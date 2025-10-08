@@ -91,6 +91,17 @@ Use Firebase Auth with OAuth2 (Google, GitHub, etc.) for secure login. Support:
 
 ---
 
+## 🔗 Module Integration Rules
+- Every new module must:
+  - Be imported into `main.dart` (or the central navigation file).
+  - Add its main ListPage (e.g., CustomerListPage, InventoryListPage) to the sidebar/drawer.
+  - Add a dashboard shortcut if relevant (e.g., “Clientes”, “Inventario”).
+  - Ensure navigation works end-to-end: Dashboard → Module → Detail/Form pages.
+- No module is considered “done” until it is visible and accessible from the main navigation.
+
+
+---
+
 # 🎨 GUI Design System
 
 Use a unified widget set across all screens:
@@ -211,3 +222,44 @@ Copilot must:
 - Use PostgreSQL syntax and constraints
 - Avoid hardcoded values—use config or constants
 - Use modular architecture with clean separation of concerns
+
+---
+
+# 🖼️ Image Handling Rules
+
+- All modules that involve products, customers, employees, or marketing must support images.
+- Use a unified image service (`ImageService`) in `lib/shared/services/` for:
+  - Uploading images (to Supabase storage or Firebase storage).
+  - Fetching images with caching (use `CachedNetworkImage`).
+  - Handling placeholders (default icon if no image).
+  - Handling errors (broken link → fallback image).
+- Store only the image URL/path in the database, not the binary.
+- Organize assets in `assets/images/` for static icons, logos, and placeholders.
+- For product images:
+  - Support multiple images per product.
+  - Use thumbnails in lists, full-size in detail pages.
+- For employee/customer profile pictures:
+  - Circular avatar style, consistent sizing.
+- For marketing/website:
+  - Support banners and campaign images with responsive scaling.
+- Always optimize for performance:
+  - Use lazy loading for lists.
+  - Use compressed formats (WebP/optimized JPEG).
+- Respect dark mode (ensure images/icons adapt or remain visible).
+
+---
+
+# 🔍 Search & Filtering Rules
+
+- Any list or dropdown with more than ~10 possible items must include a search bar at the top.
+- Examples:
+  - Chart of Accounts → searchable by code and name.
+  - Customer/Supplier selection → searchable by name, RUT, or email.
+  - Product selection → searchable by SKU, name, or category.
+- Use a consistent search widget across modules:
+  - TextField with prefix search icon.
+  - Real-time filtering as the user types.
+  - Case-insensitive matching.
+- For very large datasets (100+ items), implement pagination or lazy loading with search.
+- Always place the search bar **above the list** (not hidden in a menu).
+- Respect localization: search must work with Spanish characters (ñ, á, é, í, ó, ú).
