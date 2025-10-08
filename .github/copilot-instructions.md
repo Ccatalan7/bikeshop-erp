@@ -211,7 +211,3 @@ Copilot must:
 - Use PostgreSQL syntax and constraints
 - Avoid hardcoded values—use config or constants
 - Use modular architecture with clean separation of concerns
-
-Hello world
-
-
