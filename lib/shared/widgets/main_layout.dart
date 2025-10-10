@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../services/auth_service.dart';
 import 'expandable_menu_item.dart';
 
 const List<MenuSubItem> _accountingMenuItems = [
@@ -184,9 +187,7 @@ class MainLayout extends StatelessWidget {
                         ),
                         IconButton(
                           icon: const Icon(Icons.logout_outlined),
-                          onPressed: () {
-                            // TODO: Implement logout
-                          },
+                          onPressed: () => _handleLogout(context),
                         ),
                         const SizedBox(width: 8),
                       ],
@@ -226,9 +227,7 @@ class MainLayout extends StatelessWidget {
             ),
             IconButton(
               icon: const Icon(Icons.logout),
-              onPressed: () {
-                // TODO: Implement logout
-              },
+              onPressed: () => _handleLogout(context),
             ),
           ],
         ),
@@ -236,6 +235,21 @@ class MainLayout extends StatelessWidget {
         body: body ?? child,
       );
     }
+  }
+}
+
+Future<void> _handleLogout(BuildContext context) async {
+  final authService = context.read<AuthService>();
+  final router = GoRouter.of(context);
+
+  try {
+    await authService.signOut();
+    router.go('/login');
+  } catch (error) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(
+      SnackBar(content: Text('No se pudo cerrar sesión: $error')),
+    );
   }
 }
 

@@ -1,91 +1,68 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../constants/storage_constants.dart';
 
 class ImageService {
-  static final FirebaseStorage _storage = FirebaseStorage.instance;
-  static final FirebaseAuth _auth = FirebaseAuth.instance;
-  static final http.Client _httpClient = http.Client();
+  static final SupabaseClient _client = Supabase.instance.client;
   static final ImagePicker _picker = ImagePicker();
-  
-  // Upload image to Firebase Storage
-  static Future<String?> uploadImage(File imageFile, String bucket, String folder) async {
+
+  // Upload image to Supabase Storage
+  static Future<String?> uploadImage(
+    File imageFile,
+    String bucket,
+    String folder,
+  ) async {
     try {
       final fileName = _buildFileName(imageFile);
-      final isExplicitBucket = bucket.startsWith('gs://') || bucket.startsWith('https://');
-      final storage = isExplicitBucket
-          ? FirebaseStorage.instanceFor(bucket: bucket)
-          : _storage;
-
-      Reference ref = storage.ref();
-      if (!isExplicitBucket) {
-        final normalizedBucket = _normalizePath(bucket);
-        if (normalizedBucket.isNotEmpty) {
-          ref = ref.child(normalizedBucket);
-        }
-      }
-
       final normalizedFolder = _normalizePath(folder);
+      final segments = <String>[];
       if (normalizedFolder.isNotEmpty) {
-        ref = ref.child(normalizedFolder);
+        segments.add(normalizedFolder);
       }
+      segments.add(fileName);
+      final objectPath = segments.join('/');
 
-      ref = ref.child(fileName);
+      final bytes = await imageFile.readAsBytes();
+      final storageFile = _client.storage.from(bucket);
 
-      final fullPath = ref.fullPath;
-
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
-        return await _uploadImageWindows(imageFile, fullPath, fileName, ref.bucket);
-      }
-
-      final metadata = SettableMetadata(contentType: _inferContentType(fileName));
+      final options = FileOptions(
+        cacheControl: '3600',
+        upsert: true,
+        contentType: _inferContentType(fileName),
+      );
 
       if (kDebugMode) {
-        debugPrint('[ImageService] Uploading to ${ref.fullPath} (bucket: ${ref.bucket})');
+        debugPrint('[ImageService] Uploading to bucket="$bucket" path="$objectPath"');
       }
 
-      final uploadTask = ref.putFile(imageFile, metadata);
-      final snapshot = await uploadTask;
+      await storageFile.uploadBinary(objectPath, bytes, fileOptions: options);
+
+      final publicUrl = storageFile.getPublicUrl(objectPath);
 
       if (kDebugMode) {
-        debugPrint('[ImageService] Upload complete (state: ${snapshot.state.name})');
+        debugPrint('[ImageService] Upload complete. Public URL: $publicUrl');
       }
 
-      FirebaseException? lastError;
-      for (var attempt = 0; attempt < 3; attempt++) {
-        try {
-          final downloadUrl = await snapshot.ref.getDownloadURL();
-          if (kDebugMode) {
-            debugPrint('[ImageService] Download URL fetched on attempt ${attempt + 1}');
-          }
-          return downloadUrl;
-        } on FirebaseException catch (e) {
-          lastError = e;
-          if (kDebugMode) {
-            debugPrint('[ImageService] getDownloadURL attempt ${attempt + 1} failed: ${e.code}');
-          }
-          if (e.code == 'object-not-found') {
-            await Future.delayed(Duration(milliseconds: 300 * (attempt + 1)));
-            continue;
-          }
-          rethrow;
-        }
-      }
-
-      if (lastError != null) throw lastError;
-
-      return null;
+      return publicUrl;
     } catch (e) {
-      if (kDebugMode) print('Image upload error: $e');
+      if (kDebugMode) {
+        debugPrint('Image upload error: $e');
+      }
       rethrow;
     }
+  }
+
+  static Future<String?> uploadToDefaultBucket(
+    File imageFile,
+    String folder,
+  ) {
+    return uploadImage(imageFile, StorageConfig.defaultBucket, folder);
   }
   
   // Pick image from gallery or camera
@@ -250,16 +227,21 @@ class ImageService {
   // Delete image from storage
   static Future<bool> deleteImage(String imageUrl, String bucket) async {
     try {
-      // Extract file path from Firebase Storage URL
-      final ref = _storage.refFromURL(imageUrl);
-      if (kDebugMode) {
-        debugPrint('[ImageService] Deleting ${ref.fullPath}');
+      final objectPath = _extractObjectPath(imageUrl, bucket);
+      if (objectPath == null) {
+        if (kDebugMode) {
+          debugPrint('[ImageService] Unable to determine object path for $imageUrl');
+        }
+        return false;
       }
-      await ref.delete();
-      
+
+      await _client.storage.from(bucket).remove([objectPath]);
+
       return true;
     } catch (e) {
-      if (kDebugMode) print('Image deletion error: $e');
+      if (kDebugMode) {
+        debugPrint('Image deletion error: $e');
+      }
       return false;
     }
   }
@@ -301,133 +283,36 @@ class ImageService {
     }
   }
 
-  static Future<String?> _uploadImageWindows(
-    File imageFile,
-    String fullPath,
-    String fileName,
-    String bucket,
-  ) async {
-    final candidateBuckets = _candidateBuckets(bucket);
-    FirebaseException? lastError;
+  static String? _extractObjectPath(String imageUrl, String bucket) {
+    if (imageUrl.isEmpty) return null;
+    final uri = Uri.tryParse(imageUrl);
+    if (uri == null) return null;
 
-    for (final candidate in candidateBuckets) {
-      final uploadUri = Uri.https(
-        'firebasestorage.googleapis.com',
-        '/upload/storage/v1/b/$candidate/o',
-        {
-          'uploadType': 'media',
-          'name': fullPath,
-        },
-      );
+    final publicPattern = '/storage/v1/object/public/';
+    final securePattern = '/storage/v1/object/sign/';
 
-      final headers = {
-        'Content-Type': _inferContentType(fileName) ?? 'application/octet-stream',
-        'Accept': 'application/json',
-      };
-
-      User? user = _auth.currentUser;
-      if (user == null) {
-        try {
-          if (kDebugMode) {
-            debugPrint('[ImageService] No authenticated user; attempting anonymous sign-in for Windows upload.');
-          }
-          final credential = await _auth.signInAnonymously();
-          user = credential.user;
-        } catch (e) {
-          if (kDebugMode) {
-            debugPrint('[ImageService] Anonymous sign-in failed: $e');
-          }
-        }
-      }
-
-      if (user != null) {
-        final token = await user.getIdToken();
-        if (token != null && token.isNotEmpty) {
-          headers['Authorization'] = 'Bearer $token';
-          if (kDebugMode) {
-            debugPrint('[ImageService] Windows REST using auth token (length: ${token.length}) for user ${user.uid}');
-          }
-        } else {
-          if (kDebugMode) {
-            debugPrint('[ImageService] Windows REST user ${user.uid} has no ID token available');
-          }
-        }
-      } else {
-        if (kDebugMode) {
-          debugPrint('[ImageService] Windows REST upload proceeding WITHOUT auth token (no current user).');
-        }
-      }
-
-      final bytes = await imageFile.readAsBytes();
-
-      if (kDebugMode) {
-        debugPrint('[ImageService] Windows REST upload attempt using bucket "$candidate" -> ${uploadUri.toString()}');
-      }
-
-      http.Response response;
-      try {
-        response = await _httpClient.post(uploadUri, headers: headers, body: bytes);
-      } on SocketException catch (e) {
-        if (kDebugMode) {
-          debugPrint('[ImageService] Windows REST upload socket error for bucket "$candidate": $e');
-        }
-        lastError = FirebaseException(
-          plugin: 'firebase_storage',
-          code: 'network-error',
-          message: 'Windows REST upload failed due to network error: $e',
-        );
-        continue;
-      }
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final tokensRaw = json['downloadTokens'];
-        final downloadToken = tokensRaw is String && tokensRaw.isNotEmpty
-            ? tokensRaw.split(',').first
-            : null;
-        final encodedPath = Uri.encodeComponent(fullPath);
-        final tokenQuery = downloadToken != null ? '&token=$downloadToken' : '';
-  final downloadUrl = 'https://firebasestorage.googleapis.com/v0/b/$candidate/o/$encodedPath?alt=media$tokenQuery';
-
-        if (kDebugMode) {
-          debugPrint('[ImageService] Windows upload success via REST using bucket "$candidate".');
-        }
-
-        return downloadUrl;
-      }
-
-      if (kDebugMode) {
-        debugPrint('[ImageService] Windows REST upload failed for bucket "$candidate": ${response.statusCode} ${response.body}');
-      }
-
-      lastError = FirebaseException(
-        plugin: 'firebase_storage',
-        code: 'rest-upload-failed',
-        message: 'Windows REST upload failed (${response.statusCode}): ${response.body}',
-      );
+    final path = uri.path;
+    if (path.contains(publicPattern)) {
+      final index = path.indexOf(publicPattern) + publicPattern.length;
+      final raw = path.substring(index);
+      if (!raw.startsWith('$bucket/')) return null;
+      return raw.substring(bucket.length + 1);
     }
 
-    throw lastError ?? FirebaseException(
-      plugin: 'firebase_storage',
-      code: 'rest-upload-failed',
-      message: 'Windows REST upload failed: No candidate bucket succeeded.',
-    );
-  }
-
-  static List<String> _candidateBuckets(String bucket) {
-    var value = bucket.trim();
-    if (value.startsWith('gs://')) {
-      value = value.substring(5);
+    if (path.contains(securePattern)) {
+      final index = path.indexOf(securePattern) + securePattern.length;
+      final raw = path.substring(index);
+      if (!raw.startsWith('$bucket/')) return null;
+      final endIndex = raw.indexOf('?');
+      final trimmed = endIndex == -1 ? raw : raw.substring(0, endIndex);
+      return trimmed.substring(bucket.length + 1);
     }
 
-    if (value.startsWith('http://') || value.startsWith('https://')) {
-      value = Uri.parse(value).host;
-    }
-
-    final candidates = <String>{value};
-    if (value.endsWith('.firebasestorage.app')) {
-      candidates.add(value.replaceFirst('.firebasestorage.app', '.appspot.com'));
-    }
-    return candidates.toList();
+    // Fallback: assume the last segments correspond to the object path.
+    final segments = uri.pathSegments;
+    final bucketIndex = segments.indexOf(bucket);
+    if (bucketIndex == -1) return null;
+    final objectSegments = segments.sublist(bucketIndex + 1);
+    return objectSegments.join('/');
   }
 }

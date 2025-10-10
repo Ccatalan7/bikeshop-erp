@@ -1,7 +1,7 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
 import '../widgets/app_button.dart';
 
@@ -44,11 +44,11 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         context.go('/dashboard');
       }
-    } on FirebaseAuthException catch (e) {
+    } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_mapFirebaseError(e)),
+            content: Text(_mapSupabaseError(e)),
             backgroundColor: Colors.red,
           ),
         );
@@ -93,11 +93,11 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         context.go('/dashboard');
       }
-    } on FirebaseAuthException catch (e) {
+    } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_mapFirebaseError(e)),
+            content: Text(_mapSupabaseError(e)),
             backgroundColor: Colors.red,
           ),
         );
@@ -118,99 +118,21 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _signInWithGoogle() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final authService = Provider.of<AuthService>(context, listen: false);
-      await authService.signInWithGoogle();
-      
-      if (mounted) {
-        context.go('/dashboard');
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_mapFirebaseError(e)),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error de inicio de sesión con Google: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+  String _mapSupabaseError(AuthException e) {
+    final code = e.message.toLowerCase();
+    if (code.contains('invalid login credentials')) {
+      return 'Credenciales inválidas. Verifica tu correo y contraseña.';
     }
-  }
-
-  Future<void> _signInAsGuest() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final authService = Provider.of<AuthService>(context, listen: false);
-      await authService.signInAnonymously();
-
-      if (mounted) {
-        context.go('/dashboard');
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_mapFirebaseError(e)),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error ingresando como invitado: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+    if (code.contains('email rate limit exceeded')) {
+      return 'Has intentado demasiadas veces. Espera un momento e inténtalo nuevamente.';
     }
-  }
-
-  String _mapFirebaseError(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'user-not-found':
-        return 'No existe una cuenta con este correo.';
-      case 'wrong-password':
-        return 'La contraseña es incorrecta.';
-      case 'email-already-in-use':
-        return 'Ya existe una cuenta con este correo.';
-      case 'weak-password':
-        return 'La contraseña es demasiado débil.';
-      case 'invalid-email':
-        return 'El correo electrónico no es válido.';
-      case 'operation-not-allowed':
-        return 'El método de autenticación no está habilitado.';
-      case 'account-exists-with-different-credential':
-        return 'Ya existe una cuenta con otro proveedor para este correo.';
-      case 'credential-already-in-use':
-        return 'Esta credencial ya está asociada a otra cuenta.';
-      case 'network-request-failed':
-        return 'No se pudo conectar. Revisa tu conexión a internet.';
-      default:
-        return e.message ?? 'Ocurrió un error con la autenticación.';
+    if (code.contains('email already registered')) {
+      return 'Ya existe una cuenta con este correo.';
     }
+    if (code.contains('password should be at least')) {
+      return 'La contraseña debe cumplir los requisitos mínimos de seguridad.';
+    }
+    return e.message;
   }
 
   @override
@@ -354,46 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-
-                  // Divider
-                  const Row(
-                    children: [
-                      Expanded(child: Divider()),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('o'),
-                      ),
-                      Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Google Sign In Button
-                  AppButton(
-                    text: 'Continuar con Google',
-                    type: ButtonType.outline,
-                    onPressed: _isLoading ? null : _signInWithGoogle,
-                    isLoading: _isLoading,
-                    icon: Icons.login,
-                    width: double.infinity,
-                  ),
-                  const SizedBox(height: 16),
-                  AppButton(
-                    text: 'Entrar como Invitado',
-                    type: ButtonType.secondary,
-                    onPressed: _isLoading ? null : _signInAsGuest,
-                    isLoading: _isLoading,
-                    icon: Icons.person_outline,
-                    width: double.infinity,
-                  ),
                   const SizedBox(height: 32),
-
-                  Text(
-                    'Puedes cambiar al modo invitado y luego crear una cuenta desde Configuración.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
                 ],
               ),
             ),

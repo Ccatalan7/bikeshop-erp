@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
@@ -183,10 +184,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
           return;
         }
 
-        final url = await ImageService.uploadImage(
+        final url = await ImageService.uploadToDefaultBucket(
           file,
-          'product-images',
-          'products/gallery',
+          StorageFolders.productGallery,
         );
 
         if (url == null) {
@@ -268,10 +268,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
         String? finalImageUrl = _imageUrl;
 
         if (_selectedImage != null) {
-          final uploadUrl = await ImageService.uploadImage(
+          final uploadUrl = await ImageService.uploadToDefaultBucket(
             _selectedImage!,
-            'product-images',
-            'products',
+            StorageFolders.productMain,
           );
 
           if (uploadUrl == null) {

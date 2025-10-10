@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 Map<String, dynamic> _ensureMap(dynamic value) {
   if (value is Map<String, dynamic>) {
     return value;
@@ -13,9 +11,14 @@ Map<String, dynamic> _ensureMap(dynamic value) {
 DateTime _parseDate(dynamic value, {DateTime? fallback}) {
   if (value == null) return fallback ?? DateTime.now();
   if (value is DateTime) return value;
-  if (value is Timestamp) return value.toDate();
   if (value is String) {
     return DateTime.tryParse(value) ?? fallback ?? DateTime.now();
+  }
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+  if (value is double) {
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt());
   }
   return fallback ?? DateTime.now();
 }

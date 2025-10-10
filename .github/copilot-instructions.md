@@ -2,7 +2,7 @@
 
 This is a modular ERP-style app for managing a bikeshop. It includes accounting, inventory, POS, customer management, maintenance tracking, HR, website builder, marketing, and analytics. The app is built in **Flutter/Dart**, targeting **Windows, Android, Web**, and optionally macOS/iOS.
 
-The backend uses **PostgreSQL** (via Supabase or Railway) and **Firebase Auth** with **OAuth2** for secure login. All business logic must be accounting-first, with audit-ready data structures.
+The backend uses Supabase exclusively, with PostgreSQL as the relational database, Supabase Auth for authentication (including OAuth2 support like Google login), and Supabase Storage for file management. All business logic follows an accounting-first approach, with audit-ready data structures and strong relational integrity across modules.
 
 ---
 
@@ -71,12 +71,13 @@ Use triggers or service logic to update inventory and accounting entries.
 
 # 🔐 Authentication
 
-Use Firebase Auth with OAuth2 (Google, GitHub, etc.) for secure login. Support:
+Use Supabase Auth with OAuth2 (Google, GitHub, etc.) for secure login. Supports:
 
 - Email/password
 - Social login
-- Role-based access control
-- Token expiration and refresh
+- Role-based access control via Row Level Security (RLS)
+- Token expiration and automatic refresh
+- Seamless integration with PostgreSQL user tables
 
 ---
 

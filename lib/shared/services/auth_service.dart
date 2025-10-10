@@ -1,121 +1,77 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService extends ChangeNotifier {
   AuthService() {
-    _subscription = _auth.authStateChanges().listen((user) {
-      _currentUser = user;
+    _session = _client.auth.currentSession;
+    _currentUser = _session?.user;
+    _isInitializing = false;
+
+    _subscription = _client.auth.onAuthStateChange.listen((data) {
+      _session = data.session;
+      _currentUser = data.session?.user;
       _isInitializing = false;
       notifyListeners();
     });
   }
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
-
-  StreamSubscription<User?>? _subscription;
+  final SupabaseClient _client = Supabase.instance.client;
+  StreamSubscription<AuthState>? _subscription;
+  Session? _session;
   User? _currentUser;
   bool _isInitializing = true;
 
+  SupabaseClient get client => _client;
+  Session? get currentSession => _session;
   User? get currentUser => _currentUser;
   bool get isAuthenticated => _currentUser != null;
   bool get isInitializing => _isInitializing;
 
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
-  Future<UserCredential> signInWithEmailAndPassword(String email, String password) async {
-    final credential = await _auth.signInWithEmailAndPassword(
+  Future<User> signInWithEmailAndPassword(String email, String password) async {
+    final response = await _client.auth.signInWithPassword(
       email: email,
       password: password,
     );
-    _syncUser(credential.user);
-    return credential;
+    _syncAuth(response.session);
+    final user = response.user ?? _client.auth.currentUser;
+    if (user == null) {
+      throw AuthException('No se pudo obtener el usuario después del inicio de sesión.');
+    }
+    return user;
   }
 
-  Future<UserCredential> createUserWithEmailAndPassword(String email, String password) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
+  Future<User> createUserWithEmailAndPassword(String email, String password) async {
+    final response = await _client.auth.signUp(
       email: email,
       password: password,
+      emailRedirectTo: null,
     );
-    _syncUser(credential.user);
-    return credential;
-  }
-
-  Future<UserCredential> signInWithGoogle() async {
-    if (kIsWeb) {
-      final googleProvider = GoogleAuthProvider();
-      googleProvider.addScope('email');
-      final credential = await _auth.signInWithPopup(googleProvider);
-      _syncUser(credential.user);
-      return credential;
+    _syncAuth(response.session);
+    final user = response.user ?? _client.auth.currentUser;
+    if (user == null) {
+      throw AuthException('Revisa tu correo para confirmar la cuenta antes de iniciar sesión.');
     }
-
-    if (!kIsWeb && _isDesktopPlatform) {
-      final googleProvider = GoogleAuthProvider()..addScope('email');
-      final credential = await _auth.signInWithProvider(googleProvider);
-      _syncUser(credential.user);
-      return credential;
-    }
-
-    try {
-      final account = await _googleSignIn.signIn();
-      if (account == null) {
-        throw FirebaseAuthException(
-          code: 'google-sign-in-cancelled',
-          message: 'Inicio de sesión cancelado por el usuario.',
-        );
-      }
-
-      final auth = await account.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: auth.accessToken,
-        idToken: auth.idToken,
-      );
-
-      final userCredential = await _auth.signInWithCredential(credential);
-      _syncUser(userCredential.user);
-      return userCredential;
-    } on PlatformException catch (e) {
-      throw FirebaseAuthException(
-        code: 'google-sign-in-error',
-        message: 'No se pudo iniciar sesión con Google: ${e.message}',
-      );
-    }
-  }
-
-  Future<UserCredential> signInAnonymously() async {
-    final credential = await _auth.signInAnonymously();
-    _syncUser(credential.user);
-    return credential;
+    return user;
   }
 
   Future<void> signOut() async {
-    await _auth.signOut();
-    if (!kIsWeb) {
-      await _googleSignIn.signOut();
-    }
-    _syncUser(null);
+    await _client.auth.signOut();
+    _syncAuth(_client.auth.currentSession);
   }
 
-  Future<void> sendPasswordResetEmail(String email) {
-    return _auth.sendPasswordResetEmail(email: email);
+  Future<void> sendPasswordResetEmail(String email) async {
+    await _client.auth.resetPasswordForEmail(email);
   }
 
-  void _syncUser(User? user) {
-    _currentUser = user;
+  void _syncAuth(Session? session) {
+    _session = session;
+    _currentUser = session?.user ?? _client.auth.currentUser;
     _isInitializing = false;
     notifyListeners();
-  }
-
-  bool get _isDesktopPlatform {
-    if (kIsWeb) return false;
-    return defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux;
   }
 
   @override

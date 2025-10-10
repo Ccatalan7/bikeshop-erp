@@ -1,10 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 DateTime _parseDate(dynamic value) {
-  if (value is Timestamp) return value.toDate();
   if (value is DateTime) return value;
   if (value is String) {
     return DateTime.tryParse(value) ?? DateTime.now();
+  }
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+  if (value is double) {
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt());
   }
   return DateTime.now();
 }

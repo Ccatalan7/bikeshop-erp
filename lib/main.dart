@@ -1,12 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'shared/themes/app_theme.dart';
 import 'shared/services/auth_service.dart';
 import 'shared/services/database_service.dart';
 import 'shared/services/inventory_service.dart';
+import 'shared/config/supabase_config.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/crm/services/customer_service.dart';
 import 'modules/accounting/services/accounting_service.dart';
@@ -15,14 +16,22 @@ import 'modules/purchases/services/purchase_service.dart';
 import 'modules/sales/services/sales_service.dart';
 import 'shared/routes/app_router.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+
+  if (!SupabaseConfig.isConfigured && kDebugMode) {
+    debugPrint('[Supabase] WARNING: SupabaseConfig still has placeholder values. '
+        'Update lib/shared/config/supabase_config.dart or provide dart-defines.');
+  }
+
+  await Supabase.initialize(
+    url: SupabaseConfig.url,
+    anonKey: SupabaseConfig.anonKey,
+    authOptions: const FlutterAuthClientOptions(
+      autoRefreshToken: true,
+    ),
   );
-  
+
   runApp(const VinabikeApp());
 }
 
@@ -48,6 +57,9 @@ class VinabikeApp extends StatelessWidget {
           Provider.of<DatabaseService>(context, listen: false),
         )),
         ChangeNotifierProvider(create: (context) => AccountingService(
+          Provider.of<DatabaseService>(context, listen: false),
+        )),
+        ChangeNotifierProvider(create: (context) => PurchaseService(
           Provider.of<DatabaseService>(context, listen: false),
         )),
         ChangeNotifierProxyProvider2<DatabaseService, AccountingService, SalesService>(

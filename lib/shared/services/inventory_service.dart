@@ -37,7 +37,7 @@ class InventoryService extends ChangeNotifier {
       try {
         final data = await _db!.selectById('products', id);
         if (data == null) return null;
-        final product = _productFromFirestore(data);
+  final product = _productFromMap(data);
         _upsertLocalProduct(product);
         notifyListeners();
         return product;
@@ -60,7 +60,7 @@ class InventoryService extends ChangeNotifier {
       try {
         final records = await _db!.select('products', where: 'sku=$sku');
         if (records.isEmpty) return null;
-        final product = _productFromFirestore(records.first);
+  final product = _productFromMap(records.first);
         _upsertLocalProduct(product);
         notifyListeners();
         return product;
@@ -234,8 +234,8 @@ class InventoryService extends ChangeNotifier {
 
     try {
       final rawProducts = await _db!.select('products');
-      final products = rawProducts
-          .map(_productFromFirestore)
+    final products = rawProducts
+      .map(_productFromMap)
           .toList()
         ..sort((a, b) =>
             a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -269,7 +269,7 @@ class InventoryService extends ChangeNotifier {
     }
   }
 
-  Product _productFromFirestore(Map<String, dynamic> json) {
+  Product _productFromMap(Map<String, dynamic> json) {
     final price = (json['price'] as num?)?.toDouble() ?? 0.0;
     final cost = (json['cost'] as num?)?.toDouble() ?? 0.0;
     final stockQuantity = json['inventory_qty'] as int? ??

@@ -25,12 +25,8 @@ class Category {
       description: json['description'],
       imageUrl: json['image_url'],
       isActive: json['is_active'] ?? true,
-      createdAt: json['created_at'] is String 
-          ? DateTime.parse(json['created_at'])
-          : (json['created_at'] as dynamic)?.toDate() ?? DateTime.now(),
-      updatedAt: json['updated_at'] is String
-          ? DateTime.parse(json['updated_at'])
-          : (json['updated_at'] as dynamic)?.toDate() ?? DateTime.now(),
+    createdAt: _parseDate(json['created_at']),
+    updatedAt: _parseDate(json['updated_at']),
     );
   }
 
@@ -79,4 +75,19 @@ class Category {
   String toString() {
     return 'Category(id: $id, name: $name, isActive: $isActive)';
   }
+}
+
+DateTime _parseDate(dynamic value) {
+  if (value == null) return DateTime.now();
+  if (value is DateTime) return value;
+  if (value is String) {
+    return DateTime.tryParse(value) ?? DateTime.now();
+  }
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+  if (value is double) {
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+  }
+  return DateTime.now();
 }

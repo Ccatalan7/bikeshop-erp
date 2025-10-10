@@ -58,7 +58,7 @@ class CategoryService extends ChangeNotifier {
   
   Future<models.Category?> getCategoryByName(String name) async {
     try {
-      final data = await _db.select('categories', where: 'name=\$name');
+      final data = await _db.select('categories', where: 'name=${name}');
       return data.isNotEmpty ? models.Category.fromJson(data.first) : null;
     } catch (e) {
       if (kDebugMode) print('Error fetching category by name: $e');
@@ -69,7 +69,7 @@ class CategoryService extends ChangeNotifier {
   Future<models.Category> createCategory(models.Category category) async {
     try {
       // Check if name already exists
-      final existingCategory = await getCategoryByName(category.name);
+  final existingCategory = await getCategoryByName(category.name);
       if (existingCategory != null) {
         throw Exception('Ya existe una categoría con este nombre');
       }
@@ -89,7 +89,7 @@ class CategoryService extends ChangeNotifier {
       }
       
       // Check if name already exists (excluding current category)
-      final existingCategory = await getCategoryByName(category.name);
+  final existingCategory = await getCategoryByName(category.name);
       if (existingCategory != null && existingCategory.id != category.id) {
         throw Exception('Ya existe una categoría con este nombre');
       }
@@ -106,7 +106,7 @@ class CategoryService extends ChangeNotifier {
   Future<void> deleteCategory(String id) async {
     try {
       // Check if category is in use by products
-      final productsUsingCategory = await _db.select('products', where: 'category_id=\$id');
+        final productsUsingCategory = await _db.select('products', where: 'category_id=$id');
       if (productsUsingCategory.isNotEmpty) {
         throw Exception('No se puede eliminar la categoría porque está siendo utilizada por ${productsUsingCategory.length} producto(s)');
       }

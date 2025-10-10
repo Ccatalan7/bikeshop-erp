@@ -23,24 +23,12 @@ class ExpandableMenuItem extends StatefulWidget {
   State<ExpandableMenuItem> createState() => _ExpandableMenuItemState();
 }
 
-class _ExpandableMenuItemState extends State<ExpandableMenuItem> 
-    with SingleTickerProviderStateMixin {
+class _ExpandableMenuItemState extends State<ExpandableMenuItem> {
   bool _isExpanded = false;
-  late AnimationController _controller;
-  late Animation<double> _expandAnimation;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-    _expandAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    );
-    
     // Auto-expand if current location matches any sub-item
     _checkShouldExpand();
   }
@@ -54,45 +42,46 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem>
   }
 
   void _checkShouldExpand() {
-    final shouldExpand = widget.subItems.any((subItem) => 
-      widget.currentLocation.startsWith(subItem.route)
-    );
+    final shouldExpand = _resolveSelectedSubItem(widget.currentLocation) != null;
     
     if (shouldExpand != _isExpanded) {
       setState(() {
         _isExpanded = shouldExpand;
-        if (_isExpanded) {
-          _controller.forward();
-        } else {
-          _controller.reverse();
-        }
       });
     }
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  MenuSubItem? _resolveSelectedSubItem(String location) {
+    // Prefer exact matches and fall back to the longest matching prefix.
+    for (final subItem in widget.subItems) {
+      if (location == subItem.route) {
+        return subItem;
+      }
+    }
+
+    MenuSubItem? bestMatch;
+    for (final subItem in widget.subItems) {
+      final prefix = '${subItem.route}/';
+      if (location.startsWith(prefix)) {
+        if (bestMatch == null || subItem.route.length > bestMatch.route.length) {
+          bestMatch = subItem;
+        }
+      }
+    }
+    return bestMatch;
   }
 
   void _toggleExpanded() {
     setState(() {
       _isExpanded = !_isExpanded;
-      if (_isExpanded) {
-        _controller.forward();
-      } else {
-        _controller.reverse();
-      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isAnySubItemSelected = widget.subItems.any((subItem) => 
-      widget.currentLocation.startsWith(subItem.route)
-    );
+    final selectedSubItem = _resolveSelectedSubItem(widget.currentLocation);
+    final isAnySubItemSelected = selectedSubItem != null;
 
     return Column(
       children: [
@@ -102,6 +91,9 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem>
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(8),
+              splashFactory: NoSplash.splashFactory,
+              highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
               onTap: widget.enabled ? _toggleExpanded : null,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -136,9 +128,8 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem>
                         ),
                       ),
                     ),
-                    AnimatedRotation(
-                      turns: _isExpanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 200),
+                    RotatedBox(
+                      quarterTurns: _isExpanded ? 2 : 0,
                       child: Icon(
                         Icons.keyboard_arrow_down,
                         size: 20,
@@ -153,17 +144,19 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem>
             ),
           ),
         ),
-        SizeTransition(
-          sizeFactor: _expandAnimation,
-          child: Column(
+        if (_isExpanded)
+          Column(
             children: widget.subItems.map((subItem) {
-              final isSelected = widget.currentLocation.startsWith(subItem.route);
+              final isSelected = selectedSubItem?.route == subItem.route;
               return Container(
                 margin: const EdgeInsets.only(left: 36, right: 8, bottom: 2),
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(6),
+                    splashFactory: NoSplash.splashFactory,
+                    highlightColor: Colors.transparent,
+                    hoverColor: Colors.transparent,
                     onTap: widget.enabled
                         ? () {
                             if (!isSelected) {
@@ -208,7 +201,6 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem>
               );
             }).toList(),
           ),
-        ),
       ],
     );
   }
