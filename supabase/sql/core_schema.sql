@@ -21,6 +21,363 @@ create table if not exists products (
   created_at timestamp with time zone not null default now()
 );
 
+alter table public.products
+  add column if not exists description text,
+  add column if not exists brand text,
+  add column if not exists model text,
+  add column if not exists min_stock_level integer not null default 1,
+  add column if not exists image_url text,
+  add column if not exists is_service boolean not null default false;
+
+create or replace function public.set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+create table if not exists sales_invoices (
+  id uuid primary key default gen_random_uuid(),
+  invoice_number text not null,
+  customer_id uuid references customers(id) on delete set null,
+  customer_name text,
+  customer_rut text,
+  date timestamp with time zone not null default now(),
+  due_date timestamp with time zone,
+  reference text,
+  status text not null default 'draft'
+    check (status in ('draft','sent','paid','overdue','cancelled')),
+  subtotal numeric(12,2) not null default 0,
+  iva_amount numeric(12,2) not null default 0,
+  total numeric(12,2) not null default 0,
+  items jsonb not null default '[]'::jsonb,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'sales_invoices'
+      and t.tgname = 'trg_sales_invoices_updated_at'
+  ) then
+    create trigger trg_sales_invoices_updated_at
+      before update on sales_invoices
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
+
+create index if not exists idx_sales_invoices_customer_id
+  on sales_invoices(customer_id);
+
+create table if not exists sales_payments (
+  id uuid primary key default gen_random_uuid(),
+  invoice_id uuid not null references sales_invoices(id) on delete cascade,
+  invoice_reference text,
+  method text not null
+    check (method in ('cash','card','transfer','check','other')),
+  amount numeric(12,2) not null default 0,
+  date timestamp with time zone not null default now(),
+  reference text,
+  notes text,
+  created_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_sales_payments_invoice_id
+  on sales_payments(invoice_id);
+
+create table if not exists stock_movements (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references products(id) on delete cascade,
+  warehouse_id uuid,
+  type text not null check (type in ('IN','OUT','INVENTORY_ADJUST','TRANSFER_OUT','TRANSFER_IN')),
+  movement_type text,
+  quantity numeric(12,2) not null,
+  reference text,
+  notes text,
+  date timestamp with time zone not null default now(),
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create table if not exists journal_entries (
+  id uuid primary key default gen_random_uuid(),
+  entry_number text not null,
+  date timestamp with time zone not null default now(),
+  description text not null,
+  type text not null,
+  source_module text,
+  source_reference text,
+  status text not null default 'draft',
+  total_debit numeric(14,2) not null default 0,
+  total_credit numeric(14,2) not null default 0,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create table if not exists journal_lines (
+  id uuid primary key default gen_random_uuid(),
+  entry_id uuid not null references journal_entries(id) on delete cascade,
+  account_id integer not null,
+  account_code text not null,
+  account_name text not null,
+  description text,
+  debit_amount numeric(14,2) not null default 0,
+  credit_amount numeric(14,2) not null default 0,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+do $$
+begin
+  begin
+    alter table public.customers drop column if exists company_id;
+  exception when others then
+    null;
+  end;
+
+  begin
+    alter table public.products drop column if exists company_id;
+  exception when others then
+    null;
+  end;
+
+  begin
+    alter table public.sales_invoices drop column if exists company_id;
+  exception when others then
+    null;
+  end;
+
+  begin
+    alter table public.sales_payments drop column if exists company_id;
+  exception when others then
+    null;
+  end;
+
+  begin
+    alter table public.stock_movements drop column if exists company_id;
+  exception when others then
+    null;
+  end;
+
+  begin
+    alter table public.journal_entries drop column if exists company_id;
+  exception when others then
+    null;
+  end;
+
+  begin
+    alter table public.journal_lines drop column if exists company_id;
+  exception when others then
+    null;
+  end;
+end $$;
+
+do $$
+declare
+  v_account_id_is_uuid boolean;
+begin
+  select exists (
+    select 1
+      from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'journal_lines'
+       and column_name = 'account_id'
+       and data_type = 'uuid'
+  ) into v_account_id_is_uuid;
+
+  if v_account_id_is_uuid then
+    alter table public.journal_lines drop column account_id;
+    alter table public.journal_lines
+      add column account_id integer not null;
+  end if;
+end $$;
+
+do $$
+declare
+  v_has_old_entry_column boolean;
+  v_has_new_entry_column boolean;
+  rec record;
+begin
+  select exists (
+    select 1
+      from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'journal_lines'
+       and column_name = 'journal_entry_id'
+  ) into v_has_old_entry_column;
+
+  select exists (
+    select 1
+      from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'journal_lines'
+       and column_name = 'entry_id'
+  ) into v_has_new_entry_column;
+
+  if not v_has_old_entry_column then
+    return;
+  end if;
+
+  if not v_has_new_entry_column then
+    alter table public.journal_lines rename column journal_entry_id to entry_id;
+    return;
+  end if;
+
+  execute 'update public.journal_lines set entry_id = journal_entry_id where entry_id is null';
+
+  for rec in (
+    select constraint_name
+      from information_schema.constraint_column_usage
+     where table_schema = 'public'
+       and table_name = 'journal_lines'
+       and column_name = 'journal_entry_id'
+  ) loop
+    execute format('alter table public.journal_lines drop constraint %I', rec.constraint_name);
+  end loop;
+
+  alter table public.journal_lines drop column journal_entry_id;
+
+  begin
+    alter table public.journal_lines
+      alter column entry_id set not null;
+  exception when others then
+    null;
+  end;
+end $$;
+
+alter table public.stock_movements
+  add column if not exists date timestamp with time zone not null default now(),
+  add column if not exists created_at timestamp with time zone not null default now(),
+  add column if not exists updated_at timestamp with time zone not null default now(),
+  add column if not exists type text,
+  add column if not exists movement_type text,
+  add column if not exists quantity numeric(12,2),
+  add column if not exists reference text,
+  add column if not exists notes text;
+
+do $$
+begin
+  begin
+    alter table public.stock_movements
+      alter column warehouse_id drop not null;
+  exception when others then
+    null;
+  end;
+
+  begin
+    alter table public.stock_movements
+      alter column movement_type drop not null;
+  exception when others then
+    null;
+  end;
+end $$;
+
+alter table public.journal_entries
+  add column if not exists entry_number text,
+  add column if not exists date timestamp with time zone not null default now(),
+  add column if not exists description text,
+  add column if not exists type text,
+  add column if not exists source_module text,
+  add column if not exists source_reference text,
+  add column if not exists status text not null default 'draft',
+  add column if not exists total_debit numeric(14,2) not null default 0,
+  add column if not exists total_credit numeric(14,2) not null default 0,
+  add column if not exists created_at timestamp with time zone not null default now(),
+  add column if not exists updated_at timestamp with time zone not null default now();
+
+alter table public.journal_lines
+  add column if not exists entry_id uuid,
+  add column if not exists account_id integer,
+  add column if not exists account_code text,
+  add column if not exists account_name text,
+  add column if not exists description text,
+  add column if not exists debit_amount numeric(14,2) not null default 0,
+  add column if not exists credit_amount numeric(14,2) not null default 0,
+  add column if not exists created_at timestamp with time zone not null default now(),
+  add column if not exists updated_at timestamp with time zone not null default now();
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.journal_lines'::regclass
+      and contype = 'f'
+      and conname = 'journal_lines_entry_id_fkey'
+  ) then
+    alter table public.journal_lines
+      add constraint journal_lines_entry_id_fkey
+        foreign key (entry_id)
+        references public.journal_entries(id)
+        on delete cascade;
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'stock_movements'
+      and t.tgname = 'trg_stock_movements_updated_at'
+  ) then
+    create trigger trg_stock_movements_updated_at
+      before update on stock_movements
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'journal_entries'
+      and t.tgname = 'trg_journal_entries_updated_at'
+  ) then
+    create trigger trg_journal_entries_updated_at
+      before update on journal_entries
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'journal_lines'
+      and t.tgname = 'trg_journal_lines_updated_at'
+  ) then
+    create trigger trg_journal_lines_updated_at
+      before update on journal_lines
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
+
+create index if not exists idx_stock_movements_product_id
+  on stock_movements(product_id);
+
+create index if not exists idx_journal_entries_entry_number
+  on journal_entries(entry_number);
+
+create index if not exists idx_journal_entries_date
+  on journal_entries(date);
+
+create index if not exists idx_journal_lines_entry_id
+  on journal_lines(entry_id);
+
 create table if not exists orders (
   id uuid primary key default gen_random_uuid(),
   customer_id uuid references customers(id) on delete set null,
@@ -49,9 +406,21 @@ begin
 end;
 $$ language plpgsql;
 
-create or replace trigger trg_order_item_insert
-  after insert on order_items
-  for each row execute procedure public.handle_order_item_insert();
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'order_items'
+      and t.tgname = 'trg_order_item_insert'
+  ) then
+    create trigger trg_order_item_insert
+      after insert on order_items
+      for each row execute procedure public.handle_order_item_insert();
+  end if;
+end $$;
 
 -- Function to handle sales item updates
 create or replace function public.handle_sales_item()
@@ -125,17 +494,412 @@ $$ language plpgsql;
 -- Basic RLS scaffolding: enable on each table; policies to be tailored per role.
 alter table customers enable row level security;
 alter table products enable row level security;
+alter table sales_invoices enable row level security;
+alter table sales_payments enable row level security;
+alter table stock_movements enable row level security;
 alter table orders enable row level security;
 alter table order_items enable row level security;
+alter table journal_entries enable row level security;
+alter table journal_lines enable row level security;
 
 -- Example policies; replace with final role-aware versions.
-create policy "Admins read all" on customers
-  for select using (auth.role() = 'authenticated');
-create policy "Admins read all" on products
-  for select using (auth.role() = 'authenticated');
-create policy "Admins read all" on orders
-  for select using (auth.role() = 'authenticated');
-create policy "Admins read all" on order_items
-  for select using (auth.role() = 'authenticated');
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'customers'
+      and policyname = 'Authenticated customers read'
+  ) then
+    create policy "Authenticated customers read"
+      on customers
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'journal_entries'
+      and policyname = 'Authenticated journal_entries read'
+  ) then
+    create policy "Authenticated journal_entries read"
+      on journal_entries
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'journal_entries'
+      and policyname = 'Authenticated journal_entries insert'
+  ) then
+    create policy "Authenticated journal_entries insert"
+      on journal_entries
+      for insert
+      to authenticated
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'journal_entries'
+      and policyname = 'Authenticated journal_entries update'
+  ) then
+    create policy "Authenticated journal_entries update"
+      on journal_entries
+      for update
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'journal_entries'
+      and policyname = 'Authenticated journal_entries delete'
+  ) then
+    create policy "Authenticated journal_entries delete"
+      on journal_entries
+      for delete
+      to authenticated
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'journal_lines'
+      and policyname = 'Authenticated journal_lines read'
+  ) then
+    create policy "Authenticated journal_lines read"
+      on journal_lines
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'journal_lines'
+      and policyname = 'Authenticated journal_lines insert'
+  ) then
+    create policy "Authenticated journal_lines insert"
+      on journal_lines
+      for insert
+      to authenticated
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'journal_lines'
+      and policyname = 'Authenticated journal_lines update'
+  ) then
+    create policy "Authenticated journal_lines update"
+      on journal_lines
+      for update
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'journal_lines'
+      and policyname = 'Authenticated journal_lines delete'
+  ) then
+    create policy "Authenticated journal_lines delete"
+      on journal_lines
+      for delete
+      to authenticated
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'products'
+      and policyname = 'Authenticated products read'
+  ) then
+    create policy "Authenticated products read"
+      on products
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'sales_invoices'
+      and policyname = 'Authenticated invoices read'
+  ) then
+    create policy "Authenticated invoices read"
+      on sales_invoices
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'sales_invoices'
+      and policyname = 'Authenticated invoices insert'
+  ) then
+    create policy "Authenticated invoices insert"
+      on sales_invoices
+      for insert
+      to authenticated
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'sales_invoices'
+      and policyname = 'Authenticated invoices update'
+  ) then
+    create policy "Authenticated invoices update"
+      on sales_invoices
+      for update
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'sales_invoices'
+      and policyname = 'Authenticated invoices delete'
+  ) then
+    create policy "Authenticated invoices delete"
+      on sales_invoices
+      for delete
+      to authenticated
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'sales_payments'
+      and policyname = 'Authenticated payments read'
+  ) then
+    create policy "Authenticated payments read"
+      on sales_payments
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'sales_payments'
+      and policyname = 'Authenticated payments insert'
+  ) then
+    create policy "Authenticated payments insert"
+      on sales_payments
+      for insert
+      to authenticated
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'sales_payments'
+      and policyname = 'Authenticated payments update'
+  ) then
+    create policy "Authenticated payments update"
+      on sales_payments
+      for update
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'sales_payments'
+      and policyname = 'Authenticated payments delete'
+  ) then
+    create policy "Authenticated payments delete"
+      on sales_payments
+      for delete
+      to authenticated
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'products'
+      and policyname = 'Authenticated products insert'
+  ) then
+    create policy "Authenticated products insert"
+      on products
+      for insert
+      to authenticated
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'products'
+      and policyname = 'Authenticated products update'
+  ) then
+    create policy "Authenticated products update"
+      on products
+      for update
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'products'
+      and policyname = 'Authenticated products delete'
+  ) then
+    create policy "Authenticated products delete"
+      on products
+      for delete
+      to authenticated
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'stock_movements'
+      and policyname = 'Authenticated stock_movements read'
+  ) then
+    create policy "Authenticated stock_movements read"
+      on stock_movements
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'stock_movements'
+      and policyname = 'Authenticated stock_movements insert'
+  ) then
+    create policy "Authenticated stock_movements insert"
+      on stock_movements
+      for insert
+      to authenticated
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'orders'
+      and policyname = 'Authenticated orders read'
+  ) then
+    create policy "Authenticated orders read"
+      on orders
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'order_items'
+      and policyname = 'Authenticated order_items read'
+  ) then
+    create policy "Authenticated order_items read"
+      on order_items
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
 
 -- TODO: add role-specific policies matching Sales, Inventory, HR, Mechanic, Cashier profiles.
+
+notify pgrst, 'reload schema';

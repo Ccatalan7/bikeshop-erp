@@ -408,7 +408,7 @@ class JournalEntryService extends ChangeNotifier {
   Future<JournalEntry> _persistEntry(JournalEntry entry) async {
     final entryPayload = {
       'entry_number': entry.entryNumber,
-      'date': entry.date,
+      'date': entry.date.toUtc().toIso8601String(),
       'description': entry.description,
       'type': entry.type.name,
       'source_module': entry.sourceModule,

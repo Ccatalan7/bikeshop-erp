@@ -634,32 +634,40 @@ class _ProductListPageState extends State<ProductListPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: ImageService.buildProductImage(
-                      imageUrl: product.imageUrl,
-                      size: double.infinity,
-                      isListThumbnail: false,
-                    ),
-                  ),
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    child: _buildStockChip(product, theme),
-                  ),
-                  if (!product.isActive)
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: Chip(
-                        label: const Text('Inactivo'),
-                        backgroundColor:
-                            theme.colorScheme.surfaceVariant.withOpacity(0.9),
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Positioned.fill(
+                      child: ImageService.buildProductImage(
+                        imageUrl: product.imageUrl,
+                        size: double.infinity,
+                        isListThumbnail: false,
                       ),
                     ),
-                ],
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: _buildStockChip(product, theme),
+                    ),
+                    if (!product.isActive)
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Chip(
+                          label: const Text('Inactivo'),
+                          backgroundColor:
+                              theme.colorScheme.surfaceVariant.withOpacity(0.9),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
             Padding(
