@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-class ExpandableMenuItem extends StatefulWidget {
+class ExpandableMenuItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
   final String title;
   final List<MenuSubItem> subItems;
   final String currentLocation;
   final bool enabled;
+  final bool isExpanded;
+  final ValueChanged<bool>? onExpansionChanged;
 
   const ExpandableMenuItem({
     super.key,
@@ -17,50 +19,19 @@ class ExpandableMenuItem extends StatefulWidget {
     required this.subItems,
     required this.currentLocation,
     this.enabled = true,
+    this.isExpanded = false,
+    this.onExpansionChanged,
   });
 
-  @override
-  State<ExpandableMenuItem> createState() => _ExpandableMenuItemState();
-}
-
-class _ExpandableMenuItemState extends State<ExpandableMenuItem> {
-  bool _isExpanded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Auto-expand if current location matches any sub-item
-    _checkShouldExpand();
-  }
-
-  @override
-  void didUpdateWidget(ExpandableMenuItem oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentLocation != widget.currentLocation) {
-      _checkShouldExpand();
-    }
-  }
-
-  void _checkShouldExpand() {
-    final shouldExpand = _resolveSelectedSubItem(widget.currentLocation) != null;
-    
-    if (shouldExpand != _isExpanded) {
-      setState(() {
-        _isExpanded = shouldExpand;
-      });
-    }
-  }
-
   MenuSubItem? _resolveSelectedSubItem(String location) {
-    // Prefer exact matches and fall back to the longest matching prefix.
-    for (final subItem in widget.subItems) {
+    for (final subItem in subItems) {
       if (location == subItem.route) {
         return subItem;
       }
     }
 
     MenuSubItem? bestMatch;
-    for (final subItem in widget.subItems) {
+    for (final subItem in subItems) {
       final prefix = '${subItem.route}/';
       if (location.startsWith(prefix)) {
         if (bestMatch == null || subItem.route.length > bestMatch.route.length) {
@@ -71,16 +42,10 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem> {
     return bestMatch;
   }
 
-  void _toggleExpanded() {
-    setState(() {
-      _isExpanded = !_isExpanded;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final selectedSubItem = _resolveSelectedSubItem(widget.currentLocation);
+    final selectedSubItem = _resolveSelectedSubItem(currentLocation);
     final isAnySubItemSelected = selectedSubItem != null;
 
     return Column(
@@ -94,7 +59,9 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem> {
               splashFactory: NoSplash.splashFactory,
               highlightColor: Colors.transparent,
               hoverColor: Colors.transparent,
-              onTap: widget.enabled ? _toggleExpanded : null,
+              onTap: enabled
+                  ? () => onExpansionChanged?.call(!isExpanded)
+                  : null,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
@@ -106,34 +73,34 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem> {
                 child: Row(
                   children: [
                     Icon(
-                      isAnySubItemSelected ? widget.activeIcon : widget.icon,
+                      isAnySubItemSelected ? activeIcon : icon,
                       size: 20,
-                      color: widget.enabled
-                          ? (isAnySubItemSelected 
-                              ? theme.primaryColor 
+                      color: enabled
+                          ? (isAnySubItemSelected
+                              ? theme.primaryColor
                               : theme.colorScheme.onSurface.withOpacity(0.7))
                           : theme.disabledColor,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        widget.title,
+                        title,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: isAnySubItemSelected ? FontWeight.w600 : FontWeight.normal,
-                          color: widget.enabled
-                              ? (isAnySubItemSelected 
-                                  ? theme.primaryColor 
+                          color: enabled
+                              ? (isAnySubItemSelected
+                                  ? theme.primaryColor
                                   : theme.colorScheme.onSurface)
                               : theme.disabledColor,
                         ),
                       ),
                     ),
                     RotatedBox(
-                      quarterTurns: _isExpanded ? 2 : 0,
+                      quarterTurns: isExpanded ? 2 : 0,
                       child: Icon(
                         Icons.keyboard_arrow_down,
                         size: 20,
-                        color: widget.enabled
+                        color: enabled
                             ? theme.colorScheme.onSurface.withOpacity(0.5)
                             : theme.disabledColor,
                       ),
@@ -144,9 +111,9 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem> {
             ),
           ),
         ),
-        if (_isExpanded)
+        if (isExpanded)
           Column(
-            children: widget.subItems.map((subItem) {
+            children: subItems.map((subItem) {
               final isSelected = selectedSubItem?.route == subItem.route;
               return Container(
                 margin: const EdgeInsets.only(left: 36, right: 8, bottom: 2),
@@ -157,7 +124,7 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem> {
                     splashFactory: NoSplash.splashFactory,
                     highlightColor: Colors.transparent,
                     hoverColor: Colors.transparent,
-                    onTap: widget.enabled
+                    onTap: enabled
                         ? () {
                             if (!isSelected) {
                               context.go(subItem.route);
@@ -177,8 +144,8 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem> {
                           Icon(
                             subItem.icon,
                             size: 16,
-                            color: isSelected 
-                                ? theme.primaryColor 
+                            color: isSelected
+                                ? theme.primaryColor
                                 : theme.colorScheme.onSurface.withOpacity(0.6),
                           ),
                           const SizedBox(width: 12),
@@ -187,8 +154,8 @@ class _ExpandableMenuItemState extends State<ExpandableMenuItem> {
                               subItem.title,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                color: isSelected 
-                                    ? theme.primaryColor 
+                                color: isSelected
+                                    ? theme.primaryColor
                                     : theme.colorScheme.onSurface.withOpacity(0.8),
                               ),
                             ),

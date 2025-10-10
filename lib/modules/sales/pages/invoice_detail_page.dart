@@ -1,0 +1,426 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/main_layout.dart';
+import '../models/sales_models.dart';
+import '../services/sales_service.dart';
+import '../widgets/payment_form.dart';
+
+class InvoiceDetailPage extends StatefulWidget {
+  const InvoiceDetailPage({
+    super.key,
+    required this.invoiceId,
+    this.openPaymentOnLoad = false,
+  });
+
+  final String invoiceId;
+  final bool openPaymentOnLoad;
+
+  @override
+  State<InvoiceDetailPage> createState() => _InvoiceDetailPageState();
+}
+
+class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
+  bool _isLoading = true;
+  bool _didRequestPayments = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadInvoice();
+      if (!mounted) return;
+      if (widget.openPaymentOnLoad) {
+        _openPaymentForm();
+      }
+    });
+  }
+
+  Future<void> _loadInvoice() async {
+    final salesService = context.read<SalesService>();
+    await salesService.fetchInvoice(widget.invoiceId, refresh: true);
+    if (!_didRequestPayments) {
+      await salesService.loadPayments(forceRefresh: true);
+      _didRequestPayments = true;
+    }
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Invoice? _findInvoice(SalesService service) {
+    for (final invoice in service.invoices) {
+      if (invoice.id == widget.invoiceId) {
+        return invoice;
+      }
+    }
+    return null;
+  }
+
+  void _closePage() {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop();
+      } else {
+        context.go('/sales/invoices');
+      }
+    });
+  }
+
+  Future<void> _openPaymentForm() async {
+    final salesService = context.read<SalesService>();
+    final invoice = _findInvoice(salesService);
+    if (invoice == null || invoice.balance <= 0) {
+      return;
+    }
+
+    await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: PaymentForm(
+              invoice: invoice,
+              onCompleted: () => _loadInvoice(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _markAsSent() async {
+    try {
+      final salesService = context.read<SalesService>();
+      await salesService.updateInvoiceStatus(widget.invoiceId, InvoiceStatus.sent);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Factura marcada como enviada')), 
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo actualizar el estado: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final salesService = context.watch<SalesService>();
+    final invoice = _findInvoice(salesService);
+
+    return MainLayout(
+      child: _isLoading && invoice == null
+          ? const Center(child: CircularProgressIndicator())
+          : invoice == null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.receipt_long, size: 64),
+                      const SizedBox(height: 16),
+                      const Text('Factura no encontrada'),
+                      const SizedBox(height: 16),
+                      AppButton(
+                        text: 'Volver',
+                        onPressed: _closePage,
+                      ),
+                    ],
+                  ),
+                )
+              : _buildContent(context, invoice, salesService),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, Invoice invoice, SalesService service) {
+    final payments = service.getPaymentsForInvoice(invoice.id ?? '');
+    return Column(
+      children: [
+        _buildHeader(invoice),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildSummary(invoice),
+                  const SizedBox(height: 16),
+                  _buildItems(invoice),
+                  const SizedBox(height: 16),
+                  _buildPayments(payments),
+                  const SizedBox(height: 48),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader(Invoice invoice) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          IconButton(onPressed: _closePage, icon: const Icon(Icons.arrow_back)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  invoice.invoiceNumber.isNotEmpty ? 'Factura ${invoice.invoiceNumber}' : 'Factura',
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(invoice.customerName ?? 'Cliente'),
+              ],
+            ),
+          ),
+          if (invoice.balance > 0 && invoice.status != InvoiceStatus.cancelled)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: OutlinedButton.icon(
+                onPressed: _openPaymentForm,
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Pagar'),
+              ),
+            ),
+          OutlinedButton.icon(
+            onPressed: () {
+              context.push('/sales/invoices/${invoice.id}/edit');
+            },
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Editar'),
+          ),
+          const SizedBox(width: 8),
+          if (invoice.status == InvoiceStatus.draft)
+            FilledButton.icon(
+              onPressed: _markAsSent,
+              icon: const Icon(Icons.send_outlined),
+              label: const Text('Enviar'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummary(Invoice invoice) {
+    final theme = Theme.of(context);
+    Color statusColor;
+    String statusText;
+
+    switch (invoice.status) {
+      case InvoiceStatus.draft:
+        statusColor = Colors.grey;
+        statusText = 'Borrador';
+        break;
+      case InvoiceStatus.sent:
+        statusColor = Colors.blue;
+        statusText = 'Enviada';
+        break;
+      case InvoiceStatus.paid:
+        statusColor = Colors.green;
+        statusText = 'Pagada';
+        break;
+      case InvoiceStatus.overdue:
+        statusColor = Colors.red;
+        statusText = 'Vencida';
+        break;
+      case InvoiceStatus.cancelled:
+        statusColor = Colors.orange;
+        statusText = 'Cancelada';
+        break;
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Total: ${ChileanUtils.formatCurrency(invoice.total)}',
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    Text('Pagado: ${ChileanUtils.formatCurrency(invoice.paidAmount)}'),
+                    Text(
+                      'Saldo: ${ChileanUtils.formatCurrency(invoice.balance)}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: invoice.balance <= 0 ? Colors.green : Colors.orange[800],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 16),
+                const SizedBox(width: 4),
+                Text('Emisión: ${ChileanUtils.formatDate(invoice.date)}'),
+                if (invoice.dueDate != null) ...[
+                  const SizedBox(width: 16),
+                  const Icon(Icons.schedule, size: 16),
+                  const SizedBox(width: 4),
+                  Text('Vencimiento: ${ChileanUtils.formatDate(invoice.dueDate!)}'),
+                ],
+              ],
+            ),
+            if (invoice.reference != null && invoice.reference!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text('Referencia: ${invoice.reference}'),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildItems(Invoice invoice) {
+    if (invoice.items.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Center(child: Text('Esta factura no tiene ítems asociados.')),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Detalle de ítems',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: invoice.items.length,
+              separatorBuilder: (_, __) => const Divider(height: 16),
+              itemBuilder: (context, index) {
+                final item = invoice.items[index];
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.productName ?? item.productSku ?? 'Producto',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text('${item.quantity.toStringAsFixed(0)} x ${ChileanUtils.formatCurrency(item.unitPrice)}'),
+                        ],
+                      ),
+                    ),
+                    Text(ChileanUtils.formatCurrency(item.lineTotal)),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPayments(List<Payment> payments) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'Pagos registrados',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const Spacer(),
+                if (payments.isNotEmpty)
+                  Text('${payments.length} en total', style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (payments.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: Text('Aún no hay pagos asociados.')),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: payments.length,
+                separatorBuilder: (_, __) => const Divider(height: 16),
+                itemBuilder: (context, index) {
+                  final payment = payments[index];
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              ChileanUtils.formatCurrency(payment.amount),
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Text('${payment.method.displayName} · ${ChileanUtils.formatDate(payment.date)}'),
+                            if (payment.reference != null && payment.reference!.isNotEmpty)
+                              Text('Ref: ${payment.reference}', style: Theme.of(context).textTheme.bodySmall),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

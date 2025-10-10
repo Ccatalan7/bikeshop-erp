@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/services/database_service.dart';
 import '../../accounting/models/journal_entry.dart';
@@ -16,6 +17,9 @@ class SalesService extends ChangeNotifier {
 
   DatabaseService _databaseService;
   AccountingService _accountingService;
+
+  RealtimeChannel? _invoiceChannel;
+  RealtimeChannel? _paymentChannel;
 
   final List<Invoice> _invoices = [];
   final List<Payment> _payments = [];
@@ -37,6 +41,7 @@ class SalesService extends ChangeNotifier {
   void updateDependencies(DatabaseService databaseService, AccountingService accountingService) {
     _databaseService = databaseService;
     _accountingService = accountingService;
+    _ensureRealtimeSubscriptions();
   }
 
   Future<void> loadInvoices({bool forceRefresh = false}) async {
@@ -57,6 +62,7 @@ class SalesService extends ChangeNotifier {
       _invoices
         ..clear()
         ..addAll(invoices);
+      _ensureRealtimeSubscriptions();
     } catch (e) {
       debugPrint('SalesService.loadInvoices error: $e');
       _invoiceError = 'No se pudieron cargar las facturas.';
@@ -89,7 +95,9 @@ class SalesService extends ChangeNotifier {
 
   Future<Invoice> saveInvoice(Invoice invoice, {bool postToAccounting = true}) async {
     try {
-      final payload = invoice.toFirestoreMap();
+      final payload = invoice.toFirestoreMap()
+        ..remove('paid_amount')
+        ..remove('balance');
       final isNew = invoice.id == null;
 
       Map<String, dynamic> result;
@@ -140,16 +148,16 @@ class SalesService extends ChangeNotifier {
     try {
       final data = await _databaseService.select(_paymentsCollection);
 
-      final filtered = invoiceId == null
-          ? data
-          : data.where((row) => row['invoice_id']?.toString() == invoiceId).toList();
-
-      final payments = filtered.map(Payment.fromJson).toList()
+      final payments = data.map(Payment.fromJson).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
 
       _payments
         ..clear()
         ..addAll(payments);
+      if (invoiceId != null) {
+        // Mantener caché completa; las vistas filtrarán por factura según sea necesario.
+      }
+      _ensureRealtimeSubscriptions();
     } catch (e) {
       debugPrint('SalesService.loadPayments error: $e');
       _paymentError = 'No se pudieron cargar los pagos.';
@@ -161,7 +169,7 @@ class SalesService extends ChangeNotifier {
 
   Future<Payment> registerPayment(Payment payment, {bool postToAccounting = true}) async {
     try {
-      final payload = payment.toFirestoreMap();
+  final payload = payment.toFirestoreMap();
       final isNew = payment.id == null;
       Map<String, dynamic> result;
 
@@ -177,6 +185,9 @@ class SalesService extends ChangeNotifier {
       if (postToAccounting && isNew) {
         await _postPaymentToAccounting(savedPayment);
       }
+
+      await fetchInvoice(savedPayment.invoiceId, refresh: true);
+      await loadPayments(forceRefresh: true);
 
       notifyListeners();
       return savedPayment;
@@ -208,6 +219,114 @@ class SalesService extends ChangeNotifier {
           reference.contains(search) ||
           invoiceNumber.contains(search);
     }).toList();
+  }
+
+  List<Payment> getPaymentsForInvoice(String invoiceId) {
+    return _payments.where((payment) => payment.invoiceId == invoiceId).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  Future<Invoice?> updateInvoiceStatus(String invoiceId, InvoiceStatus status) async {
+    try {
+      final payload = {
+        'status': status.name,
+      };
+      final result = await _databaseService.update(_invoicesCollection, invoiceId, payload);
+      final updated = Invoice.fromJson(result);
+      _upsertInvoice(updated);
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      debugPrint('SalesService.updateInvoiceStatus error: $e');
+      rethrow;
+    }
+  }
+
+  void _ensureRealtimeSubscriptions() {
+    final client = Supabase.instance.client;
+
+    _invoiceChannel ??= client
+        .channel('sales_invoices_stream')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: _invoicesCollection,
+          callback: _handleInvoiceChange,
+        )
+        ..subscribe();
+
+    _paymentChannel ??= client
+        .channel('sales_payments_stream')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: _paymentsCollection,
+          callback: _handlePaymentChange,
+        )
+        ..subscribe();
+  }
+
+  void _handleInvoiceChange(PostgresChangePayload payload) {
+    try {
+      switch (payload.eventType) {
+        case PostgresChangeEvent.insert:
+        case PostgresChangeEvent.update:
+          final dynamic rawNew = payload.newRecord;
+          if (rawNew is Map) {
+            final invoice = Invoice.fromJson(Map<String, dynamic>.from(rawNew.cast<String, dynamic>()));
+            _upsertInvoice(invoice);
+            notifyListeners();
+          }
+          break;
+        case PostgresChangeEvent.delete:
+          final dynamic rawOld = payload.oldRecord;
+          final id = rawOld is Map ? rawOld['id']?.toString() : null;
+          if (id != null) {
+            _invoices.removeWhere((element) => element.id == id);
+            notifyListeners();
+          }
+          break;
+        default:
+          break;
+      }
+    } catch (e) {
+      debugPrint('SalesService._handleInvoiceChange error: $e');
+    }
+  }
+
+  void _handlePaymentChange(PostgresChangePayload payload) {
+    try {
+      switch (payload.eventType) {
+        case PostgresChangeEvent.insert:
+        case PostgresChangeEvent.update:
+          final dynamic rawNew = payload.newRecord;
+          if (rawNew is Map) {
+            final payment = Payment.fromJson(Map<String, dynamic>.from(rawNew.cast<String, dynamic>()));
+            _upsertPayment(payment);
+            notifyListeners();
+          }
+          break;
+        case PostgresChangeEvent.delete:
+          final dynamic rawOld = payload.oldRecord;
+          final id = rawOld is Map ? rawOld['id']?.toString() : null;
+          if (id != null) {
+            _payments.removeWhere((element) => element.id == id);
+            notifyListeners();
+          }
+          break;
+        default:
+          break;
+      }
+    } catch (e) {
+      debugPrint('SalesService._handlePaymentChange error: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _invoiceChannel?.unsubscribe();
+    _paymentChannel?.unsubscribe();
+    super.dispose();
   }
 
   void clearCache() {

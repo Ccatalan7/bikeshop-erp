@@ -158,7 +158,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
         onTap: () {
-          context.push('/sales/invoices/${invoice.id}/edit').then((_) {
+          context.push('/sales/invoices/${invoice.id}').then((_) {
             _refreshInvoices(showErrors: false);
           });
         },
@@ -223,6 +223,40 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       color: Colors.green,
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Text(
+                    'Pagado: ${ChileanUtils.formatCurrency(invoice.paidAmount)}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    'Saldo: ${ChileanUtils.formatCurrency(invoice.balance)}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: invoice.balance <= 0
+                          ? Colors.green[700]
+                          : Colors.orange[800],
+                    ),
+                  ),
+                  const Spacer(),
+                  if (invoice.balance > 0 && invoice.status != InvoiceStatus.cancelled)
+                    TextButton.icon(
+                      onPressed: () {
+                        context.push('/sales/invoices/${invoice.id}', extra: {'openPayment': true}).then((_) {
+                          _refreshInvoices(showErrors: false);
+                        });
+                      },
+                      icon: const Icon(Icons.payments_outlined),
+                      label: const Text('Pagar'),
+                    ),
                 ],
               ),
             ],

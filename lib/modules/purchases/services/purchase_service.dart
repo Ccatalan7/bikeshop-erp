@@ -1,243 +1,180 @@
 import 'package:flutter/foundation.dart';
+
+import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/services/database_service.dart';
 import '../../accounting/services/accounting_service.dart';
-import '../models/supplier.dart';
-import '../models/purchase_order.dart';
+import '../models/purchase_invoice.dart';
 
 class PurchaseService extends ChangeNotifier {
+  PurchaseService(this._db);
+
   final DatabaseService _db;
   static AccountingService? _accountingService;
 
-  PurchaseService(this._db);
+  List<shared_supplier.Supplier> _supplierCache = const [];
+  List<PurchaseInvoice> _invoiceCache = const [];
+  bool _suppliersLoaded = false;
+  bool _invoicesLoaded = false;
 
-  // Set accounting service dependency
   static void setAccountingService(AccountingService accountingService) {
     _accountingService = accountingService;
   }
 
-  // Supplier CRUD operations
-  Future<List<Supplier>> getSuppliers({
-    String? search,
-    bool? isActive,
-  }) async {
+  Future<List<shared_supplier.Supplier>> getSuppliers({bool forceRefresh = false}) async {
+    if (_suppliersLoaded && !forceRefresh) return _supplierCache;
     try {
       final data = await _db.select('suppliers');
-      List<Supplier> suppliers = data.map((json) => Supplier.fromJson(json)).toList();
-      
-      if (search != null && search.isNotEmpty) {
-        suppliers = suppliers.where((supplier) =>
-          supplier.name.toLowerCase().contains(search.toLowerCase()) ||
-          (supplier.rut?.toLowerCase().contains(search.toLowerCase()) ?? false) ||
-          (supplier.email?.toLowerCase().contains(search.toLowerCase()) ?? false)
-        ).toList();
-      }
-
-      if (isActive != null) {
-        suppliers = suppliers.where((supplier) => supplier.isActive == isActive).toList();
-      }
-
-      return suppliers..sort((a, b) => a.name.compareTo(b.name));
+      _supplierCache = data
+          .map((row) => shared_supplier.Supplier.fromJson(row))
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+      _suppliersLoaded = true;
+      return _supplierCache;
     } catch (e) {
-      throw Exception('Error loading suppliers: $e');
+      throw Exception('No se pudieron cargar los proveedores: $e');
     }
   }
 
-  Future<Supplier?> getSupplier(int id) async {
+  Future<shared_supplier.Supplier?> getSupplier(String id) async {
+    if (id.isEmpty) return null;
+    if (!_suppliersLoaded) {
+      await getSuppliers(forceRefresh: true);
+    }
     try {
-      final data = await _db.selectById('suppliers', id.toString());
-      if (data != null) {
-        return Supplier.fromJson(data);
-      }
-      return null;
+      return _supplierCache.firstWhere((supplier) => supplier.id == id);
+    } catch (_) {}
+
+    try {
+      final data = await _db.selectById('suppliers', id);
+      if (data == null) return null;
+      return shared_supplier.Supplier.fromJson(data);
     } catch (e) {
+      debugPrint('PurchaseService: error obteniendo proveedor $id -> $e');
       return null;
     }
   }
 
-  Future<Supplier> createSupplier(Supplier supplier) async {
+  Future<shared_supplier.Supplier> createSupplier(String name) async {
     try {
-      final supplierData = supplier.toJson();
-      supplierData.remove('id');
-      supplierData.remove('created_at');
-      supplierData.remove('updated_at');
-
-      final result = await _db.insert('suppliers', supplierData);
-      
-      return supplier.copyWith(id: result['id']);
-    } catch (e) {
-      throw Exception('Error creating supplier: $e');
-    }
-  }
-
-  Future<Supplier> updateSupplier(Supplier supplier) async {
-    try {
-      final supplierData = supplier.toJson();
-      supplierData.remove('created_at');
-
-      await _db.update('suppliers', supplier.id.toString(), supplierData);
-      
+      final result = await _db.insert('suppliers', {
+        'name': name,
+      });
+      final supplier = shared_supplier.Supplier.fromJson(result);
+      _supplierCache = [..._supplierCache, supplier];
+      notifyListeners();
       return supplier;
     } catch (e) {
-      throw Exception('Error updating supplier: $e');
+      throw Exception('No se pudo crear el proveedor: $e');
     }
   }
 
-  Future<void> deleteSupplier(int id) async {
+  Future<shared_supplier.Supplier> saveSupplier(shared_supplier.Supplier supplier) async {
     try {
-      await _db.delete('suppliers', id.toString());
+      final payload = supplier.toJson();
+      if (supplier.id.isEmpty) {
+        final inserted = await _db.insert('suppliers', payload..remove('id'));
+        final created = shared_supplier.Supplier.fromJson(inserted);
+        await getSuppliers(forceRefresh: true);
+        notifyListeners();
+        return created;
+      } else {
+        payload.remove('created_at');
+        await _db.update('suppliers', supplier.id, payload);
+        await getSuppliers(forceRefresh: true);
+        notifyListeners();
+        final refreshed = await getSupplier(supplier.id);
+        return refreshed ?? supplier;
+      }
     } catch (e) {
-      throw Exception('Error deleting supplier: $e');
+      throw Exception('No se pudo guardar el proveedor: $e');
     }
   }
 
-  // Purchase Order CRUD operations
-  Future<List<PurchaseOrder>> getPurchaseOrders({
-    int? supplierId,
-    String? status,
-    DateTime? fromDate,
-    DateTime? toDate,
-  }) async {
+  Future<void> deleteSupplier(String id) async {
     try {
-      final data = await _db.select('purchase_orders');
-      List<PurchaseOrder> orders = data.map((json) => PurchaseOrder.fromJson(json)).toList();
-
-      if (supplierId != null) {
-        orders = orders.where((order) => order.supplierId == supplierId).toList();
-      }
-
-      if (status != null) {
-        orders = orders.where((order) => order.status == status).toList();
-      }
-
-      if (fromDate != null) {
-        orders = orders.where((order) => order.date.isAfter(fromDate) || order.date.isAtSameMomentAs(fromDate)).toList();
-      }
-
-      if (toDate != null) {
-        orders = orders.where((order) => order.date.isBefore(toDate) || order.date.isAtSameMomentAs(toDate)).toList();
-      }
-
-      return orders..sort((a, b) => b.date.compareTo(a.date));
-    } catch (e) {
-      throw Exception('Error loading purchase orders: $e');
-    }
-  }
-
-  Future<PurchaseOrder?> getPurchaseOrder(int id) async {
-    try {
-      final data = await _db.selectById('purchase_orders', id.toString());
-      if (data != null) {
-        final order = PurchaseOrder.fromJson(data);
-        
-        // For now, return order without items (stub implementation)
-        // TODO: Load items when database service supports complex queries
-        
-        return order;
-      }
-      return null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  Future<PurchaseOrder> createPurchaseOrder(PurchaseOrder order) async {
-    try {
-      final orderData = order.toJson();
-      orderData.remove('id');
-      orderData.remove('created_at');
-      orderData.remove('updated_at');
-      orderData.remove('items');
-
-      final result = await _db.insert('purchase_orders', orderData);
-
-      // For stub implementation, just return the order with the new ID
-      // TODO: Create order items when database service supports it
-      
-      return order.copyWith(id: result['id']);
-    } catch (e) {
-      throw Exception('Error creating purchase order: $e');
-    }
-  }
-
-  Future<PurchaseOrder> updatePurchaseOrder(PurchaseOrder order) async {
-    try {
-      final orderData = order.toJson();
-      orderData.remove('created_at');
-      orderData.remove('items');
-
-      await _db.update('purchase_orders', order.id.toString(), orderData);
-
-      // For stub implementation, just return the order
-      // TODO: Update order items when database service supports it
-      
-      return order;
-    } catch (e) {
-      throw Exception('Error updating purchase order: $e');
-    }
-  }
-
-  Future<void> deletePurchaseOrder(int id) async {
-    try {
-      // For stub implementation, just delete the main order
-      // TODO: Delete order items when database service supports it
-      await _db.delete('purchase_orders', id.toString());
-    } catch (e) {
-      throw Exception('Error deleting purchase order: $e');
-    }
-  }
-
-  Future<PurchaseOrder> receivePurchaseOrder(int id) async {
-    try {
-      final order = await getPurchaseOrder(id);
-      if (order == null) {
-        throw Exception('Purchase order not found');
-      }
-
-      // Update status
-      final updatedOrder = order.copyWith(status: 'received');
-      await updatePurchaseOrder(updatedOrder);
-
-      // Update inventory for each item
-      for (final item in order.items) {
-        await _updateInventory(item.productId, item.quantity, item.unitCost);
-      }
-
-      // Create accounting entries
-      await _createAccountingEntries(id, updatedOrder);
-
+      await _db.delete('suppliers', id);
+      await getSuppliers(forceRefresh: true);
       notifyListeners();
-      return updatedOrder;
     } catch (e) {
-      throw Exception('Error receiving purchase order: $e');
+      throw Exception('No se pudo eliminar el proveedor: $e');
     }
   }
 
-  Future<void> _updateInventory(int productId, int quantityReceived, double unitCost) async {
+  Future<List<PurchaseInvoice>> getPurchaseInvoices({bool forceRefresh = false}) async {
+    if (_invoicesLoaded && !forceRefresh) return _invoiceCache;
     try {
-      // Stub implementation - would normally update product inventory
-      debugPrint('Would update inventory for product $productId: +$quantityReceived units at \$${unitCost.toStringAsFixed(2)} each');
+      final data = await _db.select('purchase_invoices');
+      _invoiceCache = data
+          .map((row) => PurchaseInvoice.fromJson(row))
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+      _invoicesLoaded = true;
+      return _invoiceCache;
     } catch (e) {
-      debugPrint('Error updating inventory: $e');
+      throw Exception('No se pudieron cargar las facturas de compra: $e');
     }
   }
 
-  Future<void> _createAccountingEntries(int orderId, PurchaseOrder order) async {
+  Future<PurchaseInvoice?> getPurchaseInvoice(String id) async {
     try {
-      if (_accountingService == null) {
-        debugPrint('Accounting service not set, skipping accounting entries');
-        return;
+      final data = await _db.selectById('purchase_invoices', id);
+      if (data == null) return null;
+      return PurchaseInvoice.fromJson(data);
+    } catch (e) {
+      throw Exception('No se pudo obtener la factura: $e');
+    }
+  }
+
+  Future<PurchaseInvoice> savePurchaseInvoice(PurchaseInvoice invoice) async {
+    try {
+      PurchaseInvoice saved;
+      if (invoice.id == null) {
+        final payload = invoice.toJson()
+          ..remove('id');
+        final result = await _db.insert('purchase_invoices', payload);
+        saved = PurchaseInvoice.fromJson(result);
+      } else {
+        final payload = invoice.toJson();
+        payload.remove('created_at');
+        await _db.update('purchase_invoices', invoice.id!, payload);
+        final refreshed = await getPurchaseInvoice(invoice.id!);
+        saved = refreshed ?? invoice;
       }
+
+      await getPurchaseInvoices(forceRefresh: true);
+      await _postAccountingEntry(saved);
+      notifyListeners();
+      return saved;
+    } catch (e) {
+      throw Exception('No se pudo guardar la factura de compra: $e');
+    }
+  }
+
+  Future<void> deletePurchaseInvoice(String id) async {
+    try {
+      await _db.delete('purchase_invoices', id);
+      await getPurchaseInvoices(forceRefresh: true);
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo eliminar la factura: $e');
+    }
+  }
+
+  Future<void> _postAccountingEntry(PurchaseInvoice invoice) async {
+    try {
+      if (_accountingService == null) return;
+      if (invoice.status == PurchaseInvoiceStatus.draft) return;
 
       await _accountingService!.postPurchaseEntry(
-        date: DateTime.now(),
-        supplierName: 'Proveedor ${order.supplierId}', // TODO: Get actual supplier name
-        invoiceNumber: 'PO-${order.orderNumber}',
-        subtotal: order.subtotal,
-        ivaAmount: order.tax,
-        total: order.total,
+        date: invoice.date,
+        supplierName: invoice.supplierName ?? 'Proveedor',
+        invoiceNumber: invoice.invoiceNumber,
+        subtotal: invoice.subtotal,
+        ivaAmount: invoice.ivaAmount,
+        total: invoice.total,
       );
     } catch (e) {
-      debugPrint('Error creating accounting entries: $e');
+      debugPrint('PurchaseService: error creando asiento contable -> $e');
     }
   }
 }

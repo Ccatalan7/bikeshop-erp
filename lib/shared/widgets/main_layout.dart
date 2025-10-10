@@ -23,6 +23,8 @@ const List<MenuSubItem> _accountingMenuItems = [
   ),
 ];
 
+const String _accountingSectionKey = 'accounting';
+
 const List<MenuSubItem> _crmMenuItems = [
   MenuSubItem(
     icon: Icons.people_outline,
@@ -35,6 +37,8 @@ const List<MenuSubItem> _crmMenuItems = [
     route: '/crm/customers/new',
   ),
 ];
+
+const String _crmSectionKey = 'crm';
 
 const List<MenuSubItem> _inventoryMenuItems = [
   MenuSubItem(
@@ -54,6 +58,8 @@ const List<MenuSubItem> _inventoryMenuItems = [
   ),
 ];
 
+const String _inventorySectionKey = 'inventory';
+
 const List<MenuSubItem> _salesMenuItems = [
   MenuSubItem(
     icon: Icons.receipt_long_outlined,
@@ -67,10 +73,12 @@ const List<MenuSubItem> _salesMenuItems = [
   ),
   MenuSubItem(
     icon: Icons.payments_outlined,
-    title: 'Registrar pago',
-    route: '/payments/new',
+    title: 'Pagos',
+    route: '/sales/payments',
   ),
 ];
+
+const String _salesSectionKey = 'sales';
 
 const List<MenuSubItem> _purchasesMenuItems = [
   MenuSubItem(
@@ -90,6 +98,8 @@ const List<MenuSubItem> _purchasesMenuItems = [
   ),
 ];
 
+const String _purchasesSectionKey = 'purchases';
+
 const List<MenuSubItem> _posMenuItems = [
   MenuSubItem(
     icon: Icons.point_of_sale,
@@ -107,6 +117,8 @@ const List<MenuSubItem> _posMenuItems = [
     route: '/pos/payment',
   ),
 ];
+
+const String _posSectionKey = 'pos';
 
 class MainLayout extends StatelessWidget {
   final Widget? child;
@@ -253,14 +265,81 @@ Future<void> _handleLogout(BuildContext context) async {
   }
 }
 
-class AppSidebar extends StatelessWidget {
+class AppSidebar extends StatefulWidget {
   const AppSidebar({super.key});
+
+  @override
+  State<AppSidebar> createState() => _AppSidebarState();
+}
+
+class _AppSidebarState extends State<AppSidebar> {
+  String? _expandedSection;
+  String? _lastLocation;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final currentLocation = GoRouterState.of(context).uri.path;
+    if (currentLocation != _lastLocation) {
+      _lastLocation = currentLocation;
+      final matchingSection = _resolveSectionForPath(currentLocation);
+      if (matchingSection != _expandedSection) {
+        _expandedSection = matchingSection;
+      }
+    }
+  }
+
+  void _handleExpansionChange(String sectionKey, bool expand) {
+    if (expand) {
+      if (_expandedSection == sectionKey) {
+        return;
+      }
+      setState(() {
+        _expandedSection = sectionKey;
+      });
+    } else if (_expandedSection == sectionKey) {
+      setState(() {
+        _expandedSection = null;
+      });
+    }
+  }
+
+  String? _resolveSectionForPath(String location) {
+    if (_matchesLocation(location, _accountingMenuItems)) {
+      return _accountingSectionKey;
+    }
+    if (_matchesLocation(location, _crmMenuItems)) {
+      return _crmSectionKey;
+    }
+    if (_matchesLocation(location, _inventoryMenuItems)) {
+      return _inventorySectionKey;
+    }
+    if (_matchesLocation(location, _salesMenuItems)) {
+      return _salesSectionKey;
+    }
+    if (_matchesLocation(location, _purchasesMenuItems)) {
+      return _purchasesSectionKey;
+    }
+    if (_matchesLocation(location, _posMenuItems)) {
+      return _posSectionKey;
+    }
+    return null;
+  }
+
+  bool _matchesLocation(String location, List<MenuSubItem> items) {
+    for (final item in items) {
+      if (location == item.route || location.startsWith('${item.route}/')) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
     final currentLocation = GoRouterState.of(context).uri.path;
     final theme = Theme.of(context);
-    
+
     return Container(
       color: theme.colorScheme.surface,
       child: Column(
@@ -343,6 +422,8 @@ class AppSidebar extends StatelessWidget {
                   title: 'Contabilidad',
                   currentLocation: currentLocation,
                   subItems: _accountingMenuItems,
+                  isExpanded: _expandedSection == _accountingSectionKey,
+                  onExpansionChanged: (expand) => _handleExpansionChange(_accountingSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -351,6 +432,8 @@ class AppSidebar extends StatelessWidget {
                   title: 'Clientes',
                   currentLocation: currentLocation,
                   subItems: _crmMenuItems,
+                  isExpanded: _expandedSection == _crmSectionKey,
+                  onExpansionChanged: (expand) => _handleExpansionChange(_crmSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -359,6 +442,8 @@ class AppSidebar extends StatelessWidget {
                   title: 'Inventario',
                   currentLocation: currentLocation,
                   subItems: _inventoryMenuItems,
+                  isExpanded: _expandedSection == _inventorySectionKey,
+                  onExpansionChanged: (expand) => _handleExpansionChange(_inventorySectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -367,6 +452,8 @@ class AppSidebar extends StatelessWidget {
                   title: 'Ventas',
                   currentLocation: currentLocation,
                   subItems: _salesMenuItems,
+                  isExpanded: _expandedSection == _salesSectionKey,
+                  onExpansionChanged: (expand) => _handleExpansionChange(_salesSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -375,6 +462,8 @@ class AppSidebar extends StatelessWidget {
                   title: 'Compras',
                   currentLocation: currentLocation,
                   subItems: _purchasesMenuItems,
+                  isExpanded: _expandedSection == _purchasesSectionKey,
+                  onExpansionChanged: (expand) => _handleExpansionChange(_purchasesSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -383,6 +472,8 @@ class AppSidebar extends StatelessWidget {
                   title: 'POS',
                   currentLocation: currentLocation,
                   subItems: _posMenuItems,
+                  isExpanded: _expandedSection == _posSectionKey,
+                  onExpansionChanged: (expand) => _handleExpansionChange(_posSectionKey, expand),
                 ),
                 
                 const SizedBox(height: 8),

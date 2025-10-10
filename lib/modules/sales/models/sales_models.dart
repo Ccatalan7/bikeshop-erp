@@ -36,6 +36,8 @@ class Invoice {
   final double subtotal;
   final double ivaAmount;
   final double total;
+  final double paidAmount;
+  final double balance;
   final List<InvoiceItem> items;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -53,6 +55,8 @@ class Invoice {
     this.subtotal = 0,
     this.ivaAmount = 0,
     this.total = 0,
+    this.paidAmount = 0,
+    this.balance = 0,
     this.items = const [],
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -72,6 +76,8 @@ class Invoice {
     double? subtotal,
     double? ivaAmount,
     double? total,
+    double? paidAmount,
+    double? balance,
     List<InvoiceItem>? items,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -89,6 +95,8 @@ class Invoice {
       subtotal: subtotal ?? this.subtotal,
       ivaAmount: ivaAmount ?? this.ivaAmount,
       total: total ?? this.total,
+      paidAmount: paidAmount ?? this.paidAmount,
+      balance: balance ?? this.balance,
       items: items ?? this.items,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -110,6 +118,9 @@ class Invoice {
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0,
       ivaAmount: (json['iva_amount'] as num?)?.toDouble() ?? 0,
       total: (json['total'] as num?)?.toDouble() ?? 0,
+      paidAmount: (json['paid_amount'] as num?)?.toDouble() ?? 0,
+      balance: (json['balance'] as num?)?.toDouble() ??
+          ((json['total'] as num?)?.toDouble() ?? 0) - ((json['paid_amount'] as num?)?.toDouble() ?? 0),
   items: rawItems.map((item) => InvoiceItem.fromJson(_ensureMap(item))).toList(),
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
@@ -130,13 +141,15 @@ class Invoice {
       'subtotal': subtotal,
       'iva_amount': ivaAmount,
       'total': total,
+      'paid_amount': paidAmount,
+      'balance': balance,
       'items': items.map((item) => item.toFirestoreMap()).toList(),
     };
   }
 
-  double get paidAmount => status == InvoiceStatus.paid ? total : 0;
+  double get remainingAmount => balance;
 
-  double get remainingAmount => total - paidAmount;
+  bool get isPaid => status == InvoiceStatus.paid;
 }
 
 enum InvoiceStatus {

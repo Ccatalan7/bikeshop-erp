@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
-import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/models/supplier.dart';
+import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
-import '../models/supplier.dart';
-// import '../services/purchase_service.dart'; // TODO: Fix service
+import '../services/purchase_service.dart';
 
 class SupplierListPage extends StatefulWidget {
   const SupplierListPage({super.key});
@@ -16,15 +18,20 @@ class SupplierListPage extends StatefulWidget {
 
 class _SupplierListPageState extends State<SupplierListPage> {
   final TextEditingController _searchController = TextEditingController();
-  List<Supplier> _suppliers = [];
-  List<Supplier> _filteredSuppliers = [];
+  List<Supplier> _suppliers = const [];
+  List<Supplier> _filteredSuppliers = const [];
   bool _isLoading = true;
   String _selectedFilter = 'all';
+
+  late PurchaseService _purchaseService;
 
   @override
   void initState() {
     super.initState();
-    _loadSuppliers();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _purchaseService = context.read<PurchaseService>();
+      _loadSuppliers();
+    });
   }
 
   @override
@@ -36,8 +43,7 @@ class _SupplierListPageState extends State<SupplierListPage> {
   Future<void> _loadSuppliers() async {
     try {
       setState(() => _isLoading = true);
-      // TODO: Implement actual supplier loading
-      final suppliers = <Supplier>[];
+      final suppliers = await _purchaseService.getSuppliers(forceRefresh: true);
       setState(() {
         _suppliers = suppliers;
         _filteredSuppliers = suppliers;
@@ -47,7 +53,10 @@ class _SupplierListPageState extends State<SupplierListPage> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar proveedores: $e')),
+          SnackBar(
+            content: Text('Error al cargar proveedores: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -92,7 +101,12 @@ class _SupplierListPageState extends State<SupplierListPage> {
                 AppButton(
                   text: 'Nuevo Proveedor',
                   icon: Icons.add,
-                  onPressed: () => context.push('/suppliers/new'),
+                  onPressed: () async {
+                    final created = await context.push<bool>('/purchases/suppliers/new');
+                    if (created == true) {
+                      _loadSuppliers();
+                    }
+                  },
                 ),
               ],
             ),
@@ -177,42 +191,47 @@ class _SupplierListPageState extends State<SupplierListPage> {
             AppButton(
               text: 'Agregar Proveedor',
               icon: Icons.add,
-              onPressed: () => context.push('/suppliers/new'),
-            ),
-          ],
-        ),
-      );
-    } else {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.search_off,
-              size: 80,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No se encontraron proveedores',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Intenta con otros términos de búsqueda',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
+              onPressed: () async {
+                final created = await context.push<bool>('/purchases/suppliers/new');
+                if (created == true) {
+                  _loadSuppliers();
+                }
+              },
             ),
           ],
         ),
       );
     }
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.search_off,
+            size: 72,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No encontramos resultados',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Intenta con otros términos de búsqueda',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildSupplierList() {
@@ -241,7 +260,8 @@ class _SupplierListPageState extends State<SupplierListPage> {
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (supplier.rut != null) Text('RUT: ${supplier.rut}'),
+                if (supplier.rut != null && supplier.rut!.isNotEmpty)
+                  Text('RUT: ${ChileanUtils.formatRut(supplier.rut!)}'),
                 if (supplier.email != null) Text(supplier.email!),
                 if (supplier.phone != null) Text('Tel: ${supplier.phone}'),
               ],
@@ -271,7 +291,12 @@ class _SupplierListPageState extends State<SupplierListPage> {
                 const Icon(Icons.chevron_right),
               ],
             ),
-            onTap: () => context.push('/suppliers/${supplier.id}'),
+            onTap: () async {
+              final updated = await context.push<bool>('/purchases/suppliers/${supplier.id}/edit');
+              if (updated == true) {
+                _loadSuppliers();
+              }
+            },
           ),
         );
       },

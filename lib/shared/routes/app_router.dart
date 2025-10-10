@@ -17,11 +17,12 @@ import '../../modules/inventory/pages/category_form_page.dart';
 import '../../modules/inventory/pages/stock_movement_list_page.dart';
 import '../../modules/sales/pages/invoice_list_page.dart';
 import '../../modules/sales/pages/invoice_form_page.dart';
+import '../../modules/sales/pages/invoice_detail_page.dart';
 import '../../modules/sales/pages/payment_form_page.dart';
 import '../../modules/purchases/pages/supplier_list_page.dart';
 import '../../modules/purchases/pages/supplier_form_page.dart';
-import '../../modules/purchases/pages/purchase_order_list_page.dart';
-import '../../modules/purchases/pages/purchase_order_form_page.dart';
+import '../../modules/purchases/pages/purchase_invoice_list_page.dart';
+import '../../modules/purchases/pages/purchase_invoice_form_page.dart';
 import '../../modules/pos/pages/pos_dashboard_page.dart';
 import '../../modules/pos/pages/pos_cart_page.dart';
 import '../../modules/pos/pages/pos_payment_page.dart';
@@ -161,6 +162,15 @@ class AppRouter {
         builder: (context, state) => const InvoiceFormPage(),
       ),
       GoRoute(
+        path: '/sales/invoices/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final extra = state.extra;
+          final openPayment = extra is Map && extra['openPayment'] == true;
+          return InvoiceDetailPage(invoiceId: id, openPaymentOnLoad: openPayment);
+        },
+      ),
+      GoRoute(
         path: '/sales/invoices/:id/edit',
         builder: (context, state) {
           final id = state.pathParameters['id']!;
@@ -168,13 +178,8 @@ class AppRouter {
         },
       ),
       GoRoute(
-        path: '/payments/new',
-        builder: (context, state) {
-          final paymentId = state.uri.queryParameters['payment_id'];
-          return PaymentFormPage(
-            paymentId: paymentId != null ? int.parse(paymentId) : null,
-          );
-        },
+        path: '/sales/payments',
+        builder: (context, state) => const PaymentsPage(),
       ),
       
       // Purchases Module
@@ -195,17 +200,17 @@ class AppRouter {
       ),
       GoRoute(
         path: '/purchases',
-        builder: (context, state) => const PurchaseOrderListPage(),
+        builder: (context, state) => const PurchaseInvoiceListPage(),
       ),
       GoRoute(
         path: '/purchases/new',
-        builder: (context, state) => const PurchaseOrderFormPage(),
+        builder: (context, state) => const PurchaseInvoiceFormPage(),
       ),
       GoRoute(
         path: '/purchases/:id/edit',
         builder: (context, state) {
           final id = state.pathParameters['id']!;
-          return PurchaseOrderFormPage(orderId: id);
+          return PurchaseInvoiceFormPage(invoiceId: id);
         },
       ),
       

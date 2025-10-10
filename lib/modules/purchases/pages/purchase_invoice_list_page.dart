@@ -1,0 +1,290 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/search_bar_widget.dart';
+import '../models/purchase_invoice.dart';
+import '../services/purchase_service.dart';
+
+class PurchaseInvoiceListPage extends StatefulWidget {
+  const PurchaseInvoiceListPage({super.key});
+
+  @override
+  State<PurchaseInvoiceListPage> createState() => _PurchaseInvoiceListPageState();
+}
+
+class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
+  final TextEditingController _searchController = TextEditingController();
+
+  late PurchaseService _purchaseService;
+  List<PurchaseInvoice> _invoices = const [];
+  List<PurchaseInvoice> _filtered = const [];
+  bool _isLoading = true;
+  String _selectedStatus = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _purchaseService = context.read<PurchaseService>();
+      _loadInvoices();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadInvoices({bool refresh = false}) async {
+    setState(() => _isLoading = true);
+    try {
+      final invoices = await _purchaseService.getPurchaseInvoices(forceRefresh: refresh);
+      setState(() {
+        _invoices = invoices;
+        _filtered = invoices;
+        _isLoading = false;
+      });
+      _filterInvoices(_searchController.text);
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al cargar facturas de compra: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _filterInvoices(String query) {
+    final filtered = _invoices.where((invoice) {
+      final matchesSearch = query.isEmpty ||
+          invoice.invoiceNumber.toLowerCase().contains(query.toLowerCase()) ||
+          (invoice.supplierName?.toLowerCase().contains(query.toLowerCase()) ?? false) ||
+          (invoice.supplierRut?.toLowerCase().contains(query.toLowerCase()) ?? false);
+
+      final matchesStatus = _selectedStatus == 'all' || invoice.status.name == _selectedStatus;
+
+      return matchesSearch && matchesStatus;
+    }).toList();
+
+    setState(() => _filtered = filtered);
+  }
+
+  Color _statusColor(PurchaseInvoiceStatus status) {
+    switch (status) {
+      case PurchaseInvoiceStatus.draft:
+        return Colors.grey;
+      case PurchaseInvoiceStatus.received:
+        return Colors.blue;
+      case PurchaseInvoiceStatus.paid:
+        return Colors.green;
+      case PurchaseInvoiceStatus.cancelled:
+        return Colors.red;
+    }
+  }
+
+  String _statusLabel(PurchaseInvoiceStatus status) {
+    switch (status) {
+      case PurchaseInvoiceStatus.draft:
+        return 'Borrador';
+      case PurchaseInvoiceStatus.received:
+        return 'Recibida';
+      case PurchaseInvoiceStatus.paid:
+        return 'Pagada';
+      case PurchaseInvoiceStatus.cancelled:
+        return 'Anulada';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MainLayout(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Facturas de compra',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                AppButton(
+                  text: 'Nueva factura',
+                  icon: Icons.add,
+                  onPressed: () async {
+                    final created = await context.push<bool>('/purchases/new');
+                    if (created == true) {
+                      _loadInvoices(refresh: true);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              children: [
+                SearchBarWidget(
+                  controller: _searchController,
+                  hintText: 'Buscar por número, proveedor o RUT...',
+                  onChanged: _filterInvoices,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Text('Estado:'),
+                    const SizedBox(width: 12),
+                    DropdownButton<String>(
+                      value: _selectedStatus,
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _selectedStatus = value);
+                        _filterInvoices(_searchController.text);
+                      },
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('Todos')),
+                        DropdownMenuItem(value: 'draft', child: Text('Borrador')),
+                        DropdownMenuItem(value: 'received', child: Text('Recibida')),
+                        DropdownMenuItem(value: 'paid', child: Text('Pagada')),
+                        DropdownMenuItem(value: 'cancelled', child: Text('Anulada')),
+                      ],
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      tooltip: 'Actualizar',
+                      onPressed: () => _loadInvoices(refresh: true),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filtered.isEmpty
+                    ? _EmptyState(onCreate: () => context.push('/purchases/new'))
+                    : _buildList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildList() {
+    return RefreshIndicator(
+      onRefresh: () => _loadInvoices(refresh: true),
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _filtered.length,
+        itemBuilder: (context, index) {
+          final invoice = _filtered[index];
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: _statusColor(invoice.status),
+                child: const Icon(Icons.receipt_long, color: Colors.white),
+              ),
+              title: Text(
+                invoice.invoiceNumber,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (invoice.supplierName != null && invoice.supplierName!.isNotEmpty)
+                    Text(invoice.supplierName!),
+                  Text('Fecha: ${ChileanUtils.formatDate(invoice.date)}'),
+                  Text('Total: ${ChileanUtils.formatCurrency(invoice.total)}'),
+                ],
+              ),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _statusColor(invoice.status).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _statusLabel(invoice.status),
+                      style: TextStyle(
+                        color: _statusColor(invoice.status),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              onTap: () async {
+                final refreshed = await context.push<bool>('/purchases/${invoice.id}/edit');
+                if (refreshed == true) {
+                  _loadInvoices(refresh: true);
+                }
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final VoidCallback onCreate;
+
+  const _EmptyState({required this.onCreate});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.receipt_long, size: 80, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          Text(
+            'No hay facturas de compra registradas',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Comienza registrando tus compras y ajustando inventario e IVA automáticamente.',
+            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          AppButton(
+            text: 'Crear factura',
+            icon: Icons.add,
+            onPressed: onCreate,
+          ),
+        ],
+      ),
+    );
+  }
+}

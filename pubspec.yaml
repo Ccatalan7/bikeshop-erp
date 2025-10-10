@@ -20,6 +20,7 @@ dependencies:
   
   # Supabase
   supabase_flutter: ^2.6.0
+
   
   # HTTP & Networking
   http: ^1.2.1
