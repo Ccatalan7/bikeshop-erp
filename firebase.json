@@ -1,0 +1,27 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "project-vinabike",
+          "configurations": {
+            "android": "1:452996097799:android:acfa1afc2da1411e7e47a2",
+            "ios": "1:452996097799:ios:9f19dd71884b7dde7e47a2",
+            "web": "1:452996097799:web:6af010266020d8ee7e47a2",
+            "windows": "1:452996097799:web:859d3944359a5fd27e47a2"
+          }
+        }
+      },
+      "android": {
+        "default": {
+          "projectId": "project-vinabike",
+          "appId": "1:452996097799:android:acfa1afc2da1411e7e47a2",
+          "fileOutput": "android/app/google-services.json"
+        }
+      }
+    }
+  }
+}

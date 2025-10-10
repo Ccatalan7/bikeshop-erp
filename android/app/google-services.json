@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "452996097799",
+    "project_id": "project-vinabike",
+    "storage_bucket": "project-vinabike.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:452996097799:android:acfa1afc2da1411e7e47a2",
+        "android_client_info": {
+          "package_name": "com.vinabike.erp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "452996097799-fqend7u92h8j41c10lbkirm2kshvph1c.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.vinabike.erp",
+            "certificate_hash": "4ab39e7440056db4f7a637a61e24473eb558dda8"
+          }
+        },
+        {
+          "client_id": "452996097799-qip6oipkcgep53acagmjalse3jtok7j4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDUNqLY7jx7p8bsq5iJYNuAlelK6wJBnQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "452996097799-qip6oipkcgep53acagmjalse3jtok7j4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "452996097799-s6mfnp814p0goo4eltbu1sco0hf5n87e.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.vinabike.erp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
