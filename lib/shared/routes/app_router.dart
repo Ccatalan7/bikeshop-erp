@@ -120,7 +120,14 @@ class AppRouter {
       // Inventory Module
       GoRoute(
         path: '/inventory/products',
-        builder: (context, state) => const ProductListPage(),
+        builder: (context, state) {
+          final categoryId = state.uri.queryParameters['category'];
+          final supplierId = state.uri.queryParameters['supplier'];
+          return ProductListPage(
+            initialCategoryId: categoryId,
+            initialSupplierId: supplierId,
+          );
+        },
       ),
       GoRoute(
         path: '/inventory/products/new',

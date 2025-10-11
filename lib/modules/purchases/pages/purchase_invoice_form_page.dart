@@ -525,6 +525,206 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
+  Future<void> _revertToDraft() async {
+    if (widget.invoiceId == null) return;
+    
+    final statusName = _status == PurchaseInvoiceStatus.received 
+        ? 'recibida' 
+        : 'pagada';
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('⚠️ Confirmar reversión'),
+        content: Text(
+          '¿Volver esta factura $statusName a BORRADOR?\n\n'
+          '⚠️ ADVERTENCIA: Esto reversará:\n'
+          '• Los movimientos de inventario (reducirá el stock)\n'
+          '• Los asientos contables (creará asientos de reverso)\n\n'
+          'Solo usa esta opción si cometiste un error.\n\n'
+          '¿Estás seguro?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Sí, revertir'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm != true) return;
+    
+    setState(() => _isUpdatingStatus = true);
+    
+    try {
+      final updated = await _purchaseService.revertToDraft(widget.invoiceId!);
+      if (!mounted) return;
+      
+      if (updated != null) {
+        setState(() {
+          _status = updated.status;
+          _loadedInvoice = updated;
+        });
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Factura revertida a borrador. Inventario y contabilidad actualizados.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al revertir: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingStatus = false);
+      }
+    }
+  }
+
+  Future<void> _revertToReceived() async {
+    if (widget.invoiceId == null) return;
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar reversión'),
+        content: const Text(
+          '¿Volver esta factura pagada a RECIBIDA?\n\n'
+          'Esto solo cambiará el estado. El inventario y '
+          'la contabilidad se mantendrán intactos.\n\n'
+          '¿Continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Sí, revertir'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm != true) return;
+    
+    setState(() => _isUpdatingStatus = true);
+    
+    try {
+      final updated = await _purchaseService.revertToReceived(widget.invoiceId!);
+      if (!mounted) return;
+      
+      if (updated != null) {
+        setState(() {
+          _status = updated.status;
+          _loadedInvoice = updated;
+        });
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Factura revertida a recibida'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al revertir: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingStatus = false);
+      }
+    }
+  }
+
+  Future<void> _deleteInvoice() async {
+    if (widget.invoiceId == null) return;
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Eliminar factura'),
+          ],
+        ),
+        content: Text(
+          '¿Estás seguro de que deseas eliminar la factura '
+          '${_invoiceNumberController.text}?\n\n'
+          'Esta acción no se puede deshacer.\n\n'
+          'Nota: Solo se pueden eliminar facturas en estado Borrador.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Sí, eliminar'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm != true) return;
+    
+    setState(() => _isUpdatingStatus = true);
+    
+    try {
+      await _purchaseService.deletePurchaseInvoice(widget.invoiceId!);
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Factura eliminada correctamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      
+      // Return to list page
+      context.pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al eliminar: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingStatus = false);
+      }
+    }
+  }
+
   void _removeLine(_PurchaseLineEntry entry) {
     setState(() {
       _lineEntries.remove(entry);
@@ -557,6 +757,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         _status == PurchaseInvoiceStatus.draft;
     final canMarkAsPaid = widget.invoiceId != null && 
         _status == PurchaseInvoiceStatus.received;
+    final canRevertToDraft = widget.invoiceId != null && 
+        (_status == PurchaseInvoiceStatus.received || _status == PurchaseInvoiceStatus.paid);
+    final canRevertToReceived = widget.invoiceId != null && 
+        _status == PurchaseInvoiceStatus.paid;
+    final canDelete = widget.invoiceId != null && 
+        _status == PurchaseInvoiceStatus.draft;
     
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -584,7 +790,56 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             ),
           ),
           const SizedBox(width: 8),
-          // Status action buttons
+          // Delete button (only for draft invoices)
+          if (canDelete) ...[
+            IconButton(
+              onPressed: _isUpdatingStatus ? null : _deleteInvoice,
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              tooltip: 'Eliminar factura',
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.red.withOpacity(0.1),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          // Reversal buttons (backward flow)
+          if (canRevertToReceived) ...[
+            ElevatedButton.icon(
+              onPressed: _isUpdatingStatus ? null : _revertToReceived,
+              icon: _isUpdatingStatus
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.undo),
+              label: const Text('Volver a Recibida'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          if (canRevertToDraft) ...[
+            ElevatedButton.icon(
+              onPressed: _isUpdatingStatus ? null : _revertToDraft,
+              icon: _isUpdatingStatus
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.undo),
+              label: const Text('Volver a Borrador'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[700],
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          // Forward flow buttons
           if (canMarkAsReceived) ...[
             ElevatedButton.icon(
               onPressed: _isUpdatingStatus ? null : _markAsReceived,

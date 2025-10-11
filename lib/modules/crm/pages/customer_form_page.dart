@@ -8,6 +8,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
+import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/crm_models.dart';
 import '../services/customer_service.dart';
@@ -117,10 +118,9 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
       
       // Upload image if selected
       if (_selectedImage != null) {
-        final uploadUrl = await ImageService.uploadImage(
+        final uploadUrl = await ImageService.uploadToDefaultBucket(
           _selectedImage!,
-          'customer-images',
-          'customers',
+          StorageFolders.customers,
         );
 
         if (uploadUrl == null) {

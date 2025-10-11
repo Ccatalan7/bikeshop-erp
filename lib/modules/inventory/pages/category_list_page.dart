@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
@@ -8,6 +9,8 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/database_service.dart';
 import '../models/category_models.dart';
 import '../services/category_service.dart';
+
+enum CategoryViewMode { list, cards }
 
 class CategoryListPage extends StatefulWidget {
   const CategoryListPage({super.key});
@@ -24,6 +27,7 @@ class _CategoryListPageState extends State<CategoryListPage> {
   bool _isLoading = true;
   String _searchTerm = '';
   bool _showInactiveOnly = false;
+  CategoryViewMode _viewMode = CategoryViewMode.list;
 
   @override
   void initState() {
@@ -182,6 +186,30 @@ class _CategoryListPageState extends State<CategoryListPage> {
                     ),
                   ),
                 ),
+                // View mode toggle
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.view_list),
+                        onPressed: () => setState(() => _viewMode = CategoryViewMode.list),
+                        color: _viewMode == CategoryViewMode.list ? Colors.blue : Colors.grey,
+                        tooltip: 'Vista de lista',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.grid_view),
+                        onPressed: () => setState(() => _viewMode = CategoryViewMode.cards),
+                        color: _viewMode == CategoryViewMode.cards ? Colors.blue : Colors.grey,
+                        tooltip: 'Vista de tarjetas',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
                 AppButton(
                   text: 'Nueva Categoría',
                   icon: Icons.add,
@@ -322,30 +350,88 @@ class _CategoryListPageState extends State<CategoryListPage> {
 
     return RefreshIndicator(
       onRefresh: _loadCategories,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        itemCount: _filteredCategories.length,
-        itemBuilder: (context, index) {
-          final category = _filteredCategories[index];
-          return _buildCategoryCard(category);
-        },
-      ),
+      child: _viewMode == CategoryViewMode.list
+          ? ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              itemCount: _filteredCategories.length,
+              itemBuilder: (context, index) {
+                final category = _filteredCategories[index];
+                return _buildCategoryListItem(category);
+              },
+            )
+          : GridView.builder(
+              padding: const EdgeInsets.all(16.0),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 1.0,
+              ),
+              itemCount: _filteredCategories.length,
+              itemBuilder: (context, index) {
+                final category = _filteredCategories[index];
+                return _buildCategoryGridItem(category);
+              },
+            ),
     );
   }
 
-  Widget _buildCategoryCard(Category category) {
+  Widget _buildCategoryListItem(Category category) {
+    final bool hasImage = category.imageUrl != null && category.imageUrl!.isNotEmpty;
+    
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: category.isActive 
-              ? Colors.blue.withOpacity(0.1) 
-              : Colors.grey.withOpacity(0.1),
-          child: Icon(
-            Icons.category,
-            color: category.isActive ? Colors.blue : Colors.grey,
-          ),
-        ),
+        onTap: () {
+          // Navigate to products filtered by this category
+          context.push('/inventory/products?category=${category.id}');
+        },
+        leading: hasImage
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  imageUrl: category.imageUrl!,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    width: 56,
+                    height: 56,
+                    color: Colors.grey[200],
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: category.isActive 
+                          ? Colors.blue.withOpacity(0.1) 
+                          : Colors.grey.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.category,
+                      color: category.isActive ? Colors.blue : Colors.grey,
+                    ),
+                  ),
+                ),
+              )
+            : Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: category.isActive 
+                      ? Colors.blue.withOpacity(0.1) 
+                      : Colors.grey.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.category,
+                  color: category.isActive ? Colors.blue : Colors.grey,
+                ),
+              ),
         title: Text(
           category.name,
           style: TextStyle(
@@ -429,11 +515,171 @@ class _CategoryListPageState extends State<CategoryListPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryGridItem(Category category) {
+    final bool hasImage = category.imageUrl != null && category.imageUrl!.isNotEmpty;
+    
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
         onTap: () {
-          context.push('/inventory/categories/${category.id}/edit').then((_) {
-            _loadCategories();
-          });
+          // Navigate to products filtered by this category
+          context.push('/inventory/products?category=${category.id}');
         },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Image section
+            Expanded(
+              flex: 3,
+              child: hasImage
+                  ? CachedNetworkImage(
+                      imageUrl: category.imageUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: category.isActive 
+                            ? Colors.blue.withOpacity(0.1) 
+                            : Colors.grey.withOpacity(0.1),
+                        child: Icon(
+                          Icons.category,
+                          size: 48,
+                          color: category.isActive ? Colors.blue : Colors.grey,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      color: category.isActive 
+                          ? Colors.blue.withOpacity(0.1) 
+                          : Colors.grey.withOpacity(0.1),
+                      child: Icon(
+                        Icons.category,
+                        size: 48,
+                        color: category.isActive ? Colors.blue : Colors.grey,
+                      ),
+                    ),
+            ),
+            // Info section
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            category.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: category.isActive ? null : Colors.grey,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          onSelected: (value) {
+                            switch (value) {
+                              case 'edit':
+                                context.push('/inventory/categories/${category.id}/edit').then((_) {
+                                  _loadCategories();
+                                });
+                                break;
+                              case 'toggle':
+                                _toggleCategoryStatus(category);
+                                break;
+                              case 'delete':
+                                _deleteCategory(category);
+                                break;
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('Editar'),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'toggle',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    category.isActive ? Icons.visibility_off : Icons.visibility, 
+                                    size: 20
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(category.isActive ? 'Desactivar' : 'Activar'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete, color: Colors.red, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                ],
+                              ),
+                            ),
+                          ],
+                          child: Icon(Icons.more_vert, size: 20, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                    if (category.description != null && category.description!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Expanded(
+                        child: Text(
+                          category.description!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: category.isActive ? Colors.grey[600] : Colors.grey,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: category.isActive ? Colors.green : Colors.grey,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        category.isActive ? 'Activa' : 'Inactiva',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

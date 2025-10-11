@@ -20,8 +20,15 @@ class PurchaseService extends ChangeNotifier {
     _accountingService = accountingService;
   }
 
-  Future<List<shared_supplier.Supplier>> getSuppliers({bool forceRefresh = false}) async {
-    if (_suppliersLoaded && !forceRefresh) return _supplierCache;
+  Future<List<shared_supplier.Supplier>> getSuppliers({
+    bool forceRefresh = false,
+    bool activeOnly = false,
+  }) async {
+    if (_suppliersLoaded && !forceRefresh) {
+      return activeOnly
+          ? _supplierCache.where((s) => s.isActive).toList()
+          : _supplierCache;
+    }
     try {
       final data = await _db.select('suppliers');
       _supplierCache = data
@@ -29,7 +36,9 @@ class PurchaseService extends ChangeNotifier {
           .toList()
         ..sort((a, b) => a.name.compareTo(b.name));
       _suppliersLoaded = true;
-      return _supplierCache;
+      return activeOnly
+          ? _supplierCache.where((s) => s.isActive).toList()
+          : _supplierCache;
     } catch (e) {
       throw Exception('No se pudieron cargar los proveedores: $e');
     }
@@ -154,6 +163,21 @@ class PurchaseService extends ChangeNotifier {
 
   Future<void> deletePurchaseInvoice(String id) async {
     try {
+      // Check if invoice exists and get its status
+      final invoice = await getPurchaseInvoice(id);
+      if (invoice == null) {
+        throw Exception('Factura no encontrada');
+      }
+      
+      // Only allow deletion of draft invoices
+      if (invoice.status != PurchaseInvoiceStatus.draft) {
+        throw Exception(
+          'Solo se pueden eliminar facturas en estado Borrador. '
+          'Esta factura está en estado: ${invoice.status.displayName}. '
+          'Usa "Volver a Borrador" primero si necesitas eliminarla.'
+        );
+      }
+      
       await _db.delete('purchase_invoices', id);
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
@@ -212,6 +236,29 @@ class PurchaseService extends ChangeNotifier {
   /// Cancel invoice
   Future<PurchaseInvoice?> cancelInvoice(String invoiceId) async {
     return updateInvoiceStatus(invoiceId, PurchaseInvoiceStatus.cancelled);
+  }
+
+  /// Revert to draft (from received or paid)
+  /// This reverses inventory and accounting changes
+  Future<PurchaseInvoice?> revertToDraft(String invoiceId) async {
+    try {
+      // Reversal is handled by database triggers
+      return updateInvoiceStatus(invoiceId, PurchaseInvoiceStatus.draft);
+    } catch (e) {
+      debugPrint('PurchaseService.revertToDraft error: $e');
+      rethrow;
+    }
+  }
+
+  /// Revert to received (from paid)
+  /// This only changes status, keeps inventory/accounting
+  Future<PurchaseInvoice?> revertToReceived(String invoiceId) async {
+    try {
+      return updateInvoiceStatus(invoiceId, PurchaseInvoiceStatus.received);
+    } catch (e) {
+      debugPrint('PurchaseService.revertToReceived error: $e');
+      rethrow;
+    }
   }
 
   Future<void> _postAccountingEntry(PurchaseInvoice invoice) async {

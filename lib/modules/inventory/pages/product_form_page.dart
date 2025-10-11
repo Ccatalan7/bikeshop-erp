@@ -13,6 +13,8 @@ import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/models/supplier.dart';
+import '../../purchases/services/purchase_service.dart';
 import '../models/category_models.dart';
 import '../models/inventory_models.dart';
 import '../services/category_service.dart';
@@ -32,6 +34,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
   late inventory_services.InventoryService _inventoryService;
   late CategoryService _categoryService;
+  late PurchaseService _purchaseService;
 
   final _nameController = TextEditingController();
   final _skuController = TextEditingController();
@@ -44,7 +47,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
   final _minStockController = TextEditingController();
 
   String? _selectedCategoryId;
+  String? _selectedSupplierId;
   List<Category> _categories = [];
+  List<Supplier> _suppliers = [];
   bool _isActive = true;
 
   String? _imageUrl;
@@ -62,6 +67,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       final database = Provider.of<DatabaseService>(context, listen: false);
       _inventoryService = inventory_services.InventoryService(database);
       _categoryService = CategoryService(database);
+      _purchaseService = PurchaseService(database);
 
       _inventoryQtyController.text = '0';
       _minStockController.text = '1';
@@ -70,6 +76,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       _costController.addListener(_onPricingChanged);
 
       _loadCategories();
+      _loadSuppliers();
 
       if (widget.productId != null) {
         _loadProduct();
@@ -116,6 +123,18 @@ class _ProductFormPageState extends State<ProductFormPage> {
       }
     }
 
+    Future<void> _loadSuppliers() async {
+      try {
+        final suppliers = await _purchaseService.getSuppliers(activeOnly: true);
+        if (mounted) {
+          setState(() => _suppliers = suppliers);
+        }
+      } catch (e) {
+        // Suppliers are optional, silently fail
+        if (!mounted) return;
+      }
+    }
+
     Future<void> _loadProduct() async {
       setState(() => _isLoading = true);
       try {
@@ -132,6 +151,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
           _inventoryQtyController.text = product.inventoryQty.toString();
           _minStockController.text = product.minStockLevel.toString();
           _selectedCategoryId = product.categoryId;
+          _selectedSupplierId = product.supplierId;
           _isActive = product.isActive;
           _imageUrl = product.imageUrl;
           _additionalImages
@@ -288,6 +308,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
               ? null
               : _descriptionController.text.trim(),
           categoryId: _selectedCategoryId,
+          supplierId: _selectedSupplierId,
           brand: _brandController.text.trim().isEmpty
               ? null
               : _brandController.text.trim(),
@@ -655,6 +676,27 @@ class _ProductFormPageState extends State<ProductFormPage> {
               )
               .toList(),
           onChanged: (value) => setState(() => _selectedCategoryId = value),
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String?>(
+          value: _selectedSupplierId,
+          decoration: const InputDecoration(
+            labelText: 'Proveedor',
+            helperText: 'Proveedor principal de este producto (opcional)',
+          ),
+          items: [
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('Sin proveedor'),
+            ),
+            ..._suppliers.map(
+              (supplier) => DropdownMenuItem<String?>(
+                value: supplier.id,
+                child: Text(supplier.name),
+              ),
+            ),
+          ],
+          onChanged: (value) => setState(() => _selectedSupplierId = value),
         ),
         const SizedBox(height: 16),
         Row(

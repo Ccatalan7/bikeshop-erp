@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../shared/models/supplier.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -8,6 +9,8 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../services/purchase_service.dart';
+
+enum SupplierViewMode { list, cards }
 
 class SupplierListPage extends StatefulWidget {
   const SupplierListPage({super.key});
@@ -22,6 +25,7 @@ class _SupplierListPageState extends State<SupplierListPage> {
   List<Supplier> _filteredSuppliers = const [];
   bool _isLoading = true;
   String _selectedFilter = 'all';
+  SupplierViewMode _viewMode = SupplierViewMode.list;
 
   late PurchaseService _purchaseService;
 
@@ -98,6 +102,30 @@ class _SupplierListPageState extends State<SupplierListPage> {
                     ),
                   ),
                 ),
+                // View mode toggle
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.view_list),
+                        onPressed: () => setState(() => _viewMode = SupplierViewMode.list),
+                        color: _viewMode == SupplierViewMode.list ? Colors.blue : Colors.grey,
+                        tooltip: 'Vista de lista',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.grid_view),
+                        onPressed: () => setState(() => _viewMode = SupplierViewMode.cards),
+                        color: _viewMode == SupplierViewMode.cards ? Colors.blue : Colors.grey,
+                        tooltip: 'Vista de tarjetas',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
                 AppButton(
                   text: 'Nuevo Proveedor',
                   icon: Icons.add,
@@ -235,71 +263,225 @@ class _SupplierListPageState extends State<SupplierListPage> {
   }
 
   Widget _buildSupplierList() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      itemCount: _filteredSuppliers.length,
-      itemBuilder: (context, index) {
-        final supplier = _filteredSuppliers[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8.0),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: supplier.isActive ? Colors.green : Colors.grey,
-              child: Text(
-                supplier.name.substring(0, 1).toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+    return _viewMode == SupplierViewMode.list
+        ? ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            itemCount: _filteredSuppliers.length,
+            itemBuilder: (context, index) {
+              final supplier = _filteredSuppliers[index];
+              return _buildSupplierListItem(supplier);
+            },
+          )
+        : GridView.builder(
+            padding: const EdgeInsets.all(16.0),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 1.2,
+            ),
+            itemCount: _filteredSuppliers.length,
+            itemBuilder: (context, index) {
+              final supplier = _filteredSuppliers[index];
+              return _buildSupplierGridItem(supplier);
+            },
+          );
+  }
+
+  Widget _buildSupplierListItem(Supplier supplier) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8.0),
+      child: ListTile(
+        onTap: () {
+          // Navigate to products filtered by this supplier
+          context.push('/inventory/products?supplier=${supplier.id}');
+        },
+        leading: CircleAvatar(
+          backgroundColor: supplier.isActive ? Colors.green : Colors.grey,
+          child: Text(
+            supplier.name.substring(0, 1).toUpperCase(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        title: Text(
+          supplier.name,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (supplier.rut != null && supplier.rut!.isNotEmpty)
+              Text('RUT: ${ChileanUtils.formatRut(supplier.rut!)}'),
+            if (supplier.email != null) Text(supplier.email!),
+            if (supplier.phone != null) Text('Tel: ${supplier.phone}'),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!supplier.isActive)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.grey,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Inactivo',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                  ),
                 ),
               ),
-            ),
-            title: Text(
-              supplier.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (supplier.rut != null && supplier.rut!.isNotEmpty)
-                  Text('RUT: ${ChileanUtils.formatRut(supplier.rut!)}'),
-                if (supplier.email != null) Text(supplier.email!),
-                if (supplier.phone != null) Text('Tel: ${supplier.phone}'),
+            const SizedBox(width: 8),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'edit') {
+                  context.push('/purchases/suppliers/${supplier.id}/edit').then((updated) {
+                    if (updated == true) {
+                      _loadSuppliers();
+                    }
+                  });
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    leading: Icon(Icons.edit),
+                    title: Text('Editar'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
               ],
+              child: const Icon(Icons.more_vert),
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!supplier.isActive)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'Inactivo',
-                      style: TextStyle(
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSupplierGridItem(Supplier supplier) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          // Navigate to products filtered by this supplier
+          context.push('/inventory/products?supplier=${supplier.id}');
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: supplier.isActive ? Colors.green : Colors.grey,
+                    child: Text(
+                      supplier.name.substring(0, 1).toUpperCase(),
+                      style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                const SizedBox(width: 8),
-                const Icon(Icons.chevron_right),
+                  const Spacer(),
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        context.push('/purchases/suppliers/${supplier.id}/edit').then((updated) {
+                          if (updated == true) {
+                            _loadSuppliers();
+                          }
+                        });
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, size: 20),
+                            SizedBox(width: 8),
+                            Text('Editar'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    child: Icon(Icons.more_vert, size: 20, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                supplier.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              if (supplier.rut != null && supplier.rut!.isNotEmpty)
+                Text(
+                  'RUT: ${ChileanUtils.formatRut(supplier.rut!)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              if (supplier.email != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  supplier.email!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
-            ),
-            onTap: () async {
-              final updated = await context.push<bool>('/purchases/suppliers/${supplier.id}/edit');
-              if (updated == true) {
-                _loadSuppliers();
-              }
-            },
+              if (supplier.phone != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  supplier.phone!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: supplier.isActive ? Colors.green : Colors.grey,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  supplier.isActive ? 'Activo' : 'Inactivo',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

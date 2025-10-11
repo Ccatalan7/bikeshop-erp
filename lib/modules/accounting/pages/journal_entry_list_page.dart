@@ -38,17 +38,20 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
   }
 
   Future<void> _loadJournalEntries() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     
     try {
       final entries = await _accountingService.getJournalEntries();
       
+      if (!mounted) return;
       setState(() {
         _journalEntries = entries;
         _filteredEntries = entries;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -62,6 +65,7 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
   }
 
   void _filterEntries() {
+    if (!mounted) return;
     setState(() {
       _filteredEntries = _journalEntries.where((entry) {
         final matchesSearch = _searchTerm.isEmpty ||
@@ -78,11 +82,13 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
   }
 
   void _onSearchChanged(String value) {
+    if (!mounted) return;
     setState(() => _searchTerm = value);
     _filterEntries();
   }
 
   void _onTypeFilterChanged(JournalEntryType? type) {
+    if (!mounted) return;
     setState(() => _selectedType = type);
     _filterEntries();
   }

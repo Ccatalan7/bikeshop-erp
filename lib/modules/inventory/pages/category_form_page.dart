@@ -8,6 +8,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
+import '../../../shared/constants/storage_constants.dart';
 import '../models/category_models.dart';
 import '../services/category_service.dart';
 
@@ -111,10 +112,9 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
       
       // Upload new image if selected
       if (_selectedImage != null) {
-        final uploadUrl = await ImageService.uploadImage(
+        final uploadUrl = await ImageService.uploadToDefaultBucket(
           _selectedImage!,
-          'category-images',
-          'categories',
+          StorageFolders.categories,
         );
 
         if (uploadUrl == null) {

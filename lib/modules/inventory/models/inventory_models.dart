@@ -5,6 +5,8 @@ class Product {
   final String? description;
   final String? categoryId;
   final String? categoryName; // For display purposes, populated from JOIN
+  final String? supplierId;
+  final String? supplierName; // For display purposes, populated from JOIN
   final String? brand;
   final String? model;
   final double price;
@@ -24,6 +26,8 @@ class Product {
     this.description,
     this.categoryId,
     this.categoryName,
+    this.supplierId,
+    this.supplierName,
     this.brand,
     this.model,
     required this.price,
@@ -46,6 +50,8 @@ class Product {
       description: json['description'],
       categoryId: json['category_id']?.toString(),
       categoryName: json['category_name'], // From JOIN query
+      supplierId: json['supplier_id']?.toString(),
+      supplierName: json['supplier_name'], // From trigger or JOIN query
       brand: json['brand'],
       model: json['model'],
       price: (json['price'] as num).toDouble(),
@@ -67,12 +73,12 @@ class Product {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
+    final json = {
       'name': name,
       'sku': sku,
       'description': description,
       'category_id': categoryId,
+      'supplier_id': supplierId,
       'brand': brand,
       'model': model,
       'price': price,
@@ -85,6 +91,13 @@ class Product {
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
+    
+    // Only include id if it's not null (for updates)
+    if (id != null) {
+      json['id'] = id;
+    }
+    
+    return json;
   }
 
   Product copyWith({
@@ -94,6 +107,8 @@ class Product {
     String? description,
     String? categoryId,
     String? categoryName,
+    String? supplierId,
+    String? supplierName,
     String? brand,
     String? model,
     double? price,
@@ -113,6 +128,8 @@ class Product {
       description: description ?? this.description,
       categoryId: categoryId ?? this.categoryId,
       categoryName: categoryName ?? this.categoryName,
+      supplierId: supplierId ?? this.supplierId,
+      supplierName: supplierName ?? this.supplierName,
       brand: brand ?? this.brand,
       model: model ?? this.model,
       price: price ?? this.price,

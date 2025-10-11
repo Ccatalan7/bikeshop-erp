@@ -195,53 +195,132 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         itemCount: _filtered.length,
         itemBuilder: (context, index) {
           final invoice = _filtered[index];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: _statusColor(invoice.status),
-                child: const Icon(Icons.receipt_long, color: Colors.white),
-              ),
-              title: Text(
-                invoice.invoiceNumber,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (invoice.supplierName != null && invoice.supplierName!.isNotEmpty)
-                    Text(invoice.supplierName!),
-                  Text('Fecha: ${ChileanUtils.formatDate(invoice.date)}'),
-                  Text('Total: ${ChileanUtils.formatCurrency(invoice.total)}'),
-                ],
-              ),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _statusColor(invoice.status).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
+          final isDraft = invoice.status == PurchaseInvoiceStatus.draft;
+          
+          return Dismissible(
+            key: Key(invoice.id ?? invoice.invoiceNumber),
+            direction: isDraft ? DismissDirection.endToStart : DismissDirection.none,
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 20),
+              color: Colors.red,
+              child: const Icon(Icons.delete, color: Colors.white),
+            ),
+            confirmDismiss: (direction) async {
+              if (!isDraft) return false;
+              
+              return await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Row(
+                    children: [
+                      Icon(Icons.delete_forever, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Eliminar factura'),
+                    ],
+                  ),
+                  content: Text(
+                    '¿Eliminar la factura ${invoice.invoiceNumber}?\n\n'
+                    'Esta acción no se puede deshacer.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancelar'),
                     ),
-                    child: Text(
-                      _statusLabel(invoice.status),
-                      style: TextStyle(
-                        color: _statusColor(invoice.status),
-                        fontWeight: FontWeight.w600,
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      child: const Text('Eliminar'),
+                    ),
+                  ],
+                ),
+              );
+            },
+            onDismissed: (direction) async {
+              try {
+                await _purchaseService.deletePurchaseInvoice(invoice.id!);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Factura ${invoice.invoiceNumber} eliminada'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+                _loadInvoices(refresh: true);
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error al eliminar: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                _loadInvoices(refresh: true);
+              }
+            },
+            child: Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: _statusColor(invoice.status),
+                  child: const Icon(Icons.receipt_long, color: Colors.white),
+                ),
+                title: Text(
+                  invoice.invoiceNumber,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (invoice.supplierName != null && invoice.supplierName!.isNotEmpty)
+                      Text(invoice.supplierName!),
+                    Text('Fecha: ${ChileanUtils.formatDate(invoice.date)}'),
+                    Text('Total: ${ChileanUtils.formatCurrency(invoice.total)}'),
+                    if (isDraft)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4.0),
+                        child: Row(
+                          children: [
+                            Icon(Icons.swipe_left, size: 14, color: Colors.grey),
+                            SizedBox(width: 4),
+                            Text(
+                              'Desliza para eliminar',
+                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _statusColor(invoice.status).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _statusLabel(invoice.status),
+                        style: TextStyle(
+                          color: _statusColor(invoice.status),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Icon(Icons.chevron_right),
-                ],
+                    const SizedBox(height: 6),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+                onTap: () async {
+                  final refreshed = await context.push<bool>('/purchases/${invoice.id}/edit');
+                  if (refreshed == true) {
+                    _loadInvoices(refresh: true);
+                  }
+                },
               ),
-              onTap: () async {
-                final refreshed = await context.push<bool>('/purchases/${invoice.id}/edit');
-                if (refreshed == true) {
-                  _loadInvoices(refresh: true);
-                }
-              },
             ),
           );
         },

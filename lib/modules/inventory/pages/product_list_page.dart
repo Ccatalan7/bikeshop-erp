@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/models/supplier.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
@@ -11,6 +12,7 @@ import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
+import '../../purchases/services/purchase_service.dart';
 import '../models/category_models.dart';
 import '../models/inventory_models.dart';
 import '../services/category_service.dart';
@@ -19,7 +21,14 @@ import '../services/inventory_service.dart' as inventory_services;
 enum ProductViewMode { table, cards }
 
 class ProductListPage extends StatefulWidget {
-  const ProductListPage({super.key});
+  final String? initialCategoryId;
+  final String? initialSupplierId;
+  
+  const ProductListPage({
+    super.key,
+    this.initialCategoryId,
+    this.initialSupplierId,
+  });
 
   @override
   State<ProductListPage> createState() => _ProductListPageState();
@@ -31,14 +40,17 @@ class _ProductListPageState extends State<ProductListPage> {
 
   late inventory_services.InventoryService _inventoryService;
   late CategoryService _categoryService;
+  late PurchaseService _purchaseService;
 
   List<Product> _products = [];
   List<Product> _filteredProducts = [];
   List<Category> _categories = [];
+  List<Supplier> _suppliers = [];
 
   bool _isLoading = true;
   String _searchTerm = '';
   String? _selectedCategoryId;
+  String? _selectedSupplierId;
   bool _showLowStockOnly = false;
   bool _showInactive = false;
   ProductViewMode _viewMode = ProductViewMode.table;
@@ -49,7 +61,31 @@ class _ProductListPageState extends State<ProductListPage> {
     final database = Provider.of<DatabaseService>(context, listen: false);
     _inventoryService = inventory_services.InventoryService(database);
     _categoryService = CategoryService(database);
-    _loadCategories();
+    _purchaseService = PurchaseService(database);
+    
+    // Don't set initial category/supplier until categories are loaded
+    _loadCategories().then((_) {
+      // After categories load, validate and set the initial category filter
+      if (widget.initialCategoryId != null && mounted) {
+        final categoryExists = _categories.any((c) => c.id == widget.initialCategoryId);
+        if (categoryExists) {
+          setState(() {
+            _selectedCategoryId = widget.initialCategoryId;
+          });
+          _applyFilters();
+        }
+      }
+      
+      // Set initial supplier filter if provided
+      if (widget.initialSupplierId != null && mounted) {
+        setState(() {
+          _selectedSupplierId = widget.initialSupplierId;
+        });
+        _applyFilters();
+      }
+    });
+    
+    _loadSuppliers();
     _loadProducts();
   }
 
@@ -70,6 +106,19 @@ class _ProductListPageState extends State<ProductListPage> {
       }
     } catch (_) {
       // Ignored: categories are optional for listing products.
+    }
+  }
+
+  Future<void> _loadSuppliers() async {
+    try {
+      final suppliers = await _purchaseService.getSuppliers(activeOnly: true);
+      if (mounted) {
+        setState(() {
+          _suppliers = suppliers;
+        });
+      }
+    } catch (_) {
+      // Ignored: suppliers are optional for listing products.
     }
   }
 
@@ -121,6 +170,12 @@ class _ProductListPageState extends State<ProductListPage> {
           .toList();
     }
 
+    if (_selectedSupplierId != null && _selectedSupplierId!.isNotEmpty) {
+      filtered = filtered
+          .where((product) => product.supplierId == _selectedSupplierId)
+          .toList();
+    }
+
     if (_showLowStockOnly) {
       filtered = filtered
           .where((product) => product.isLowStock || product.isOutOfStock)
@@ -164,6 +219,13 @@ class _ProductListPageState extends State<ProductListPage> {
   void _onCategoryChanged(String? categoryId) {
     setState(() {
       _selectedCategoryId = categoryId;
+      _applyFilters();
+    });
+  }
+
+  void _onSupplierChanged(String? supplierId) {
+    setState(() {
+      _selectedSupplierId = supplierId;
       _applyFilters();
     });
   }
@@ -297,6 +359,29 @@ class _ProductListPageState extends State<ProductListPage> {
                     }),
                   ],
                   onChanged: _onCategoryChanged,
+                ),
+              ),
+              SizedBox(
+                width: 260,
+                child: DropdownButtonFormField<String>(
+                  value: _selectedSupplierId,
+                  decoration: const InputDecoration(
+                    labelText: 'Proveedor',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: null,
+                      child: Text('Todos los proveedores'),
+                    ),
+                    ..._suppliers.map((supplier) {
+                      return DropdownMenuItem<String>(
+                        value: supplier.id,
+                        child: Text(supplier.name),
+                      );
+                    }),
+                  ],
+                  onChanged: _onSupplierChanged,
                 ),
               ),
               FilterChip(
@@ -550,6 +635,12 @@ class _ProductListPageState extends State<ProductListPage> {
                           icon: Icons.category_outlined,
                           label: categoryName,
                         ),
+                      if (product.supplierName != null && product.supplierName!.isNotEmpty)
+                        _buildInfoPill(
+                          theme,
+                          icon: Icons.business_outlined,
+                          label: product.supplierName!,
+                        ),
                       if (product.brand?.isNotEmpty ?? false)
                         _buildInfoPill(
                           theme,
@@ -698,6 +789,29 @@ class _ProductListPageState extends State<ProductListPage> {
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
+                    ),
+                  ],
+                  if (product.supplierName != null && product.supplierName!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.business_outlined,
+                          size: 14,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            product.supplierName!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                   const SizedBox(height: 12),
