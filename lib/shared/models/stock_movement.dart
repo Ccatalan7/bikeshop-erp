@@ -3,18 +3,12 @@ class StockMovement {
   final String productId;
   final String productSku;
   final String productName;
-  final StockMovementType type;
-  final int quantity; // Positive for increases, negative for decreases
-  final int previousQuantity;
-  final int newQuantity;
-  final double unitCost;
-  final double totalCost;
-  final String? sourceModule; // 'Sales', 'Purchases', 'Adjustment', etc.
-  final String? sourceReference; // Invoice number, PO number, etc.
-  final String? sourceId; // Invoice ID, PO ID, etc.
-  final String? warehouseId;
-  final String? userId;
+  final String type; // 'IN' or 'OUT'
+  final String? movementType; // 'sales_invoice', 'purchase_invoice', 'adjustment', etc.
+  final double quantity; // Positive for IN, negative for OUT
+  final String? reference;
   final String? notes;
+  final String? warehouseId;
   final DateTime date;
   final DateTime createdAt;
 
@@ -24,17 +18,11 @@ class StockMovement {
     required this.productSku,
     required this.productName,
     required this.type,
+    this.movementType,
     required this.quantity,
-    required this.previousQuantity,
-    required this.newQuantity,
-    required this.unitCost,
-    required this.totalCost,
-    this.sourceModule,
-    this.sourceReference,
-    this.sourceId,
-    this.warehouseId,
-    this.userId,
+    this.reference,
     this.notes,
+    this.warehouseId,
     required this.date,
     required this.createdAt,
   });
@@ -42,25 +30,18 @@ class StockMovement {
   factory StockMovement.fromJson(Map<String, dynamic> json) {
     return StockMovement(
       id: json['id'] as String,
-      productId: json['product_id'] as String,
-      productSku: json['product_sku'] as String,
-      productName: json['product_name'] as String,
-      type: StockMovementType.values.firstWhere(
-        (t) => t.name == json['type'],
-        orElse: () => StockMovementType.adjustment,
-      ),
-      quantity: json['quantity'] as int,
-      previousQuantity: json['previous_quantity'] as int,
-      newQuantity: json['new_quantity'] as int,
-      unitCost: (json['unit_cost'] as num).toDouble(),
-      totalCost: (json['total_cost'] as num).toDouble(),
-      sourceModule: json['source_module'] as String?,
-      sourceReference: json['source_reference'] as String?,
-      sourceId: json['source_id'] as String?,
-      warehouseId: json['warehouse_id'] as String?,
-      userId: json['user_id'] as String?,
+      productId: json['product_id'] as String? ?? '',
+      productSku: json['product_sku'] as String? ?? 'N/A',
+      productName: json['product_name'] as String? ?? 'Producto desconocido',
+      type: json['type'] as String? ?? 'OUT',
+      movementType: json['movement_type'] as String?,
+      quantity: (json['quantity'] as num?)?.toDouble() ?? 0.0,
+      reference: json['reference'] as String?,
       notes: json['notes'] as String?,
-      date: DateTime.parse(json['date'] as String),
+      warehouseId: json['warehouse_id'] as String?,
+      date: json['date'] != null
+          ? DateTime.parse(json['date'] as String)
+          : DateTime.now(),
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
@@ -69,20 +50,12 @@ class StockMovement {
     return {
       'id': id,
       'product_id': productId,
-      'product_sku': productSku,
-      'product_name': productName,
-      'type': type.name,
+      'type': type,
+      'movement_type': movementType,
       'quantity': quantity,
-      'previous_quantity': previousQuantity,
-      'new_quantity': newQuantity,
-      'unit_cost': unitCost,
-      'total_cost': totalCost,
-      'source_module': sourceModule,
-      'source_reference': sourceReference,
-      'source_id': sourceId,
-      'warehouse_id': warehouseId,
-      'user_id': userId,
+      'reference': reference,
       'notes': notes,
+      'warehouse_id': warehouseId,
       'date': date.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
     };
@@ -93,18 +66,12 @@ class StockMovement {
     String? productId,
     String? productSku,
     String? productName,
-    StockMovementType? type,
-    int? quantity,
-    int? previousQuantity,
-    int? newQuantity,
-    double? unitCost,
-    double? totalCost,
-    String? sourceModule,
-    String? sourceReference,
-    String? sourceId,
-    String? warehouseId,
-    String? userId,
+    String? type,
+    String? movementType,
+    double? quantity,
+    String? reference,
     String? notes,
+    String? warehouseId,
     DateTime? date,
     DateTime? createdAt,
   }) {
@@ -114,48 +81,48 @@ class StockMovement {
       productSku: productSku ?? this.productSku,
       productName: productName ?? this.productName,
       type: type ?? this.type,
+      movementType: movementType ?? this.movementType,
       quantity: quantity ?? this.quantity,
-      previousQuantity: previousQuantity ?? this.previousQuantity,
-      newQuantity: newQuantity ?? this.newQuantity,
-      unitCost: unitCost ?? this.unitCost,
-      totalCost: totalCost ?? this.totalCost,
-      sourceModule: sourceModule ?? this.sourceModule,
-      sourceReference: sourceReference ?? this.sourceReference,
-      sourceId: sourceId ?? this.sourceId,
-      warehouseId: warehouseId ?? this.warehouseId,
-      userId: userId ?? this.userId,
+      reference: reference ?? this.reference,
       notes: notes ?? this.notes,
+      warehouseId: warehouseId ?? this.warehouseId,
       date: date ?? this.date,
       createdAt: createdAt ?? this.createdAt,
     );
   }
 
-  bool get isInbound => quantity > 0;
-  bool get isOutbound => quantity < 0;
-  int get absoluteQuantity => quantity.abs();
+  bool get isInbound => type == 'IN' || quantity > 0;
+  bool get isOutbound => type == 'OUT' || quantity < 0;
+  double get absoluteQuantity => quantity.abs();
 
   String get formattedQuantity {
     if (isInbound) {
-      return '+$quantity';
+      return '+${absoluteQuantity.toStringAsFixed(0)}';
     } else {
-      return quantity.toString();
+      return '-${absoluteQuantity.toStringAsFixed(0)}';
     }
   }
 
-  String get sourceDescription {
-    if (sourceModule != null && sourceReference != null) {
-      return '$sourceModule: $sourceReference';
-    } else if (sourceModule != null) {
-      return sourceModule!;
-    } else if (sourceReference != null) {
-      return sourceReference!;
+  String get movementTypeDisplay {
+    switch (movementType) {
+      case 'sales_invoice':
+        return 'Venta';
+      case 'purchase_invoice':
+        return 'Compra';
+      case 'adjustment':
+        return 'Ajuste';
+      case 'transfer':
+        return 'Transferencia';
+      case 'return':
+        return 'Devolución';
+      default:
+        return movementType ?? type;
     }
-    return type.displayName;
   }
 
   @override
   String toString() {
-    return 'StockMovement(id: $id, product: $productSku, type: ${type.name}, qty: $quantity)';
+    return 'StockMovement(id: $id, product: $productSku, type: $type, qty: $quantity)';
   }
 
   @override
@@ -166,40 +133,4 @@ class StockMovement {
 
   @override
   int get hashCode => id.hashCode;
-}
-
-enum StockMovementType {
-  purchase('Compra'),
-  sale('Venta'),
-  adjustment('Ajuste'),
-  transfer('Transferencia'),
-  return_('Devolución'),
-  damage('Daño'),
-  loss('Pérdida'),
-  found('Encontrado'),
-  initialStock('Stock Inicial'),
-  production('Producción'),
-  consumption('Consumo');
-
-  const StockMovementType(this.displayName);
-  final String displayName;
-
-  bool get isInbound {
-    switch (this) {
-      case StockMovementType.purchase:
-      case StockMovementType.return_:
-      case StockMovementType.found:
-      case StockMovementType.initialStock:
-      case StockMovementType.production:
-        return true;
-      case StockMovementType.sale:
-      case StockMovementType.damage:
-      case StockMovementType.loss:
-      case StockMovementType.consumption:
-        return false;
-      case StockMovementType.adjustment:
-      case StockMovementType.transfer:
-        return false; // Depends on quantity sign
-    }
-  }
 }

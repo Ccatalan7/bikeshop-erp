@@ -45,6 +45,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isUpdatingStatus = false;
 
   List<shared_supplier.Supplier> _supplierCache = const [];
   List<Product> _productCache = const [];
@@ -401,6 +402,129 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
+  Future<void> _markAsReceived() async {
+    if (widget.invoiceId == null) return;
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar recepción'),
+        content: const Text(
+          '¿Marcar esta factura como recibida?\n\n'
+          'Esto aumentará el inventario de todos los productos '
+          'y creará los asientos contables correspondientes.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm != true) return;
+    
+    setState(() => _isUpdatingStatus = true);
+    
+    try {
+      final updated = await _purchaseService.markAsReceived(widget.invoiceId!);
+      if (!mounted) return;
+      
+      if (updated != null) {
+        setState(() {
+          _status = updated.status;
+          _loadedInvoice = updated;
+        });
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Factura marcada como recibida. Inventario actualizado.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al actualizar estado: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingStatus = false);
+      }
+    }
+  }
+
+  Future<void> _markAsPaid() async {
+    if (widget.invoiceId == null) return;
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar pago'),
+        content: const Text(
+          '¿Marcar esta factura como pagada?\n\n'
+          'Esto registrará el pago de la factura en el sistema contable.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm != true) return;
+    
+    setState(() => _isUpdatingStatus = true);
+    
+    try {
+      final updated = await _purchaseService.markAsPaid(widget.invoiceId!);
+      if (!mounted) return;
+      
+      if (updated != null) {
+        setState(() {
+          _status = updated.status;
+          _loadedInvoice = updated;
+        });
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Factura marcada como pagada'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al actualizar estado: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingStatus = false);
+      }
+    }
+  }
+
   void _removeLine(_PurchaseLineEntry entry) {
     setState(() {
       _lineEntries.remove(entry);
@@ -429,6 +553,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   Widget _buildHeader() {
+    final canMarkAsReceived = widget.invoiceId != null && 
+        _status == PurchaseInvoiceStatus.draft;
+    final canMarkAsPaid = widget.invoiceId != null && 
+        _status == PurchaseInvoiceStatus.received;
+    
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Row(
@@ -438,11 +567,60 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             icon: const Icon(Icons.arrow_back),
           ),
           Expanded(
-            child: Text(
-              widget.invoiceId != null ? 'Editar factura de compra' : 'Nueva factura de compra',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.invoiceId != null ? 'Editar factura de compra' : 'Nueva factura de compra',
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                if (widget.invoiceId != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: _buildStatusChip(_status),
+                  ),
+              ],
             ),
           ),
+          const SizedBox(width: 8),
+          // Status action buttons
+          if (canMarkAsReceived) ...[
+            ElevatedButton.icon(
+              onPressed: _isUpdatingStatus ? null : _markAsReceived,
+              icon: _isUpdatingStatus 
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.inventory_2),
+              label: const Text('Marcar como Recibida'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          if (canMarkAsPaid) ...[
+            ElevatedButton.icon(
+              onPressed: _isUpdatingStatus ? null : _markAsPaid,
+              icon: _isUpdatingStatus
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.payment),
+              label: const Text('Marcar como Pagada'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           AppButton(
             text: 'Guardar',
             icon: Icons.save,
@@ -451,6 +629,41 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatusChip(PurchaseInvoiceStatus status) {
+    Color color;
+    IconData icon;
+    
+    switch (status) {
+      case PurchaseInvoiceStatus.draft:
+        color = Colors.grey;
+        icon = Icons.edit;
+        break;
+      case PurchaseInvoiceStatus.received:
+        color = Colors.green;
+        icon = Icons.inventory_2;
+        break;
+      case PurchaseInvoiceStatus.paid:
+        color = Colors.blue;
+        icon = Icons.check_circle;
+        break;
+      case PurchaseInvoiceStatus.cancelled:
+        color = Colors.red;
+        icon = Icons.cancel;
+        break;
+    }
+    
+    return Chip(
+      avatar: Icon(icon, size: 16, color: Colors.white),
+      label: Text(
+        status.displayName,
+        style: const TextStyle(color: Colors.white, fontSize: 12),
+      ),
+      backgroundColor: color,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      visualDensity: VisualDensity.compact,
     );
   }
 

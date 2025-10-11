@@ -142,7 +142,9 @@ class PurchaseService extends ChangeNotifier {
       }
 
       await getPurchaseInvoices(forceRefresh: true);
-      await _postAccountingEntry(saved);
+      // NOTE: Accounting entries are now created automatically by database triggers
+      // when invoice status changes to 'received'. No need to call _postAccountingEntry here.
+      // await _postAccountingEntry(saved);
       notifyListeners();
       return saved;
     } catch (e) {
@@ -158,6 +160,58 @@ class PurchaseService extends ChangeNotifier {
     } catch (e) {
       throw Exception('No se pudo eliminar la factura: $e');
     }
+  }
+
+  /// Update the status of a purchase invoice
+  /// This triggers database triggers for inventory and accounting
+  Future<PurchaseInvoice?> updateInvoiceStatus(
+    String invoiceId,
+    PurchaseInvoiceStatus status,
+  ) async {
+    try {
+      final payload = {
+        'status': status.name,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      };
+      
+      final result = await _db.update('purchase_invoices', invoiceId, payload);
+      final updated = PurchaseInvoice.fromJson(result);
+      
+      // Update cache
+      _invoiceCache = _invoiceCache.map((inv) {
+        return inv.id == invoiceId ? updated : inv;
+      }).toList();
+      
+      // Refresh accounting if service available
+      if (_accountingService != null) {
+        await _accountingService!.initialize();
+        await _accountingService!.journalEntries.loadJournalEntries();
+      }
+      
+      // Fetch fresh data from database
+      final refreshed = await getPurchaseInvoice(invoiceId);
+      
+      notifyListeners();
+      return refreshed ?? updated;
+    } catch (e) {
+      debugPrint('PurchaseService.updateInvoiceStatus error: $e');
+      rethrow;
+    }
+  }
+
+  /// Mark invoice as received (triggers inventory increase and accounting)
+  Future<PurchaseInvoice?> markAsReceived(String invoiceId) async {
+    return updateInvoiceStatus(invoiceId, PurchaseInvoiceStatus.received);
+  }
+
+  /// Mark invoice as paid
+  Future<PurchaseInvoice?> markAsPaid(String invoiceId) async {
+    return updateInvoiceStatus(invoiceId, PurchaseInvoiceStatus.paid);
+  }
+
+  /// Cancel invoice
+  Future<PurchaseInvoice?> cancelInvoice(String invoiceId) async {
+    return updateInvoiceStatus(invoiceId, PurchaseInvoiceStatus.cancelled);
   }
 
   Future<void> _postAccountingEntry(PurchaseInvoice invoice) async {

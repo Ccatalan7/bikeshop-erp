@@ -833,206 +833,119 @@ as $$
 declare
   v_reference text;
   v_item record;
-  v_rows integer;
   v_resolved_product_id uuid;
-  v_has_inventory_qty boolean := false;
-  v_has_stock_quantity boolean := false;
-  v_has_is_service boolean := false;
-  v_has_track_stock boolean := false;
-  v_has_updated_at boolean := false;
-  v_update_sql text;
-  v_update_assignments text := '';
-  v_quantity numeric;
   v_quantity_int integer;
   v_status text;
+  v_items_count integer;
 begin
+  -- Early exit if invoice ID is null
   if p_invoice.id is null then
+    raise notice 'consume_sales_invoice_inventory: invoice ID is null';
     return;
   end if;
 
   v_status := lower(coalesce(p_invoice.status, 'draft'));
+  raise notice 'consume_sales_invoice_inventory: invoice %, status %', p_invoice.id, v_status;
 
+  -- Only process if status is posted (not draft/cancelled)
   if v_status = any (array['draft','borrador','cancelled','cancelado','cancelada','anulado','anulada']) then
+    raise notice 'consume_sales_invoice_inventory: status is non-posted, skipping';
     return;
   end if;
 
-  select exists (
-           select 1
-             from information_schema.columns
-            where table_schema = 'public'
-              and table_name = 'products'
-              and column_name = 'inventory_qty'
-         )
-    into v_has_inventory_qty;
-
-  select exists (
-           select 1
-             from information_schema.columns
-            where table_schema = 'public'
-              and table_name = 'products'
-              and column_name = 'stock_quantity'
-         )
-    into v_has_stock_quantity;
-
-  select exists (
-           select 1
-             from information_schema.columns
-            where table_schema = 'public'
-              and table_name = 'products'
-              and column_name = 'is_service'
-         )
-    into v_has_is_service;
-
-  select exists (
-           select 1
-             from information_schema.columns
-            where table_schema = 'public'
-              and table_name = 'products'
-              and column_name = 'track_stock'
-         )
-    into v_has_track_stock;
-
-  select exists (
-           select 1
-             from information_schema.columns
-            where table_schema = 'public'
-              and table_name = 'products'
-              and column_name = 'updated_at'
-         )
-    into v_has_updated_at;
-
-  if not v_has_inventory_qty and not v_has_stock_quantity then
-    return;
-  end if;
-
-  if v_has_inventory_qty then
-    v_update_assignments := v_update_assignments || 'inventory_qty = coalesce(inventory_qty, 0) - $1';
-  end if;
-
-  if v_has_stock_quantity then
-    if v_update_assignments <> '' then
-      v_update_assignments := v_update_assignments || ', ';
-    end if;
-    v_update_assignments := v_update_assignments || 'stock_quantity = coalesce(stock_quantity, 0) - $1';
-  end if;
-
-  if v_has_updated_at then
-    if v_update_assignments <> '' then
-      v_update_assignments := v_update_assignments || ', ';
-    end if;
-    v_update_assignments := v_update_assignments || 'updated_at = now()';
-  end if;
-
-  if v_update_assignments = '' then
-    return;
-  end if;
-
-  v_update_sql := 'update public.products set ' || v_update_assignments || ' where id = $2';
-
-  if v_has_is_service then
-    v_update_sql := v_update_sql || ' and coalesce(is_service, false) = false';
-  end if;
-
-  if v_has_track_stock then
-    v_update_sql := v_update_sql || ' and coalesce(track_stock, true) = true';
-  end if;
-
+  -- Check if inventory reduction already done
   v_reference := concat('sales_invoice:', p_invoice.id::text);
-
   if exists (
        select 1
          from public.stock_movements
         where reference = v_reference
+          and type = 'OUT'
      ) then
+    raise notice 'consume_sales_invoice_inventory: inventory already reduced for %', v_reference;
     return;
   end if;
 
+  -- Count items
+  select jsonb_array_length(coalesce(p_invoice.items, '[]'::jsonb))
+    into v_items_count;
+  
+  raise notice 'consume_sales_invoice_inventory: processing % items', v_items_count;
+
+  -- Process each item
   for v_item in
-    select coalesce(
-             nullif(item->>'product_id', ''),
-             nullif(item->>'productId', ''),
-             nullif(item#>>'{product,id}', ''),
-             nullif(item#>>'{product,product_id}', ''),
-             nullif(item#>>'{product,productId}', '')
-           )::uuid as product_id,
-           coalesce(
-             nullif(item->>'product_sku', ''),
-             nullif(item->>'productSku', ''),
-             nullif(item#>>'{product,sku}', ''),
-             nullif(item#>>'{product,product_sku}', ''),
-             nullif(item#>>'{product,productSku}', '')
-           ) as product_sku,
-           case
-             when coalesce(
-                    nullif(item->>'quantity', ''),
-                    nullif(item->>'qty', ''),
-                    nullif(item->>'cantidad', ''),
-                    nullif(item#>>'{quantity}', ''),
-                    nullif(item#>>'{line,quantity}', ''),
-                    nullif(item#>>'{product,quantity}', '')
-                  ) ~ '^-?\\d+(\\.\\d+)?$'
-               then coalesce(
-                      nullif(item->>'quantity', ''),
-                      nullif(item->>'qty', ''),
-                      nullif(item->>'cantidad', ''),
-                      nullif(item#>>'{quantity}', ''),
-                      nullif(item#>>'{line,quantity}', ''),
-                      nullif(item#>>'{product,quantity}', '')
-                    )::numeric
-             else 0
-           end as quantity
-      from jsonb_array_elements(coalesce(p_invoice.items, '[]'::jsonb)) item
+    select 
+      (item->>'product_id')::uuid as product_id,
+      (item->>'product_sku')::text as product_sku,
+      (item->>'quantity')::numeric as quantity
+    from jsonb_array_elements(coalesce(p_invoice.items, '[]'::jsonb)) item
   loop
-      v_resolved_product_id := v_item.product_id;
+    v_resolved_product_id := v_item.product_id;
 
-      if v_resolved_product_id is null and v_item.product_sku is not null then
-        select id
-          into v_resolved_product_id
-          from public.products
-         where sku = v_item.product_sku
-         limit 1;
-      end if;
+    -- Try to resolve by SKU if product_id is null
+    if v_resolved_product_id is null and v_item.product_sku is not null and v_item.product_sku != '' then
+      select id
+        into v_resolved_product_id
+        from public.products
+       where sku = v_item.product_sku
+       limit 1;
+      
+      raise notice 'consume_sales_invoice_inventory: resolved product % by SKU %', v_resolved_product_id, v_item.product_sku;
+    end if;
 
-      v_quantity := coalesce(v_item.quantity, 0);
-      v_quantity_int := coalesce(v_quantity::int, 0);
+    v_quantity_int := coalesce(v_item.quantity::int, 0);
 
-      if v_resolved_product_id is null or v_quantity_int <= 0 then
-        continue;
-      end if;
+    if v_resolved_product_id is null then
+      raise notice 'consume_sales_invoice_inventory: skipping item - product_id is null, sku: %', v_item.product_sku;
+      continue;
+    end if;
 
-      execute v_update_sql using v_quantity_int, v_resolved_product_id;
+    if v_quantity_int <= 0 then
+      raise notice 'consume_sales_invoice_inventory: skipping item - quantity <= 0, product: %', v_resolved_product_id;
+      continue;
+    end if;
 
-      get diagnostics v_rows = row_count;
-      if v_rows = 0 then
-        continue;
-      end if;
+    -- Reduce inventory (check both inventory_qty and stock_quantity columns)
+    update public.products
+       set inventory_qty = coalesce(inventory_qty, 0) - v_quantity_int,
+           updated_at = now()
+     where id = v_resolved_product_id
+       and coalesce(is_service, false) = false;
 
-    insert into public.stock_movements (
-      id,
-      product_id,
-      warehouse_id,
-      type,
-      movement_type,
-      quantity,
-      reference,
-      notes,
-      date,
-      created_at,
-      updated_at
-    ) values (
-      gen_random_uuid(),
-      v_resolved_product_id,
-      null,
-      'OUT',
-      'sales_invoice',
-      v_item.quantity,
-      v_reference,
-      format('Salida por factura %s', coalesce(nullif(p_invoice.invoice_number, ''), p_invoice.id::text)),
-      coalesce(p_invoice.date, now()),
-      now(),
-      now()
-    );
+    if found then
+      raise notice 'consume_sales_invoice_inventory: reduced inventory for product % by %', v_resolved_product_id, v_quantity_int;
+      
+      -- Create stock movement record
+      insert into public.stock_movements (
+        id,
+        product_id,
+        warehouse_id,
+        type,
+        movement_type,
+        quantity,
+        reference,
+        notes,
+        date,
+        created_at,
+        updated_at
+      ) values (
+        gen_random_uuid(),
+        v_resolved_product_id,
+        null,
+        'OUT',
+        'sales_invoice',
+        -v_quantity_int, -- Negative for OUT movements
+        v_reference,
+        format('Salida por factura %s', coalesce(nullif(p_invoice.invoice_number, ''), p_invoice.id::text)),
+        coalesce(p_invoice.date, now()),
+        now(),
+        now()
+      );
+    else
+      raise notice 'consume_sales_invoice_inventory: product % is a service or does not exist', v_resolved_product_id;
+    end if;
   end loop;
+
+  raise notice 'consume_sales_invoice_inventory: completed for invoice %', p_invoice.id;
 end;
 $$;
 
@@ -1458,7 +1371,11 @@ declare
   v_old_posted boolean;
   v_new_posted boolean;
 begin
+  raise notice 'handle_sales_invoice_change: TG_OP=%', TG_OP;
+
+  -- Prevent infinite recursion
   if pg_trigger_depth() > 1 then
+    raise notice 'handle_sales_invoice_change: trigger depth > 1, returning';
     if TG_OP = 'DELETE' then
       return OLD;
     else
@@ -1468,60 +1385,82 @@ begin
 
   if TG_OP = 'INSERT' then
     v_new_status := lower(coalesce(NEW.status, 'draft'));
+    raise notice 'handle_sales_invoice_change: INSERT invoice %, status %', NEW.id, v_new_status;
+    
+    -- If inserted with posted status, consume inventory
     if not (v_new_status = any (v_non_posted)) then
       perform public.consume_sales_invoice_inventory(NEW);
     end if;
+    
+    -- Create journal entry
     perform public.create_sales_invoice_journal_entry(NEW);
     perform public.recalculate_sales_invoice_payments(NEW.id);
     return NEW;
+
   elsif TG_OP = 'UPDATE' then
     v_old_status := lower(coalesce(OLD.status, 'draft'));
     v_new_status := lower(coalesce(NEW.status, 'draft'));
+    
+    raise notice 'handle_sales_invoice_change: UPDATE invoice %, old status %, new status %', NEW.id, v_old_status, v_new_status;
 
     v_old_posted := not (v_old_status = any (v_non_posted));
     v_new_posted := not (v_new_status = any (v_non_posted));
 
-    if v_old_posted then
-      if v_new_posted then
-        perform public.restore_sales_invoice_inventory(OLD);
-        perform public.consume_sales_invoice_inventory(NEW);
-      else
-        perform public.restore_sales_invoice_inventory(OLD);
-      end if;
-    elsif v_new_posted then
+    -- Handle inventory changes based on status transition
+    if v_old_posted and v_new_posted then
+      -- Both statuses are posted: restore old inventory, consume new
+      raise notice 'handle_sales_invoice_change: both posted, restore and consume';
+      perform public.restore_sales_invoice_inventory(OLD);
       perform public.consume_sales_invoice_inventory(NEW);
+    elsif v_old_posted and not v_new_posted then
+      -- Changed from posted to non-posted: restore inventory
+      raise notice 'handle_sales_invoice_change: changed to non-posted, restore only';
+      perform public.restore_sales_invoice_inventory(OLD);
+    elsif not v_old_posted and v_new_posted then
+      -- Changed from non-posted to posted: consume inventory
+      raise notice 'handle_sales_invoice_change: changed to posted, consume';
+      perform public.consume_sales_invoice_inventory(NEW);
+    else
+      -- Both non-posted: no inventory change
+      raise notice 'handle_sales_invoice_change: both non-posted, no inventory change';
     end if;
+
+    -- Update journal entries
     perform public.delete_sales_invoice_journal_entry(OLD.id);
     perform public.create_sales_invoice_journal_entry(NEW);
     perform public.recalculate_sales_invoice_payments(NEW.id);
     return NEW;
+
   elsif TG_OP = 'DELETE' then
     v_old_status := lower(coalesce(OLD.status, 'draft'));
+    raise notice 'handle_sales_invoice_change: DELETE invoice %, status %', OLD.id, v_old_status;
+    
+    -- If was posted, restore inventory
     if not (v_old_status = any (v_non_posted)) then
       perform public.restore_sales_invoice_inventory(OLD);
     end if;
+    
     perform public.delete_sales_invoice_journal_entry(OLD.id);
     return OLD;
   end if;
+
   return NULL;
 end;
 $$;
 
 do $$
 begin
-  if not exists (
-    select 1
-      from pg_trigger t
-      join pg_class c on c.oid = t.tgrelid
-      join pg_namespace n on n.oid = c.relnamespace
-     where n.nspname = 'public'
-       and c.relname = 'sales_invoices'
-       and t.tgname = 'trg_sales_invoices_change'
-  ) then
-    create trigger trg_sales_invoices_change
-      after insert or update or delete on public.sales_invoices
-      for each row execute procedure public.handle_sales_invoice_change();
-  end if;
+  -- Drop and recreate trigger to ensure it uses latest function
+  drop trigger if exists trg_sales_invoices_change on public.sales_invoices;
+  
+  create trigger trg_sales_invoices_change
+    after insert or update or delete on public.sales_invoices
+    for each row execute procedure public.handle_sales_invoice_change();
+    
+  raise notice 'Trigger trg_sales_invoices_change created successfully';
+exception
+  when others then
+    raise notice 'Error creating trigger: %', SQLERRM;
 end $$;
 
 create or replace function public.handle_sales_payment_change()
