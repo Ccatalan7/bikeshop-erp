@@ -128,7 +128,33 @@ class _PaymentsPageState extends State<PaymentsPage> {
           backgroundColor: Colors.green[100],
           child: const Icon(Icons.attach_money, color: Colors.green),
         ),
-        title: Text(ChileanUtils.formatCurrency(payment.amount)),
+        title: Row(
+          children: [
+            Text(
+              ChileanUtils.formatCurrency(payment.amount),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            if (payment.invoiceReference != null && payment.invoiceReference!.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
+                child: Text(
+                  payment.invoiceReference!,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -58,6 +58,20 @@ class AuthService extends ChangeNotifier {
     return user;
   }
 
+  Future<bool> signInWithGoogle() async {
+    try {
+      // For desktop/mobile apps, Supabase handles the OAuth flow automatically
+      // The session will be updated via the auth state listener
+      final response = await _client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        // No redirectTo needed - Supabase handles it automatically for desktop
+      );
+      return response;
+    } catch (e) {
+      throw AuthException('Error al iniciar sesión con Google: ${e.toString()}');
+    }
+  }
+
   Future<void> signOut() async {
     await _client.auth.signOut();
     _syncAuth(_client.auth.currentSession);

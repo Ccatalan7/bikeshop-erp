@@ -279,6 +279,7 @@ enum InvoiceType {
 enum InvoiceStatus {
   draft('Borrador'),
   sent('Enviada'),
+  confirmed('Confirmada'),
   paid('Pagada'),
   overdue('Vencida'),
   cancelled('Anulada');

@@ -209,7 +209,8 @@ class POSService extends ChangeNotifier {
         date: timestamp,
         dueDate: timestamp,
         reference: notes,
-        status: payments.isNotEmpty ? sales_models.InvoiceStatus.sent : sales_models.InvoiceStatus.draft,
+        // POS sales are immediately confirmed (not just sent) to trigger accounting
+        status: payments.isNotEmpty ? sales_models.InvoiceStatus.confirmed : sales_models.InvoiceStatus.draft,
         subtotal: cartNetAmount,
         ivaAmount: cartTaxAmount,
         total: cartTotal,

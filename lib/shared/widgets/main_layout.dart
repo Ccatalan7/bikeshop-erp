@@ -96,6 +96,11 @@ const List<MenuSubItem> _purchasesMenuItems = [
     title: 'Nueva factura',
     route: '/purchases/new',
   ),
+  MenuSubItem(
+    icon: Icons.payments_outlined,
+    title: 'Pagos',
+    route: '/purchases/payments',
+  ),
 ];
 
 const String _purchasesSectionKey = 'purchases';
@@ -531,7 +536,7 @@ class _AppSidebarState extends State<AppSidebar> {
               title: 'Configuración',
               route: '/settings',
               currentLocation: currentLocation,
-              enabled: false,
+              enabled: true,
             ),
           ),
         ],

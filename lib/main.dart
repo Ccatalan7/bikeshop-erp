@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:app_links/app_links.dart';
 
 import 'shared/themes/app_theme.dart';
 import 'shared/services/auth_service.dart';
@@ -31,6 +32,15 @@ Future<void> main() async {
       autoRefreshToken: true,
     ),
   );
+
+  // Handle deep links for OAuth callbacks on desktop
+  if (!kIsWeb) {
+    final appLinks = AppLinks();
+    appLinks.uriLinkStream.listen((uri) {
+      debugPrint('[DeepLink] Received: $uri');
+      // Supabase will automatically handle the OAuth callback
+    });
+  }
 
   runApp(const VinabikeApp());
 }

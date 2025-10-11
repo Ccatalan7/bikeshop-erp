@@ -1210,6 +1210,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         return 'Borrador';
       case InvoiceStatus.sent:
         return 'Enviada';
+      case InvoiceStatus.confirmed:
+        return 'Confirmada';
       case InvoiceStatus.paid:
         return 'Pagada';
       case InvoiceStatus.overdue:
@@ -1225,6 +1227,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         return theme.colorScheme.outline;
       case InvoiceStatus.sent:
         return theme.colorScheme.primary;
+      case InvoiceStatus.confirmed:
+        return Colors.purple;
       case InvoiceStatus.paid:
         return Colors.green;
       case InvoiceStatus.overdue:

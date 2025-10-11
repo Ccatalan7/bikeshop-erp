@@ -4,6 +4,7 @@ import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/services/database_service.dart';
 import '../../accounting/services/accounting_service.dart';
 import '../models/purchase_invoice.dart';
+import '../models/purchase_payment.dart';
 
 class PurchaseService extends ChangeNotifier {
   PurchaseService(this._db);
@@ -13,8 +14,10 @@ class PurchaseService extends ChangeNotifier {
 
   List<shared_supplier.Supplier> _supplierCache = const [];
   List<PurchaseInvoice> _invoiceCache = const [];
+  List<PurchasePayment> _paymentCache = const [];
   bool _suppliersLoaded = false;
   bool _invoicesLoaded = false;
+  bool _paymentsLoaded = false;
 
   static void setAccountingService(AccountingService accountingService) {
     _accountingService = accountingService;
@@ -276,6 +279,75 @@ class PurchaseService extends ChangeNotifier {
       );
     } catch (e) {
       debugPrint('PurchaseService: error creando asiento contable -> $e');
+    }
+  }
+
+  // =====================================================
+  // Purchase Payments
+  // =====================================================
+
+  Future<List<PurchasePayment>> getPurchasePayments({bool forceRefresh = false}) async {
+    if (_paymentsLoaded && !forceRefresh) {
+      return _paymentCache;
+    }
+
+    try {
+      final data = await _db.select('purchase_payments');
+      _paymentCache = data
+          .map((row) => PurchasePayment.fromJson(row))
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date)); // Most recent first
+      
+      _paymentsLoaded = true;
+      notifyListeners();
+      return _paymentCache;
+    } catch (e) {
+      throw Exception('No se pudieron cargar los pagos de compras: $e');
+    }
+  }
+
+  Future<List<PurchasePayment>> getPaymentsForInvoice(String invoiceId) async {
+    try {
+      final data = await _db.select(
+        'purchase_payments',
+        where: 'invoice_id=$invoiceId',
+      );
+      
+      return data.map((row) => PurchasePayment.fromJson(row)).toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+    } catch (e) {
+      throw Exception('No se pudieron cargar los pagos de la factura: $e');
+    }
+  }
+
+  Future<PurchasePayment> createPayment(PurchasePayment payment) async {
+    try {
+      final payload = payment.toJson()..remove('id');
+      final result = await _db.insert('purchase_payments', payload);
+      final created = PurchasePayment.fromJson(result);
+      
+      // Refresh caches
+      await getPurchasePayments(forceRefresh: true);
+      await getPurchaseInvoices(forceRefresh: true);
+      
+      notifyListeners();
+      return created;
+    } catch (e) {
+      throw Exception('No se pudo registrar el pago: $e');
+    }
+  }
+
+  Future<void> deletePayment(String paymentId) async {
+    try {
+      await _db.delete('purchase_payments', paymentId);
+      
+      // Refresh caches
+      await getPurchasePayments(forceRefresh: true);
+      await getPurchaseInvoices(forceRefresh: true);
+      
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo eliminar el pago: $e');
     }
   }
 }

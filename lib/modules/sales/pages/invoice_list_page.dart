@@ -282,6 +282,11 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         textColor = Colors.blue[800]!;
         text = 'Enviada';
         break;
+      case InvoiceStatus.confirmed:
+        backgroundColor = Colors.purple[100]!;
+        textColor = Colors.purple[800]!;
+        text = 'Confirmada';
+        break;
       case InvoiceStatus.paid:
         backgroundColor = Colors.green[100]!;
         textColor = Colors.green[800]!;

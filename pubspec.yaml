@@ -20,7 +20,9 @@ dependencies:
   
   # Supabase
   supabase_flutter: ^2.6.0
-
+  
+  # Deep linking for OAuth
+  app_links: ^6.3.2
   
   # HTTP & Networking
   http: ^1.2.1

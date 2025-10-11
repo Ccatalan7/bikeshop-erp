@@ -24,11 +24,14 @@ import '../../modules/purchases/pages/supplier_list_page.dart';
 import '../../modules/purchases/pages/supplier_form_page.dart';
 import '../../modules/purchases/pages/purchase_invoice_list_page.dart';
 import '../../modules/purchases/pages/purchase_invoice_form_page.dart';
+import '../../modules/purchases/pages/purchase_payments_list_page.dart';
 import '../../modules/pos/pages/pos_dashboard_page.dart';
 import '../../modules/pos/pages/pos_cart_page.dart';
 import '../../modules/pos/pages/pos_payment_page.dart';
 import '../../modules/pos/pages/pos_receipt_page.dart';
 import '../../modules/pos/models/pos_transaction.dart';
+import '../../modules/settings/pages/settings_page.dart';
+import '../../modules/settings/pages/factory_reset_page.dart';
 
 class AppRouter {
   static GoRouter? _router;
@@ -228,6 +231,10 @@ class AppRouter {
           return PurchaseInvoiceFormPage(invoiceId: id);
         },
       ),
+      GoRoute(
+        path: '/purchases/payments',
+        builder: (context, state) => const PurchasePaymentsListPage(),
+      ),
       
       // POS Module
       GoRoute(
@@ -256,6 +263,20 @@ class AppRouter {
             child: POSReceiptPage(transaction: transaction),
           );
         },
+      ),
+
+      // Settings routes
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const MainLayout(
+          child: SettingsPage(),
+        ),
+      ),
+      GoRoute(
+        path: '/settings/factory-reset',
+        builder: (context, state) => const MainLayout(
+          child: FactoryResetPage(),
+        ),
       ),
       ],
     );

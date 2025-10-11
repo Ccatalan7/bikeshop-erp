@@ -158,6 +158,7 @@ class Invoice {
 enum InvoiceStatus {
   draft,
   sent,
+  confirmed,
   paid,
   overdue,
   cancelled,

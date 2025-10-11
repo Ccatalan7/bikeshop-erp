@@ -109,6 +109,112 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
   }
 
+  Future<void> _markAsConfirmed() async {
+    try {
+      final salesService = context.read<SalesService>();
+      await salesService.updateInvoiceStatus(
+          widget.invoiceId, InvoiceStatus.confirmed);
+      await _loadInvoice();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Factura confirmada - contabilizada')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('No se pudo confirmar la factura: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _revertToDraft() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Revertir a borrador'),
+        content: const Text(
+          'Esto eliminará el asiento contable y restaurará el inventario. '
+          '¿Está seguro?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Revertir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final salesService = context.read<SalesService>();
+      await salesService.updateInvoiceStatus(
+          widget.invoiceId, InvoiceStatus.draft);
+      await _loadInvoice();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Factura revertida a borrador')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('No se pudo revertir: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _revertToSent() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Revertir a enviada'),
+        content: const Text(
+          'Esto eliminará el asiento contable y restaurará el inventario. '
+          '¿Está seguro?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Revertir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final salesService = context.read<SalesService>();
+      await salesService.updateInvoiceStatus(
+          widget.invoiceId, InvoiceStatus.sent);
+      await _loadInvoice();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Factura revertida a enviada')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('No se pudo revertir: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final salesService = context.watch<SalesService>();
@@ -186,7 +292,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               ],
             ),
           ),
-          if (invoice.balance > 0 && invoice.status != InvoiceStatus.cancelled)
+          if (invoice.balance > 0 && invoice.status == InvoiceStatus.confirmed)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: OutlinedButton.icon(
@@ -203,11 +309,36 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             label: const Text('Editar'),
           ),
           const SizedBox(width: 8),
+          // Draft → Sent
           if (invoice.status == InvoiceStatus.draft)
             FilledButton.icon(
               onPressed: _markAsSent,
               icon: const Icon(Icons.send_outlined),
-              label: const Text('Marcar como enviado'),
+              label: const Text('Marcar como enviada'),
+            ),
+          // Sent → Confirmed OR Sent → Draft
+          if (invoice.status == InvoiceStatus.sent) ...[
+            OutlinedButton.icon(
+              onPressed: _revertToDraft,
+              icon: const Icon(Icons.undo),
+              label: const Text('Volver a borrador'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: _markAsConfirmed,
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Confirmar'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.green,
+              ),
+            ),
+          ],
+          // Confirmed → Sent
+          if (invoice.status == InvoiceStatus.confirmed && invoice.balance > 0)
+            OutlinedButton.icon(
+              onPressed: _revertToSent,
+              icon: const Icon(Icons.undo),
+              label: const Text('Volver a enviada'),
             ),
         ],
       ),
@@ -227,6 +358,10 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       case InvoiceStatus.sent:
         statusColor = Colors.blue;
         statusText = 'Enviada';
+        break;
+      case InvoiceStatus.confirmed:
+        statusColor = Colors.purple;
+        statusText = 'Confirmada';
         break;
       case InvoiceStatus.paid:
         statusColor = Colors.green;
