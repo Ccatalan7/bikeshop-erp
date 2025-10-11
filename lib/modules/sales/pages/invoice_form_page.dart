@@ -28,7 +28,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   static const double _ivaRate = 0.19;
 
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _invoiceNumberController = TextEditingController();
+  final TextEditingController _invoiceNumberController =
+      TextEditingController();
   final TextEditingController _referenceController = TextEditingController();
 
   late SalesService _salesService;
@@ -41,6 +42,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isEditing = false;
+  bool _isUpdatingStatus = false;
 
   Customer? _selectedCustomer;
   Invoice? _loadedInvoice;
@@ -48,9 +51,33 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   DateTime? _dueDate;
   InvoiceStatus _status = InvoiceStatus.draft;
 
+  String? get _currentInvoiceId => _loadedInvoice?.id ?? widget.invoiceId;
+  bool get _canEditFields => _status == InvoiceStatus.draft && _isEditing;
+  bool get _canMarkAsSent =>
+      _currentInvoiceId != null &&
+      _status == InvoiceStatus.draft &&
+      !_isEditing;
+  double get _outstandingAmount {
+    final balance = _loadedInvoice?.balance;
+    if (balance != null && balance > 0) {
+      return balance;
+    }
+    final paid = _loadedInvoice?.paidAmount ?? 0;
+    final total = _loadedInvoice?.total ?? _total;
+    return (total - paid).clamp(0, double.infinity);
+  }
+
+  bool get _canRegisterPayment =>
+      _currentInvoiceId != null &&
+      _status == InvoiceStatus.sent &&
+      _outstandingAmount > 0.01;
+  bool get _shouldShowReadOnlyNotice =>
+      !_canEditFields && _status == InvoiceStatus.draft;
+
   @override
   void initState() {
     super.initState();
+    _isEditing = widget.invoiceId == null;
     _dueDate = _issueDate.add(const Duration(days: 30));
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
   }
@@ -83,7 +110,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         ..addAll(results[1] as List<Product>);
 
       if (widget.invoiceId != null) {
-        final invoice = await _salesService.fetchInvoice(widget.invoiceId!, refresh: true);
+        final invoice =
+            await _salesService.fetchInvoice(widget.invoiceId!, refresh: true);
         if (invoice != null) {
           _loadedInvoice = invoice;
           _applyInvoice(invoice);
@@ -109,24 +137,27 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   void _applyInvoice(Invoice invoice) {
+    if (!mounted) return;
+
     _invoiceNumberController.text = invoice.invoiceNumber.isNotEmpty
         ? invoice.invoiceNumber
         : _buildSuggestedNumber();
     _referenceController.text = invoice.reference ?? '';
-    _issueDate = invoice.date;
-    _dueDate = invoice.dueDate ?? invoice.date.add(const Duration(days: 30));
-    _status = invoice.status;
 
-    _selectedCustomer = _cachedCustomers.firstWhere(
-      (customer) => customer.id == invoice.customerId,
-      orElse: () => Customer(
-        id: invoice.customerId,
-        name: invoice.customerName ?? 'Cliente',
-        rut: invoice.customerRut ?? '',
-        email: null,
-      ),
-    );
+    Customer? resolvedCustomer;
+    if (invoice.customerId != null) {
+      resolvedCustomer = _cachedCustomers.firstWhere(
+        (customer) => customer.id == invoice.customerId,
+        orElse: () => Customer(
+          id: invoice.customerId,
+          name: invoice.customerName ?? 'Cliente',
+          rut: invoice.customerRut ?? '',
+          email: null,
+        ),
+      );
+    }
 
+    final newEntries = <_InvoiceLineEntry>[];
     for (final item in invoice.items) {
       Product? product;
       for (final candidate in _cachedProducts) {
@@ -149,15 +180,30 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         ),
       );
       entry.attachListeners(_handleLinesChanged);
-      _lineEntries.add(entry);
+      newEntries.add(entry);
     }
 
-    setState(() {});
+    for (final entry in _lineEntries) {
+      entry.dispose();
+    }
+
+    setState(() {
+      _loadedInvoice = invoice;
+      _selectedCustomer = resolvedCustomer;
+      _issueDate = invoice.date;
+      _dueDate = invoice.dueDate ?? invoice.date.add(const Duration(days: 30));
+      _status = invoice.status;
+      _isEditing = false;
+      _lineEntries
+        ..clear()
+        ..addAll(newEntries);
+    });
   }
 
   String _buildSuggestedNumber() {
     final now = DateTime.now();
-    final datePortion = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final datePortion =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final timePortion = now.millisecondsSinceEpoch.toString().substring(7);
     return 'FV-$datePortion-$timePortion';
   }
@@ -168,8 +214,95 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
   }
 
+  void _startEditing() {
+    if (_status != InvoiceStatus.draft) return;
+    setState(() => _isEditing = true);
+  }
+
+  void _cancelEditing() {
+    if (!_isEditing) return;
+    if (_loadedInvoice != null) {
+      _applyInvoice(_loadedInvoice!);
+    } else if (mounted) {
+      setState(() => _isEditing = false);
+    }
+  }
+
+  Future<void> _refreshInvoiceById(String invoiceId) async {
+    final refreshed =
+        await _salesService.fetchInvoice(invoiceId, refresh: true);
+    if (refreshed != null && mounted) {
+      _applyInvoice(refreshed);
+    }
+  }
+
+  Future<void> _markAsSent() async {
+    final invoiceId = _currentInvoiceId;
+    if (invoiceId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Guarda la factura como borrador antes de enviarla.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isUpdatingStatus = true);
+    try {
+      final updated = await _salesService.updateInvoiceStatus(
+          invoiceId, InvoiceStatus.sent);
+      if (updated != null && mounted) {
+        _applyInvoice(updated);
+        await _refreshInvoiceById(invoiceId);
+      } else if (mounted) {
+        await _refreshInvoiceById(invoiceId);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Factura marcada como enviada'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo actualizar el estado: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingStatus = false);
+      }
+    }
+  }
+
+  Future<void> _openPaymentForm() async {
+    final invoiceId = _currentInvoiceId;
+    if (invoiceId == null) {
+      return;
+    }
+
+    final didRegisterPayment = await context.push<bool>(
+          '/sales/invoices/$invoiceId/payment',
+        ) ??
+        false;
+
+    if (didRegisterPayment && mounted) {
+      await _refreshInvoiceById(invoiceId);
+    }
+  }
+
   double get _subtotal {
-    final value = _lineEntries.fold<double>(0, (sum, entry) => sum + entry.line.netAmount);
+    final value = _lineEntries.fold<double>(
+        0, (sum, entry) => sum + entry.line.netAmount);
     return value < 0 ? 0 : value;
   }
 
@@ -212,7 +345,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
     if (selected != null && mounted) {
       setState(() => _selectedCustomer = selected);
-      final exists = _cachedCustomers.any((customer) => customer.id == selected.id);
+      final exists =
+          _cachedCustomers.any((customer) => customer.id == selected.id);
       if (!exists) {
         _cachedCustomers.add(selected);
       }
@@ -222,7 +356,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   Future<void> _openProductSelector() async {
     if (_cachedProducts.isEmpty) {
       try {
-        final products = await _inventoryService.getProducts(forceRefresh: true);
+        final products =
+            await _inventoryService.getProducts(forceRefresh: true);
         _cachedProducts
           ..clear()
           ..addAll(products);
@@ -294,7 +429,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   Future<void> _pickDate({required bool isIssueDate}) async {
-    final initialDate = isIssueDate ? _issueDate : (_dueDate ?? _issueDate.add(const Duration(days: 30)));
+    final initialDate = isIssueDate
+        ? _issueDate
+        : (_dueDate ?? _issueDate.add(const Duration(days: 30)));
     final selected = await showDatePicker(
       context: context,
       initialDate: initialDate,
@@ -347,7 +484,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     if (customerId == null || customerId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('El cliente seleccionado no tiene un identificador válido.'),
+          content:
+              Text('El cliente seleccionado no tiene un identificador válido.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -380,7 +518,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       reference: _referenceController.text.trim().isEmpty
           ? null
           : _referenceController.text.trim(),
-      status: _status,
+      status: InvoiceStatus.draft,
       subtotal: _subtotal,
       ivaAmount: _iva,
       total: _total,
@@ -394,11 +532,17 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Factura guardada correctamente'),
+          content: Text('Borrador guardado correctamente'),
           backgroundColor: Colors.green,
         ),
       );
-      context.pop(saved);
+
+      if (widget.invoiceId == null && saved.id != null) {
+        context.go('/sales/invoices/${saved.id}/edit');
+        return;
+      }
+
+      _applyInvoice(saved);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -426,7 +570,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 _buildHeader(theme),
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: _buildForm(theme),
                   ),
                 ),
@@ -436,7 +581,94 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   Widget _buildHeader(ThemeData theme) {
-    final title = widget.invoiceId != null ? 'Editar factura' : 'Nueva factura';
+    final invoiceNumber = _invoiceNumberController.text.trim();
+    final hasExistingInvoice = _currentInvoiceId != null;
+    final title = invoiceNumber.isNotEmpty
+        ? 'Factura $invoiceNumber'
+        : (hasExistingInvoice ? 'Factura' : 'Nueva factura');
+
+    final actionButtons = <Widget>[];
+
+    if (_canEditFields) {
+      if (_loadedInvoice != null) {
+        actionButtons.add(
+          OutlinedButton.icon(
+            onPressed: _isSaving ? null : _cancelEditing,
+            icon: const Icon(Icons.close),
+            label: const Text('Cancelar'),
+          ),
+        );
+      }
+      actionButtons.add(
+        AppButton(
+          text: 'Guardar borrador',
+          icon: Icons.save_outlined,
+          onPressed: _isSaving ? null : _saveInvoice,
+          isLoading: _isSaving,
+        ),
+      );
+    } else {
+      if (_status == InvoiceStatus.draft) {
+        actionButtons.add(
+          OutlinedButton.icon(
+            onPressed: _isUpdatingStatus ? null : _startEditing,
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Editar'),
+          ),
+        );
+        if (_canMarkAsSent) {
+          actionButtons.add(
+            FilledButton.icon(
+              onPressed: _isUpdatingStatus ? null : _markAsSent,
+              icon: _isUpdatingStatus
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_outlined),
+              label: const Text('Marcar como enviado'),
+            ),
+          );
+        }
+      } else if (_canRegisterPayment) {
+        actionButtons.add(
+          FilledButton.icon(
+            onPressed: _openPaymentForm,
+            icon: const Icon(Icons.payments_outlined),
+            label: const Text('Pagar factura'),
+          ),
+        );
+      }
+    }
+
+    final actionWidgets = <Widget>[
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primary.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.payments_outlined,
+                size: 16, color: theme.colorScheme.primary),
+            const SizedBox(width: 6),
+            Text(
+              ChileanUtils.formatCurrency(_total),
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+      _buildStatusChip(theme),
+      ...actionButtons,
+    ];
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
@@ -453,7 +685,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               children: [
                 Text(
                   title,
-                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -466,32 +699,16 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             ),
           ),
           const SizedBox(width: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(999),
+          Flexible(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: actionWidgets,
+              ),
             ),
-            child: Row(
-              children: [
-                Icon(Icons.payments_outlined, size: 16, color: theme.colorScheme.primary),
-                const SizedBox(width: 6),
-                Text(
-                  ChileanUtils.formatCurrency(_total),
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          AppButton(
-            text: 'Guardar',
-            icon: Icons.save_outlined,
-            onPressed: _isSaving ? null : _saveInvoice,
-            isLoading: _isSaving,
           ),
         ],
       ),
@@ -511,6 +728,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 Expanded(
                   child: Column(
                     children: [
+                      if (_shouldShowReadOnlyNotice)
+                        _buildReadOnlyNotice(theme),
+                      if (_shouldShowReadOnlyNotice) const SizedBox(height: 16),
                       _buildSectionCard(
                         theme,
                         icon: Icons.person_outline,
@@ -535,6 +755,11 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   ),
                 ),
                 const SizedBox(width: 24),
+                if (_shouldShowReadOnlyNotice)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _buildReadOnlyNotice(theme),
+                  ),
                 SizedBox(
                   width: 360,
                   child: Column(
@@ -602,6 +827,19 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
+  Widget _buildReadOnlyNotice(ThemeData theme) {
+    return Card(
+      color: theme.colorScheme.surfaceVariant.withOpacity(0.6),
+      child: ListTile(
+        leading:
+            Icon(Icons.lock_outline, color: theme.colorScheme.onSurfaceVariant),
+        title: const Text('Factura en modo lectura'),
+        subtitle: const Text(
+            'Usa “Editar” para habilitar los campos y modificar el borrador.'),
+      ),
+    );
+  }
+
   Widget _buildSectionCard(
     ThemeData theme, {
     required IconData icon,
@@ -626,7 +864,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 const SizedBox(width: 12),
                 Text(
                   title,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -644,6 +883,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       children: [
         TextFormField(
           controller: _invoiceNumberController,
+          enabled: _canEditFields,
           decoration: const InputDecoration(
             labelText: 'Número de factura',
             helperText: 'Puedes modificar el folio si tu numeración es manual',
@@ -684,9 +924,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   ],
                 ),
           trailing: FilledButton.icon(
-            onPressed: _openCustomerSelector,
+            onPressed: _canEditFields ? _openCustomerSelector : null,
             icon: const Icon(Icons.search),
-            label: Text(_selectedCustomer == null ? 'Buscar cliente' : 'Cambiar'),
+            label:
+                Text(_selectedCustomer == null ? 'Buscar cliente' : 'Cambiar'),
           ),
         ),
       ],
@@ -702,7 +943,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           child: OutlinedButton.icon(
             icon: const Icon(Icons.add_shopping_cart_outlined),
             label: const Text('Agregar producto'),
-            onPressed: _openProductSelector,
+            onPressed: _canEditFields ? _openProductSelector : null,
           ),
         ),
         const SizedBox(height: 12),
@@ -716,7 +957,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.production_quantity_limits, size: 48, color: theme.colorScheme.onSurfaceVariant),
+                Icon(Icons.production_quantity_limits,
+                    size: 48, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(height: 12),
                 Text(
                   'Aún no has agregado productos',
@@ -735,7 +977,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           )
         else
           Column(
-            children: _lineEntries.map((entry) => _buildLineCard(theme, entry)).toList(),
+            children: _lineEntries
+                .map((entry) => _buildLineCard(theme, entry))
+                .toList(),
           ),
       ],
     );
@@ -760,20 +1004,23 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                     children: [
                       Text(
                         line.name,
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         line.sku.isEmpty ? 'SKU pendiente' : 'SKU: ${line.sku}',
-                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
                   tooltip: 'Quitar',
-                  onPressed: () => _removeLine(entry),
-                  icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                  onPressed: _canEditFields ? () => _removeLine(entry) : null,
+                  icon: Icon(Icons.delete_outline,
+                      color: theme.colorScheme.error),
                 ),
               ],
             ),
@@ -783,35 +1030,47 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 Expanded(
                   child: TextField(
                     controller: entry.quantityController,
+                    enabled: _canEditFields,
                     decoration: const InputDecoration(
                       labelText: 'Cantidad',
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                    ],
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextField(
                     controller: entry.unitPriceController,
+                    enabled: _canEditFields,
                     decoration: const InputDecoration(
                       labelText: 'Precio unitario (sin IVA)',
                       prefixText: 'CLP ',
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                    ],
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextField(
                     controller: entry.discountController,
+                    enabled: _canEditFields,
                     decoration: const InputDecoration(
                       labelText: 'Descuento',
                       prefixText: 'CLP ',
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                    ],
                   ),
                 ),
               ],
@@ -820,7 +1079,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -838,7 +1098,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   Text(
                     'Stock disponible: ${line.product!.stockQuantity}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: line.product!.stockQuantity <= line.product!.minStockLevel
+                      color: line.product!.stockQuantity <=
+                              line.product!.minStockLevel
                           ? theme.colorScheme.error
                           : theme.colorScheme.onSurfaceVariant,
                     ),
@@ -860,7 +1121,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           title: const Text('Fecha de emisión'),
           subtitle: Text(ChileanUtils.formatDate(_issueDate)),
           trailing: TextButton(
-            onPressed: () => _pickDate(isIssueDate: true),
+            onPressed:
+                _canEditFields ? () => _pickDate(isIssueDate: true) : null,
             child: const Text('Cambiar'),
           ),
         ),
@@ -869,43 +1131,41 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.schedule_outlined),
           title: const Text('Fecha de vencimiento'),
-          subtitle: Text(ChileanUtils.formatDate(_dueDate ?? _issueDate.add(const Duration(days: 30)))),
+          subtitle: Text(ChileanUtils.formatDate(
+              _dueDate ?? _issueDate.add(const Duration(days: 30)))),
           trailing: TextButton(
-            onPressed: () => _pickDate(isIssueDate: false),
+            onPressed:
+                _canEditFields ? () => _pickDate(isIssueDate: false) : null,
             child: const Text('Cambiar'),
           ),
         ),
         const Divider(),
-        DropdownButtonFormField<InvoiceStatus>(
-          value: _status,
-          decoration: const InputDecoration(
-            labelText: 'Estado de la factura',
-          ),
-          items: InvoiceStatus.values
-              .map(
-                (status) => DropdownMenuItem<InvoiceStatus>(
-                  value: status,
-                  child: Text(_statusDisplayName(status)),
-                ),
-              )
-              .toList(),
-          onChanged: (value) {
-            if (value != null) {
-              setState(() => _status = value);
-            }
-          },
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.flag_outlined),
+          title: const Text('Estado de la factura'),
+          subtitle: Text(_statusDisplayName(_status)),
+          trailing: _status == InvoiceStatus.draft
+              ? Text(
+                  _canEditFields ? 'Editando' : 'Solo lectura',
+                  style: theme.textTheme.labelMedium,
+                )
+              : null,
         ),
       ],
     );
   }
 
   Widget _buildSummary(ThemeData theme) {
-    final textStyle = theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
+    final textStyle =
+        theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
     return Column(
       children: [
-        _buildSummaryRow('Subtotal', ChileanUtils.formatCurrency(_subtotal), textStyle, theme),
+        _buildSummaryRow('Subtotal', ChileanUtils.formatCurrency(_subtotal),
+            textStyle, theme),
         const SizedBox(height: 8),
-        _buildSummaryRow('IVA (19%)', ChileanUtils.formatCurrency(_iva), textStyle, theme),
+        _buildSummaryRow(
+            'IVA (19%)', ChileanUtils.formatCurrency(_iva), textStyle, theme),
         const Divider(height: 24),
         _buildSummaryRow(
           'Total',
@@ -920,7 +1180,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
-  Widget _buildSummaryRow(String label, String value, TextStyle? style, ThemeData theme) {
+  Widget _buildSummaryRow(
+      String label, String value, TextStyle? style, ThemeData theme) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -933,6 +1194,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   Widget _buildReferenceField(ThemeData theme) {
     return TextFormField(
       controller: _referenceController,
+      enabled: _canEditFields,
       decoration: const InputDecoration(
         labelText: 'Referencia / Observaciones',
         hintText: 'Ej: Pedido web, orden de compra, notas internas...',
@@ -955,6 +1217,39 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       case InvoiceStatus.cancelled:
         return 'Cancelada';
     }
+  }
+
+  Color _statusColor(ThemeData theme) {
+    switch (_status) {
+      case InvoiceStatus.draft:
+        return theme.colorScheme.outline;
+      case InvoiceStatus.sent:
+        return theme.colorScheme.primary;
+      case InvoiceStatus.paid:
+        return Colors.green;
+      case InvoiceStatus.overdue:
+        return Colors.orange;
+      case InvoiceStatus.cancelled:
+        return theme.colorScheme.error;
+    }
+  }
+
+  Widget _buildStatusChip(ThemeData theme) {
+    final color = _statusColor(theme);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        _statusDisplayName(_status),
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 }
 
@@ -987,9 +1282,12 @@ class _InvoiceLine {
 
 class _InvoiceLineEntry {
   _InvoiceLineEntry(this.line)
-      : quantityController = TextEditingController(text: line.quantity.toStringAsFixed(0)),
-        unitPriceController = TextEditingController(text: line.unitPrice.toStringAsFixed(0)),
-        discountController = TextEditingController(text: line.discount.toStringAsFixed(0));
+      : quantityController =
+            TextEditingController(text: line.quantity.toStringAsFixed(0)),
+        unitPriceController =
+            TextEditingController(text: line.unitPrice.toStringAsFixed(0)),
+        discountController =
+            TextEditingController(text: line.discount.toStringAsFixed(0));
 
   final _InvoiceLine line;
   final TextEditingController quantityController;
@@ -1026,7 +1324,8 @@ class _InvoiceLineEntry {
   }
 
   void _onUnitPriceChanged() {
-    final value = double.tryParse(unitPriceController.text.replaceAll(',', '.'));
+    final value =
+        double.tryParse(unitPriceController.text.replaceAll(',', '.'));
     if (value != null && value >= 0) {
       line.unitPrice = value;
       _listener?.call();
@@ -1120,8 +1419,7 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
               onChanged: _onSearchChanged,
             ),
             const SizedBox(height: 16),
-            if (_isSearching)
-              const LinearProgressIndicator(minHeight: 2),
+            if (_isSearching) const LinearProgressIndicator(minHeight: 2),
             SizedBox(
               height: MediaQuery.of(context).size.height * 0.5,
               child: _customers.isEmpty
@@ -1136,9 +1434,12 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (customer.rut.isNotEmpty) Text('RUT: ${customer.rut}'),
-                              if ((customer.email ?? '').isNotEmpty) Text(customer.email!),
-                              if ((customer.phone ?? '').isNotEmpty) Text(customer.phone!),
+                              if (customer.rut.isNotEmpty)
+                                Text('RUT: ${customer.rut}'),
+                              if ((customer.email ?? '').isNotEmpty)
+                                Text(customer.email!),
+                              if ((customer.phone ?? '').isNotEmpty)
+                                Text(customer.phone!),
                             ],
                           ),
                           onTap: () => Navigator.of(context).pop(customer),
@@ -1225,8 +1526,7 @@ class _ProductSelectorState extends State<_ProductSelector> {
               onChanged: _onSearchChanged,
             ),
             const SizedBox(height: 16),
-            if (_isSearching)
-              const LinearProgressIndicator(minHeight: 2),
+            if (_isSearching) const LinearProgressIndicator(minHeight: 2),
             SizedBox(
               height: MediaQuery.of(context).size.height * 0.5,
               child: _products.isEmpty
@@ -1242,7 +1542,8 @@ class _ProductSelectorState extends State<_ProductSelector> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('SKU: ${product.sku}'),
-                              if (product.brand != null && product.brand!.isNotEmpty)
+                              if (product.brand != null &&
+                                  product.brand!.isNotEmpty)
                                 Text('Marca: ${product.brand}'),
                               Text('Stock: ${product.stockQuantity}'),
                             ],

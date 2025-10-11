@@ -4,9 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/services/database_service.dart';
-import '../../accounting/models/journal_entry.dart';
 import '../../accounting/services/accounting_service.dart';
-import '../../accounting/services/journal_entry_service.dart';
 import '../models/sales_models.dart';
 
 class SalesService extends ChangeNotifier {
@@ -38,7 +36,8 @@ class SalesService extends ChangeNotifier {
   String? get invoiceError => _invoiceError;
   String? get paymentError => _paymentError;
 
-  void updateDependencies(DatabaseService databaseService, AccountingService accountingService) {
+  void updateDependencies(
+      DatabaseService databaseService, AccountingService accountingService) {
     _databaseService = databaseService;
     _accountingService = accountingService;
     _ensureRealtimeSubscriptions();
@@ -46,7 +45,7 @@ class SalesService extends ChangeNotifier {
 
   Future<void> loadInvoices({bool forceRefresh = false}) async {
     if (_isLoadingInvoices) return;
-  if (!forceRefresh && _invoices.isNotEmpty) return;
+    if (!forceRefresh && _invoices.isNotEmpty) return;
 
     _isLoadingInvoices = true;
     _invoiceError = null;
@@ -54,9 +53,7 @@ class SalesService extends ChangeNotifier {
 
     try {
       final data = await _databaseService.select(_invoicesCollection);
-      final invoices = data
-          .map((raw) => Invoice.fromJson(raw))
-          .toList()
+      final invoices = data.map((raw) => Invoice.fromJson(raw)).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
 
       _invoices
@@ -93,7 +90,7 @@ class SalesService extends ChangeNotifier {
     }
   }
 
-  Future<Invoice> saveInvoice(Invoice invoice, {bool postToAccounting = true}) async {
+  Future<Invoice> saveInvoice(Invoice invoice) async {
     try {
       final payload = invoice.toFirestoreMap()
         ..remove('paid_amount')
@@ -104,19 +101,15 @@ class SalesService extends ChangeNotifier {
       if (isNew) {
         result = await _databaseService.insert(_invoicesCollection, payload);
       } else {
-        result = await _databaseService.update(_invoicesCollection, invoice.id!, payload);
+        result = await _databaseService.update(
+            _invoicesCollection, invoice.id!, payload);
       }
 
       final savedInvoice = Invoice.fromJson(result);
       _upsertInvoice(savedInvoice);
 
-      if (postToAccounting && isNew) {
-        await _postInvoiceToAccounting(savedInvoice);
-      }
-
-      if (isNew) {
-        await _recordInventoryMovements(savedInvoice);
-      }
+      await _accountingService.initialize();
+      await _accountingService.journalEntries.loadJournalEntries();
 
       notifyListeners();
       return savedInvoice;
@@ -137,7 +130,8 @@ class SalesService extends ChangeNotifier {
     }
   }
 
-  Future<void> loadPayments({String? invoiceId, bool forceRefresh = false}) async {
+  Future<void> loadPayments(
+      {String? invoiceId, bool forceRefresh = false}) async {
     if (_isLoadingPayments) return;
     if (!forceRefresh && _payments.isNotEmpty && invoiceId == null) return;
 
@@ -167,27 +161,26 @@ class SalesService extends ChangeNotifier {
     }
   }
 
-  Future<Payment> registerPayment(Payment payment, {bool postToAccounting = true}) async {
+  Future<Payment> registerPayment(Payment payment) async {
     try {
-  final payload = payment.toFirestoreMap();
+      final payload = payment.toFirestoreMap();
       final isNew = payment.id == null;
       Map<String, dynamic> result;
 
       if (isNew) {
         result = await _databaseService.insert(_paymentsCollection, payload);
       } else {
-        result = await _databaseService.update(_paymentsCollection, payment.id!, payload);
+        result = await _databaseService.update(
+            _paymentsCollection, payment.id!, payload);
       }
 
       final savedPayment = Payment.fromJson(result);
       _upsertPayment(savedPayment);
 
-      if (postToAccounting && isNew) {
-        await _postPaymentToAccounting(savedPayment);
-      }
-
       await fetchInvoice(savedPayment.invoiceId, refresh: true);
       await loadPayments(forceRefresh: true);
+      await _accountingService.initialize();
+      await _accountingService.journalEntries.loadJournalEntries();
 
       notifyListeners();
       return savedPayment;
@@ -226,16 +219,28 @@ class SalesService extends ChangeNotifier {
       ..sort((a, b) => b.date.compareTo(a.date));
   }
 
-  Future<Invoice?> updateInvoiceStatus(String invoiceId, InvoiceStatus status) async {
+  Future<Invoice?> updateInvoiceStatus(
+      String invoiceId, InvoiceStatus status) async {
     try {
       final payload = {
         'status': status.name,
       };
-      final result = await _databaseService.update(_invoicesCollection, invoiceId, payload);
+      final result = await _databaseService.update(
+          _invoicesCollection, invoiceId, payload);
       final updated = Invoice.fromJson(result);
       _upsertInvoice(updated);
+
+      await _accountingService.initialize();
+      await _accountingService.journalEntries.loadJournalEntries();
+
+      final refreshed = await fetchInvoice(invoiceId, refresh: true);
+
+      if (status == InvoiceStatus.paid) {
+        await loadPayments(forceRefresh: true);
+      }
+
       notifyListeners();
-      return updated;
+      return refreshed ?? updated;
     } catch (e) {
       debugPrint('SalesService.updateInvoiceStatus error: $e');
       rethrow;
@@ -245,25 +250,21 @@ class SalesService extends ChangeNotifier {
   void _ensureRealtimeSubscriptions() {
     final client = Supabase.instance.client;
 
-    _invoiceChannel ??= client
-        .channel('sales_invoices_stream')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: _invoicesCollection,
-          callback: _handleInvoiceChange,
-        )
-        ..subscribe();
+    _invoiceChannel ??=
+        client.channel('sales_invoices_stream').onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: _invoicesCollection,
+              callback: _handleInvoiceChange,
+            )..subscribe();
 
-    _paymentChannel ??= client
-        .channel('sales_payments_stream')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: _paymentsCollection,
-          callback: _handlePaymentChange,
-        )
-        ..subscribe();
+    _paymentChannel ??=
+        client.channel('sales_payments_stream').onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: _paymentsCollection,
+              callback: _handlePaymentChange,
+            )..subscribe();
   }
 
   void _handleInvoiceChange(PostgresChangePayload payload) {
@@ -273,7 +274,8 @@ class SalesService extends ChangeNotifier {
         case PostgresChangeEvent.update:
           final dynamic rawNew = payload.newRecord;
           if (rawNew is Map) {
-            final invoice = Invoice.fromJson(Map<String, dynamic>.from(rawNew.cast<String, dynamic>()));
+            final invoice = Invoice.fromJson(
+                Map<String, dynamic>.from(rawNew.cast<String, dynamic>()));
             _upsertInvoice(invoice);
             notifyListeners();
           }
@@ -301,7 +303,8 @@ class SalesService extends ChangeNotifier {
         case PostgresChangeEvent.update:
           final dynamic rawNew = payload.newRecord;
           if (rawNew is Map) {
-            final payment = Payment.fromJson(Map<String, dynamic>.from(rawNew.cast<String, dynamic>()));
+            final payment = Payment.fromJson(
+                Map<String, dynamic>.from(rawNew.cast<String, dynamic>()));
             _upsertPayment(payment);
             notifyListeners();
           }
@@ -333,104 +336,6 @@ class SalesService extends ChangeNotifier {
     _invoices.clear();
     _payments.clear();
     notifyListeners();
-  }
-
-  Future<void> _postInvoiceToAccounting(Invoice invoice) async {
-    final salesLines = invoice.items
-        .map(
-          (item) => SalesLineEntry(
-            productId: item.productId,
-            productName: item.productName ?? (item.productSku ?? 'Producto'),
-            quantity: item.quantity.round(),
-            unitPrice: item.unitPrice,
-            cost: item.cost,
-          ),
-        )
-        .toList();
-
-    await _accountingService.postSalesEntry(
-      date: invoice.date,
-      customerName: invoice.customerName ?? 'Cliente',
-      invoiceNumber: invoice.invoiceNumber.isNotEmpty
-          ? invoice.invoiceNumber
-          : (invoice.id ?? ''),
-      subtotal: invoice.subtotal,
-      ivaAmount: invoice.ivaAmount,
-      total: invoice.total,
-      salesLines: salesLines,
-    );
-  }
-
-  Future<void> _postPaymentToAccounting(Payment payment) async {
-    final description = 'Pago recibido ${payment.method.displayName}';
-    await _accountingService.initialize();
-
-    final debitAccountCode = _resolveDebitAccountForPayment(payment.method);
-    final debitAccount = await _accountingService.getAccountByCode(debitAccountCode);
-    final receivableAccount = await _accountingService.getAccountByCode('1201');
-
-    if (debitAccount == null || debitAccount.id == null) {
-      throw Exception('No se encontró la cuenta contable para el medio de pago ${payment.method.displayName} ($debitAccountCode).');
-    }
-
-    if (receivableAccount == null || receivableAccount.id == null) {
-      throw Exception('No se encontró la cuenta contable "1201 - Cuentas por Cobrar Clientes".');
-    }
-
-    await _accountingService.createJournalEntry(
-      date: payment.date,
-      description: description,
-      type: JournalEntryType.payment,
-      lines: [
-        JournalLine(
-          accountId: debitAccount.id!,
-          accountCode: debitAccount.code,
-          accountName: debitAccount.name,
-          description: description,
-          debitAmount: payment.amount,
-          creditAmount: 0,
-        ),
-        JournalLine(
-          accountId: receivableAccount.id!,
-          accountCode: receivableAccount.code,
-          accountName: receivableAccount.name,
-          description: 'Pago factura ${payment.invoiceReference ?? payment.invoiceId}',
-          debitAmount: 0,
-          creditAmount: payment.amount,
-        ),
-      ],
-      sourceModule: 'sales',
-      sourceReference: payment.invoiceId,
-    );
-  }
-
-  String _resolveDebitAccountForPayment(PaymentMethod method) {
-    switch (method) {
-      case PaymentMethod.cash:
-        return '1101';
-      case PaymentMethod.card:
-        return '1110';
-      case PaymentMethod.transfer:
-        return '1110';
-      case PaymentMethod.check:
-        return '1110';
-      case PaymentMethod.other:
-        return '1190';
-    }
-  }
-
-  Future<void> _recordInventoryMovements(Invoice invoice) async {
-    for (final item in invoice.items) {
-      if (item.productId.isEmpty) continue;
-      final qty = item.quantity.round();
-      if (qty <= 0) continue;
-      await _databaseService.adjustStock(
-        item.productId,
-        qty,
-        'OUT',
-        invoice.invoiceNumber.isNotEmpty ? invoice.invoiceNumber : (invoice.id ?? ''),
-      );
-    }
   }
 
   void _upsertInvoice(Invoice invoice) {

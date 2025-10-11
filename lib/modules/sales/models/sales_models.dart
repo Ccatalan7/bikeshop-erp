@@ -26,7 +26,7 @@ DateTime _parseDate(dynamic value, {DateTime? fallback}) {
 class Invoice {
   final String? id;
   final String invoiceNumber;
-  final String customerId;
+  final String? customerId;
   final String? customerName;
   final String? customerRut;
   final DateTime date;
@@ -44,8 +44,8 @@ class Invoice {
 
   Invoice({
     this.id,
-  required this.customerId,
-  this.invoiceNumber = '',
+    this.customerId,
+    this.invoiceNumber = '',
     this.customerName,
     this.customerRut,
     required this.date,
@@ -65,8 +65,8 @@ class Invoice {
 
   Invoice copyWith({
     String? id,
-  String? customerId,
-  String? invoiceNumber,
+    String? customerId,
+    String? invoiceNumber,
     String? customerName,
     String? customerRut,
     DateTime? date,
@@ -84,8 +84,8 @@ class Invoice {
   }) {
     return Invoice(
       id: id ?? this.id,
-  customerId: customerId ?? this.customerId,
-  invoiceNumber: invoiceNumber ?? this.invoiceNumber,
+      customerId: customerId ?? this.customerId,
+      invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       customerName: customerName ?? this.customerName,
       customerRut: customerRut ?? this.customerRut,
       date: date ?? this.date,
@@ -104,24 +104,27 @@ class Invoice {
   }
 
   factory Invoice.fromJson(Map<String, dynamic> json) {
-  final rawItems = (json['items'] as List?) ?? const [];
+    final rawItems = (json['items'] as List?) ?? const [];
     return Invoice(
       id: json['id']?.toString(),
-  customerId: json['customer_id']?.toString() ?? '',
-  invoiceNumber: json['invoice_number']?.toString() ?? '',
-      customerName: json['customer_name'] as String?,
-      customerRut: json['customer_rut'] as String?,
+      customerId: json['customer_id']?.toString(),
+      invoiceNumber: json['invoice_number']?.toString() ?? '',
+      customerName: json['customer_name']?.toString(),
+      customerRut: json['customer_rut']?.toString(),
       date: _parseDate(json['date']),
       dueDate: json['due_date'] != null ? _parseDate(json['due_date']) : null,
-      reference: json['reference'] as String?,
+      reference: json['reference']?.toString(),
       status: InvoiceStatusX.fromName(json['status']) ?? InvoiceStatus.draft,
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0,
       ivaAmount: (json['iva_amount'] as num?)?.toDouble() ?? 0,
       total: (json['total'] as num?)?.toDouble() ?? 0,
       paidAmount: (json['paid_amount'] as num?)?.toDouble() ?? 0,
       balance: (json['balance'] as num?)?.toDouble() ??
-          ((json['total'] as num?)?.toDouble() ?? 0) - ((json['paid_amount'] as num?)?.toDouble() ?? 0),
-  items: rawItems.map((item) => InvoiceItem.fromJson(_ensureMap(item))).toList(),
+          ((json['total'] as num?)?.toDouble() ?? 0) -
+              ((json['paid_amount'] as num?)?.toDouble() ?? 0),
+      items: rawItems
+          .map((item) => InvoiceItem.fromJson(_ensureMap(item)))
+          .toList(),
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
     );
@@ -134,8 +137,8 @@ class Invoice {
       'invoice_number': invoiceNumber,
       'customer_name': customerName,
       'customer_rut': customerRut,
-      'date': date,
-      'due_date': dueDate,
+      'date': date.toIso8601String(),
+      'due_date': dueDate?.toIso8601String(),
       'reference': reference,
       'status': status.name,
       'subtotal': subtotal,
@@ -233,12 +236,12 @@ class InvoiceItem {
       id: json['id']?.toString(),
       invoiceId: json['invoice_id']?.toString(),
       productId: json['product_id']?.toString() ?? '',
-      productName: json['product_name'] as String?,
-      productSku: json['product_sku'] as String?,
-  quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
-  unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0,
-  discount: (json['discount'] as num?)?.toDouble() ?? 0,
-  lineTotal: (json['line_total'] as num?)?.toDouble(),
+      productName: json['product_name']?.toString(),
+      productSku: json['product_sku']?.toString(),
+      quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
+      unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0,
+      discount: (json['discount'] as num?)?.toDouble() ?? 0,
+      lineTotal: (json['line_total'] as num?)?.toDouble(),
       cost: (json['cost'] as num?)?.toDouble() ?? 0,
     );
   }
@@ -327,7 +330,7 @@ class Payment {
       'invoice_reference': invoiceReference,
       'method': method.name,
       'amount': amount,
-      'date': date,
+      'date': date.toIso8601String(),
       'reference': reference,
       'notes': notes,
     };

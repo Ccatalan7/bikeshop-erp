@@ -20,23 +20,7 @@ create table if not exists products (
   inventory_qty integer not null default 0,
   created_at timestamp with time zone not null default now()
 );
-
-alter table public.products
-  add column if not exists description text,
-  add column if not exists brand text,
-  add column if not exists model text,
-  add column if not exists min_stock_level integer not null default 1,
-  add column if not exists image_url text,
-  add column if not exists is_service boolean not null default false;
-
-create or replace function public.set_updated_at()
-returns trigger as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$ language plpgsql;
-
+ 
 create table if not exists suppliers (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -94,6 +78,416 @@ end $$;
 
 create index if not exists idx_suppliers_name on suppliers using gin (to_tsvector('spanish', coalesce(name, '')));
 
+create table if not exists accounts (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique,
+  name text not null,
+  type text not null
+    check (type in ('asset','liability','equity','income','expense','tax')),
+  category text not null
+    check (category in (
+      'currentAsset','fixedAsset','otherAsset',
+      'currentLiability','longTermLiability',
+      'capital','retainedEarnings',
+      'operatingIncome','nonOperatingIncome',
+      'costOfGoodsSold','operatingExpense','financialExpense',
+      'taxPayable','taxReceivable','taxExpense'
+    )),
+  description text,
+  parent_id uuid references accounts(id),
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+alter table public.accounts
+  add column if not exists code text,
+  add column if not exists name text,
+  add column if not exists type text,
+  add column if not exists category text,
+  add column if not exists description text,
+  add column if not exists parent_id uuid,
+  add column if not exists is_active boolean not null default true,
+  add column if not exists created_at timestamp with time zone not null default now(),
+  add column if not exists updated_at timestamp with time zone not null default now();
+
+do $$
+begin
+  begin
+    alter table public.accounts
+      alter column code set not null;
+  exception when others then
+    null;
+  end;
+
+  begin
+    alter table public.accounts
+      alter column name set not null;
+  exception when others then
+    null;
+  end;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.accounts'::regclass
+       and contype = 'u'
+       and conname = 'accounts_code_key'
+  ) then
+    alter table public.accounts
+      add constraint accounts_code_key unique (code);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.accounts'::regclass
+       and contype = 'c'
+       and conname = 'accounts_type_check'
+  ) then
+    alter table public.accounts
+      add constraint accounts_type_check
+        check (type in ('asset','liability','equity','income','expense','tax'));
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.accounts'::regclass
+       and contype = 'c'
+       and conname = 'accounts_category_check'
+  ) then
+    alter table public.accounts
+      add constraint accounts_category_check
+        check (category in (
+          'currentAsset','fixedAsset','otherAsset',
+          'currentLiability','longTermLiability',
+          'capital','retainedEarnings',
+          'operatingIncome','nonOperatingIncome',
+          'costOfGoodsSold','operatingExpense','financialExpense',
+          'taxPayable','taxReceivable','taxExpense'
+        ));
+  end if;
+end $$;
+
+do $$
+begin
+  if exists (
+    select 1
+      from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'accounts'
+       and column_name = 'parent_id'
+  ) then
+    if not exists (
+      select 1
+        from pg_constraint
+       where conrelid = 'public.accounts'::regclass
+         and contype = 'f'
+         and conname = 'accounts_parent_id_fkey'
+    ) then
+      alter table public.accounts
+        add constraint accounts_parent_id_fkey
+          foreign key (parent_id)
+          references public.accounts(id)
+          on delete set null;
+    end if;
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'accounts'
+      and t.tgname = 'trg_accounts_updated_at'
+  ) then
+    create trigger trg_accounts_updated_at
+      before update on accounts
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
+
+do $$
+begin
+  begin
+    alter table public.accounts drop column if exists company_id;
+  exception when others then
+    begin
+      alter table public.accounts alter column company_id drop not null;
+    exception when others then
+      null;
+    end;
+  end;
+end $$;
+
+create or replace function public.migrate_accounts_to_uuid()
+returns void as $$
+declare
+  v_accounts_id_is_uuid boolean;
+  v_accounts_parent_type text;
+  v_journal_account_type text;
+begin
+  select case when data_type = 'uuid' then true else false end
+    into v_accounts_id_is_uuid
+    from information_schema.columns
+   where table_schema = 'public'
+     and table_name = 'accounts'
+     and column_name = 'id'
+   limit 1;
+
+  if coalesce(v_accounts_id_is_uuid, false) then
+    return;
+  end if;
+
+  if not exists (
+    select 1
+      from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'accounts'
+       and column_name = 'id_uuid'
+  ) then
+    alter table public.accounts add column id_uuid uuid;
+  end if;
+
+  update public.accounts
+     set id_uuid = coalesce(id_uuid, gen_random_uuid());
+
+  alter table public.accounts
+    alter column id_uuid set not null;
+
+  select data_type
+    into v_journal_account_type
+    from information_schema.columns
+   where table_schema = 'public'
+     and table_name = 'journal_lines'
+     and column_name = 'account_id'
+   limit 1;
+
+  if v_journal_account_type is not null then
+    if v_journal_account_type <> 'uuid' then
+      if not exists (
+        select 1
+          from information_schema.columns
+         where table_schema = 'public'
+           and table_name = 'journal_lines'
+           and column_name = 'account_id_uuid'
+      ) then
+        alter table public.journal_lines add column account_id_uuid uuid;
+      end if;
+
+      update public.journal_lines jl
+         set account_id_uuid = a.id_uuid
+        from public.accounts a
+       where jl.account_id is not null
+         and a.id::text = jl.account_id::text;
+
+      alter table public.journal_lines drop column account_id;
+      alter table public.journal_lines rename column account_id_uuid to account_id;
+    else
+      update public.journal_lines jl
+         set account_id = a.id_uuid
+        from public.accounts a
+       where jl.account_id is not null
+         and a.id::text = jl.account_id::text
+         and jl.account_id <> a.id_uuid;
+    end if;
+  end if;
+
+  select data_type
+    into v_accounts_parent_type
+    from information_schema.columns
+   where table_schema = 'public'
+     and table_name = 'accounts'
+     and column_name = 'parent_id'
+   limit 1;
+
+  if v_accounts_parent_type is not null then
+    if v_accounts_parent_type <> 'uuid' then
+      if not exists (
+        select 1
+          from information_schema.columns
+         where table_schema = 'public'
+           and table_name = 'accounts'
+           and column_name = 'parent_id_uuid'
+      ) then
+        alter table public.accounts add column parent_id_uuid uuid;
+      end if;
+
+      update public.accounts child
+         set parent_id_uuid = parent.id_uuid
+        from public.accounts parent
+       where child.parent_id is not null
+         and parent.id::text = child.parent_id::text;
+
+      alter table public.accounts drop column parent_id;
+      alter table public.accounts rename column parent_id_uuid to parent_id;
+    else
+      update public.accounts child
+         set parent_id = parent.id_uuid
+        from public.accounts parent
+       where child.parent_id is not null
+         and parent.id::text = child.parent_id::text
+         and child.parent_id <> parent.id_uuid;
+    end if;
+  end if;
+
+  if v_journal_account_type is not null then
+    alter table public.journal_lines
+      drop constraint if exists journal_lines_account_id_fkey;
+  end if;
+
+  if exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.accounts'::regclass
+       and contype = 'f'
+       and conname = 'accounts_parent_id_fkey'
+  ) then
+    alter table public.accounts
+      drop constraint accounts_parent_id_fkey;
+  end if;
+
+  alter table public.accounts
+    drop constraint if exists accounts_pkey;
+
+  alter table public.accounts drop column id;
+  alter table public.accounts rename column id_uuid to id;
+  alter table public.accounts add primary key (id);
+  alter table public.accounts alter column id set default gen_random_uuid();
+
+  if exists (
+    select 1
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+     where c.relkind = 'S'
+       and n.nspname = 'public'
+       and c.relname = 'accounts_id_seq'
+  ) then
+    execute 'drop sequence public.accounts_id_seq';
+  end if;
+
+  if exists (
+    select 1
+      from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'accounts'
+       and column_name = 'parent_id'
+  ) then
+    if not exists (
+      select 1
+        from pg_constraint
+       where conrelid = 'public.accounts'::regclass
+         and contype = 'f'
+         and conname = 'accounts_parent_id_fkey'
+    ) then
+      alter table public.accounts
+        add constraint accounts_parent_id_fkey
+          foreign key (parent_id)
+          references public.accounts(id)
+          on delete set null;
+    end if;
+  end if;
+
+  if exists (
+    select 1
+      from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'journal_lines'
+       and column_name = 'account_id'
+  ) then
+    if not exists (
+      select 1
+        from pg_constraint
+       where conrelid = 'public.journal_lines'::regclass
+         and contype = 'f'
+         and conname = 'journal_lines_account_id_fkey'
+    ) then
+      alter table public.journal_lines
+        add constraint journal_lines_account_id_fkey
+          foreign key (account_id)
+          references public.accounts(id);
+    end if;
+  end if;
+end;
+$$ language plpgsql;
+
+select public.migrate_accounts_to_uuid();
+
+insert into public.accounts (code, name, type, category, description)
+values
+  ('1101', 'Caja General', 'asset', 'currentAsset', 'Efectivo disponible en caja y fondos inmediatos.'),
+  ('1110', 'Bancos - Cuenta Corriente', 'asset', 'currentAsset', 'Saldos disponibles en cuentas corrientes bancarias.'),
+  ('1190', 'Otros Activos Corrientes', 'asset', 'currentAsset', 'Activos circulantes no clasificados en otra cuenta específica.'),
+  ('1130', 'Cuentas por Cobrar Comerciales', 'asset', 'currentAsset', 'Saldos pendientes de cobro a clientes por ventas a crédito.')
+on conflict (code) do update
+set
+  name = excluded.name,
+  type = excluded.type,
+  category = excluded.category,
+  description = coalesce(excluded.description, accounts.description),
+  is_active = true,
+  updated_at = now();
+
+create or replace function public.ensure_account(
+  p_code text,
+  p_name text,
+  p_type text,
+  p_category text,
+  p_description text default null,
+  p_parent_code text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_account_id uuid;
+  v_parent_id uuid;
+begin
+  perform public.migrate_accounts_to_uuid();
+
+  if p_code is null then
+    return null;
+  end if;
+
+  if p_parent_code is not null then
+    select id
+      into v_parent_id
+      from public.accounts
+     where code = p_parent_code
+     limit 1;
+  end if;
+
+  insert into public.accounts (code, name, type, category, description, parent_id)
+  values (p_code, p_name, p_type, p_category, p_description, v_parent_id)
+  on conflict (code) do update
+    set name = excluded.name,
+        type = excluded.type,
+        category = excluded.category,
+        description = coalesce(excluded.description, accounts.description),
+        parent_id = coalesce(excluded.parent_id, accounts.parent_id),
+        is_active = true,
+        updated_at = now()
+  returning id into v_account_id;
+
+  return v_account_id;
+end;
+$$;
+
 create table if not exists sales_invoices (
   id uuid primary key default gen_random_uuid(),
   invoice_number text not null,
@@ -104,7 +498,13 @@ create table if not exists sales_invoices (
   due_date timestamp with time zone,
   reference text,
   status text not null default 'draft'
-    check (status in ('draft','sent','paid','overdue','cancelled')),
+    check (lower(status) = any (array[
+      'draft','borrador',
+      'sent','enviado','enviada','emitido','emitida','issued',
+      'paid','pagado','pagada',
+      'overdue','vencido','vencida',
+      'cancelled','cancelado','cancelada','anulado','anulada'
+    ])),
   subtotal numeric(12,2) not null default 0,
   iva_amount numeric(12,2) not null default 0,
   total numeric(12,2) not null default 0,
@@ -138,6 +538,33 @@ alter table public.sales_invoices
   add column if not exists paid_amount numeric(12,2) not null default 0,
   add column if not exists balance numeric(12,2) not null default 0;
 
+do $$
+begin
+  begin
+    alter table public.sales_invoices
+      drop constraint if exists sales_invoices_status_check;
+  exception when others then
+    null;
+  end;
+
+  if not exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.sales_invoices'::regclass
+       and conname = 'sales_invoices_status_check'
+  ) then
+    alter table public.sales_invoices
+      add constraint sales_invoices_status_check
+        check (lower(status) = any (array[
+          'draft','borrador',
+          'sent','enviado','enviada','emitido','emitida','issued',
+          'paid','pagado','pagada',
+          'overdue','vencido','vencida',
+          'cancelled','cancelado','cancelada','anulado','anulada'
+        ]));
+  end if;
+end $$;
+
 create table if not exists sales_payments (
   id uuid primary key default gen_random_uuid(),
   invoice_id uuid not null references sales_invoices(id) on delete cascade,
@@ -148,7 +575,8 @@ create table if not exists sales_payments (
   date timestamp with time zone not null default now(),
   reference text,
   notes text,
-  created_at timestamp with time zone not null default now()
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
 );
 
 create index if not exists idx_sales_payments_invoice_id
@@ -157,7 +585,24 @@ create index if not exists idx_sales_payments_invoice_id
 alter table public.sales_payments
   add column if not exists invoice_reference text,
   add column if not exists notes text,
-  add column if not exists created_at timestamp with time zone not null default now();
+  add column if not exists created_at timestamp with time zone not null default now(),
+  add column if not exists updated_at timestamp with time zone not null default now();
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'sales_payments'
+      and t.tgname = 'trg_sales_payments_updated_at'
+  ) then
+    create trigger trg_sales_payments_updated_at
+      before update on sales_payments
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
 
 create or replace function public.recalculate_sales_invoice_payments(p_invoice_id uuid)
 returns void as $$
@@ -214,13 +659,21 @@ end;
 $$ language plpgsql;
 
 create or replace function public.create_sales_payment_journal_entry(p_payment public.sales_payments)
-returns void as $$
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare
   v_invoice record;
   v_entry_id uuid := gen_random_uuid();
   v_exists boolean;
   v_cash_account_code text;
   v_cash_account_name text;
+  v_cash_account_id uuid;
+  v_receivable_account_id uuid;
+  v_receivable_account_code text := '1130';
+  v_receivable_account_name text := 'Cuentas por Cobrar Comerciales';
   v_description text;
 begin
   if p_payment.invoice_id is null then
@@ -254,20 +707,38 @@ begin
   case coalesce(p_payment.method, 'other')
     when 'cash' then
       v_cash_account_code := '1101';
-      v_cash_account_name := 'Caja';
+      v_cash_account_name := 'Caja General';
     when 'card' then
       v_cash_account_code := '1110';
-      v_cash_account_name := 'Bancos - Tarjeta';
+      v_cash_account_name := 'Bancos - Cuenta Corriente';
     when 'transfer' then
       v_cash_account_code := '1110';
-      v_cash_account_name := 'Bancos';
+      v_cash_account_name := 'Bancos - Cuenta Corriente';
     when 'check' then
       v_cash_account_code := '1110';
-      v_cash_account_name := 'Bancos - Cheques';
+      v_cash_account_name := 'Bancos - Cuenta Corriente';
     else
       v_cash_account_code := '1190';
-      v_cash_account_name := 'Otros medios de cobro';
+      v_cash_account_name := 'Otros Activos Corrientes';
   end case;
+
+  v_cash_account_id := public.ensure_account(
+    v_cash_account_code,
+    v_cash_account_name,
+    'asset',
+    'currentAsset',
+    v_cash_account_name,
+    null
+  );
+
+  v_receivable_account_id := public.ensure_account(
+    v_receivable_account_code,
+    v_receivable_account_name,
+    'asset',
+    'currentAsset',
+    'Cuentas por cobrar a clientes',
+    null
+  );
 
   v_description := format('Pago factura %s', coalesce(v_invoice.invoice_number, v_invoice.id::text));
 
@@ -313,7 +784,7 @@ begin
   ) values (
     gen_random_uuid(),
     v_entry_id,
-    null,
+    v_cash_account_id,
     v_cash_account_code,
     v_cash_account_name,
     format('Cobro a %s', coalesce(v_invoice.customer_name, 'Cliente')),
@@ -324,9 +795,9 @@ begin
   ), (
     gen_random_uuid(),
     v_entry_id,
-    null,
-    '1201',
-    'Cuentas por cobrar clientes',
+    v_receivable_account_id,
+    v_receivable_account_code,
+    v_receivable_account_name,
     format('Pago factura %s', coalesce(v_invoice.invoice_number, v_invoice.id::text)),
     0,
     p_payment.amount,
@@ -334,10 +805,14 @@ begin
     now()
   );
 end;
-$$ language plpgsql;
+$$;
 
 create or replace function public.delete_sales_payment_journal_entry(p_payment_id uuid)
-returns void as $$
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
   if p_payment_id is null then
     return;
@@ -347,7 +822,707 @@ begin
    where source_module = 'sales_payments'
      and source_reference = p_payment_id::text;
 end;
-$$ language plpgsql;
+$$;
+
+create or replace function public.consume_sales_invoice_inventory(p_invoice public.sales_invoices)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_reference text;
+  v_item record;
+  v_rows integer;
+  v_resolved_product_id uuid;
+  v_has_inventory_qty boolean := false;
+  v_has_stock_quantity boolean := false;
+  v_has_is_service boolean := false;
+  v_has_track_stock boolean := false;
+  v_has_updated_at boolean := false;
+  v_update_sql text;
+  v_update_assignments text := '';
+  v_quantity numeric;
+  v_quantity_int integer;
+  v_status text;
+begin
+  if p_invoice.id is null then
+    return;
+  end if;
+
+  v_status := lower(coalesce(p_invoice.status, 'draft'));
+
+  if v_status = any (array['draft','borrador','cancelled','cancelado','cancelada','anulado','anulada']) then
+    return;
+  end if;
+
+  select exists (
+           select 1
+             from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'products'
+              and column_name = 'inventory_qty'
+         )
+    into v_has_inventory_qty;
+
+  select exists (
+           select 1
+             from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'products'
+              and column_name = 'stock_quantity'
+         )
+    into v_has_stock_quantity;
+
+  select exists (
+           select 1
+             from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'products'
+              and column_name = 'is_service'
+         )
+    into v_has_is_service;
+
+  select exists (
+           select 1
+             from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'products'
+              and column_name = 'track_stock'
+         )
+    into v_has_track_stock;
+
+  select exists (
+           select 1
+             from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'products'
+              and column_name = 'updated_at'
+         )
+    into v_has_updated_at;
+
+  if not v_has_inventory_qty and not v_has_stock_quantity then
+    return;
+  end if;
+
+  if v_has_inventory_qty then
+    v_update_assignments := v_update_assignments || 'inventory_qty = coalesce(inventory_qty, 0) - $1';
+  end if;
+
+  if v_has_stock_quantity then
+    if v_update_assignments <> '' then
+      v_update_assignments := v_update_assignments || ', ';
+    end if;
+    v_update_assignments := v_update_assignments || 'stock_quantity = coalesce(stock_quantity, 0) - $1';
+  end if;
+
+  if v_has_updated_at then
+    if v_update_assignments <> '' then
+      v_update_assignments := v_update_assignments || ', ';
+    end if;
+    v_update_assignments := v_update_assignments || 'updated_at = now()';
+  end if;
+
+  if v_update_assignments = '' then
+    return;
+  end if;
+
+  v_update_sql := 'update public.products set ' || v_update_assignments || ' where id = $2';
+
+  if v_has_is_service then
+    v_update_sql := v_update_sql || ' and coalesce(is_service, false) = false';
+  end if;
+
+  if v_has_track_stock then
+    v_update_sql := v_update_sql || ' and coalesce(track_stock, true) = true';
+  end if;
+
+  v_reference := concat('sales_invoice:', p_invoice.id::text);
+
+  if exists (
+       select 1
+         from public.stock_movements
+        where reference = v_reference
+     ) then
+    return;
+  end if;
+
+  for v_item in
+    select coalesce(
+             nullif(item->>'product_id', ''),
+             nullif(item->>'productId', ''),
+             nullif(item#>>'{product,id}', ''),
+             nullif(item#>>'{product,product_id}', ''),
+             nullif(item#>>'{product,productId}', '')
+           )::uuid as product_id,
+           coalesce(
+             nullif(item->>'product_sku', ''),
+             nullif(item->>'productSku', ''),
+             nullif(item#>>'{product,sku}', ''),
+             nullif(item#>>'{product,product_sku}', ''),
+             nullif(item#>>'{product,productSku}', '')
+           ) as product_sku,
+           case
+             when coalesce(
+                    nullif(item->>'quantity', ''),
+                    nullif(item->>'qty', ''),
+                    nullif(item->>'cantidad', ''),
+                    nullif(item#>>'{quantity}', ''),
+                    nullif(item#>>'{line,quantity}', ''),
+                    nullif(item#>>'{product,quantity}', '')
+                  ) ~ '^-?\\d+(\\.\\d+)?$'
+               then coalesce(
+                      nullif(item->>'quantity', ''),
+                      nullif(item->>'qty', ''),
+                      nullif(item->>'cantidad', ''),
+                      nullif(item#>>'{quantity}', ''),
+                      nullif(item#>>'{line,quantity}', ''),
+                      nullif(item#>>'{product,quantity}', '')
+                    )::numeric
+             else 0
+           end as quantity
+      from jsonb_array_elements(coalesce(p_invoice.items, '[]'::jsonb)) item
+  loop
+      v_resolved_product_id := v_item.product_id;
+
+      if v_resolved_product_id is null and v_item.product_sku is not null then
+        select id
+          into v_resolved_product_id
+          from public.products
+         where sku = v_item.product_sku
+         limit 1;
+      end if;
+
+      v_quantity := coalesce(v_item.quantity, 0);
+      v_quantity_int := coalesce(v_quantity::int, 0);
+
+      if v_resolved_product_id is null or v_quantity_int <= 0 then
+        continue;
+      end if;
+
+      execute v_update_sql using v_quantity_int, v_resolved_product_id;
+
+      get diagnostics v_rows = row_count;
+      if v_rows = 0 then
+        continue;
+      end if;
+
+    insert into public.stock_movements (
+      id,
+      product_id,
+      warehouse_id,
+      type,
+      movement_type,
+      quantity,
+      reference,
+      notes,
+      date,
+      created_at,
+      updated_at
+    ) values (
+      gen_random_uuid(),
+      v_resolved_product_id,
+      null,
+      'OUT',
+      'sales_invoice',
+      v_item.quantity,
+      v_reference,
+      format('Salida por factura %s', coalesce(nullif(p_invoice.invoice_number, ''), p_invoice.id::text)),
+      coalesce(p_invoice.date, now()),
+      now(),
+      now()
+    );
+  end loop;
+end;
+$$;
+
+create or replace function public.restore_sales_invoice_inventory(p_invoice public.sales_invoices)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_reference text;
+  v_movement record;
+  v_has_inventory_qty boolean := false;
+  v_has_stock_quantity boolean := false;
+  v_has_is_service boolean := false;
+  v_has_track_stock boolean := false;
+  v_has_updated_at boolean := false;
+  v_update_assignments text := '';
+  v_update_sql text;
+  v_quantity_int integer;
+begin
+  if p_invoice.id is null then
+    return;
+  end if;
+
+  v_reference := concat('sales_invoice:', p_invoice.id::text);
+
+  select exists (
+           select 1
+             from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'products'
+              and column_name = 'inventory_qty'
+         )
+    into v_has_inventory_qty;
+
+  select exists (
+           select 1
+             from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'products'
+              and column_name = 'stock_quantity'
+         )
+    into v_has_stock_quantity;
+
+  select exists (
+           select 1
+             from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'products'
+              and column_name = 'is_service'
+         )
+    into v_has_is_service;
+
+  select exists (
+           select 1
+             from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'products'
+              and column_name = 'track_stock'
+         )
+    into v_has_track_stock;
+
+  select exists (
+           select 1
+             from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'products'
+              and column_name = 'updated_at'
+         )
+    into v_has_updated_at;
+
+  if not v_has_inventory_qty and not v_has_stock_quantity then
+    delete from public.stock_movements
+     where reference = v_reference;
+    return;
+  end if;
+
+  if v_has_inventory_qty then
+    v_update_assignments := v_update_assignments || 'inventory_qty = coalesce(inventory_qty, 0) + $1';
+  end if;
+
+  if v_has_stock_quantity then
+    if v_update_assignments <> '' then
+      v_update_assignments := v_update_assignments || ', ';
+    end if;
+    v_update_assignments := v_update_assignments || 'stock_quantity = coalesce(stock_quantity, 0) + $1';
+  end if;
+
+  if v_has_updated_at then
+    if v_update_assignments <> '' then
+      v_update_assignments := v_update_assignments || ', ';
+    end if;
+    v_update_assignments := v_update_assignments || 'updated_at = now()';
+  end if;
+
+  if v_update_assignments = '' then
+    delete from public.stock_movements
+     where reference = v_reference;
+    return;
+  end if;
+
+  v_update_sql := 'update public.products set ' || v_update_assignments || ' where id = $2';
+
+  if v_has_is_service then
+    v_update_sql := v_update_sql || ' and coalesce(is_service, false) = false';
+  end if;
+
+  if v_has_track_stock then
+    v_update_sql := v_update_sql || ' and coalesce(track_stock, true) = true';
+  end if;
+
+  for v_movement in
+    select product_id, quantity
+      from public.stock_movements
+     where reference = v_reference
+  loop
+    if v_movement.product_id is null or v_movement.quantity = 0 then
+      continue;
+    end if;
+
+    v_quantity_int := coalesce(v_movement.quantity::int, 0);
+
+    if v_quantity_int = 0 then
+      continue;
+    end if;
+
+    execute v_update_sql using v_quantity_int, v_movement.product_id;
+  end loop;
+
+  delete from public.stock_movements
+   where reference = v_reference;
+end;
+$$;
+
+create or replace function public.create_sales_invoice_journal_entry(p_invoice public.sales_invoices)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_exists boolean;
+  v_entry_id uuid := gen_random_uuid();
+  v_receivable_account_code text := '1130';
+  v_receivable_account_name text := 'Cuentas por Cobrar Comerciales';
+  v_receivable_account_id uuid;
+  v_revenue_account_code text := '4100';
+  v_revenue_account_name text := 'Ingresos por Ventas';
+  v_revenue_account_id uuid;
+  v_iva_account_code text := '2150';
+  v_iva_account_name text := 'IVA Débito Fiscal';
+  v_iva_account_id uuid;
+  v_inventory_account_code text := '1150';
+  v_inventory_account_name text := 'Inventarios de Mercaderías';
+  v_inventory_account_id uuid;
+  v_cogs_account_code text := '5100';
+  v_cogs_account_name text := 'Costo de Ventas';
+  v_cogs_account_id uuid;
+  v_invoice_number text;
+  v_customer_name text;
+  v_description text;
+  v_subtotal numeric(12,2);
+  v_iva numeric(12,2);
+  v_total numeric(12,2);
+  v_total_cost numeric(12,2);
+begin
+  if p_invoice.id is null then
+    return;
+  end if;
+
+  if coalesce(p_invoice.status, 'draft') in ('draft', 'cancelled') then
+    return;
+  end if;
+
+  select exists (
+           select 1
+             from public.journal_entries
+            where source_module = 'sales_invoices'
+              and source_reference = p_invoice.id::text
+       )
+    into v_exists;
+
+  if v_exists then
+    return;
+  end if;
+
+  v_subtotal := coalesce(p_invoice.subtotal, 0);
+  v_iva := coalesce(p_invoice.iva_amount, 0);
+  v_total := coalesce(p_invoice.total, v_subtotal + v_iva);
+
+  if v_total = 0 then
+    return;
+  end if;
+
+  v_receivable_account_id := public.ensure_account(
+    v_receivable_account_code,
+    v_receivable_account_name,
+    'asset',
+    'currentAsset',
+    'Cuentas por cobrar a clientes',
+    null
+  );
+
+  v_revenue_account_id := public.ensure_account(
+    v_revenue_account_code,
+    v_revenue_account_name,
+    'income',
+    'operatingIncome',
+    'Ingresos operacionales por ventas',
+    null
+  );
+
+  v_iva_account_id := public.ensure_account(
+    v_iva_account_code,
+    v_iva_account_name,
+    'tax',
+    'taxPayable',
+    'IVA generado en ventas',
+    null
+  );
+
+  select coalesce(sum((item->>'cost')::numeric), 0)
+    into v_total_cost
+    from jsonb_array_elements(coalesce(p_invoice.items, '[]'::jsonb)) item
+   where (item->>'cost') is not null
+     and (item->>'cost') <> '';
+
+  if v_total_cost > 0 then
+    v_inventory_account_id := public.ensure_account(
+      v_inventory_account_code,
+      v_inventory_account_name,
+      'asset',
+      'currentAsset',
+      'Inventario disponible para la venta',
+      null
+    );
+
+    v_cogs_account_id := public.ensure_account(
+      v_cogs_account_code,
+      v_cogs_account_name,
+      'expense',
+      'costOfGoodsSold',
+      'Costo de ventas',
+      null
+    );
+  end if;
+
+  v_invoice_number := coalesce(nullif(p_invoice.invoice_number, ''), p_invoice.id::text);
+  v_customer_name := coalesce(nullif(p_invoice.customer_name, ''), 'Cliente');
+  v_description := format('Factura %s - %s', v_invoice_number, v_customer_name);
+
+  insert into public.journal_entries (
+    id,
+    entry_number,
+    date,
+    description,
+    type,
+    source_module,
+    source_reference,
+    status,
+    total_debit,
+    total_credit,
+    created_at,
+    updated_at
+  ) values (
+    v_entry_id,
+    concat('INV-', to_char(now(), 'YYYYMMDDHH24MISS')),
+    coalesce(p_invoice.date, now()),
+    v_description,
+    'sales',
+    'sales_invoices',
+    p_invoice.id::text,
+    'posted',
+    v_total,
+    v_total,
+    now(),
+    now()
+  );
+
+  insert into public.journal_lines (
+    id,
+    entry_id,
+    account_id,
+    account_code,
+    account_name,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
+    gen_random_uuid(),
+    v_entry_id,
+    v_receivable_account_id,
+    v_receivable_account_code,
+    v_receivable_account_name,
+    v_description,
+    v_total,
+    0,
+    now(),
+    now()
+  );
+
+  if v_subtotal <> 0 then
+    insert into public.journal_lines (
+      id,
+      entry_id,
+      account_id,
+      account_code,
+      account_name,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      gen_random_uuid(),
+      v_entry_id,
+      v_revenue_account_id,
+      v_revenue_account_code,
+      v_revenue_account_name,
+      format('Ingreso por venta %s', v_invoice_number),
+      0,
+      v_subtotal,
+      now(),
+      now()
+    );
+  end if;
+
+  if v_iva <> 0 then
+    insert into public.journal_lines (
+      id,
+      entry_id,
+      account_id,
+      account_code,
+      account_name,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      gen_random_uuid(),
+      v_entry_id,
+      v_iva_account_id,
+      v_iva_account_code,
+      v_iva_account_name,
+      format('IVA débito factura %s', v_invoice_number),
+      0,
+      v_iva,
+      now(),
+      now()
+    );
+  end if;
+
+  if v_total_cost > 0 then
+    insert into public.journal_lines (
+      id,
+      entry_id,
+      account_id,
+      account_code,
+      account_name,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      gen_random_uuid(),
+      v_entry_id,
+      v_cogs_account_id,
+      v_cogs_account_code,
+      v_cogs_account_name,
+      format('Costo de ventas %s', v_invoice_number),
+      v_total_cost,
+      0,
+      now(),
+      now()
+    ), (
+      gen_random_uuid(),
+      v_entry_id,
+      v_inventory_account_id,
+      v_inventory_account_code,
+      v_inventory_account_name,
+      format('Salida inventario factura %s', v_invoice_number),
+      0,
+      v_total_cost,
+      now(),
+      now()
+    );
+  end if;
+end;
+$$;
+
+create or replace function public.delete_sales_invoice_journal_entry(p_invoice_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_invoice_id is null then
+    return;
+  end if;
+
+  delete from public.journal_entries
+   where source_module = 'sales_invoices'
+     and source_reference = p_invoice_id::text;
+end;
+$$;
+
+create or replace function public.handle_sales_invoice_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_non_posted constant text[] := array['draft','borrador','cancelled','cancelado','cancelada','anulado','anulada'];
+  v_old_status text;
+  v_new_status text;
+  v_old_posted boolean;
+  v_new_posted boolean;
+begin
+  if pg_trigger_depth() > 1 then
+    if TG_OP = 'DELETE' then
+      return OLD;
+    else
+      return NEW;
+    end if;
+  end if;
+
+  if TG_OP = 'INSERT' then
+    v_new_status := lower(coalesce(NEW.status, 'draft'));
+    if not (v_new_status = any (v_non_posted)) then
+      perform public.consume_sales_invoice_inventory(NEW);
+    end if;
+    perform public.create_sales_invoice_journal_entry(NEW);
+    perform public.recalculate_sales_invoice_payments(NEW.id);
+    return NEW;
+  elsif TG_OP = 'UPDATE' then
+    v_old_status := lower(coalesce(OLD.status, 'draft'));
+    v_new_status := lower(coalesce(NEW.status, 'draft'));
+
+    v_old_posted := not (v_old_status = any (v_non_posted));
+    v_new_posted := not (v_new_status = any (v_non_posted));
+
+    if v_old_posted then
+      if v_new_posted then
+        perform public.restore_sales_invoice_inventory(OLD);
+        perform public.consume_sales_invoice_inventory(NEW);
+      else
+        perform public.restore_sales_invoice_inventory(OLD);
+      end if;
+    elsif v_new_posted then
+      perform public.consume_sales_invoice_inventory(NEW);
+    end if;
+    perform public.delete_sales_invoice_journal_entry(OLD.id);
+    perform public.create_sales_invoice_journal_entry(NEW);
+    perform public.recalculate_sales_invoice_payments(NEW.id);
+    return NEW;
+  elsif TG_OP = 'DELETE' then
+    v_old_status := lower(coalesce(OLD.status, 'draft'));
+    if not (v_old_status = any (v_non_posted)) then
+      perform public.restore_sales_invoice_inventory(OLD);
+    end if;
+    perform public.delete_sales_invoice_journal_entry(OLD.id);
+    return OLD;
+  end if;
+  return NULL;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_trigger t
+      join pg_class c on c.oid = t.tgrelid
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public'
+       and c.relname = 'sales_invoices'
+       and t.tgname = 'trg_sales_invoices_change'
+  ) then
+    create trigger trg_sales_invoices_change
+      after insert or update or delete on public.sales_invoices
+      for each row execute procedure public.handle_sales_invoice_change();
+  end if;
+end $$;
 
 create or replace function public.handle_sales_payment_change()
 returns trigger as $$
@@ -500,7 +1675,7 @@ create table if not exists journal_entries (
 create table if not exists journal_lines (
   id uuid primary key default gen_random_uuid(),
   entry_id uuid not null references journal_entries(id) on delete cascade,
-  account_id integer not null,
+  account_id uuid not null,
   account_code text not null,
   account_name text not null,
   description text,
@@ -559,6 +1734,12 @@ begin
   exception when others then
     null;
   end;
+
+  begin
+    alter table public.accounts drop column if exists company_id;
+  exception when others then
+    null;
+  end;
 end $$;
 
 do $$
@@ -574,11 +1755,26 @@ begin
        and data_type = 'uuid'
   ) into v_account_id_is_uuid;
 
-  if v_account_id_is_uuid then
-    alter table public.journal_lines drop column account_id;
+  if not v_account_id_is_uuid then
+    begin
+      alter table public.journal_lines drop column account_id;
+    exception when undefined_column then
+      null;
+    end;
+
     alter table public.journal_lines
-      add column account_id integer not null;
+      add column account_id uuid;
   end if;
+end $$;
+
+do $$
+begin
+  begin
+    alter table public.journal_lines
+      alter column account_id set not null;
+  exception when others then
+    null;
+  end;
 end $$;
 
 do $$
@@ -676,7 +1872,7 @@ alter table public.journal_entries
 
 alter table public.journal_lines
   add column if not exists entry_id uuid,
-  add column if not exists account_id integer,
+  add column if not exists account_id uuid,
   add column if not exists account_code text,
   add column if not exists account_name text,
   add column if not exists description text,
@@ -698,6 +1894,21 @@ begin
         foreign key (entry_id)
         references public.journal_entries(id)
         on delete cascade;
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.journal_lines'::regclass
+      and contype = 'f'
+      and conname = 'journal_lines_account_id_fkey'
+  ) then
+    alter table public.journal_lines
+      add constraint journal_lines_account_id_fkey
+        foreign key (account_id)
+        references public.accounts(id);
   end if;
 end $$;
 
@@ -886,6 +2097,70 @@ alter table journal_entries enable row level security;
 alter table journal_lines enable row level security;
 alter table suppliers enable row level security;
 alter table purchase_invoices enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'accounts'
+      and policyname = 'Authenticated accounts read'
+  ) then
+    create policy "Authenticated accounts read"
+      on accounts
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'accounts'
+      and policyname = 'Authenticated accounts insert'
+  ) then
+    create policy "Authenticated accounts insert"
+      on accounts
+      for insert
+      to authenticated
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'accounts'
+      and policyname = 'Authenticated accounts update'
+  ) then
+    create policy "Authenticated accounts update"
+      on accounts
+      for update
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'accounts'
+      and policyname = 'Authenticated accounts delete'
+  ) then
+    create policy "Authenticated accounts delete"
+      on accounts
+      for delete
+      to authenticated
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
 
 -- Example policies; replace with final role-aware versions.
 do $$

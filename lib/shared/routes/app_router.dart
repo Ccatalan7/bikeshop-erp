@@ -17,6 +17,7 @@ import '../../modules/inventory/pages/category_form_page.dart';
 import '../../modules/inventory/pages/stock_movement_list_page.dart';
 import '../../modules/sales/pages/invoice_list_page.dart';
 import '../../modules/sales/pages/invoice_form_page.dart';
+import '../../modules/sales/pages/invoice_payment_page.dart';
 import '../../modules/sales/pages/invoice_detail_page.dart';
 import '../../modules/sales/pages/payment_form_page.dart';
 import '../../modules/purchases/pages/supplier_list_page.dart';
@@ -168,6 +169,13 @@ class AppRouter {
           final extra = state.extra;
           final openPayment = extra is Map && extra['openPayment'] == true;
           return InvoiceDetailPage(invoiceId: id, openPaymentOnLoad: openPayment);
+        },
+      ),
+      GoRoute(
+        path: '/sales/invoices/:id/payment',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return InvoicePaymentPage(invoiceId: id);
         },
       ),
       GoRoute(

@@ -1,5 +1,5 @@
 class Account {
-  final int? id;
+  final String? id;
   final String code;
   final String name;
   final AccountType type;
@@ -22,10 +22,9 @@ class Account {
     this.createdAt,
     this.updatedAt,
   });
-
   factory Account.fromJson(Map<String, dynamic> json) {
     return Account(
-      id: json['id'] as int?,
+      id: json['id']?.toString(),
       code: json['code'] as String,
       name: json['name'] as String,
       type: AccountType.values.firstWhere(
@@ -37,20 +36,15 @@ class Account {
         orElse: () => AccountCategory.currentAsset,
       ),
       description: json['description'] as String?,
-      parentId: json['parent_id'] as String?,
+      parentId: json['parent_id']?.toString(),
       isActive: json['is_active'] as bool? ?? true,
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at'] as String)
-          : null,
-      updatedAt: json['updated_at'] != null 
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
+    final data = <String, dynamic>{
       'code': code,
       'name': name,
       'type': type.name,
@@ -61,10 +55,16 @@ class Account {
       'created_at': createdAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
     };
+
+    if (id != null) {
+      data['id'] = id;
+    }
+
+    return data;
   }
 
   Account copyWith({
-    int? id,
+    String? id,
     String? code,
     String? name,
     AccountType? type,
@@ -89,6 +89,15 @@ class Account {
     );
   }
 
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
   @override
   String toString() {
     return '$code - $name';
@@ -97,16 +106,20 @@ class Account {
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is Account && other.id == id;
+    if (other is! Account) return false;
+    if (id != null && other.id != null) {
+      return id == other.id;
+    }
+    return code == other.code;
   }
 
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode => id?.hashCode ?? code.hashCode;
 }
 
 enum AccountType {
   asset('Activo'),
-  liability('Pasivo'), 
+  liability('Pasivo'),
   equity('Patrimonio'),
   income('Ingresos'),
   expense('Gastos'),
@@ -121,24 +134,24 @@ enum AccountCategory {
   currentAsset('Activo Circulante'),
   fixedAsset('Activo Fijo'),
   otherAsset('Otros Activos'),
-  
+
   // Liabilities
   currentLiability('Pasivo Circulante'),
   longTermLiability('Pasivo Largo Plazo'),
-  
+
   // Equity
   capital('Capital'),
   retainedEarnings('Utilidades Retenidas'),
-  
+
   // Income
   operatingIncome('Ingresos Operacionales'),
   nonOperatingIncome('Ingresos No Operacionales'),
-  
+
   // Expenses
   costOfGoodsSold('Costo de Ventas'),
   operatingExpense('Gastos Operacionales'),
   financialExpense('Gastos Financieros'),
-  
+
   // Tax
   taxPayable('Impuestos por Pagar'),
   taxReceivable('Impuestos por Cobrar'),

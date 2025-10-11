@@ -7,7 +7,6 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
-import '../widgets/payment_form.dart';
 
 class InvoiceDetailPage extends StatefulWidget {
   const InvoiceDetailPage({
@@ -80,36 +79,32 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       return;
     }
 
-    await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return Dialog(
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: PaymentForm(
-              invoice: invoice,
-              onCompleted: () => _loadInvoice(),
-            ),
-          ),
-        );
-      },
-    );
+    final didRegisterPayment = await context.push<bool>(
+          '/sales/invoices/${invoice.id}/payment',
+        ) ??
+        false;
+
+    if (didRegisterPayment) {
+      await _loadInvoice();
+    }
   }
 
   Future<void> _markAsSent() async {
     try {
       final salesService = context.read<SalesService>();
-      await salesService.updateInvoiceStatus(widget.invoiceId, InvoiceStatus.sent);
+      await salesService.updateInvoiceStatus(
+          widget.invoiceId, InvoiceStatus.sent);
+      await _loadInvoice();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Factura marcada como enviada')), 
+        const SnackBar(content: Text('Factura marcada como enviada')),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo actualizar el estado: $e'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text('No se pudo actualizar el estado: $e'),
+            backgroundColor: Colors.red),
       );
     }
   }
@@ -142,7 +137,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     );
   }
 
-  Widget _buildContent(BuildContext context, Invoice invoice, SalesService service) {
+  Widget _buildContent(
+      BuildContext context, Invoice invoice, SalesService service) {
     final payments = service.getPaymentsForInvoice(invoice.id ?? '');
     return Column(
       children: [
@@ -179,8 +175,11 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  invoice.invoiceNumber.isNotEmpty ? 'Factura ${invoice.invoiceNumber}' : 'Factura',
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  invoice.invoiceNumber.isNotEmpty
+                      ? 'Factura ${invoice.invoiceNumber}'
+                      : 'Factura',
+                  style: const TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Text(invoice.customerName ?? 'Cliente'),
@@ -193,7 +192,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               child: OutlinedButton.icon(
                 onPressed: _openPaymentForm,
                 icon: const Icon(Icons.payments_outlined),
-                label: const Text('Pagar'),
+                label: const Text('Pagar factura'),
               ),
             ),
           OutlinedButton.icon(
@@ -208,7 +207,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             FilledButton.icon(
               onPressed: _markAsSent,
               icon: const Icon(Icons.send_outlined),
-              label: const Text('Enviar'),
+              label: const Text('Marcar como enviado'),
             ),
         ],
       ),
@@ -252,7 +251,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: statusColor.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(16),
@@ -271,13 +271,17 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                   children: [
                     Text(
                       'Total: ${ChileanUtils.formatCurrency(invoice.total)}',
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
-                    Text('Pagado: ${ChileanUtils.formatCurrency(invoice.paidAmount)}'),
+                    Text(
+                        'Pagado: ${ChileanUtils.formatCurrency(invoice.paidAmount)}'),
                     Text(
                       'Saldo: ${ChileanUtils.formatCurrency(invoice.balance)}',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: invoice.balance <= 0 ? Colors.green : Colors.orange[800],
+                        color: invoice.balance <= 0
+                            ? Colors.green
+                            : Colors.orange[800],
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -295,7 +299,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                   const SizedBox(width: 16),
                   const Icon(Icons.schedule, size: 16),
                   const SizedBox(width: 4),
-                  Text('Vencimiento: ${ChileanUtils.formatDate(invoice.dueDate!)}'),
+                  Text(
+                      'Vencimiento: ${ChileanUtils.formatDate(invoice.dueDate!)}'),
                 ],
               ],
             ),
@@ -349,7 +354,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 4),
-                          Text('${item.quantity.toStringAsFixed(0)} x ${ChileanUtils.formatCurrency(item.unitPrice)}'),
+                          Text(
+                              '${item.quantity.toStringAsFixed(0)} x ${ChileanUtils.formatCurrency(item.unitPrice)}'),
                         ],
                       ),
                     ),
@@ -379,7 +385,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                 ),
                 const Spacer(),
                 if (payments.isNotEmpty)
-                  Text('${payments.length} en total', style: Theme.of(context).textTheme.bodySmall),
+                  Text('${payments.length} en total',
+                      style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
             const SizedBox(height: 12),
@@ -404,12 +411,16 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                           children: [
                             Text(
                               ChileanUtils.formatCurrency(payment.amount),
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 4),
-                            Text('${payment.method.displayName} · ${ChileanUtils.formatDate(payment.date)}'),
-                            if (payment.reference != null && payment.reference!.isNotEmpty)
-                              Text('Ref: ${payment.reference}', style: Theme.of(context).textTheme.bodySmall),
+                            Text(
+                                '${payment.method.displayName} · ${ChileanUtils.formatDate(payment.date)}'),
+                            if (payment.reference != null &&
+                                payment.reference!.isNotEmpty)
+                              Text('Ref: ${payment.reference}',
+                                  style: Theme.of(context).textTheme.bodySmall),
                           ],
                         ),
                       ),

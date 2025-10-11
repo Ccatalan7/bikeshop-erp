@@ -2,47 +2,46 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../shared/services/database_service.dart';
 import '../data/standard_chart_of_accounts.dart';
 import '../models/account.dart';
 
 class ChartOfAccountsService extends ChangeNotifier {
+  ChartOfAccountsService(this._databaseService);
+
+  final DatabaseService _databaseService;
   final List<Account> _accounts = [];
   bool _isInitialized = false;
 
   List<Account> get accounts => List.unmodifiable(_accounts);
   bool get isInitialized => _isInitialized;
 
-  Future<void> initializeChartOfAccounts() async {
-    if (_isInitialized) return;
+  Future<void> initializeChartOfAccounts({bool forceRefresh = false}) async {
+    if (_isInitialized && !forceRefresh) {
+      final hasAllStandardAccounts =
+          kStandardChartOfAccounts.every((definition) {
+        return _accounts.any((account) => account.code == definition.code);
+      });
+
+      if (hasAllStandardAccounts) {
+        return;
+      }
+
+      forceRefresh = true;
+    }
 
     try {
       _accounts.clear();
 
-      final now = DateTime.now();
-      var idCounter = 1;
+      await _ensureStandardChartOfAccounts();
+      final remoteAccounts = await _databaseService.select('accounts');
 
-      for (final definition in kStandardChartOfAccounts) {
-        final description = definition.description.isNotEmpty
-            ? definition.description
-            : '${definition.name} (${definition.category.displayName})';
+      final mappedAccounts = remoteAccounts
+          .map((raw) => Account.fromJson(raw))
+          .toList(growable: false)
+        ..sort((a, b) => a.code.compareTo(b.code));
 
-        _accounts.add(
-          Account(
-            id: idCounter++,
-            code: definition.code,
-            name: definition.name,
-            type: definition.type,
-            category: definition.category,
-            description: description,
-            parentId: definition.parentCode,
-            createdAt: now,
-            updatedAt: now,
-          ),
-        );
-      }
-
-      _accounts.sort((a, b) => a.code.compareTo(b.code));
-
+      _accounts.addAll(mappedAccounts);
       _isInitialized = true;
       notifyListeners();
     } catch (e) {
@@ -88,7 +87,7 @@ class ChartOfAccountsService extends ChangeNotifier {
     }
   }
 
-  Account? getAccountById(int id) {
+  Account? getAccountById(String id) {
     try {
       return _accounts.firstWhere((account) => account.id == id);
     } catch (_) {
@@ -111,12 +110,20 @@ class ChartOfAccountsService extends ChangeNotifier {
 
   Future<void> addAccount(Account account) async {
     try {
-      final newAccount = account.copyWith(
-        id: _accounts.length + 1,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
+      final payload = {
+        'code': account.code,
+        'name': account.name,
+        'type': account.type.name,
+        'category': account.category.name,
+        'description': account.description,
+        'parent_id': account.parentId,
+        'is_active': account.isActive,
+      };
 
+      final inserted = await _databaseService.insert('accounts', payload);
+      final newAccount = Account.fromJson(inserted);
+
+      _accounts.removeWhere((existing) => existing.code == newAccount.code);
       _accounts.add(newAccount);
       _accounts.sort((a, b) => a.code.compareTo(b.code));
       notifyListeners();
@@ -128,19 +135,42 @@ class ChartOfAccountsService extends ChangeNotifier {
 
   Future<void> updateAccount(Account account) async {
     try {
-      final index = _accounts.indexWhere((a) => a.id == account.id);
-      if (index != -1) {
-        _accounts[index] = account.copyWith(updatedAt: DateTime.now());
-        notifyListeners();
+      if (account.id == null) {
+        throw ArgumentError(
+            'No se puede actualizar una cuenta sin identificador.');
       }
+
+      final payload = {
+        'name': account.name,
+        'description': account.description,
+        'type': account.type.name,
+        'category': account.category.name,
+        'parent_id': account.parentId,
+        'is_active': account.isActive,
+      };
+
+      final updated =
+          await _databaseService.update('accounts', account.id!, payload);
+      final refreshed = Account.fromJson(updated);
+
+      final index = _accounts.indexWhere((a) => a.id == refreshed.id);
+      if (index != -1) {
+        _accounts[index] = refreshed;
+      } else {
+        _accounts.add(refreshed);
+      }
+
+      _accounts.sort((a, b) => a.code.compareTo(b.code));
+      notifyListeners();
     } catch (e) {
       debugPrint('Error updating account: $e');
       rethrow;
     }
   }
 
-  Future<void> deleteAccount(int accountId) async {
+  Future<void> deleteAccount(String accountId) async {
     try {
+      await _databaseService.delete('accounts', accountId);
       _accounts.removeWhere((account) => account.id == accountId);
       notifyListeners();
     } catch (e) {
@@ -158,4 +188,25 @@ class ChartOfAccountsService extends ChangeNotifier {
   Account? get ivaDebit => getAccountByCode('2150');
   Account? get salesRevenue => getAccountByCode('4100');
   Account? get costOfGoodsSold => getAccountByCode('5100');
+
+  Future<void> _ensureStandardChartOfAccounts() async {
+    try {
+      for (final definition in kStandardChartOfAccounts) {
+        final description = definition.description.isNotEmpty
+            ? definition.description
+            : '${definition.name} (${definition.category.displayName})';
+        await _databaseService.ensureAccount(
+          code: definition.code,
+          name: definition.name,
+          type: definition.type.name,
+          category: definition.category.name,
+          description: description,
+          parentCode: definition.parentCode,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error seeding standard chart of accounts: $e');
+      rethrow;
+    }
+  }
 }

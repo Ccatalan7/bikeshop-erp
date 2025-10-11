@@ -28,7 +28,8 @@ class JournalEntryService extends ChangeNotifier {
 
       final linesByEntry = <String, List<JournalLine>>{};
       for (final rawLine in lineDocs) {
-        final entryId = (rawLine['entry_id'] ?? rawLine['journal_entry_id'])?.toString();
+        final entryId =
+            (rawLine['entry_id'] ?? rawLine['journal_entry_id'])?.toString();
         if (entryId == null) continue;
         final line = _mapLineFromFirestore(rawLine, entryId);
         linesByEntry.putIfAbsent(entryId, () => []).add(line);
@@ -69,8 +70,10 @@ class JournalEntryService extends ChangeNotifier {
 
     _validateJournalEntry(lines);
 
-    final totalDebit = lines.fold<double>(0.0, (sum, line) => sum + line.debitAmount);
-    final totalCredit = lines.fold<double>(0.0, (sum, line) => sum + line.creditAmount);
+    final totalDebit =
+        lines.fold<double>(0.0, (sum, line) => sum + line.debitAmount);
+    final totalCredit =
+        lines.fold<double>(0.0, (sum, line) => sum + line.creditAmount);
 
     return JournalEntry(
       entryNumber: _generateEntryNumber(),
@@ -94,7 +97,8 @@ class JournalEntryService extends ChangeNotifier {
     _validateJournalEntry(entry.lines);
 
     if (!entry.isBalanced) {
-      throw Exception('Journal entry is not balanced. Debits: \$${entry.totalDebit.toStringAsFixed(2)}, Credits: \$${entry.totalCredit.toStringAsFixed(2)}');
+      throw Exception(
+          'Journal entry is not balanced. Debits: \$${entry.totalDebit.toStringAsFixed(2)}, Credits: \$${entry.totalCredit.toStringAsFixed(2)}');
     }
 
     final persistedEntry = await _persistEntry(entry.copyWith(
@@ -295,19 +299,24 @@ class JournalEntryService extends ChangeNotifier {
     }
 
     if (lines.length < 2) {
-      throw Exception('Journal entry must have at least two lines (double-entry)');
+      throw Exception(
+          'Journal entry must have at least two lines (double-entry)');
     }
 
-    final totalDebit = lines.fold<double>(0.0, (sum, line) => sum + line.debitAmount);
-    final totalCredit = lines.fold<double>(0.0, (sum, line) => sum + line.creditAmount);
+    final totalDebit =
+        lines.fold<double>(0.0, (sum, line) => sum + line.debitAmount);
+    final totalCredit =
+        lines.fold<double>(0.0, (sum, line) => sum + line.creditAmount);
 
     if ((totalDebit - totalCredit).abs() > 0.01) {
-      throw Exception('Journal entry is not balanced. Debits: \$${totalDebit.toStringAsFixed(2)}, Credits: \$${totalCredit.toStringAsFixed(2)}');
+      throw Exception(
+          'Journal entry is not balanced. Debits: \$${totalDebit.toStringAsFixed(2)}, Credits: \$${totalCredit.toStringAsFixed(2)}');
     }
 
     for (final line in lines) {
       if (line.debitAmount > 0 && line.creditAmount > 0) {
-        throw Exception('Journal line cannot have both debit and credit amounts');
+        throw Exception(
+            'Journal line cannot have both debit and credit amounts');
       }
       if (line.debitAmount == 0 && line.creditAmount == 0) {
         throw Exception('Journal line must have either debit or credit amount');
@@ -327,35 +336,43 @@ class JournalEntryService extends ChangeNotifier {
     return _journalEntries.where((entry) => entry.type == type).toList();
   }
 
-  List<JournalEntry> getEntriesByDateRange(DateTime startDate, DateTime endDate) {
-    return _journalEntries.where((entry) =>
-      entry.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
-      entry.date.isBefore(endDate.add(const Duration(days: 1)))
-    ).toList();
+  List<JournalEntry> getEntriesByDateRange(
+      DateTime startDate, DateTime endDate) {
+    return _journalEntries
+        .where((entry) =>
+            entry.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
+            entry.date.isBefore(endDate.add(const Duration(days: 1))))
+        .toList();
   }
 
-  List<JournalEntry> getEntriesBySource(String sourceModule, String sourceReference) {
-    return _journalEntries.where((entry) =>
-      entry.sourceModule == sourceModule && entry.sourceReference == sourceReference
-    ).toList();
+  List<JournalEntry> getEntriesBySource(
+      String sourceModule, String sourceReference) {
+    return _journalEntries
+        .where((entry) =>
+            entry.sourceModule == sourceModule &&
+            entry.sourceReference == sourceReference)
+        .toList();
   }
 
   List<JournalEntry> searchEntries(String query) {
     if (query.isEmpty) return _journalEntries;
 
     final lowerQuery = query.toLowerCase();
-    return _journalEntries.where((entry) =>
-      entry.entryNumber.toLowerCase().contains(lowerQuery) ||
-      entry.description.toLowerCase().contains(lowerQuery) ||
-      (entry.sourceModule?.toLowerCase().contains(lowerQuery) ?? false) ||
-      (entry.sourceReference?.toLowerCase().contains(lowerQuery) ?? false)
-    ).toList();
+    return _journalEntries
+        .where((entry) =>
+            entry.entryNumber.toLowerCase().contains(lowerQuery) ||
+            entry.description.toLowerCase().contains(lowerQuery) ||
+            (entry.sourceModule?.toLowerCase().contains(lowerQuery) ?? false) ||
+            (entry.sourceReference?.toLowerCase().contains(lowerQuery) ??
+                false))
+        .toList();
   }
 
   Future<void> reverseEntry(String entryId) async {
     await ensureLoaded();
 
-    final entryIndex = _journalEntries.indexWhere((entry) => entry.id == entryId);
+    final entryIndex =
+        _journalEntries.indexWhere((entry) => entry.id == entryId);
     if (entryIndex == -1) {
       throw Exception('Journal entry not found');
     }
@@ -365,14 +382,17 @@ class JournalEntryService extends ChangeNotifier {
       throw Exception('Journal entry is already reversed');
     }
 
-    final reverseLines = originalEntry.lines.map((line) => line.copyWith(
-      debitAmount: line.creditAmount,
-      creditAmount: line.debitAmount,
-      createdAt: DateTime.now(),
-    )).toList();
+    final reverseLines = originalEntry.lines
+        .map((line) => line.copyWith(
+              debitAmount: line.creditAmount,
+              creditAmount: line.debitAmount,
+              createdAt: DateTime.now(),
+            ))
+        .toList();
 
     if (originalEntry.id == null) {
-      throw Exception('Journal entry cannot be reversed because it is missing an identifier');
+      throw Exception(
+          'Journal entry cannot be reversed because it is missing an identifier');
     }
 
     await _databaseService.update('journal_entries', originalEntry.id!, {
@@ -418,16 +438,19 @@ class JournalEntryService extends ChangeNotifier {
       'total_credit': entry.totalCredit,
     };
 
-    final linesPayload = entry.lines.map((line) => {
-      'account_id': line.accountId,
-      'account_code': line.accountCode,
-      'account_name': line.accountName,
-      'description': line.description,
-      'debit_amount': line.debitAmount,
-      'credit_amount': line.creditAmount,
-    }).toList();
+    final linesPayload = entry.lines
+        .map((line) => {
+              'account_id': line.accountId,
+              'account_code': line.accountCode,
+              'account_name': line.accountName,
+              'description': line.description,
+              'debit_amount': line.debitAmount,
+              'credit_amount': line.creditAmount,
+            })
+        .toList();
 
-    final entryId = await _databaseService.createJournalEntry(entryPayload, linesPayload);
+    final entryId =
+        await _databaseService.createJournalEntry(entryPayload, linesPayload);
 
     final now = DateTime.now();
     final persistedLines = entry.lines
@@ -464,7 +487,8 @@ class JournalEntryService extends ChangeNotifier {
     return JournalEntry.fromJson(data);
   }
 
-  JournalLine _mapLineFromFirestore(Map<String, dynamic> rawLine, String entryId) {
+  JournalLine _mapLineFromFirestore(
+      Map<String, dynamic> rawLine, String entryId) {
     final data = Map<String, dynamic>.from(rawLine);
     data['id'] = data['id']?.toString();
     data['journal_entry_id'] = entryId;
@@ -523,12 +547,13 @@ class JournalEntryService extends ChangeNotifier {
     ];
 
     for (final account in candidates) {
-      if (account != null && account.id != null) {
+      if (account != null && account.id != null && account.id!.isNotEmpty) {
         return account;
       }
     }
 
-    throw Exception('No se encontró una cuenta de caja/banco/cuentas por cobrar para registrar la venta.');
+    throw Exception(
+        'No se encontró una cuenta de caja/banco/cuentas por cobrar para registrar la venta.');
   }
 
   Account _resolvePurchaseLiabilityAccount() {
@@ -539,17 +564,19 @@ class JournalEntryService extends ChangeNotifier {
     ];
 
     for (final account in candidates) {
-      if (account != null && account.id != null) {
+      if (account != null && account.id != null && account.id!.isNotEmpty) {
         return account;
       }
     }
 
-    throw Exception('No se encontró una cuenta de proveedor/pago para registrar la compra.');
+    throw Exception(
+        'No se encontró una cuenta de proveedor/pago para registrar la compra.');
   }
 
   Account _requireAccount(Account? account, String codeDescription) {
-    if (account == null || account.id == null) {
-      throw Exception('La cuenta requerida "$codeDescription" no está disponible.');
+    if (account == null || account.id == null || account.id!.isEmpty) {
+      throw Exception(
+          'La cuenta requerida "$codeDescription" no está disponible.');
     }
     return account;
   }

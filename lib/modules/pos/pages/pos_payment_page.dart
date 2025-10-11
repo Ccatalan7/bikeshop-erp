@@ -7,8 +7,9 @@ import '../services/pos_service.dart';
 import '../models/payment_method.dart';
 import '../models/pos_transaction.dart';
 import '../widgets/payment_method_selector.dart';
-import '../../crm/models/crm_models.dart';
+import '../../crm/models/crm_models.dart' as crm_models;
 import '../../crm/services/customer_service.dart';
+import '../../../shared/models/customer.dart' as shared_customer;
 
 class POSPaymentPage extends StatefulWidget {
   const POSPaymentPage({super.key});
@@ -22,27 +23,24 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
   double _amountReceived = 0.0;
   bool _isProcessing = false;
   final Uuid _uuid = const Uuid();
-  
-  Customer? _selectedCustomer;
-  List<Customer> _customers = [];
+
+  shared_customer.Customer? _selectedCustomer;
+  List<shared_customer.Customer> _customers = [];
   bool _isLoadingCustomers = true;
   final TextEditingController _customerSearchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    // Set default payment method to cash
     _selectedPaymentMethod = PaymentMethod.cash;
-    
-    // Set default amount to the total
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final posService = context.read<POSService>();
       setState(() {
         _amountReceived = posService.cartTotal;
       });
     });
-    
-    // Load customers
+
     _loadCustomers();
   }
 
@@ -55,20 +53,23 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
   Future<void> _loadCustomers() async {
     try {
       final customerService = Provider.of<CustomerService>(context, listen: false);
-      final customers = await customerService.getCustomers();
-      
-      if (mounted) {
-        setState(() {
-          _customers = customers;
-          _isLoadingCustomers = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingCustomers = false;
-        });
-      }
+  final crmCustomers = await customerService.getCustomers();
+  final mappedCustomers = crmCustomers
+          .where((customer) => (customer.id ?? '').isNotEmpty)
+          .map(_mapCrmCustomer)
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+
+      if (!mounted) return;
+      setState(() {
+        _customers = mappedCustomers;
+        _isLoadingCustomers = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingCustomers = false;
+      });
     }
   }
 
@@ -81,7 +82,8 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
     }
 
     final posService = context.read<POSService>();
-    
+    posService.setCustomer(_selectedCustomer);
+
     if (_amountReceived < posService.cartTotal) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Monto insuficiente')),
@@ -94,19 +96,16 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
     });
 
     try {
-      // Create payment
       final payment = POSPayment(
         id: _uuid.v4(),
         method: _selectedPaymentMethod!,
         amount: _amountReceived,
         createdAt: DateTime.now(),
       );
-      
-      // Process the payment
+
       final transaction = await posService.checkout([payment]);
 
       if (mounted && transaction != null) {
-        // Navigate to receipt
         context.pushReplacement('/pos/receipt', extra: transaction);
       } else {
         throw Exception('Failed to process transaction');
@@ -116,7 +115,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
         setState(() {
           _isProcessing = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al procesar pago: $e'),
@@ -127,13 +126,32 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
     }
   }
 
+  shared_customer.Customer _mapCrmCustomer(crm_models.Customer customer) {
+    final rutValue = (customer.rut.isNotEmpty) ? customer.rut : null;
+    return shared_customer.Customer(
+      id: customer.id ?? '',
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      rut: rutValue,
+      address: customer.address,
+      city: null,
+      region: customer.region,
+      comuna: null,
+      type: shared_customer.CustomerType.individual,
+      notes: null,
+      isActive: customer.isActive,
+      createdAt: customer.createdAt,
+      updatedAt: customer.updatedAt,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Column(
       children: [
-        // Header
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
@@ -153,8 +171,6 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
             ],
           ),
         ),
-        
-        // Content area
         Expanded(
           child: Consumer<POSService>(
             builder: (context, posService, child) {
@@ -163,7 +179,6 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Order summary
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
@@ -177,7 +192,6 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -185,7 +199,6 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                                 Text('\$${posService.cartNetAmount.toStringAsFixed(0)}'),
                               ],
                             ),
-                            
                             if (posService.cartDiscountAmount > 0)
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -197,7 +210,6 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                                   ),
                                 ],
                               ),
-                            
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -205,9 +217,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                                 Text('\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
                               ],
                             ),
-                            
                             const Divider(),
-                            
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -230,10 +240,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                         ),
                       ),
                     ),
-                    
                     const SizedBox(height: 24),
-                    
-                    // Customer selector
                     Text(
                       'Cliente',
                       style: theme.textTheme.titleLarge?.copyWith(
@@ -241,14 +248,13 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
                     if (_isLoadingCustomers)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
                         child: LinearProgressIndicator(),
                       )
                     else
-                      DropdownButtonFormField<Customer>(
+                      DropdownButtonFormField<shared_customer.Customer?>(
                         value: _selectedCustomer,
                         decoration: const InputDecoration(
                           labelText: 'Seleccionar Cliente (Opcional)',
@@ -257,15 +263,15 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                         ),
                         isExpanded: true,
                         items: [
-                          const DropdownMenuItem<Customer>(
+                          const DropdownMenuItem<shared_customer.Customer?>(
                             value: null,
                             child: Text('Cliente Genérico'),
                           ),
                           ..._customers.map((customer) {
-                            final identifier = customer.rut.isNotEmpty
-                                ? customer.rut
+                            final identifier = (customer.rut?.isNotEmpty ?? false)
+                                ? customer.rut!
                                 : (customer.email ?? 'Sin RUT');
-                            return DropdownMenuItem<Customer>(
+                            return DropdownMenuItem<shared_customer.Customer?>(
                               value: customer,
                               child: Text('${customer.name} - $identifier'),
                             );
@@ -275,12 +281,10 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                           setState(() {
                             _selectedCustomer = customer;
                           });
+                          context.read<POSService>().setCustomer(customer);
                         },
                       ),
-                    
                     const SizedBox(height: 24),
-                    
-                    // Payment method selector
                     Text(
                       'Método de Pago',
                       style: theme.textTheme.titleLarge?.copyWith(
@@ -288,7 +292,6 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
                     PaymentMethodSelector(
                       paymentMethods: PaymentMethod.defaultMethods,
                       selectedMethod: _selectedPaymentMethod,
@@ -301,10 +304,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                         });
                       },
                     ),
-                    
                     const SizedBox(height: 24),
-                    
-                    // Amount received (only for cash)
                     if (_selectedPaymentMethod == PaymentMethod.cash) ...[
                       Text(
                         'Monto Recibido',
@@ -313,7 +313,6 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
                       TextField(
                         onChanged: (value) {
                           setState(() {
@@ -328,10 +327,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                           hintText: posService.cartTotal.toStringAsFixed(0),
                         ),
                       ),
-                      
                       const SizedBox(height: 16),
-                      
-                      // Change calculation
                       if (_amountReceived >= posService.cartTotal)
                         Card(
                           color: theme.colorScheme.primaryContainer,
@@ -358,11 +354,8 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                             ),
                           ),
                         ),
-                      
                       const SizedBox(height: 24),
                     ],
-                    
-                    // Payment button
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(

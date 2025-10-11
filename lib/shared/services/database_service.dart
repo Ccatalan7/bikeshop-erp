@@ -5,7 +5,8 @@ class DatabaseService extends ChangeNotifier {
   final SupabaseClient _client = Supabase.instance.client;
 
   // Generic CRUD operations
-  Future<List<Map<String, dynamic>>> select(String table, {String? where}) async {
+  Future<List<Map<String, dynamic>>> select(String table,
+      {String? where}) async {
     try {
       var query = _client.from(table).select();
 
@@ -16,10 +17,10 @@ class DatabaseService extends ChangeNotifier {
         query = query.eq(field, value);
       }
 
-    final data = await query;
-    return (data as List)
-      .map((row) => Map<String, dynamic>.from(row as Map))
-      .toList();
+      final data = await query;
+      return (data as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Database select error: $e');
@@ -30,12 +31,9 @@ class DatabaseService extends ChangeNotifier {
 
   Future<Map<String, dynamic>?> selectById(String table, String id) async {
     try {
-    final data = await _client
-          .from(table)
-          .select()
-      .eq('id', id)
-      .maybeSingle();
-    return data != null ? Map<String, dynamic>.from(data as Map) : null;
+      final data =
+          await _client.from(table).select().eq('id', id).maybeSingle();
+      return data != null ? Map<String, dynamic>.from(data as Map) : null;
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Database selectById error: $e');
@@ -44,10 +42,15 @@ class DatabaseService extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>> insert(String table, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> insert(String table, Map<String, dynamic> data,
+      {bool applyTimestamps = true}) async {
     try {
-      _applyTimestamps(data, isInsert: true);
-      final result = await _client.from(table).insert(data).select().single();
+      final payload = Map<String, dynamic>.from(data);
+      if (applyTimestamps) {
+        _applyTimestamps(payload, isInsert: true);
+      }
+      final result =
+          await _client.from(table).insert(payload).select().single();
       notifyListeners();
       return Map<String, dynamic>.from(result as Map);
     } catch (e) {
@@ -58,12 +61,17 @@ class DatabaseService extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>> update(String table, String id, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> update(
+      String table, String id, Map<String, dynamic> data,
+      {bool applyTimestamps = true}) async {
     try {
-      _applyTimestamps(data, isInsert: false);
+      final payload = Map<String, dynamic>.from(data);
+      if (applyTimestamps) {
+        _applyTimestamps(payload, isInsert: false);
+      }
       final result = await _client
           .from(table)
-          .update(data)
+          .update(payload)
           .eq('id', id)
           .select()
           .single();
@@ -89,6 +97,33 @@ class DatabaseService extends ChangeNotifier {
     }
   }
 
+  Future<String?> ensureAccount({
+    required String code,
+    required String name,
+    required String type,
+    required String category,
+    String? description,
+    String? parentCode,
+  }) async {
+    try {
+      final result = await _client.rpc('ensure_account', params: {
+        'p_code': code,
+        'p_name': name,
+        'p_type': type,
+        'p_category': category,
+        'p_description': description,
+        'p_parent_code': parentCode,
+      });
+
+      return result?.toString();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Database ensureAccount error: $e');
+      }
+      rethrow;
+    }
+  }
+
   // Accounting-specific operations
   Future<String> createJournalEntry(
     Map<String, dynamic> entry,
@@ -96,11 +131,8 @@ class DatabaseService extends ChangeNotifier {
   ) async {
     try {
       _applyTimestamps(entry, isInsert: true);
-      final insertedEntry = await _client
-          .from('journal_entries')
-          .insert(entry)
-          .select()
-          .single();
+      final insertedEntry =
+          await _client.from('journal_entries').insert(entry).select().single();
 
       final entryId = insertedEntry['id'].toString();
 
@@ -147,16 +179,17 @@ class DatabaseService extends ChangeNotifier {
         'updated_at': now,
       });
 
-    final product = await _client
+      final product = await _client
           .from('products')
           .select('inventory_qty')
           .eq('id', productId)
-      .maybeSingle();
-    final productMap = product == null ? null : Map<String, dynamic>.from(product as Map);
-    final currentQty = productMap == null
-      ? 0
-      : (productMap['inventory_qty'] as int? ?? 0);
-      final newQty = type == 'IN' ? currentQty + quantity : currentQty - quantity;
+          .maybeSingle();
+      final productMap =
+          product == null ? null : Map<String, dynamic>.from(product as Map);
+      final currentQty =
+          productMap == null ? 0 : (productMap['inventory_qty'] as int? ?? 0);
+      final newQty =
+          type == 'IN' ? currentQty + quantity : currentQty - quantity;
 
       await _client.from('products').update({
         'inventory_qty': newQty,

@@ -11,15 +11,16 @@ class AccountingService extends ChangeNotifier {
   final DatabaseService _databaseService;
   late final ChartOfAccountsService _chartOfAccountsService;
   late final JournalEntryService _journalEntryService;
-  
+
   bool _isInitialized = false;
   bool _isLoading = false;
   String? _error;
-  
+
   AccountingService(this._databaseService) {
-    _chartOfAccountsService = ChartOfAccountsService();
-    _journalEntryService = JournalEntryService(_databaseService, _chartOfAccountsService);
-    
+    _chartOfAccountsService = ChartOfAccountsService(_databaseService);
+    _journalEntryService =
+        JournalEntryService(_databaseService, _chartOfAccountsService);
+
     // Listen to changes
     _chartOfAccountsService.addListener(_notifyListeners);
     _journalEntryService.addListener(_notifyListeners);
@@ -29,13 +30,13 @@ class AccountingService extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  
+
   ChartOfAccountsService get chartOfAccounts => _chartOfAccountsService;
   JournalEntryService get journalEntries => _journalEntryService;
-  
+
   List<Account> get accounts => _chartOfAccountsService.accounts;
   List<JournalEntry> get entries => _journalEntryService.journalEntries;
-  
+
   Future<void> initializeChileanChartOfAccounts() async {
     await initialize();
   }
@@ -55,17 +56,17 @@ class AccountingService extends ChangeNotifier {
 
     return ordered;
   }
-  
+
   Future<void> initialize() async {
     if (_isInitialized) return;
-    
+
     _isLoading = true;
     _error = null;
     notifyListeners();
-    
+
     try {
-  await _chartOfAccountsService.initializeChartOfAccounts();
-  await _journalEntryService.ensureLoaded();
+      await _chartOfAccountsService.initializeChartOfAccounts();
+      await _journalEntryService.ensureLoaded();
       _isInitialized = true;
       _isLoading = false;
       notifyListeners();
@@ -84,14 +85,14 @@ class AccountingService extends ChangeNotifier {
   // Account-related methods
   Future<List<Account>> getAccounts({String? searchTerm}) async {
     await initialize();
-    
+
     if (searchTerm != null && searchTerm.isNotEmpty) {
       return _chartOfAccountsService.searchAccounts(searchTerm);
     }
     return _chartOfAccountsService.accounts;
   }
 
-  Future<Account?> getAccountById(int id) async {
+  Future<Account?> getAccountById(String id) async {
     await initialize();
     return _chartOfAccountsService.getAccountById(id);
   }
@@ -111,7 +112,7 @@ class AccountingService extends ChangeNotifier {
     await _chartOfAccountsService.updateAccount(account);
   }
 
-  Future<void> deleteAccount(int accountId) async {
+  Future<void> deleteAccount(String accountId) async {
     await initialize();
     await _chartOfAccountsService.deleteAccount(accountId);
   }
@@ -124,23 +125,23 @@ class AccountingService extends ChangeNotifier {
     DateTime? endDate,
   }) async {
     await initialize();
-    
-  await _journalEntryService.ensureLoaded();
 
-  var entries = _journalEntryService.journalEntries;
-    
+    await _journalEntryService.ensureLoaded();
+
+    var entries = _journalEntryService.journalEntries;
+
     if (type != null) {
       entries = _journalEntryService.getEntriesByType(type);
     }
-    
+
     if (startDate != null && endDate != null) {
       entries = _journalEntryService.getEntriesByDateRange(startDate, endDate);
     }
-    
+
     if (searchTerm != null && searchTerm.isNotEmpty) {
       entries = _journalEntryService.searchEntries(searchTerm);
     }
-    
+
     return entries;
   }
 
@@ -153,7 +154,7 @@ class AccountingService extends ChangeNotifier {
     String? sourceReference,
   }) async {
     await initialize();
-    
+
     final entry = await _journalEntryService.createJournalEntry(
       date: date,
       description: description,
@@ -162,7 +163,7 @@ class AccountingService extends ChangeNotifier {
       sourceModule: sourceModule,
       sourceReference: sourceReference,
     );
-    
+
     await _journalEntryService.postJournalEntry(entry);
   }
 
@@ -176,7 +177,7 @@ class AccountingService extends ChangeNotifier {
     List<SalesLineEntry>? salesLines,
   }) async {
     await initialize();
-    
+
     await _journalEntryService.postSalesEntry(
       date: date,
       customerName: customerName,
@@ -197,7 +198,7 @@ class AccountingService extends ChangeNotifier {
     required double total,
   }) async {
     await initialize();
-    
+
     await _journalEntryService.postPurchaseEntry(
       date: date,
       supplierName: supplierName,

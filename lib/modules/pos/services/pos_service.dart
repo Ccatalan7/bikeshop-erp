@@ -4,15 +4,15 @@ import 'package:uuid/uuid.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/models/customer.dart';
 import '../../../shared/services/inventory_service.dart';
-import '../../accounting/services/accounting_service.dart';
-import '../../accounting/services/journal_entry_service.dart';
+import '../../sales/models/sales_models.dart' as sales_models;
+import '../../sales/services/sales_service.dart';
+import '../models/payment_method.dart';
 import '../models/pos_cart_item.dart';
 import '../models/pos_transaction.dart';
-import '../models/payment_method.dart';
 
 class POSService extends ChangeNotifier {
-  final InventoryService _inventoryService;
-  final AccountingService _accountingService;
+  InventoryService _inventoryService;
+  SalesService _salesService;
   final Uuid _uuid = const Uuid();
 
   // Current sale state
@@ -22,9 +22,21 @@ class POSService extends ChangeNotifier {
   
   POSService({
     required InventoryService inventoryService,
-    required AccountingService accountingService,
-  }) : _inventoryService = inventoryService,
-       _accountingService = accountingService;
+    required SalesService salesService,
+  })  : _inventoryService = inventoryService,
+        _salesService = salesService;
+
+  void updateDependencies({
+    InventoryService? inventoryService,
+    SalesService? salesService,
+  }) {
+    if (inventoryService != null) {
+      _inventoryService = inventoryService;
+    }
+    if (salesService != null) {
+      _salesService = salesService;
+    }
+  }
 
   // Getters
   List<POSCartItem> get cartItems => List.unmodifiable(_cartItems);
@@ -159,24 +171,88 @@ class POSService extends ChangeNotifier {
   Future<POSTransaction?> checkout(List<POSPayment> payments, {String? notes}) async {
     if (_cartItems.isEmpty) return null;
     if (_isProcessingSale) return null;
+    if (payments.isEmpty) {
+      throw Exception('Debe registrar al menos un pago.');
+    }
 
     _isProcessingSale = true;
     notifyListeners();
 
+    final timestamp = DateTime.now();
+
     try {
-      // Validate payment amount
-      final totalPaid = payments.fold(0.0, (sum, payment) => sum + payment.amount);
+      final totalPaid = payments.fold<double>(0, (sum, payment) => sum + payment.amount);
       if (totalPaid < cartTotal) {
-        throw Exception('Insufficient payment amount');
+        throw Exception('Monto insuficiente para completar la venta.');
       }
 
-      // Create transaction
-      final transactionId = 'TXN-${DateTime.now().millisecondsSinceEpoch}';
-      final receiptNumber = 'RCP-${DateTime.now().millisecondsSinceEpoch}';
-      
+      final invoiceNumber = _buildInvoiceNumber(timestamp);
+      final invoiceItems = _cartItems.map((item) {
+        final discountAmount = item.discountAmount;
+        return sales_models.InvoiceItem(
+          productId: item.product.id,
+          productName: item.product.name,
+          productSku: item.product.sku,
+          quantity: item.quantity.toDouble(),
+          unitPrice: item.unitPrice,
+          discount: discountAmount,
+          lineTotal: item.total,
+          cost: item.totalCost,
+        );
+      }).toList();
+
+      final invoice = sales_models.Invoice(
+        customerId: _selectedCustomer?.id,
+        invoiceNumber: invoiceNumber,
+        customerName: _selectedCustomer?.name ?? 'Cliente Mostrador',
+        customerRut: _selectedCustomer?.rut?.isNotEmpty == true ? _selectedCustomer!.rut : null,
+        date: timestamp,
+        dueDate: timestamp,
+        reference: notes,
+        status: payments.isNotEmpty ? sales_models.InvoiceStatus.sent : sales_models.InvoiceStatus.draft,
+        subtotal: cartNetAmount,
+        ivaAmount: cartTaxAmount,
+        total: cartTotal,
+        items: invoiceItems,
+      );
+
+      final savedInvoice = await _salesService.saveInvoice(invoice);
+      if (savedInvoice.id == null) {
+        throw Exception('No se pudo obtener el identificador de la factura generada.');
+      }
+      final invoiceId = savedInvoice.id!;
+
+      double remaining = cartTotal;
+      for (final payment in payments) {
+        if (remaining <= 0) {
+          break;
+        }
+
+        final appliedAmount = remaining < payment.amount ? remaining : payment.amount;
+        if (appliedAmount <= 0) {
+          continue;
+        }
+
+        final salesPayment = sales_models.Payment(
+          invoiceId: invoiceId,
+          invoiceReference: savedInvoice.invoiceNumber.isNotEmpty
+              ? savedInvoice.invoiceNumber
+              : invoiceId,
+          method: _mapPaymentMethod(payment.method),
+          amount: appliedAmount,
+          date: timestamp,
+          reference: payment.reference,
+        );
+
+        await _salesService.registerPayment(salesPayment);
+        remaining -= appliedAmount;
+      }
+
+      await _inventoryService.getProducts(forceRefresh: true);
+
       final transaction = POSTransaction(
-        id: transactionId,
-        cashierId: 'current_user', // TODO: Get from auth service
+        id: invoiceId,
+        cashierId: 'current_user', // TODO: enlazar con el usuario autenticado
         customerId: _selectedCustomer?.id,
         customer: _selectedCustomer,
         items: List.from(_cartItems),
@@ -187,52 +263,25 @@ class POSService extends ChangeNotifier {
         total: cartTotal,
         status: POSTransactionStatus.completed,
         notes: notes,
-        createdAt: DateTime.now(),
-        completedAt: DateTime.now(),
-        receiptNumber: receiptNumber,
+        createdAt: timestamp,
+        completedAt: timestamp,
+        receiptNumber: savedInvoice.invoiceNumber.isNotEmpty
+            ? savedInvoice.invoiceNumber
+            : invoiceId,
       );
 
-      // Update inventory
-      for (final item in _cartItems) {
-        final success = await _inventoryService.deductStock(
-          item.product.id,
-          item.quantity,
-        );
-        if (!success) {
-          throw Exception('Failed to update inventory for ${item.product.name}');
-        }
-      }
-
-      // Create accounting entry
-      await _accountingService.postSalesEntry(
-        date: DateTime.now(),
-        customerName: _selectedCustomer?.name ?? 'Cliente General',
-        invoiceNumber: transactionId,
-        subtotal: cartNetAmount,
-        ivaAmount: cartTaxAmount,
-        total: cartTotal,
-        salesLines: _cartItems.map((item) => SalesLineEntry(
-          productId: item.product.id,
-          productName: item.product.name,
-          quantity: item.quantity,
-          unitPrice: item.product.price,
-          cost: item.product.cost * item.quantity,
-        )).toList(),
-      );
-
-      final completedTransaction = transaction.copyWith(journalEntryId: transactionId);
-
-      // Clear cart
       clearCart();
 
       _isProcessingSale = false;
       notifyListeners();
 
-      return completedTransaction;
+      return transaction;
     } catch (e) {
       _isProcessingSale = false;
       notifyListeners();
-      if (kDebugMode) print('POSService: Checkout error: $e');
+      if (kDebugMode) {
+        print('POSService: Checkout error: $e');
+      }
       rethrow;
     }
   }
@@ -275,5 +324,28 @@ class POSService extends ChangeNotifier {
   // Get available payment methods
   List<PaymentMethod> getAvailablePaymentMethods() {
     return PaymentMethod.defaultMethods.where((method) => method.isActive).toList();
+  }
+
+  sales_models.PaymentMethod _mapPaymentMethod(PaymentMethod method) {
+    switch (method.type) {
+      case PaymentType.cash:
+        return sales_models.PaymentMethod.cash;
+      case PaymentType.card:
+        return sales_models.PaymentMethod.card;
+      case PaymentType.transfer:
+        return sales_models.PaymentMethod.transfer;
+      case PaymentType.voucher:
+        return sales_models.PaymentMethod.other;
+    }
+  }
+
+  String _buildInvoiceNumber(DateTime timestamp) {
+    final datePortion =
+        '${timestamp.year}${timestamp.month.toString().padLeft(2, '0')}${timestamp.day.toString().padLeft(2, '0')}';
+    final millisPortion = timestamp.millisecondsSinceEpoch
+        .toString()
+        .padLeft(13, '0')
+        .substring(7);
+    return 'POS-$datePortion-$millisPortion';
   }
 }

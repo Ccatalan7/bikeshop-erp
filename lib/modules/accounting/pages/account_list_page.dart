@@ -35,10 +35,10 @@ class _AccountListPageState extends State<AccountListPage> {
 
   Future<void> _loadAccounts() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final accounts = await _accountingService.getAccounts();
-      
+
       setState(() {
         _accounts = accounts;
         _filteredAccounts = accounts;
@@ -63,10 +63,14 @@ class _AccountListPageState extends State<AccountListPage> {
         final matchesSearch = _searchTerm.isEmpty ||
             account.code.toLowerCase().contains(_searchTerm.toLowerCase()) ||
             account.name.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-            (account.description?.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false);
-        
-        final matchesType = _selectedType == null || account.type == _selectedType;
-        
+            (account.description
+                    ?.toLowerCase()
+                    .contains(_searchTerm.toLowerCase()) ??
+                false);
+
+        final matchesType =
+            _selectedType == null || account.type == _selectedType;
+
         return matchesSearch && matchesType && account.isActive;
       }).toList();
     });
@@ -126,8 +130,8 @@ class _AccountListPageState extends State<AccountListPage> {
                             value: null,
                             child: Text('Todos'),
                           ),
-                          ...AccountType.values.map((type) =>
-                            DropdownMenuItem<AccountType?>(
+                          ...AccountType.values.map(
+                            (type) => DropdownMenuItem<AccountType?>(
                               value: type,
                               child: Text(type.displayName),
                             ),
@@ -163,7 +167,7 @@ class _AccountListPageState extends State<AccountListPage> {
               ],
             ),
           ),
-          
+
           // Accounts List
           Expanded(
             child: _isLoading
@@ -183,9 +187,12 @@ class _AccountListPageState extends State<AccountListPage> {
                               _searchTerm.isEmpty && _selectedType == null
                                   ? 'No hay cuentas registradas'
                                   : 'No se encontraron cuentas que coincidan con los filtros',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: Theme.of(context).disabledColor,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context).disabledColor,
+                                  ),
                             ),
                           ],
                         ),
@@ -202,7 +209,8 @@ class _AccountListPageState extends State<AccountListPage> {
                                 width: 48,
                                 height: 48,
                                 decoration: BoxDecoration(
-                                  color: _getTypeColor(account.type).withOpacity(0.1),
+                                  color: _getTypeColor(account.type)
+                                      .withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
                                     color: _getTypeColor(account.type),
@@ -211,9 +219,11 @@ class _AccountListPageState extends State<AccountListPage> {
                                 ),
                                 child: Center(
                                   child: Text(
-                                    account.code.substring(0, account.code.indexOf('.') != -1 
-                                        ? account.code.indexOf('.') 
-                                        : 1),
+                                    account.code.substring(
+                                        0,
+                                        account.code.indexOf('.') != -1
+                                            ? account.code.indexOf('.')
+                                            : 1),
                                     style: TextStyle(
                                       color: _getTypeColor(account.type),
                                       fontWeight: FontWeight.bold,
@@ -239,8 +249,10 @@ class _AccountListPageState extends State<AccountListPage> {
                                           vertical: 2,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: _getTypeColor(account.type).withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(12),
+                                          color: _getTypeColor(account.type)
+                                              .withOpacity(0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                           border: Border.all(
                                             color: _getTypeColor(account.type),
                                             width: 1,
@@ -263,7 +275,8 @@ class _AccountListPageState extends State<AccountListPage> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: Colors.grey.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                           border: Border.all(
                                             color: Colors.grey,
                                             width: 1,
@@ -284,7 +297,8 @@ class _AccountListPageState extends State<AccountListPage> {
                                     const SizedBox(height: 4),
                                     Text(
                                       account.description!,
-                                      style: Theme.of(context).textTheme.bodySmall,
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
                                     ),
                                   ],
                                 ],
@@ -293,7 +307,8 @@ class _AccountListPageState extends State<AccountListPage> {
                                 onSelected: (value) {
                                   switch (value) {
                                     case 'edit':
-                                      context.push('/accounting/accounts/${account.id}/edit');
+                                      context.push(
+                                          '/accounting/accounts/${account.id}/edit');
                                       break;
                                     case 'view':
                                       _showAccountDetails(account);
@@ -323,8 +338,10 @@ class _AccountListPageState extends State<AccountListPage> {
                                   const PopupMenuItem(
                                     value: 'delete',
                                     child: ListTile(
-                                      leading: Icon(Icons.delete, color: Colors.red),
-                                      title: Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                      leading:
+                                          Icon(Icons.delete, color: Colors.red),
+                                      title: Text('Eliminar',
+                                          style: TextStyle(color: Colors.red)),
                                       contentPadding: EdgeInsets.zero,
                                     ),
                                   ),
@@ -375,7 +392,8 @@ class _AccountListPageState extends State<AccountListPage> {
               _buildDetailRow('Descripción', account.description!),
             _buildDetailRow('Estado', account.isActive ? 'Activa' : 'Inactiva'),
             if (account.createdAt != null)
-              _buildDetailRow('Creada', account.createdAt.toString().split(' ')[0]),
+              _buildDetailRow(
+                  'Creada', account.createdAt.toString().split(' ')[0]),
           ],
         ),
         actions: [
@@ -431,9 +449,14 @@ class _AccountListPageState extends State<AccountListPage> {
           TextButton(
             onPressed: () async {
               Navigator.of(context).pop();
-              
+
               try {
-                await _accountingService.deleteAccount(account.id!);
+                final accountId = account.id;
+                if (accountId == null || accountId.isEmpty) {
+                  throw Exception('La cuenta no tiene identificador definido.');
+                }
+
+                await _accountingService.deleteAccount(accountId);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(

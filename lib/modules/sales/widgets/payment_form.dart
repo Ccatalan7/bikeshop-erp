@@ -10,10 +10,12 @@ class PaymentForm extends StatefulWidget {
     super.key,
     required this.invoice,
     this.onCompleted,
+    this.dismissOnSubmit = true,
   });
 
   final Invoice invoice;
   final VoidCallback? onCompleted;
+  final bool dismissOnSubmit;
 
   @override
   State<PaymentForm> createState() => _PaymentFormState();
@@ -62,7 +64,8 @@ class _PaymentFormState extends State<PaymentForm> {
       return;
     }
 
-    final rawAmount = _amountController.text.trim().replaceAll('.', '').replaceAll(',', '.');
+    final rawAmount =
+        _amountController.text.trim().replaceAll('.', '').replaceAll(',', '.');
     final amount = double.tryParse(rawAmount);
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -72,12 +75,18 @@ class _PaymentFormState extends State<PaymentForm> {
     }
 
     final balance = widget.invoice.balance;
-    if (amount - balance > 0.01) {
+    final amountInt = amount.round();
+    final balanceInt = balance.round();
+    if (amountInt - balanceInt > 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('El pago no puede exceder el saldo (${ChileanUtils.formatCurrency(balance)})')),
+        SnackBar(
+            content: Text(
+                'El pago no puede exceder el saldo (${ChileanUtils.formatCurrency(balance)})')),
       );
       return;
     }
+
+    final effectiveAmount = amount > balance ? balance : amount;
 
     final salesService = context.read<SalesService>();
 
@@ -85,18 +94,26 @@ class _PaymentFormState extends State<PaymentForm> {
     try {
       final payment = Payment(
         invoiceId: widget.invoice.id!,
-        invoiceReference: widget.invoice.invoiceNumber.isNotEmpty ? widget.invoice.invoiceNumber : null,
+        invoiceReference: widget.invoice.invoiceNumber.isNotEmpty
+            ? widget.invoice.invoiceNumber
+            : null,
         method: _method,
-        amount: amount,
+  amount: effectiveAmount,
         date: _paymentDate,
-        reference: _referenceController.text.trim().isEmpty ? null : _referenceController.text.trim(),
-        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+        reference: _referenceController.text.trim().isEmpty
+            ? null
+            : _referenceController.text.trim(),
+        notes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
       );
 
       await salesService.registerPayment(payment);
       widget.onCompleted?.call();
       if (mounted) {
-        Navigator.of(context).pop(true);
+        if (widget.dismissOnSubmit) {
+          Navigator.of(context).pop(true);
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Pago registrado correctamente'),
@@ -131,8 +148,11 @@ class _PaymentFormState extends State<PaymentForm> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Registrar pago',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              'Pagar factura',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             Text(
@@ -140,24 +160,30 @@ class _PaymentFormState extends State<PaymentForm> {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            Text('Saldo actual: ${ChileanUtils.formatCurrency(invoice.balance)}'),
+            Text(
+                'Saldo actual: ${ChileanUtils.formatCurrency(invoice.balance)}'),
             const Divider(height: 32),
             TextFormField(
               controller: _amountController,
               decoration: const InputDecoration(
                 labelText: 'Monto',
-                  prefixText: '\$ ',
+                prefixText: '\$ ',
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
                   return 'Ingresa el monto del pago';
                 }
-                final parsed = double.tryParse(value.replaceAll('.', '').replaceAll(',', '.'));
+                final normalizedValue =
+                    value.replaceAll('.', '').replaceAll(',', '.');
+                final parsed = double.tryParse(normalizedValue);
                 if (parsed == null || parsed <= 0) {
                   return 'Monto inválido';
                 }
-                if (parsed - invoice.balance > 0.01) {
+                final parsedInt = parsed.round();
+                final balanceInt = invoice.balance.round();
+                if (parsedInt - balanceInt > 1) {
                   return 'No puede superar el saldo';
                 }
                 return null;
@@ -227,7 +253,7 @@ class _PaymentFormState extends State<PaymentForm> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.check),
-                label: const Text('Registrar pago'),
+                label: const Text('Marcar como pagado'),
               ),
             ),
           ],

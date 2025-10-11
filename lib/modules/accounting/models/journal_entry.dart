@@ -116,7 +116,7 @@ class JournalEntry {
 class JournalLine {
   final String? id;
   final String? journalEntryId;
-  final int accountId;
+  final String accountId;
   final String accountCode;
   final String accountName;
   final String description;
@@ -139,8 +139,8 @@ class JournalLine {
   factory JournalLine.fromJson(Map<String, dynamic> json) {
     return JournalLine(
       id: json['id']?.toString(),
-      journalEntryId: json['journal_entry_id']?.toString(),
-      accountId: _parseInt(json['account_id']),
+      journalEntryId: json['entry_id']?.toString() ?? json['journal_entry_id']?.toString(),
+      accountId: json['account_id']?.toString() ?? '',
       accountCode: json['account_code']?.toString() ?? '',
       accountName: json['account_name']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
@@ -153,7 +153,7 @@ class JournalLine {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'journal_entry_id': journalEntryId,
+      'entry_id': journalEntryId,
       'account_id': accountId,
       'account_code': accountCode,
       'account_name': accountName,
@@ -167,7 +167,7 @@ class JournalLine {
   JournalLine copyWith({
     String? id,
     String? journalEntryId,
-    int? accountId,
+    String? accountId,
     String? accountCode,
     String? accountName,
     String? description,
