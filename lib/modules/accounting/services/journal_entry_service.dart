@@ -21,10 +21,48 @@ class JournalEntryService extends ChangeNotifier {
     await loadJournalEntries();
   }
 
-  Future<void> loadJournalEntries() async {
+  Future<void> loadJournalEntries({int limit = 100}) async {
     try {
-      final entryDocs = await _databaseService.select('journal_entries');
-      final lineDocs = await _databaseService.select('journal_lines');
+      debugPrint('🔍 Loading journal entries with limit: $limit');
+      final startTime = DateTime.now();
+      
+      // Load only recent entries with limit and ordering
+      final entryDocs = await _databaseService.select(
+        'journal_entries',
+        orderBy: 'date',
+        descending: true,
+        limit: limit,
+      );
+      
+      final entriesLoadTime = DateTime.now().difference(startTime).inMilliseconds;
+      debugPrint('✅ Loaded ${entryDocs.length} entries in ${entriesLoadTime}ms');
+
+      if (entryDocs.isEmpty) {
+        _journalEntries.clear();
+        _isLoaded = true;
+        notifyListeners();
+        return;
+      }
+
+      // Get all entry IDs for efficient line loading
+      final entryIds = entryDocs
+          .map((e) => e['id']?.toString())
+          .where((id) => id != null)
+          .cast<String>()
+          .toList();
+      
+      debugPrint('🔍 Loading lines for ${entryIds.length} entries');
+      final linesStartTime = DateTime.now();
+
+      // Load only lines for these entries using WHERE IN clause
+      final lineDocs = await _databaseService.select(
+        'journal_lines',
+        where: 'entry_id',
+        whereIn: entryIds,
+      );
+      
+      final linesLoadTime = DateTime.now().difference(linesStartTime).inMilliseconds;
+      debugPrint('✅ Loaded ${lineDocs.length} lines in ${linesLoadTime}ms');
 
       final linesByEntry = <String, List<JournalLine>>{};
       for (final rawLine in lineDocs) {
@@ -43,17 +81,20 @@ class JournalEntryService extends ChangeNotifier {
         entries.add(_mapEntryFromFirestore(rawEntry, entryId, lines));
       }
 
-      entries.sort((a, b) => b.date.compareTo(a.date));
-
+      // Already sorted by date DESC from query
       _journalEntries
         ..clear()
         ..addAll(entries);
 
       _isLoaded = true;
       _syncNextEntryNumber();
+      
+      final totalTime = DateTime.now().difference(startTime).inMilliseconds;
+      debugPrint('✅ TOTAL: Loaded ${entries.length} entries in ${totalTime}ms');
+      
       notifyListeners();
     } catch (e) {
-      debugPrint('Error loading journal entries: $e');
+      debugPrint('❌ Error loading journal entries: $e');
       rethrow;
     }
   }

@@ -215,6 +215,187 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
   }
 
+  Future<void> _undoLastPayment() async {
+    final salesService = context.read<SalesService>();
+    final invoice = _findInvoice(salesService);
+    if (invoice == null) return;
+
+    // Get the most recent payment for this invoice
+    final payments = salesService.payments
+        .where((p) => p.invoiceId == invoice.id)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    if (payments.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay pagos para deshacer')),
+      );
+      return;
+    }
+
+    final lastPayment = payments.first;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Deshacer pago'),
+        content: Text(
+          'Se eliminará el pago de ${ChileanUtils.formatCurrency(lastPayment.amount)} '
+          'y su asiento contable asociado. ¿Continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Eliminar pago'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await salesService.deletePayment(lastPayment.id!);
+      await _loadInvoice();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pago eliminado correctamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo eliminar el pago: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showPaymentDetails(Payment payment) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Detalle del pago'),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDetailRow('Monto', ChileanUtils.formatCurrency(payment.amount)),
+              const SizedBox(height: 12),
+              _buildDetailRow('Método', payment.method.displayName),
+              const SizedBox(height: 12),
+              _buildDetailRow('Fecha', ChileanUtils.formatDate(payment.date)),
+              if (payment.reference != null && payment.reference!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildDetailRow('Referencia', payment.reference!),
+              ],
+              if (payment.notes != null && payment.notes!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildDetailRow('Notas', payment.notes!),
+              ],
+              if (payment.invoiceReference != null) ...[
+                const SizedBox(height: 12),
+                _buildDetailRow('Factura', payment.invoiceReference!),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _confirmDeletePayment(payment);
+            },
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Eliminar'),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+        Expanded(
+          child: Text(value),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _confirmDeletePayment(Payment payment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar pago'),
+        content: Text(
+          'Se eliminará el pago de ${ChileanUtils.formatCurrency(payment.amount)} '
+          'y su asiento contable asociado. ¿Continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final salesService = context.read<SalesService>();
+      await salesService.deletePayment(payment.id!);
+      await _loadInvoice();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pago eliminado correctamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo eliminar el pago: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final salesService = context.watch<SalesService>();
@@ -339,6 +520,16 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               onPressed: _revertToSent,
               icon: const Icon(Icons.undo),
               label: const Text('Volver a enviada'),
+            ),
+          // Paid → Undo payment
+          if (invoice.status == InvoiceStatus.paid)
+            OutlinedButton.icon(
+              onPressed: _undoLastPayment,
+              icon: const Icon(Icons.undo),
+              label: const Text('Deshacer pago'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
             ),
         ],
       ),
@@ -538,29 +729,39 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                 separatorBuilder: (_, __) => const Divider(height: 16),
                 itemBuilder: (context, index) {
                   final payment = payments[index];
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              ChileanUtils.formatCurrency(payment.amount),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
+                  return InkWell(
+                    onTap: () => _showPaymentDetails(payment),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  ChileanUtils.formatCurrency(payment.amount),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                    '${payment.method.displayName} · ${ChileanUtils.formatDate(payment.date)}'),
+                                if (payment.reference != null &&
+                                    payment.reference!.isNotEmpty)
+                                  Text('Ref: ${payment.reference}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                                '${payment.method.displayName} · ${ChileanUtils.formatDate(payment.date)}'),
-                            if (payment.reference != null &&
-                                payment.reference!.isNotEmpty)
-                              Text('Ref: ${payment.reference}',
-                                  style: Theme.of(context).textTheme.bodySmall),
-                          ],
-                        ),
+                          ),
+                          const Icon(Icons.chevron_right),
+                        ],
                       ),
-                      const Icon(Icons.chevron_right),
-                    ],
+                    ),
                   );
                 },
               ),

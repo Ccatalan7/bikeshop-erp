@@ -538,7 +538,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       );
 
       if (widget.invoiceId == null && saved.id != null) {
-        context.go('/sales/invoices/${saved.id}/edit');
+        // Use pop and push instead of go to maintain navigation stack
+        context.pop(); // Remove the form page from stack
+        context.push('/sales/invoices/${saved.id}'); // Show the detail page
         return;
       }
 

@@ -17,24 +17,26 @@ class ChartOfAccountsService extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
 
   Future<void> initializeChartOfAccounts({bool forceRefresh = false}) async {
+    // Quick return if already initialized (unless forcing refresh)
     if (_isInitialized && !forceRefresh) {
-      final hasAllStandardAccounts =
-          kStandardChartOfAccounts.every((definition) {
-        return _accounts.any((account) => account.code == definition.code);
-      });
-
-      if (hasAllStandardAccounts) {
-        return;
-      }
-
-      forceRefresh = true;
+      return; // Already initialized and loaded
     }
 
     try {
+      debugPrint('🔄 Initializing Chart of Accounts...');
+      final startTime = DateTime.now();
+      
       _accounts.clear();
 
-      await _ensureStandardChartOfAccounts();
+      // Only ensure standard accounts if database is empty or force refresh
+      if (forceRefresh) {
+        await _ensureStandardChartOfAccounts();
+      }
+      
       final remoteAccounts = await _databaseService.select('accounts');
+      
+      final loadTime = DateTime.now().difference(startTime).inMilliseconds;
+      debugPrint('✅ Loaded ${remoteAccounts.length} accounts in ${loadTime}ms');
 
       final mappedAccounts = remoteAccounts
           .map((raw) => Account.fromJson(raw))
@@ -44,8 +46,11 @@ class ChartOfAccountsService extends ChangeNotifier {
       _accounts.addAll(mappedAccounts);
       _isInitialized = true;
       notifyListeners();
+      
+      final totalTime = DateTime.now().difference(startTime).inMilliseconds;
+      debugPrint('✅ Chart of Accounts initialized in ${totalTime}ms');
     } catch (e) {
-      debugPrint('Error initializing chart of accounts: $e');
+      debugPrint('❌ Error initializing chart of accounts: $e');
       rethrow;
     }
   }

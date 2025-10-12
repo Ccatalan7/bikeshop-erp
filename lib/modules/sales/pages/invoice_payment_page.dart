@@ -78,7 +78,7 @@ class _InvoicePaymentPageState extends State<InvoicePaymentPage> {
 
   Widget _buildContent(BuildContext context, Invoice invoice) {
     final theme = Theme.of(context);
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Align(
         alignment: Alignment.topCenter,

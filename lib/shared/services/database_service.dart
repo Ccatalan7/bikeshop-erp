@@ -5,11 +5,23 @@ class DatabaseService extends ChangeNotifier {
   final SupabaseClient _client = Supabase.instance.client;
 
   // Generic CRUD operations
-  Future<List<Map<String, dynamic>>> select(String table,
-      {String? where}) async {
+  Future<List<Map<String, dynamic>>> select(
+    String table, {
+    String? where,
+    List<String>? whereIn,
+    String? orderBy,
+    bool descending = false,
+    int? limit,
+  }) async {
     try {
-      var query = _client.from(table).select();
+      if (kDebugMode) {
+        debugPrint('🔍 DB Query: $table | where: $where | whereIn: ${whereIn?.length} items | orderBy: $orderBy | limit: $limit');
+      }
+      
+      // Use dynamic to handle different builder types in the chain
+      dynamic query = _client.from(table).select();
 
+      // Handle simple WHERE clause
       if (where != null && where.contains('=')) {
         final parts = where.split('=');
         final field = parts[0].trim();
@@ -17,13 +29,33 @@ class DatabaseService extends ChangeNotifier {
         query = query.eq(field, value);
       }
 
+      // Handle WHERE IN clause
+      if (where != null && whereIn != null && whereIn.isNotEmpty) {
+        query = query.inFilter(where, whereIn);
+      }
+
+      // Handle ORDER BY
+      if (orderBy != null) {
+        query = query.order(orderBy, ascending: !descending);
+      }
+
+      // Handle LIMIT
+      if (limit != null) {
+        query = query.limit(limit);
+      }
+
       final data = await query;
+      
+      if (kDebugMode) {
+        debugPrint('✅ DB Result: ${(data as List).length} rows from $table');
+      }
+      
       return (data as List)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Database select error: $e');
+        debugPrint('❌ Database select error on $table: $e');
       }
       rethrow;
     }
