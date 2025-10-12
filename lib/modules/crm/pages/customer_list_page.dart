@@ -5,8 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/responsive_data_view.dart';
+import '../../../shared/themes/app_theme.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
+import '../../../shared/utils/chilean_utils.dart';
 import '../models/crm_models.dart';
 import '../services/customer_service.dart';
 
@@ -73,34 +76,60 @@ class _CustomerListPageState extends State<CustomerListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = AppTheme.isMobile(context);
+    final theme = Theme.of(context);
+    
     return MainLayout(
+      title: 'Clientes',
       child: Column(
         children: [
           // Header
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Clientes',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+            padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Clientes',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      AppButton(
+                        text: 'Nuevo Cliente',
+                        icon: Icons.person_add,
+                        fullWidth: true,
+                        onPressed: () {
+                          context.push('/crm/customers/new').then((_) {
+                            _loadCustomers();
+                          });
+                        },
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Clientes',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      AppButton(
+                        text: 'Nuevo Cliente',
+                        icon: Icons.person_add,
+                        onPressed: () {
+                          context.push('/crm/customers/new').then((_) {
+                            _loadCustomers();
+                          });
+                        },
+                      ),
+                    ],
                   ),
-                ),
-                AppButton(
-                  text: 'Nuevo Cliente',
-                  icon: Icons.person_add,
-                  onPressed: () {
-                    context.push('/crm/customers/new').then((_) {
-                      _loadCustomers();
-                    });
-                  },
-                ),
-              ],
-            ),
           ),
           
           // Search
@@ -112,64 +141,90 @@ class _CustomerListPageState extends State<CustomerListPage> {
           // Stats
           if (!_isLoading && _customers.isNotEmpty)
             Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(16),
+              margin: EdgeInsets.symmetric(
+                horizontal: isMobile ? 12 : 16,
+                vertical: 8,
+              ),
+              padding: EdgeInsets.all(isMobile ? 12 : 16),
               decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
+                color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
-                children: [
-                  _buildStatItem('Total', _customers.length.toString()),
-                  const SizedBox(width: 24),
-                  _buildStatItem(
-                    'Activos', 
-                    _customers.where((c) => c.isActive).length.toString()
-                  ),
-                  const SizedBox(width: 24),
-                  _buildStatItem(
-                    'Mostrando', 
-                    _filteredCustomers.length.toString()
-                  ),
-                ],
-              ),
+              child: isMobile
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildStatItem(theme, 'Total', _customers.length.toString(), true),
+                        _buildStatItem(
+                          theme,
+                          'Activos', 
+                          _customers.where((c) => c.isActive).length.toString(),
+                          true,
+                        ),
+                        _buildStatItem(
+                          theme,
+                          'Mostrando', 
+                          _filteredCustomers.length.toString(),
+                          true,
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        _buildStatItem(theme, 'Total', _customers.length.toString(), false),
+                        const SizedBox(width: 24),
+                        _buildStatItem(
+                          theme,
+                          'Activos', 
+                          _customers.where((c) => c.isActive).length.toString(),
+                          false,
+                        ),
+                        const SizedBox(width: 24),
+                        _buildStatItem(
+                          theme,
+                          'Mostrando', 
+                          _filteredCustomers.length.toString(),
+                          false,
+                        ),
+                      ],
+                    ),
             ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           
           // Content
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _buildCustomersList(),
+                : _buildCustomersList(isMobile),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(String label, String value) {
+  Widget _buildStatItem(ThemeData theme, String label, String value, bool isCompact) {
     return Column(
       children: [
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 20,
+          style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
-            color: Colors.blue,
+            color: theme.colorScheme.primary,
+            fontSize: isCompact ? 18 : 20,
           ),
         ),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.blue[700],
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontSize: isCompact ? 11 : 12,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildCustomersList() {
+  Widget _buildCustomersList(bool isMobile) {
     if (_filteredCustomers.isEmpty) {
       return Center(
         child: Column(
@@ -194,6 +249,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
               const SizedBox(height: 16),
               AppButton(
                 text: 'Agregar Primer Cliente',
+                fullWidth: isMobile,
                 onPressed: () {
                   context.push('/crm/customers/new').then((_) {
                     _loadCustomers();
@@ -209,19 +265,21 @@ class _CustomerListPageState extends State<CustomerListPage> {
     return RefreshIndicator(
       onRefresh: _loadCustomers,
       child: ListView.builder(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
         itemCount: _filteredCustomers.length,
         itemBuilder: (context, index) {
           final customer = _filteredCustomers[index];
-          return _buildCustomerCard(customer);
+          return _buildCustomerCard(customer, isMobile);
         },
       ),
     );
   }
 
-  Widget _buildCustomerCard(Customer customer) {
+  Widget _buildCustomerCard(Customer customer, bool isMobile) {
+    final theme = Theme.of(context);
+    
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.only(bottom: isMobile ? 10 : 16),
       child: InkWell(
         onTap: () {
           context.push('/crm/customers/${customer.id}').then((_) {
@@ -230,16 +288,16 @@ class _CustomerListPageState extends State<CustomerListPage> {
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
           child: Row(
             children: [
               // Avatar
               ImageService.buildAvatarImage(
                 imageUrl: customer.imageUrl,
-                radius: 30,
+                radius: isMobile ? 28 : 30,
                 initials: customer.initials,
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: isMobile ? 12 : 16),
               
               // Customer info
               Expanded(
@@ -251,10 +309,12 @@ class _CustomerListPageState extends State<CustomerListPage> {
                         Expanded(
                           child: Text(
                             customer.name,
-                            style: const TextStyle(
-                              fontSize: 16,
+                            style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold,
+                              fontSize: isMobile ? 15 : 16,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (!customer.isActive)
@@ -264,62 +324,74 @@ class _CustomerListPageState extends State<CustomerListPage> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.red[100],
+                              color: theme.colorScheme.errorContainer,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
                               'Inactivo',
                               style: TextStyle(
-                                color: Colors.red[800],
-                                fontSize: 12,
+                                color: theme.colorScheme.error,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      'RUT: ${customer.rut}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    if (customer.email != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        customer.email!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.badge_outlined,
+                          size: 14,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
+                        const SizedBox(width: 4),
+                        Text(
+                          ChileanUtils.formatRut(customer.rut),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (customer.email != null && !isMobile) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.email_outlined,
+                            size: 14,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              customer.email!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                     if (customer.phone != null) ...[
                       const SizedBox(height: 2),
-                      Text(
-                        customer.phone!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                    if (customer.region != null) ...[
-                      const SizedBox(height: 4),
                       Row(
                         children: [
                           Icon(
-                            Icons.location_on,
+                            Icons.phone_outlined,
                             size: 14,
-                            color: Colors.grey[600],
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            customer.region!,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
+                            customer.phone!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -329,26 +401,10 @@ class _CustomerListPageState extends State<CustomerListPage> {
                 ),
               ),
               
-              // Actions
-              Column(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () {
-                      context.push('/crm/customers/${customer.id}/edit').then((_) {
-                        _loadCustomers();
-                      });
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_forward_ios),
-                    onPressed: () {
-                      context.push('/crm/customers/${customer.id}').then((_) {
-                        _loadCustomers();
-                      });
-                    },
-                  ),
-                ],
+              // Arrow icon
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ],
           ),

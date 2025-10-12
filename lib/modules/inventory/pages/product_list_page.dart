@@ -266,6 +266,71 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildHeader(ThemeData theme) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    
+    if (isMobile) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Productos',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Administra tu catálogo',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Mobile action buttons
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    text: 'Nuevo',
+                    icon: Icons.add,
+                    fullWidth: true,
+                    onPressed: () {
+                      context.push('/inventory/products/new').then((_) {
+                        _loadProducts();
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: theme.colorScheme.outline),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: IconButton(
+                    icon: Icon(
+                      _viewMode == ProductViewMode.table
+                          ? Icons.grid_view
+                          : Icons.view_list,
+                    ),
+                    onPressed: () {
+                      _onViewModeChanged(
+                        _viewMode == ProductViewMode.table
+                            ? ProductViewMode.cards
+                            : ProductViewMode.table,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+    
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Row(
@@ -323,104 +388,356 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildFilters(ThemeData theme) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
           SearchBarWidget(
             controller: _searchController,
-            hintText: 'Buscar por nombre, SKU, marca o categoría…',
+            hintText: isMobile ? 'Buscar productos...' : 'Buscar por nombre, SKU, marca o categoría…',
             onChanged: _onSearchChanged,
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: 260,
-                child: DropdownButtonFormField<String>(
-                  value: _selectedCategoryId,
-                  decoration: const InputDecoration(
-                    labelText: 'Categoría',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('Todas las categorías'),
-                    ),
-                    ..._categories.map((category) {
-                      return DropdownMenuItem<String>(
-                        value: category.id,
-                        child: Text(category.name),
-                      );
-                    }),
-                  ],
-                  onChanged: _onCategoryChanged,
-                ),
-              ),
-              SizedBox(
-                width: 260,
-                child: DropdownButtonFormField<String>(
-                  value: _selectedSupplierId,
-                  decoration: const InputDecoration(
-                    labelText: 'Proveedor',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('Todos los proveedores'),
-                    ),
-                    ..._suppliers.map((supplier) {
-                      return DropdownMenuItem<String>(
-                        value: supplier.id,
-                        child: Text(supplier.name),
-                      );
-                    }),
-                  ],
-                  onChanged: _onSupplierChanged,
-                ),
-              ),
-              FilterChip(
-                avatar: Icon(
-                  Icons.warning_amber_outlined,
-                  color: _showLowStockOnly
-                      ? theme.colorScheme.error
-                      : theme.colorScheme.onSurfaceVariant,
-                ),
-                selectedColor:
-                    theme.colorScheme.errorContainer.withOpacity(0.3),
-                label: const Text('Solo stock crítico'),
-                selected: _showLowStockOnly,
-                onSelected: _onLowStockToggle,
-              ),
-              FilterChip(
-                avatar: Icon(
-                  Icons.visibility_off_outlined,
-                  color: _showInactive
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurfaceVariant,
-                ),
-                label: const Text('Mostrar inactivos'),
-                selected: _showInactive,
-                onSelected: _onInactiveToggle,
-              ),
-              IconButton(
-                tooltip: 'Actualizar',
-                icon: const Icon(Icons.refresh_outlined),
-                onPressed: _loadProducts,
-              ),
-            ],
-          ),
+          if (isMobile)
+            _buildMobileFilters(theme)
+          else
+            _buildDesktopFilters(theme),
         ],
       ),
     );
   }
 
+  Widget _buildMobileFilters(ThemeData theme) {
+    final hasActiveFilters = _selectedCategoryId != null || 
+                             _selectedSupplierId != null || 
+                             _showLowStockOnly || 
+                             _showInactive;
+    
+    return Row(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                if (_showLowStockOnly)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      avatar: const Icon(Icons.warning_amber, size: 18),
+                      label: const Text('Stock crítico'),
+                      selected: true,
+                      onSelected: (_) => _onLowStockToggle(false),
+                      deleteIcon: const Icon(Icons.close, size: 18),
+                      onDeleted: () => _onLowStockToggle(false),
+                    ),
+                  ),
+                if (_showInactive)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      avatar: const Icon(Icons.visibility_off, size: 18),
+                      label: const Text('Inactivos'),
+                      selected: true,
+                      onSelected: (_) => _onInactiveToggle(false),
+                      deleteIcon: const Icon(Icons.close, size: 18),
+                      onDeleted: () => _onInactiveToggle(false),
+                    ),
+                  ),
+                if (_selectedCategoryId != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      avatar: const Icon(Icons.category, size: 18),
+                      label: Text(_categories.firstWhere((c) => c.id == _selectedCategoryId).name),
+                      selected: true,
+                      onSelected: (_) => _onCategoryChanged(null),
+                      deleteIcon: const Icon(Icons.close, size: 18),
+                      onDeleted: () => _onCategoryChanged(null),
+                    ),
+                  ),
+                if (_selectedSupplierId != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      avatar: const Icon(Icons.business, size: 18),
+                      label: Text(_suppliers.firstWhere((s) => s.id == _selectedSupplierId).name),
+                      selected: true,
+                      onSelected: (_) => _onSupplierChanged(null),
+                      deleteIcon: const Icon(Icons.close, size: 18),
+                      onDeleted: () => _onSupplierChanged(null),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: hasActiveFilters ? theme.primaryColor : theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: hasActiveFilters ? theme.primaryColor : theme.colorScheme.outline,
+            ),
+          ),
+          child: IconButton(
+            icon: Icon(
+              Icons.filter_list,
+              color: hasActiveFilters ? Colors.white : null,
+            ),
+            onPressed: () => _showMobileFiltersSheet(context),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: theme.colorScheme.outline),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadProducts,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopFilters(ThemeData theme) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SizedBox(
+          width: 260,
+          child: DropdownButtonFormField<String>(
+            value: _selectedCategoryId,
+            decoration: const InputDecoration(
+              labelText: 'Categoría',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              const DropdownMenuItem<String>(
+                value: null,
+                child: Text('Todas las categorías'),
+              ),
+              ..._categories.map((category) {
+                return DropdownMenuItem<String>(
+                  value: category.id,
+                  child: Text(category.name),
+                );
+              }),
+            ],
+            onChanged: _onCategoryChanged,
+          ),
+        ),
+        SizedBox(
+          width: 260,
+          child: DropdownButtonFormField<String>(
+            value: _selectedSupplierId,
+            decoration: const InputDecoration(
+              labelText: 'Proveedor',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              const DropdownMenuItem<String>(
+                value: null,
+                child: Text('Todos los proveedores'),
+              ),
+              ..._suppliers.map((supplier) {
+                return DropdownMenuItem<String>(
+                  value: supplier.id,
+                  child: Text(supplier.name),
+                );
+              }),
+            ],
+            onChanged: _onSupplierChanged,
+          ),
+        ),
+        FilterChip(
+          avatar: Icon(
+            Icons.warning_amber_outlined,
+            color: _showLowStockOnly
+                ? theme.colorScheme.error
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+          selectedColor:
+              theme.colorScheme.errorContainer.withOpacity(0.3),
+          label: const Text('Solo stock crítico'),
+          selected: _showLowStockOnly,
+          onSelected: _onLowStockToggle,
+        ),
+        FilterChip(
+          avatar: Icon(
+            Icons.visibility_off_outlined,
+            color: _showInactive
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+          label: const Text('Mostrar inactivos'),
+          selected: _showInactive,
+          onSelected: _onInactiveToggle,
+        ),
+        IconButton(
+          tooltip: 'Actualizar',
+          icon: const Icon(Icons.refresh_outlined),
+          onPressed: _loadProducts,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showMobileFiltersSheet(BuildContext context) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Filtros',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _selectedCategoryId = null;
+                            _selectedSupplierId = null;
+                            _showLowStockOnly = false;
+                            _showInactive = false;
+                            _applyFilters();
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Limpiar'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  DropdownButtonFormField<String>(
+                    value: _selectedCategoryId,
+                    decoration: const InputDecoration(
+                      labelText: 'Categoría',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('Todas las categorías'),
+                      ),
+                      ..._categories.map((category) {
+                        return DropdownMenuItem<String>(
+                          value: category.id,
+                          child: Text(category.name),
+                        );
+                      }),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedCategoryId = value;
+                        _applyFilters();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _selectedSupplierId,
+                    decoration: const InputDecoration(
+                      labelText: 'Proveedor',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('Todos los proveedores'),
+                      ),
+                      ..._suppliers.map((supplier) {
+                        return DropdownMenuItem<String>(
+                          value: supplier.id,
+                          child: Text(supplier.name),
+                        );
+                      }),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedSupplierId = value;
+                        _applyFilters();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    title: const Text('Solo stock crítico'),
+                    subtitle: const Text('Productos con stock bajo o agotado'),
+                    value: _showLowStockOnly,
+                    onChanged: (value) {
+                      setState(() {
+                        _showLowStockOnly = value;
+                        _applyFilters();
+                      });
+                    },
+                  ),
+                  SwitchListTile(
+                    title: const Text('Mostrar inactivos'),
+                    subtitle: const Text('Incluir productos desactivados'),
+                    value: _showInactive,
+                    onChanged: (value) {
+                      setState(() {
+                        _showInactive = value;
+                        _applyFilters();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: AppButton(
+                      text: 'Aplicar filtros',
+                      fullWidth: true,
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSummary(ThemeData theme) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     final lowStock = _products.where((p) => p.isLowStock).length;
     final outOfStock = _products.where((p) => p.isOutOfStock).length;
     final inactive = _products.where((p) => !p.isActive).length;
@@ -428,6 +745,79 @@ class _ProductListPageState extends State<ProductListPage> {
       0.0,
       (total, product) => total + product.inventoryValue,
     );
+
+    if (isMobile) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: Card(
+          elevation: 0,
+          color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildMobileStatTile(
+                      theme,
+                      icon: Icons.inventory_2_outlined,
+                      color: theme.colorScheme.primary,
+                      label: 'Total',
+                      value: _products.length.toString(),
+                    ),
+                    _buildMobileStatTile(
+                      theme,
+                      icon: Icons.filter_alt_outlined,
+                      color: theme.colorScheme.primary,
+                      label: 'Mostrando',
+                      value: _filteredProducts.length.toString(),
+                    ),
+                    _buildMobileStatTile(
+                      theme,
+                      icon: Icons.warning_amber_outlined,
+                      color: theme.colorScheme.error,
+                      label: 'Crítico',
+                      value: lowStock.toString(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildMobileStatTile(
+                      theme,
+                      icon: Icons.block_outlined,
+                      color: theme.colorScheme.error,
+                      label: 'Sin stock',
+                      value: outOfStock.toString(),
+                    ),
+                    _buildMobileStatTile(
+                      theme,
+                      icon: Icons.visibility_off_outlined,
+                      color: theme.colorScheme.onSurfaceVariant,
+                      label: 'Inactivos',
+                      value: inactive.toString(),
+                    ),
+                    Expanded(
+                      child: _buildMobileStatTile(
+                        theme,
+                        icon: Icons.attach_money,
+                        color: theme.colorScheme.tertiary,
+                        label: 'Valor',
+                        value: ChileanUtils.formatCurrency(inventoryValue),
+                        isCompact: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -486,6 +876,42 @@ class _ProductListPageState extends State<ProductListPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMobileStatTile(
+    ThemeData theme, {
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String value,
+    bool isCompact = false,
+  }) {
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: isCompact ? 20 : 24),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: color,
+              fontSize: isCompact ? 14 : 16,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: isCompact ? 10 : 11,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
@@ -558,6 +984,7 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildTableRow(Product product, ThemeData theme) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     final categoryName = _resolveCategoryName(product);
     final priceText = ChileanUtils.formatCurrency(product.price);
     final costText = ChileanUtils.formatCurrency(product.cost);
@@ -565,6 +992,95 @@ class _ProductListPageState extends State<ProductListPage> {
         ? ((product.price - product.cost) / product.cost) * 100
         : 0;
 
+    if (isMobile) {
+      // Mobile card layout
+      return Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _openEditor(product),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Product image
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 70,
+                    height: 70,
+                    child: ImageService.buildProductImage(
+                      imageUrl: product.imageUrl,
+                      size: 70,
+                      isListThumbnail: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Product details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.name,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'SKU: ${product.sku}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      if (categoryName != null)
+                        Text(
+                          categoryName,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  priceText,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                Text(
+                                  'Stock: ${product.inventoryQty}',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                          _buildStockChip(product, theme),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Desktop table row layout
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () => _openEditor(product),

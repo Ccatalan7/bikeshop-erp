@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../themes/app_theme.dart';
 
 class AppButton extends StatelessWidget {
   final String text;
@@ -7,6 +8,7 @@ class AppButton extends StatelessWidget {
   final bool isLoading;
   final IconData? icon;
   final double? width;
+  final bool fullWidth;
   
   const AppButton({
     super.key,
@@ -16,11 +18,13 @@ class AppButton extends StatelessWidget {
     this.isLoading = false,
     this.icon,
     this.width,
+    this.fullWidth = false,
   });
   
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isMobile = AppTheme.isMobile(context);
     
     Color backgroundColor;
     Color foregroundColor;
@@ -44,38 +48,60 @@ class AppButton extends StatelessWidget {
         break;
     }
     
+    // Mobile-optimized sizing
+    final double horizontalPadding = isMobile ? 20.0 : 24.0;
+    final double verticalPadding = isMobile ? 14.0 : 12.0;
+    final double iconSize = isMobile ? 22.0 : 18.0;
+    final double fontSize = isMobile ? 15.0 : 14.0;
+    
     Widget buttonChild = Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: fullWidth ? MainAxisSize.max : MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (isLoading) ...[
-          const SizedBox(
-            width: 16,
-            height: 16,
+          SizedBox(
+            width: iconSize,
+            height: iconSize,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                type == ButtonType.outline ? theme.primaryColor : Colors.white,
+              ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
         ] else if (icon != null) ...[
-          Icon(icon, size: 18),
-          const SizedBox(width: 8),
+          Icon(icon, size: iconSize),
+          const SizedBox(width: 10),
         ],
-        Text(text),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     );
     
     if (type == ButtonType.outline) {
       return SizedBox(
-        width: width,
+        width: fullWidth ? double.infinity : width,
         child: OutlinedButton(
           onPressed: isLoading ? null : onPressed,
           style: OutlinedButton.styleFrom(
             foregroundColor: foregroundColor,
-            side: BorderSide(color: theme.primaryColor),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            side: BorderSide(color: theme.primaryColor, width: 1.5),
+            minimumSize: Size(
+              AppTheme.mobileMinTouchTarget,
+              AppTheme.mobileMinTouchTarget,
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
+            ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(isMobile ? 10 : 8),
             ),
           ),
           child: buttonChild,
@@ -84,15 +110,25 @@ class AppButton extends StatelessWidget {
     }
     
     return SizedBox(
-      width: width,
+      width: fullWidth ? double.infinity : width,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          disabledBackgroundColor: backgroundColor.withOpacity(0.5),
+          disabledForegroundColor: foregroundColor.withOpacity(0.5),
+          minimumSize: Size(
+            AppTheme.mobileMinTouchTarget,
+            AppTheme.mobileMinTouchTarget,
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
+          elevation: isMobile ? 2 : 1,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(isMobile ? 10 : 8),
           ),
         ),
         child: buttonChild,

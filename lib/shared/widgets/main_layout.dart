@@ -199,7 +199,7 @@ class MainLayout extends StatelessWidget {
                         IconButton(
                           icon: const Icon(Icons.settings_outlined),
                           onPressed: () {
-                            // TODO: Navigate to settings
+                            context.go('/settings');
                           },
                         ),
                         IconButton(
@@ -227,24 +227,34 @@ class MainLayout extends StatelessWidget {
       // Mobile layout with drawer
       return Scaffold(
         appBar: AppBar(
-          title: Text(title ?? 'Vinabike ERP'),
-          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          title: Text(
+            title ?? 'Vinabike ERP',
+            style: const TextStyle(fontSize: 18),
+          ),
+          leading: Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu),
+              iconSize: 28,
+              padding: const EdgeInsets.all(12),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.notifications),
+              icon: const Icon(Icons.notifications_outlined),
+              iconSize: 24,
+              padding: const EdgeInsets.all(12),
               onPressed: () {
                 // TODO: Implement notifications
               },
             ),
             IconButton(
-              icon: const Icon(Icons.settings),
+              icon: const Icon(Icons.settings_outlined),
+              iconSize: 24,
+              padding: const EdgeInsets.all(12),
               onPressed: () {
-                // TODO: Navigate to settings
+                context.go('/settings');
               },
-            ),
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: () => _handleLogout(context),
             ),
           ],
         ),
@@ -625,168 +635,172 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentLocation = GoRouterState.of(context).uri.path;
+    final theme = Theme.of(context);
     
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          DrawerHeader(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).primaryColor,
-                  Theme.of(context).primaryColor.withOpacity(0.8),
+      width: MediaQuery.of(context).size.width * 0.85, // 85% of screen width on mobile
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Modern header with gradient
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    theme.primaryColor,
+                    theme.primaryColor.withOpacity(0.8),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.pedal_bike,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Vinabike ERP',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Sistema de Gestión',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
               ),
             ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.pedal_bike,
-                  color: Colors.white,
-                  size: 48,
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Vinabike ERP',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+            
+            // Navigation items
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  // Dashboard
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.dashboard,
+                    title: 'Dashboard',
+                    route: '/dashboard',
+                    currentLocation: currentLocation,
                   ),
-                ),
-                Text(
-                  'Sistema Integral de Gestión',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
+                  
+                  const Divider(height: 16),
+                  
+                  // Core Modules
+                  _buildSectionHeader(context, 'MÓDULOS'),
+                  
+                  _buildDrawerExpandableItem(
+                    context,
+                    icon: Icons.account_balance,
+                    title: 'Contabilidad',
+                    subItems: _accountingMenuItems,
+                    currentLocation: currentLocation,
                   ),
-                ),
-              ],
+
+                  _buildDrawerExpandableItem(
+                    context,
+                    icon: Icons.people,
+                    title: 'Clientes',
+                    subItems: _crmMenuItems,
+                    currentLocation: currentLocation,
+                  ),
+
+                  _buildDrawerExpandableItem(
+                    context,
+                    icon: Icons.inventory_2,
+                    title: 'Inventario',
+                    subItems: _inventoryMenuItems,
+                    currentLocation: currentLocation,
+                  ),
+
+                  _buildDrawerExpandableItem(
+                    context,
+                    icon: Icons.receipt_long,
+                    title: 'Ventas',
+                    subItems: _salesMenuItems,
+                    currentLocation: currentLocation,
+                  ),
+
+                  _buildDrawerExpandableItem(
+                    context,
+                    icon: Icons.shopping_cart,
+                    title: 'Compras',
+                    subItems: _purchasesMenuItems,
+                    currentLocation: currentLocation,
+                  ),
+
+                  _buildDrawerExpandableItem(
+                    context,
+                    icon: Icons.point_of_sale,
+                    title: 'POS',
+                    subItems: _posMenuItems,
+                    currentLocation: currentLocation,
+                  ),
+                ],
+              ),
             ),
-          ),
-          
-          // Dashboard
-          _buildDrawerItem(
-            context,
-            icon: Icons.dashboard,
-            title: 'Dashboard',
-            route: '/dashboard',
-            currentLocation: currentLocation,
-          ),
-          
-          const Divider(),
-          
-          // Core Modules
-          _buildSectionHeader(context, 'MÓDULOS PRINCIPALES'),
-          
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.account_balance,
-            title: 'Contabilidad',
-            subItems: _accountingMenuItems,
-            currentLocation: currentLocation,
-          ),
-
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.people,
-            title: 'Clientes',
-            subItems: _crmMenuItems,
-            currentLocation: currentLocation,
-          ),
-
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.inventory,
-            title: 'Inventario',
-            subItems: _inventoryMenuItems,
-            currentLocation: currentLocation,
-          ),
-
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.point_of_sale,
-            title: 'Ventas',
-            subItems: _salesMenuItems,
-            currentLocation: currentLocation,
-          ),
-
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.shopping_cart,
-            title: 'Compras',
-            subItems: _purchasesMenuItems,
-            currentLocation: currentLocation,
-          ),
-
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.store,
-            title: 'POS',
-            subItems: _posMenuItems,
-            currentLocation: currentLocation,
-          ),
-          
-          const Divider(),
-          
-          // Secondary Modules
-          _buildSectionHeader(context, 'OTROS MÓDULOS'),
-          
-          _buildDrawerItem(
-            context,
-            icon: Icons.build,
-            title: 'Mantención',
-            route: '/maintenance',
-            currentLocation: currentLocation,
-            enabled: false,
-          ),
-          
-          _buildDrawerItem(
-            context,
-            icon: Icons.badge,
-            title: 'RR.HH.',
-            route: '/hr',
-            currentLocation: currentLocation,
-            enabled: false,
-          ),
-          
-          _buildDrawerItem(
-            context,
-            icon: Icons.analytics,
-            title: 'Análisis',
-            route: '/analytics',
-            currentLocation: currentLocation,
-            enabled: false,
-          ),
-          
-          const Divider(),
-          
-          // Settings
-          _buildDrawerItem(
-            context,
-            icon: Icons.settings,
-            title: 'Configuración',
-            route: '/settings',
-            currentLocation: currentLocation,
-            enabled: false,
-          ),
-        ],
+            
+            // Footer with settings and logout
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: theme.dividerColor,
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.settings,
+                    title: 'Configuración',
+                    route: '/settings',
+                    currentLocation: currentLocation,
+                  ),
+                  _buildLogoutItem(context),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildSectionHeader(BuildContext context, String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
       child: Text(
         title,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
           fontWeight: FontWeight.bold,
-          color: Theme.of(context).colorScheme.primary,
+          color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+          letterSpacing: 1.2,
         ),
       ),
     );
@@ -809,15 +823,17 @@ class AppDrawer extends StatelessWidget {
       child: ExpansionTile(
         leading: Icon(
           icon,
+          size: 24,
           color: theme.colorScheme.primary,
         ),
         title: Text(
           title,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            fontWeight: FontWeight.w500,
           ),
         ),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        childrenPadding: EdgeInsets.zero,
         collapsedIconColor: theme.colorScheme.onSurface.withOpacity(0.6),
         iconColor: theme.colorScheme.primary,
         initiallyExpanded: isExpanded,
@@ -842,32 +858,49 @@ class AppDrawer extends StatelessWidget {
     final theme = Theme.of(context);
     final isSelected = currentLocation.startsWith(item.route);
 
-    return ListTile(
-      contentPadding: const EdgeInsets.only(left: 56, right: 16),
-      leading: Icon(
-        item.icon,
-        size: 18,
-        color: isSelected
-            ? theme.colorScheme.primary
-            : theme.colorScheme.onSurface.withOpacity(0.6),
-      ),
-      title: Text(
-        item.title,
-        style: theme.textTheme.bodySmall?.copyWith(
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          color: isSelected
-              ? theme.colorScheme.primary
-              : theme.colorScheme.onSurface,
-        ),
-      ),
-      selected: isSelected,
-      selectedTileColor: theme.colorScheme.primary.withOpacity(0.08),
+    return InkWell(
       onTap: () {
         if (!isSelected) {
           context.go(item.route);
         }
         Navigator.pop(context);
       },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        margin: const EdgeInsets.only(left: 48),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? theme.colorScheme.primary.withOpacity(0.1)
+              : null,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            bottomLeft: Radius.circular(24),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              item.icon,
+              size: 20,
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                item.title,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -879,26 +912,10 @@ class AppDrawer extends StatelessWidget {
     required String currentLocation,
     bool enabled = true,
   }) {
+    final theme = Theme.of(context);
     final isSelected = currentLocation.startsWith(route);
     
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: enabled
-            ? (isSelected ? Theme.of(context).colorScheme.primary : null)
-            : Theme.of(context).disabledColor,
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: enabled
-              ? (isSelected ? Theme.of(context).colorScheme.primary : null)
-              : Theme.of(context).disabledColor,
-        ),
-      ),
-      selected: isSelected,
-      selectedTileColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+    return InkWell(
       onTap: enabled
           ? () {
               if (!isSelected) {
@@ -907,6 +924,68 @@ class AppDrawer extends StatelessWidget {
               Navigator.pop(context);
             }
           : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? theme.colorScheme.primary.withOpacity(0.1)
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 24,
+              color: enabled
+                  ? (isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.7))
+                  : theme.disabledColor,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: enabled
+                      ? (isSelected ? theme.colorScheme.primary : null)
+                      : theme.disabledColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildLogoutItem(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context); // Close drawer first
+        _handleLogout(context);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Icon(
+              Icons.logout,
+              size: 24,
+              color: Colors.red.shade400,
+            ),
+            const SizedBox(width: 16),
+            Text(
+              'Cerrar sesión',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: Colors.red.shade400,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/models/customer.dart';
+import '../../../shared/themes/app_theme.dart';
 import '../../crm/services/customer_service.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/widgets/search_bar_widget.dart';

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
+import '../../../shared/themes/app_theme.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -564,17 +565,21 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isMobile = AppTheme.isMobile(context);
+    
     return MainLayout(
       child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                _buildHeader(theme),
+                _buildHeader(theme, isMobile),
                 Expanded(
                   child: SingleChildScrollView(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: _buildForm(theme),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 12 : 16,
+                      vertical: 8,
+                    ),
+                    child: _buildForm(theme, isMobile),
                   ),
                 ),
               ],
@@ -582,7 +587,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
-  Widget _buildHeader(ThemeData theme) {
+  Widget _buildHeader(ThemeData theme, bool isMobile) {
     final invoiceNumber = _invoiceNumberController.text.trim();
     final hasExistingInvoice = _currentInvoiceId != null;
     final title = invoiceNumber.isNotEmpty
@@ -646,7 +651,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
     final actionWidgets = <Widget>[
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 8 : 12,
+          vertical: isMobile ? 6 : 8,
+        ),
         decoration: BoxDecoration(
           color: theme.colorScheme.primary.withOpacity(0.1),
           borderRadius: BorderRadius.circular(999),
@@ -654,75 +662,120 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.payments_outlined,
-                size: 16, color: theme.colorScheme.primary),
-            const SizedBox(width: 6),
+            Icon(
+              Icons.payments_outlined,
+              size: isMobile ? 14 : 16,
+              color: theme.colorScheme.primary,
+            ),
+            SizedBox(width: isMobile ? 4 : 6),
             Text(
               ChileanUtils.formatCurrency(_total),
               style: theme.textTheme.labelLarge?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w700,
+                fontSize: isMobile ? 13 : null,
               ),
             ),
           ],
         ),
       ),
-      _buildStatusChip(theme),
+      _buildStatusChip(theme, isMobile),
       ...actionButtons,
     ];
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => context.pop(),
-            icon: const Icon(Icons.arrow_back),
-            tooltip: 'Volver',
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+      padding: EdgeInsets.fromLTRB(
+        isMobile ? 12 : 16,
+        isMobile ? 12 : 16,
+        isMobile ? 12 : 16,
+        8,
+      ),
+      child: isMobile
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: theme.textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => context.pop(),
+                      icon: const Icon(Icons.arrow_back),
+                      tooltip: 'Volver',
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Emite documentos auditables y con IVA integrado.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: actionWidgets,
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                IconButton(
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Volver',
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Emite documentos auditables y con IVA integrado.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: actionWidgets,
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 16),
-          Flexible(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: actionWidgets,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildForm(ThemeData theme) {
+  Widget _buildForm(ThemeData theme, bool isMobile) {
     return Form(
       key: _formKey,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isWide = constraints.maxWidth > 1180;
+          // Use 900px as threshold instead of 1180px for better mobile/tablet handling
+          final isWide = constraints.maxWidth > 900 && !isMobile;
           if (isWide) {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1240,10 +1293,13 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
   }
 
-  Widget _buildStatusChip(ThemeData theme) {
+  Widget _buildStatusChip(ThemeData theme, bool isMobile) {
     final color = _statusColor(theme);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 8 : 12,
+        vertical: isMobile ? 4 : 6,
+      ),
       decoration: BoxDecoration(
         color: color.withOpacity(0.15),
         borderRadius: BorderRadius.circular(999),
@@ -1253,6 +1309,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         style: theme.textTheme.labelMedium?.copyWith(
           color: color,
           fontWeight: FontWeight.w600,
+          fontSize: isMobile ? 12 : null,
         ),
       ),
     );

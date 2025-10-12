@@ -4,9 +4,11 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../shared/models/supplier.dart';
+import '../../../shared/themes/app_theme.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/mobile_dialogs.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../services/purchase_service.dart';
 
@@ -85,64 +87,90 @@ class _SupplierListPageState extends State<SupplierListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isMobile = AppTheme.isMobile(context);
+    
     return MainLayout(
       child: Column(
         children: [
-          // Header
+          // Header - Mobile responsive
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Proveedores',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                // View mode toggle
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
+            padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.view_list),
-                        onPressed: () => setState(() => _viewMode = SupplierViewMode.list),
-                        color: _viewMode == SupplierViewMode.list ? Colors.blue : Colors.grey,
-                        tooltip: 'Vista de lista',
+                      Text(
+                        'Proveedores',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.grid_view),
-                        onPressed: () => setState(() => _viewMode = SupplierViewMode.cards),
-                        color: _viewMode == SupplierViewMode.cards ? Colors.blue : Colors.grey,
-                        tooltip: 'Vista de tarjetas',
+                      const SizedBox(height: 12),
+                      AppButton(
+                        text: 'Nuevo Proveedor',
+                        icon: Icons.add,
+                        fullWidth: true,
+                        onPressed: () async {
+                          final created = await context.push<bool>('/purchases/suppliers/new');
+                          if (created == true) {
+                            _loadSuppliers();
+                          }
+                        },
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Proveedores',
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      // View mode toggle (desktop only)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.view_list),
+                              onPressed: () => setState(() => _viewMode = SupplierViewMode.list),
+                              color: _viewMode == SupplierViewMode.list ? Colors.blue : Colors.grey,
+                              tooltip: 'Vista de lista',
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.grid_view),
+                              onPressed: () => setState(() => _viewMode = SupplierViewMode.cards),
+                              color: _viewMode == SupplierViewMode.cards ? Colors.blue : Colors.grey,
+                              tooltip: 'Vista de tarjetas',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      AppButton(
+                        text: 'Nuevo Proveedor',
+                        icon: Icons.add,
+                        onPressed: () async {
+                          final created = await context.push<bool>('/purchases/suppliers/new');
+                          if (created == true) {
+                            _loadSuppliers();
+                          }
+                        },
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 16),
-                AppButton(
-                  text: 'Nuevo Proveedor',
-                  icon: Icons.add,
-                  onPressed: () async {
-                    final created = await context.push<bool>('/purchases/suppliers/new');
-                    if (created == true) {
-                      _loadSuppliers();
-                    }
-                  },
-                ),
-              ],
-            ),
           ),
 
           // Search and filters
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 12.0 : 16.0),
             child: Column(
               children: [
                 SearchBarWidget(
@@ -180,7 +208,7 @@ class _SupplierListPageState extends State<SupplierListPage> {
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredSuppliers.isEmpty
                     ? _buildEmptyState()
-                    : _buildSupplierList(),
+                    : _buildSupplierList(isMobile),
           ),
         ],
       ),
@@ -262,15 +290,21 @@ class _SupplierListPageState extends State<SupplierListPage> {
     );
   }
 
-  Widget _buildSupplierList() {
-    return _viewMode == SupplierViewMode.list
-        ? ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            itemCount: _filteredSuppliers.length,
-            itemBuilder: (context, index) {
-              final supplier = _filteredSuppliers[index];
-              return _buildSupplierListItem(supplier);
-            },
+  Widget _buildSupplierList(bool isMobile) {
+    // Force list view on mobile for better UX
+    final effectiveViewMode = isMobile ? SupplierViewMode.list : _viewMode;
+    
+    return effectiveViewMode == SupplierViewMode.list
+        ? RefreshIndicator(
+            onRefresh: _loadSuppliers,
+            child: ListView.builder(
+              padding: EdgeInsets.symmetric(horizontal: isMobile ? 12.0 : 16.0),
+              itemCount: _filteredSuppliers.length,
+              itemBuilder: (context, index) {
+                final supplier = _filteredSuppliers[index];
+                return _buildSupplierListItem(supplier, isMobile);
+              },
+            ),
           )
         : GridView.builder(
             padding: const EdgeInsets.all(16.0),
@@ -288,82 +322,177 @@ class _SupplierListPageState extends State<SupplierListPage> {
           );
   }
 
-  Widget _buildSupplierListItem(Supplier supplier) {
+  Widget _buildSupplierListItem(Supplier supplier, bool isMobile) {
+    final theme = Theme.of(context);
+    
     return Card(
-      margin: const EdgeInsets.only(bottom: 8.0),
-      child: ListTile(
+      margin: EdgeInsets.only(bottom: isMobile ? 10 : 12),
+      child: InkWell(
         onTap: () {
-          // Navigate to products filtered by this supplier
           context.push('/inventory/products?supplier=${supplier.id}');
         },
-        leading: CircleAvatar(
-          backgroundColor: supplier.isActive ? Colors.green : Colors.grey,
-          child: Text(
-            supplier.name.substring(0, 1).toUpperCase(),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        title: Text(
-          supplier.name,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (supplier.rut != null && supplier.rut!.isNotEmpty)
-              Text('RUT: ${ChileanUtils.formatRut(supplier.rut!)}'),
-            if (supplier.email != null) Text(supplier.email!),
-            if (supplier.phone != null) Text('Tel: ${supplier.phone}'),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!supplier.isActive)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.grey,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'Inactivo',
+        child: Padding(
+          padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
+          child: Row(
+            children: [
+              // Avatar
+              CircleAvatar(
+                radius: isMobile ? 20 : 24,
+                backgroundColor: supplier.isActive 
+                    ? theme.colorScheme.primary.withOpacity(0.1)
+                    : Colors.grey.withOpacity(0.2),
+                child: Text(
+                  supplier.name.substring(0, 1).toUpperCase(),
                   style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
+                    color: supplier.isActive ? theme.colorScheme.primary : Colors.grey,
+                    fontWeight: FontWeight.bold,
+                    fontSize: isMobile ? 16 : 18,
                   ),
                 ),
               ),
-            const SizedBox(width: 8),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'edit') {
-                  context.push('/purchases/suppliers/${supplier.id}/edit').then((updated) {
-                    if (updated == true) {
-                      _loadSuppliers();
-                    }
-                  });
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: ListTile(
-                    leading: Icon(Icons.edit),
-                    title: Text('Editar'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
+              SizedBox(width: isMobile ? 12 : 16),
+              
+              // Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            supplier.name,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: isMobile ? 15 : 16,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (!supplier.isActive) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.grey,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'Inactivo',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: isMobile ? 10 : 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    
+                    // RUT
+                    if (supplier.rut != null && supplier.rut!.isNotEmpty)
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.badge_outlined,
+                            size: isMobile ? 14 : 16,
+                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            ChileanUtils.formatRut(supplier.rut!),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(0.7),
+                              fontSize: isMobile ? 12 : 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    
+                    // Phone
+                    if (supplier.phone != null) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.phone_outlined,
+                            size: isMobile ? 14 : 16,
+                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            supplier.phone!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(0.7),
+                              fontSize: isMobile ? 12 : 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    
+                    // Email (hide on mobile to save space)
+                    if (!isMobile && supplier.email != null) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.email_outlined,
+                            size: 16,
+                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              supplier.email!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-              child: const Icon(Icons.more_vert),
-            ),
-          ],
+              ),
+              
+              // Actions
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    context.push('/purchases/suppliers/${supplier.id}/edit').then((updated) {
+                      if (updated == true) {
+                        _loadSuppliers();
+                      }
+                    });
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: ListTile(
+                      leading: Icon(Icons.edit),
+                      title: Text('Editar'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+                child: Icon(
+                  Icons.more_vert,
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

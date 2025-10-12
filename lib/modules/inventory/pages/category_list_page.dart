@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../../shared/themes/app_theme.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -169,58 +170,83 @@ class _CategoryListPageState extends State<CategoryListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isMobile = AppTheme.isMobile(context);
+    
     return MainLayout(
       child: Column(
         children: [
-          // Header
+          // Header - Mobile responsive
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Categorías',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                // View mode toggle
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
+            padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.view_list),
-                        onPressed: () => setState(() => _viewMode = CategoryViewMode.list),
-                        color: _viewMode == CategoryViewMode.list ? Colors.blue : Colors.grey,
-                        tooltip: 'Vista de lista',
+                      Text(
+                        'Categorías',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.grid_view),
-                        onPressed: () => setState(() => _viewMode = CategoryViewMode.cards),
-                        color: _viewMode == CategoryViewMode.cards ? Colors.blue : Colors.grey,
-                        tooltip: 'Vista de tarjetas',
+                      const SizedBox(height: 12),
+                      AppButton(
+                        text: 'Nueva Categoría',
+                        icon: Icons.add,
+                        fullWidth: true,
+                        onPressed: () {
+                          context.push('/inventory/categories/new').then((_) {
+                            _loadCategories();
+                          });
+                        },
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Categorías',
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      // View mode toggle (desktop only)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.view_list),
+                              onPressed: () => setState(() => _viewMode = CategoryViewMode.list),
+                              color: _viewMode == CategoryViewMode.list ? Colors.blue : Colors.grey,
+                              tooltip: 'Vista de lista',
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.grid_view),
+                              onPressed: () => setState(() => _viewMode = CategoryViewMode.cards),
+                              color: _viewMode == CategoryViewMode.cards ? Colors.blue : Colors.grey,
+                              tooltip: 'Vista de tarjetas',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      AppButton(
+                        text: 'Nueva Categoría',
+                        icon: Icons.add,
+                        onPressed: () {
+                          context.push('/inventory/categories/new').then((_) {
+                            _loadCategories();
+                          });
+                        },
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 16),
-                AppButton(
-                  text: 'Nueva Categoría',
-                  icon: Icons.add,
-                  onPressed: () {
-                    context.push('/inventory/categories/new').then((_) {
-                      _loadCategories();
-                    });
-                  },
-                ),
-              ],
-            ),
           ),
           
           // Search
@@ -232,16 +258,17 @@ class _CategoryListPageState extends State<CategoryListPage> {
           
           // Filters
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 12.0 : 16.0),
             child: Row(
               children: [
                 SizedBox(
-                  width: 200,
+                  width: isMobile ? null : 200,
                   child: CheckboxListTile(
                     title: const Text('Solo Inactivas'),
                     value: _showInactiveOnly,
                     onChanged: (value) => _onInactiveToggle(value ?? false),
                     controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
                   ),
                 ),
               ],
@@ -249,30 +276,53 @@ class _CategoryListPageState extends State<CategoryListPage> {
           ),
           const SizedBox(height: 16),
           
-          // Stats
+          // Stats - Mobile responsive
           if (!_isLoading && _categories.isNotEmpty)
             Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(16),
+              margin: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16),
+              padding: EdgeInsets.all(isMobile ? 12 : 16),
               decoration: BoxDecoration(
-                color: Colors.blue[50],
+                color: theme.colorScheme.primary.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
-                children: [
-                  _buildStatItem('Total', _categories.length.toString()),
-                  const SizedBox(width: 24),
-                  _buildStatItem(
-                    'Activas', 
-                    _categories.where((c) => c.isActive).length.toString(),
-                  ),
-                  const SizedBox(width: 24),
-                  _buildStatItem(
-                    'Inactivas', 
-                    _categories.where((c) => !c.isActive).length.toString(),
-                  ),
-                ],
-              ),
+              child: isMobile
+                  ? Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _buildStatItem('Total', _categories.length.toString(), isMobile),
+                            _buildStatItem(
+                              'Activas', 
+                              _categories.where((c) => c.isActive).length.toString(),
+                              isMobile,
+                            ),
+                            _buildStatItem(
+                              'Inactivas', 
+                              _categories.where((c) => !c.isActive).length.toString(),
+                              isMobile,
+                            ),
+                          ],
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        _buildStatItem('Total', _categories.length.toString(), isMobile),
+                        const SizedBox(width: 24),
+                        _buildStatItem(
+                          'Activas', 
+                          _categories.where((c) => c.isActive).length.toString(),
+                          isMobile,
+                        ),
+                        const SizedBox(width: 24),
+                        _buildStatItem(
+                          'Inactivas', 
+                          _categories.where((c) => !c.isActive).length.toString(),
+                          isMobile,
+                        ),
+                      ],
+                    ),
             ),
           
           const SizedBox(height: 16),
@@ -281,37 +331,39 @@ class _CategoryListPageState extends State<CategoryListPage> {
           Expanded(
             child: _isLoading 
                 ? const Center(child: CircularProgressIndicator())
-                : _buildCategoriesList(),
+                : _buildCategoriesList(isMobile),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(String label, String value) {
+  Widget _buildStatItem(String label, String value, bool isMobile) {
+    final theme = Theme.of(context);
+    
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.start,
       children: [
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 20,
+          style: TextStyle(
+            fontSize: isMobile ? 18 : 20,
             fontWeight: FontWeight.bold,
-            color: Colors.blue,
+            color: theme.colorScheme.primary,
           ),
         ),
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
+            fontSize: isMobile ? 11 : 12,
+            color: theme.colorScheme.onSurface.withOpacity(0.6),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildCategoriesList() {
+  Widget _buildCategoriesList(bool isMobile) {
     if (_filteredCategories.isEmpty) {
       return Center(
         child: Column(
@@ -348,15 +400,18 @@ class _CategoryListPageState extends State<CategoryListPage> {
       );
     }
 
+    // Force list view on mobile
+    final effectiveViewMode = isMobile ? CategoryViewMode.list : _viewMode;
+
     return RefreshIndicator(
       onRefresh: _loadCategories,
-      child: _viewMode == CategoryViewMode.list
+      child: effectiveViewMode == CategoryViewMode.list
           ? ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              padding: EdgeInsets.symmetric(horizontal: isMobile ? 12.0 : 16.0),
               itemCount: _filteredCategories.length,
               itemBuilder: (context, index) {
                 final category = _filteredCategories[index];
-                return _buildCategoryListItem(category);
+                return _buildCategoryListItem(category, isMobile);
               },
             )
           : GridView.builder(
@@ -376,144 +431,178 @@ class _CategoryListPageState extends State<CategoryListPage> {
     );
   }
 
-  Widget _buildCategoryListItem(Category category) {
+  Widget _buildCategoryListItem(Category category, bool isMobile) {
+    final theme = Theme.of(context);
     final bool hasImage = category.imageUrl != null && category.imageUrl!.isNotEmpty;
     
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
+      margin: EdgeInsets.only(bottom: isMobile ? 10 : 12),
+      child: InkWell(
         onTap: () {
-          // Navigate to products filtered by this category
           context.push('/inventory/products?category=${category.id}');
         },
-        leading: hasImage
-            ? ClipRRect(
+        child: Padding(
+          padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
+          child: Row(
+            children: [
+              // Image/Icon
+              ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: CachedNetworkImage(
-                  imageUrl: category.imageUrl!,
-                  width: 56,
-                  height: 56,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    width: 56,
-                    height: 56,
-                    color: Colors.grey[200],
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                child: hasImage
+                    ? CachedNetworkImage(
+                        imageUrl: category.imageUrl!,
+                        width: isMobile ? 48 : 56,
+                        height: isMobile ? 48 : 56,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          width: isMobile ? 48 : 56,
+                          height: isMobile ? 48 : 56,
+                          color: Colors.grey[200],
+                          child: const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          width: isMobile ? 48 : 56,
+                          height: isMobile ? 48 : 56,
+                          decoration: BoxDecoration(
+                            color: category.isActive 
+                                ? theme.colorScheme.primary.withOpacity(0.1)
+                                : Colors.grey.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.category,
+                            color: category.isActive ? theme.colorScheme.primary : Colors.grey,
+                            size: isMobile ? 24 : 28,
+                          ),
+                        ),
+                      )
+                    : Container(
+                        width: isMobile ? 48 : 56,
+                        height: isMobile ? 48 : 56,
+                        decoration: BoxDecoration(
+                          color: category.isActive 
+                              ? theme.colorScheme.primary.withOpacity(0.1)
+                              : Colors.grey.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.category,
+                          color: category.isActive ? theme.colorScheme.primary : Colors.grey,
+                          size: isMobile ? 24 : 28,
+                        ),
+                      ),
+              ),
+              SizedBox(width: isMobile ? 12 : 16),
+              
+              // Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            category.name,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: isMobile ? 15 : 16,
+                              color: category.isActive ? null : Colors.grey,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isMobile ? 6 : 8, 
+                            vertical: isMobile ? 2 : 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: category.isActive ? Colors.green : Colors.grey,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            category.isActive ? 'Activa' : 'Inactiva',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: isMobile ? 10 : 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (category.description != null && category.description!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        category.description!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: category.isActive 
+                              ? theme.colorScheme.onSurface.withOpacity(0.6)
+                              : Colors.grey,
+                          fontSize: isMobile ? 12 : 13,
+                        ),
+                        maxLines: isMobile ? 1 : 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              
+              // Actions
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  switch (value) {
+                    case 'edit':
+                      context.push('/inventory/categories/${category.id}/edit').then((_) {
+                        _loadCategories();
+                      });
+                      break;
+                    case 'toggle':
+                      _toggleCategoryStatus(category);
+                      break;
+                    case 'delete':
+                      _deleteCategory(category);
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: ListTile(
+                      leading: Icon(Icons.edit),
+                      title: Text('Editar'),
+                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
-                  errorWidget: (context, url, error) => Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: category.isActive 
-                          ? Colors.blue.withOpacity(0.1) 
-                          : Colors.grey.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.category,
-                      color: category.isActive ? Colors.blue : Colors.grey,
+                  PopupMenuItem(
+                    value: 'toggle',
+                    child: ListTile(
+                      leading: Icon(category.isActive ? Icons.visibility_off : Icons.visibility),
+                      title: Text(category.isActive ? 'Desactivar' : 'Activar'),
+                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
-                ),
-              )
-            : Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: category.isActive 
-                      ? Colors.blue.withOpacity(0.1) 
-                      : Colors.grey.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: ListTile(
+                      leading: Icon(Icons.delete, color: Colors.red),
+                      title: Text('Eliminar', style: TextStyle(color: Colors.red)),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
                 child: Icon(
-                  Icons.category,
-                  color: category.isActive ? Colors.blue : Colors.grey,
+                  Icons.more_vert,
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
                 ),
               ),
-        title: Text(
-          category.name,
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: category.isActive ? null : Colors.grey,
+            ],
           ),
-        ),
-        subtitle: category.description != null
-            ? Text(
-                category.description!,
-                style: TextStyle(
-                  color: category.isActive ? Colors.grey[600] : Colors.grey,
-                ),
-              )
-            : null,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Status indicator
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: category.isActive ? Colors.green : Colors.grey,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                category.isActive ? 'Activa' : 'Inactiva',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            
-            // Actions menu
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                switch (value) {
-                  case 'edit':
-                    context.push('/inventory/categories/${category.id}/edit').then((_) {
-                      _loadCategories();
-                    });
-                    break;
-                  case 'toggle':
-                    _toggleCategoryStatus(category);
-                    break;
-                  case 'delete':
-                    _deleteCategory(category);
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: ListTile(
-                    leading: Icon(Icons.edit),
-                    title: Text('Editar'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'toggle',
-                  child: ListTile(
-                    leading: Icon(category.isActive ? Icons.visibility_off : Icons.visibility),
-                    title: Text(category.isActive ? 'Desactivar' : 'Activar'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: ListTile(
-                    leading: Icon(Icons.delete, color: Colors.red),
-                    title: Text('Eliminar', style: TextStyle(color: Colors.red)),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-              ],
-              child: const Icon(Icons.more_vert),
-            ),
-          ],
         ),
       ),
     );
