@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/themes/app_theme.dart';
 import '../models/account.dart';
 import '../services/accounting_service.dart';
 
@@ -88,72 +89,132 @@ class _AccountListPageState extends State<AccountListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = AppTheme.isMobile(context);
+    final theme = Theme.of(context);
+    
     return MainLayout(
       title: 'Plan de Cuentas',
       body: Column(
         children: [
           // Search and Filter Bar
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(isMobile ? 12 : 16),
             decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
+              color: theme.cardColor,
               border: Border(
-                bottom: BorderSide(color: Theme.of(context).dividerColor),
+                bottom: BorderSide(color: theme.dividerColor),
               ),
             ),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: SearchWidget(
-                        hintText: 'Buscar por código, nombre o descripción...',
-                        onSearchChanged: _onSearchChanged,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 2,
-                      child: DropdownButtonFormField<AccountType?>(
-                        decoration: const InputDecoration(
-                          labelText: 'Tipo',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                        ),
-                        value: _selectedType,
-                        items: [
-                          const DropdownMenuItem<AccountType?>(
-                            value: null,
-                            child: Text('Todos'),
-                          ),
-                          ...AccountType.values.map(
-                            (type) => DropdownMenuItem<AccountType?>(
-                              value: type,
-                              child: Text(type.displayName),
+                if (isMobile) ...[
+                  // Mobile: Vertical layout
+                  SearchWidget(
+                    hintText: 'Buscar por código o nombre...',
+                    onSearchChanged: _onSearchChanged,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<AccountType?>(
+                          decoration: const InputDecoration(
+                            labelText: 'Tipo',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
                             ),
                           ),
-                        ],
-                        onChanged: _onTypeFilterChanged,
+                          value: _selectedType,
+                          items: [
+                            const DropdownMenuItem<AccountType?>(
+                              value: null,
+                              child: Text(
+                                'Todos',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            ...AccountType.values.map(
+                              (type) => DropdownMenuItem<AccountType?>(
+                                value: type,
+                                child: Text(
+                                  type.displayName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: _onTypeFilterChanged,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    AppButton(
-                      text: 'Nueva Cuenta',
-                      onPressed: () => context.push('/accounting/accounts/new'),
-                      icon: Icons.add,
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 12),
+                      IconButton.filledTonal(
+                        onPressed: () => context.push('/accounting/accounts/new'),
+                        icon: const Icon(Icons.add),
+                        iconSize: 24,
+                        tooltip: 'Nueva Cuenta',
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  // Desktop: Horizontal layout
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: SearchWidget(
+                          hintText: 'Buscar por código, nombre o descripción...',
+                          onSearchChanged: _onSearchChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 2,
+                        child: DropdownButtonFormField<AccountType?>(
+                          decoration: const InputDecoration(
+                            labelText: 'Tipo',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                          ),
+                          value: _selectedType,
+                          items: [
+                            const DropdownMenuItem<AccountType?>(
+                              value: null,
+                              child: Text('Todos'),
+                            ),
+                            ...AccountType.values.map(
+                              (type) => DropdownMenuItem<AccountType?>(
+                                value: type,
+                                child: Text(type.displayName),
+                              ),
+                            ),
+                          ],
+                          onChanged: _onTypeFilterChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      AppButton(
+                        text: 'Nueva Cuenta',
+                        onPressed: () => context.push('/accounting/accounts/new'),
+                        icon: Icons.add,
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Text(
                       'Total: ${_filteredAccounts.length} cuentas',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: theme.textTheme.bodySmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const Spacer(),
                     if (_isLoading)
@@ -174,36 +235,39 @@ class _AccountListPageState extends State<AccountListPage> {
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredAccounts.isEmpty
                     ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.account_balance,
-                              size: 64,
-                              color: Theme.of(context).disabledColor,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _searchTerm.isEmpty && _selectedType == null
-                                  ? 'No hay cuentas registradas'
-                                  : 'No se encontraron cuentas que coincidan con los filtros',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    color: Theme.of(context).disabledColor,
-                                  ),
-                            ),
-                          ],
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.account_balance,
+                                size: 64,
+                                color: theme.disabledColor,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _searchTerm.isEmpty && _selectedType == null
+                                    ? 'No hay cuentas registradas'
+                                    : 'No se encontraron cuentas que coincidan con los filtros',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: theme.disabledColor,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(isMobile ? 8 : 16),
                         itemCount: _filteredAccounts.length,
                         itemBuilder: (context, index) {
                           final account = _filteredAccounts[index];
                           return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
+                            margin: EdgeInsets.only(bottom: isMobile ? 6 : 8),
                             child: ListTile(
                               leading: Container(
                                 width: 48,
@@ -237,11 +301,15 @@ class _AccountListPageState extends State<AccountListPage> {
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                 ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 4,
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.symmetric(
@@ -265,9 +333,10 @@ class _AccountListPageState extends State<AccountListPage> {
                                             fontSize: 10,
                                             fontWeight: FontWeight.w500,
                                           ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 8,
@@ -289,6 +358,8 @@ class _AccountListPageState extends State<AccountListPage> {
                                             fontSize: 10,
                                             fontWeight: FontWeight.w500,
                                           ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
@@ -297,8 +368,9 @@ class _AccountListPageState extends State<AccountListPage> {
                                     const SizedBox(height: 4),
                                     Text(
                                       account.description!,
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
+                                      style: theme.textTheme.bodySmall,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ],

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/themes/app_theme.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/journal_entry.dart';
 import '../services/accounting_service.dart';
@@ -95,59 +96,116 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = AppTheme.isMobile(context);
+    final theme = Theme.of(context);
+    
     return MainLayout(
       title: 'Asientos Contables',
       body: Column(
         children: [
           // Search and Filter Bar
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(isMobile ? 12 : 16),
             decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
+              color: theme.cardColor,
               border: Border(
-                bottom: BorderSide(color: Theme.of(context).dividerColor),
+                bottom: BorderSide(color: theme.dividerColor),
               ),
             ),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: SearchWidget(
-                        hintText: 'Buscar por número, descripción, módulo...',
-                        onSearchChanged: _onSearchChanged,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 2,
-                      child: DropdownButtonFormField<JournalEntryType?>(
-                        decoration: const InputDecoration(
-                          labelText: 'Tipo',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                        ),
-                        value: _selectedType,
-                        items: [
-                          const DropdownMenuItem<JournalEntryType?>(
-                            value: null,
-                            child: Text('Todos'),
-                          ),
-                          ...JournalEntryType.values.map((type) =>
-                            DropdownMenuItem<JournalEntryType?>(
-                              value: type,
-                              child: Text(type.displayName),
+                if (isMobile) ...[
+                  // Mobile: Vertical layout
+                  SearchWidget(
+                    hintText: 'Buscar asientos...',
+                    onSearchChanged: _onSearchChanged,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<JournalEntryType?>(
+                          decoration: const InputDecoration(
+                            labelText: 'Tipo',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
                             ),
                           ),
-                        ],
-                        onChanged: _onTypeFilterChanged,
+                          value: _selectedType,
+                          items: [
+                            const DropdownMenuItem<JournalEntryType?>(
+                              value: null,
+                              child: Text(
+                                'Todos',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            ...JournalEntryType.values.map((type) =>
+                              DropdownMenuItem<JournalEntryType?>(
+                                value: type,
+                                child: Text(
+                                  type.displayName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: _onTypeFilterChanged,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
+                      const SizedBox(width: 12),
+                      IconButton.filledTonal(
+                        onPressed: () => context.push('/accounting/journal-entries/new'),
+                        icon: const Icon(Icons.add),
+                        iconSize: 24,
+                        tooltip: 'Nuevo Asiento',
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  // Desktop: Horizontal layout
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: SearchWidget(
+                          hintText: 'Buscar por número, descripción, módulo...',
+                          onSearchChanged: _onSearchChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 2,
+                        child: DropdownButtonFormField<JournalEntryType?>(
+                          decoration: const InputDecoration(
+                            labelText: 'Tipo',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                          ),
+                          value: _selectedType,
+                          items: [
+                            const DropdownMenuItem<JournalEntryType?>(
+                              value: null,
+                              child: Text('Todos'),
+                            ),
+                            ...JournalEntryType.values.map((type) =>
+                              DropdownMenuItem<JournalEntryType?>(
+                                value: type,
+                                child: Text(type.displayName),
+                              ),
+                            ),
+                          ],
+                          onChanged: _onTypeFilterChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
                     AppButton(
                       text: 'Nuevo Asiento',
                       onPressed: () => context.push('/accounting/journal-entries/new'),
@@ -155,12 +213,15 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                     ),
                   ],
                 ),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Text(
                       'Total: ${_filteredEntries.length} asientos',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: theme.textTheme.bodySmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const Spacer(),
                     if (_isLoading)
@@ -181,60 +242,93 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredEntries.isEmpty
                     ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.receipt_long,
-                              size: 64,
-                              color: Theme.of(context).disabledColor,
-                            ),
-                            const SizedBox(height: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.receipt_long,
+                                size: 64,
+                                color: theme.disabledColor,
+                              ),
+                              const SizedBox(height: 16),
                             Text(
                               _searchTerm.isEmpty && _selectedType == null
                                   ? 'No hay asientos contables registrados'
                                   : 'No se encontraron asientos que coincidan con los filtros',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: Theme.of(context).disabledColor,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: theme.disabledColor,
                               ),
+                              textAlign: TextAlign.center,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             if (_searchTerm.isEmpty && _selectedType == null) ...[
                               const SizedBox(height: 8),
                               Text(
                                 'Los asientos se crean automáticamente con las ventas y compras',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).disabledColor,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.disabledColor,
                                 ),
+                                textAlign: TextAlign.center,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ],
                         ),
-                      )
+                      ),
+                    )
                     : ListView.builder(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(isMobile ? 8 : 16),
                         itemCount: _filteredEntries.length,
                         itemBuilder: (context, index) {
                           final entry = _filteredEntries[index];
                           return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
+                            margin: EdgeInsets.only(bottom: isMobile ? 6 : 8),
                             child: ExpansionTile(
-                              title: Row(
-                                children: [
-                                  Expanded(
-                                    flex: 2,
-                                    child: Column(
+                              title: isMobile
+                                  ? Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           entry.entryNumber,
-                                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          style: theme.textTheme.titleSmall?.copyWith(
                                             fontWeight: FontWeight.bold,
                                           ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                         Text(
                                           _dateFormat.format(entry.date),
-                                          style: Theme.of(context).textTheme.bodySmall,
+                                          style: theme.textTheme.bodySmall,
                                         ),
+                                        Text(
+                                          entry.description,
+                                          style: theme.textTheme.bodySmall,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    )
+                                  : Row(
+                                      children: [
+                                        Expanded(
+                                          flex: 2,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                entry.entryNumber,
+                                                style: theme.textTheme.titleMedium?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              Text(
+                                                _dateFormat.format(entry.date),
+                                                style: theme.textTheme.bodySmall,
+                                              ),
                                       ],
                                     ),
                                   ),
@@ -242,7 +336,9 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                     flex: 3,
                                     child: Text(
                                       entry.description,
-                                      style: Theme.of(context).textTheme.bodyMedium,
+                                      style: theme.textTheme.bodyMedium,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   Expanded(
@@ -268,6 +364,8 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                           fontWeight: FontWeight.w500,
                                         ),
                                         textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   ),
@@ -292,15 +390,19 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                         fontSize: 12,
                                         fontWeight: FontWeight.w500,
                                       ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
                                     _currencyFormat.format(entry.totalDebit),
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    style: theme.textTheme.titleMedium?.copyWith(
                                       fontWeight: FontWeight.bold,
                                       color: entry.isBalanced ? null : Colors.red,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),

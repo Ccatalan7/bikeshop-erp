@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../shared/models/stock_movement.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
+import '../../../shared/themes/app_theme.dart';
 import '../services/stock_movement_service.dart';
 
 class StockMovementListPage extends StatefulWidget {
@@ -113,8 +114,10 @@ class _StockMovementListPageState extends State<StockMovementListPage> {
   }
 
   Widget _buildHeader() {
+    final isMobile = AppTheme.isMobile(context);
+    
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
       child: Row(
         children: [
           IconButton(
@@ -128,6 +131,8 @@ class _StockMovementListPageState extends State<StockMovementListPage> {
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           IconButton(
@@ -135,11 +140,12 @@ class _StockMovementListPageState extends State<StockMovementListPage> {
             onPressed: _loadData,
             tooltip: 'Actualizar',
           ),
-          IconButton(
-            icon: const Icon(Icons.filter_alt_off),
-            onPressed: _clearFilters,
-            tooltip: 'Limpiar filtros',
-          ),
+          if (!isMobile)
+            IconButton(
+              icon: const Icon(Icons.filter_alt_off),
+              onPressed: _clearFilters,
+              tooltip: 'Limpiar filtros',
+            ),
         ],
       ),
     );
@@ -150,78 +156,140 @@ class _StockMovementListPageState extends State<StockMovementListPage> {
       return const SizedBox.shrink();
     }
 
+    final isMobile = AppTheme.isMobile(context);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildStatCard(
-              'Total',
-              _statistics!['total_movements'].toString(),
-              Icons.swap_horiz,
-              Colors.blue,
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12.0 : 16.0),
+      child: isMobile
+          ? Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        'Total',
+                        _statistics!['total_movements'].toString(),
+                        Icons.swap_horiz,
+                        Colors.blue,
+                        isMobile,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Entradas',
+                        _statistics!['total_in'].toString(),
+                        Icons.arrow_downward,
+                        Colors.green,
+                        isMobile,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        'Salidas',
+                        _statistics!['total_out'].toString(),
+                        Icons.arrow_upward,
+                        Colors.red,
+                        isMobile,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Ajustes',
+                        _statistics!['total_adjustments'].toString(),
+                        Icons.tune,
+                        Colors.orange,
+                        isMobile,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    'Total',
+                    _statistics!['total_movements'].toString(),
+                    Icons.swap_horiz,
+                    Colors.blue,
+                    isMobile,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildStatCard(
+                    'Entradas',
+                    _statistics!['total_in'].toString(),
+                    Icons.arrow_downward,
+                    Colors.green,
+                    isMobile,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildStatCard(
+                    'Salidas',
+                    _statistics!['total_out'].toString(),
+                    Icons.arrow_upward,
+                    Colors.red,
+                    isMobile,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildStatCard(
+                    'Ajustes',
+                    _statistics!['total_adjustments'].toString(),
+                    Icons.tune,
+                    Colors.orange,
+                    isMobile,
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _buildStatCard(
-              'Entradas',
-              _statistics!['total_in'].toString(),
-              Icons.arrow_downward,
-              Colors.green,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _buildStatCard(
-              'Salidas',
-              _statistics!['total_out'].toString(),
-              Icons.arrow_upward,
-              Colors.red,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _buildStatCard(
-              'Ajustes',
-              _statistics!['total_adjustments'].toString(),
-              Icons.tune,
-              Colors.orange,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(String label, String value, IconData icon, Color color, bool isMobile) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: EdgeInsets.all(isMobile ? 8.0 : 12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(icon, size: 20, color: color),
+                Icon(icon, size: isMobile ? 18 : 20, color: color),
                 const SizedBox(width: 4),
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: isMobile ? 11 : 12,
                     color: Colors.grey[600],
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: isMobile ? 2 : 4),
             Text(
               value,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: isMobile ? 18 : 20,
                 fontWeight: FontWeight.bold,
                 color: color,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

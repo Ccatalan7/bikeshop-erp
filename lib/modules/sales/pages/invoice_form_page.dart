@@ -790,21 +790,21 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                         theme,
                         icon: Icons.person_outline,
                         title: 'Cliente',
-                        children: [_buildCustomerSection(theme)],
+                        children: [_buildCustomerSection(theme, isMobile)],
                       ),
                       const SizedBox(height: 16),
                       _buildSectionCard(
                         theme,
                         icon: Icons.shopping_basket_outlined,
                         title: 'Productos y servicios',
-                        children: [_buildLineItemsSection(theme)],
+                        children: [_buildLineItemsSection(theme, isMobile)],
                       ),
                       const SizedBox(height: 16),
                       _buildSectionCard(
                         theme,
                         icon: Icons.notes_outlined,
                         title: 'Referencia',
-                        children: [_buildReferenceField(theme)],
+                        children: [_buildReferenceField(theme, isMobile)],
                       ),
                     ],
                   ),
@@ -823,14 +823,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                         theme,
                         icon: Icons.event_available_outlined,
                         title: 'Fechas y estado',
-                        children: [_buildDatesAndStatus(theme)],
+                        children: [_buildDatesAndStatus(theme, isMobile)],
                       ),
                       const SizedBox(height: 16),
                       _buildSectionCard(
                         theme,
                         icon: Icons.calculate_outlined,
                         title: 'Resumen',
-                        children: [_buildSummary(theme)],
+                        children: [_buildSummary(theme, isMobile)],
                       ),
                     ],
                   ),
@@ -845,35 +845,35 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 theme,
                 icon: Icons.person_outline,
                 title: 'Cliente',
-                children: [_buildCustomerSection(theme)],
+                children: [_buildCustomerSection(theme, isMobile)],
               ),
               const SizedBox(height: 16),
               _buildSectionCard(
                 theme,
                 icon: Icons.shopping_basket_outlined,
                 title: 'Productos y servicios',
-                children: [_buildLineItemsSection(theme)],
+                children: [_buildLineItemsSection(theme, isMobile)],
               ),
               const SizedBox(height: 16),
               _buildSectionCard(
                 theme,
                 icon: Icons.event_available_outlined,
                 title: 'Fechas y estado',
-                children: [_buildDatesAndStatus(theme)],
+                children: [_buildDatesAndStatus(theme, isMobile)],
               ),
               const SizedBox(height: 16),
               _buildSectionCard(
                 theme,
                 icon: Icons.calculate_outlined,
                 title: 'Resumen',
-                children: [_buildSummary(theme)],
+                children: [_buildSummary(theme, isMobile)],
               ),
               const SizedBox(height: 16),
               _buildSectionCard(
                 theme,
                 icon: Icons.notes_outlined,
                 title: 'Referencia',
-                children: [_buildReferenceField(theme)],
+                children: [_buildReferenceField(theme, isMobile)],
               ),
             ],
           );
@@ -932,7 +932,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
-  Widget _buildCustomerSection(ThemeData theme) {
+  Widget _buildCustomerSection(ThemeData theme, bool isMobile) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -950,7 +950,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             return null;
           },
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: isMobile ? 16 : 20),
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: CircleAvatar(
@@ -963,48 +963,95 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           title: Text(
             _selectedCustomer?.name ?? 'Selecciona un cliente',
             style: theme.textTheme.titleMedium,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           subtitle: _selectedCustomer == null
-              ? const Text('Necesario para facturación electrónica y reportes')
+              ? Text(
+                  'Necesario para facturación electrónica y reportes',
+                  style: theme.textTheme.bodySmall,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 4),
                     if (_selectedCustomer!.rut.isNotEmpty)
-                      Text('RUT: ${_selectedCustomer!.rut}'),
+                      Text(
+                        'RUT: ${_selectedCustomer!.rut}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     if ((_selectedCustomer!.email ?? '').isNotEmpty)
-                      Text('Email: ${_selectedCustomer!.email}'),
+                      Text(
+                        'Email: ${_selectedCustomer!.email}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     if ((_selectedCustomer!.phone ?? '').isNotEmpty)
-                      Text('Teléfono: ${_selectedCustomer!.phone}'),
+                      Text(
+                        'Teléfono: ${_selectedCustomer!.phone}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                   ],
                 ),
-          trailing: FilledButton.icon(
-            onPressed: _canEditFields ? _openCustomerSelector : null,
-            icon: const Icon(Icons.search),
-            label:
-                Text(_selectedCustomer == null ? 'Buscar cliente' : 'Cambiar'),
-          ),
+          trailing: isMobile
+              ? null
+              : FilledButton.icon(
+                  onPressed: _canEditFields ? _openCustomerSelector : null,
+                  icon: const Icon(Icons.search),
+                  label: Text(
+                    _selectedCustomer == null ? 'Buscar cliente' : 'Cambiar',
+                  ),
+                ),
         ),
+        if (isMobile) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _canEditFields ? _openCustomerSelector : null,
+              icon: const Icon(Icons.search),
+              label: Text(
+                _selectedCustomer == null ? 'Buscar cliente' : 'Cambiar cliente',
+              ),
+              style: FilledButton.styleFrom(
+                minimumSize: Size(double.infinity, AppTheme.mobileMinTouchTarget),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildLineItemsSection(ThemeData theme) {
+  Widget _buildLineItemsSection(ThemeData theme, bool isMobile) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Align(
-          alignment: Alignment.centerRight,
+        SizedBox(
+          width: double.infinity,
           child: OutlinedButton.icon(
             icon: const Icon(Icons.add_shopping_cart_outlined),
             label: const Text('Agregar producto'),
             onPressed: _canEditFields ? _openProductSelector : null,
+            style: OutlinedButton.styleFrom(
+              minimumSize: Size(
+                double.infinity,
+                isMobile ? AppTheme.mobileMinTouchTarget : 40,
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: isMobile ? 8 : 12),
         if (_lineEntries.isEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+            padding: EdgeInsets.symmetric(
+              vertical: isMobile ? 24 : 32,
+              horizontal: 16,
+            ),
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
               borderRadius: BorderRadius.circular(16),
@@ -1012,12 +1059,16 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.production_quantity_limits,
-                    size: 48, color: theme.colorScheme.onSurfaceVariant),
-                const SizedBox(height: 12),
+                Icon(
+                  Icons.production_quantity_limits,
+                  size: isMobile ? 40 : 48,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                SizedBox(height: isMobile ? 8 : 12),
                 Text(
                   'Aún no has agregado productos',
                   style: theme.textTheme.titleMedium,
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1026,6 +1077,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                   textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -1033,20 +1086,20 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         else
           Column(
             children: _lineEntries
-                .map((entry) => _buildLineCard(theme, entry))
+                .map((entry) => _buildLineCard(theme, entry, isMobile))
                 .toList(),
           ),
       ],
     );
   }
 
-  Widget _buildLineCard(ThemeData theme, _InvoiceLineEntry entry) {
+  Widget _buildLineCard(ThemeData theme, _InvoiceLineEntry entry, bool isMobile) {
     final line = entry.line;
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: isMobile ? 8 : 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1061,12 +1114,16 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                         line.name,
                         style: theme.textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.w600),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         line.sku.isEmpty ? 'SKU pendiente' : 'SKU: ${line.sku}',
                         style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -1079,11 +1136,12 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
+            SizedBox(height: isMobile ? 8 : 12),
+            if (isMobile)
+              // Mobile: Vertical stacked fields
+              Column(
+                children: [
+                  TextField(
                     controller: entry.quantityController,
                     enabled: _canEditFields,
                     decoration: const InputDecoration(
@@ -1095,10 +1153,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                       FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
+                  const SizedBox(height: 12),
+                  TextField(
                     controller: entry.unitPriceController,
                     enabled: _canEditFields,
                     decoration: const InputDecoration(
@@ -1111,10 +1167,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                       FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
+                  const SizedBox(height: 12),
+                  TextField(
                     controller: entry.discountController,
                     enabled: _canEditFields,
                     decoration: const InputDecoration(
@@ -1127,11 +1181,65 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                       FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
                     ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
+                ],
+              )
+            else
+              // Desktop: Horizontal row
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: entry.quantityController,
+                      enabled: _canEditFields,
+                      decoration: const InputDecoration(
+                        labelText: 'Cantidad',
+                      ),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: entry.unitPriceController,
+                      enabled: _canEditFields,
+                      decoration: const InputDecoration(
+                        labelText: 'Precio unitario (sin IVA)',
+                        prefixText: 'CLP ',
+                      ),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: entry.discountController,
+                      enabled: _canEditFields,
+                      decoration: const InputDecoration(
+                        labelText: 'Descuento',
+                        prefixText: 'CLP ',
+                      ),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            SizedBox(height: isMobile ? 8 : 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.spaceBetween,
               children: [
                 Container(
                   padding:
@@ -1141,23 +1249,26 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    'Total línea: ${ChileanUtils.formatCurrency(line.netAmount)}',
+                    'Total: ${ChileanUtils.formatCurrency(line.netAmount)}',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.primary,
                       fontWeight: FontWeight.w600,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const Spacer(),
                 if (line.product != null && line.product!.trackStock)
                   Text(
-                    'Stock disponible: ${line.product!.stockQuantity}',
+                    'Stock: ${line.product!.stockQuantity}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: line.product!.stockQuantity <=
                               line.product!.minStockLevel
                           ? theme.colorScheme.error
                           : theme.colorScheme.onSurfaceVariant,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
               ],
             ),
@@ -1167,32 +1278,54 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
-  Widget _buildDatesAndStatus(ThemeData theme) {
+  Widget _buildDatesAndStatus(ThemeData theme, bool isMobile) {
     return Column(
       children: [
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.event_note),
           title: const Text('Fecha de emisión'),
-          subtitle: Text(ChileanUtils.formatDate(_issueDate)),
-          trailing: TextButton(
-            onPressed:
-                _canEditFields ? () => _pickDate(isIssueDate: true) : null,
-            child: const Text('Cambiar'),
+          subtitle: Text(
+            ChileanUtils.formatDate(_issueDate),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
+          trailing: isMobile
+              ? IconButton(
+                  onPressed:
+                      _canEditFields ? () => _pickDate(isIssueDate: true) : null,
+                  icon: const Icon(Icons.edit),
+                  tooltip: 'Cambiar',
+                )
+              : TextButton(
+                  onPressed:
+                      _canEditFields ? () => _pickDate(isIssueDate: true) : null,
+                  child: const Text('Cambiar'),
+                ),
         ),
         const Divider(),
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.schedule_outlined),
           title: const Text('Fecha de vencimiento'),
-          subtitle: Text(ChileanUtils.formatDate(
-              _dueDate ?? _issueDate.add(const Duration(days: 30)))),
-          trailing: TextButton(
-            onPressed:
-                _canEditFields ? () => _pickDate(isIssueDate: false) : null,
-            child: const Text('Cambiar'),
+          subtitle: Text(
+            ChileanUtils.formatDate(
+                _dueDate ?? _issueDate.add(const Duration(days: 30))),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
+          trailing: isMobile
+              ? IconButton(
+                  onPressed:
+                      _canEditFields ? () => _pickDate(isIssueDate: false) : null,
+                  icon: const Icon(Icons.edit),
+                  tooltip: 'Cambiar',
+                )
+              : TextButton(
+                  onPressed:
+                      _canEditFields ? () => _pickDate(isIssueDate: false) : null,
+                  child: const Text('Cambiar'),
+                ),
         ),
         const Divider(),
         ListTile(
@@ -1211,17 +1344,26 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
-  Widget _buildSummary(ThemeData theme) {
-    final textStyle =
-        theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
+  Widget _buildSummary(ThemeData theme, bool isMobile) {
+    final textStyle = theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
     return Column(
       children: [
-        _buildSummaryRow('Subtotal', ChileanUtils.formatCurrency(_subtotal),
-            textStyle, theme),
-        const SizedBox(height: 8),
         _buildSummaryRow(
-            'IVA (19%)', ChileanUtils.formatCurrency(_iva), textStyle, theme),
-        const Divider(height: 24),
+          'Subtotal',
+          ChileanUtils.formatCurrency(_subtotal),
+          textStyle,
+          theme,
+        ),
+        SizedBox(height: isMobile ? 6 : 8),
+        _buildSummaryRow(
+          'IVA (19%)',
+          ChileanUtils.formatCurrency(_iva),
+          textStyle,
+          theme,
+        ),
+        Divider(height: isMobile ? 20 : 24),
         _buildSummaryRow(
           'Total',
           ChileanUtils.formatCurrency(_total),
@@ -1240,13 +1382,28 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: theme.textTheme.bodyMedium),
-        Text(value, style: style),
+        Flexible(
+          child: Text(
+            label,
+            style: theme.textTheme.bodyMedium,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            style: style,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildReferenceField(ThemeData theme) {
+  Widget _buildReferenceField(ThemeData theme, bool isMobile) {
     return TextFormField(
       controller: _referenceController,
       enabled: _canEditFields,

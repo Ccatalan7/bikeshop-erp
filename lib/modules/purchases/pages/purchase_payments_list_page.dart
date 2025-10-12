@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/themes/app_theme.dart';
 import '../models/purchase_payment.dart';
 import '../services/purchase_service.dart';
 
@@ -102,6 +103,7 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = AppTheme.isMobile(context);
     final totalAmount = _filtered.fold<double>(
       0,
       (sum, payment) => sum + payment.amount,
@@ -109,7 +111,7 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pagos de Compras'),
+        title: const Text('Pagos de Compras', maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -121,14 +123,14 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
         children: [
           // Search and summary
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(isMobile ? 12 : 16),
             color: Theme.of(context).colorScheme.surface,
             child: Column(
               children: [
                 TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: 'Buscar por factura, proveedor, referencia...',
+                    hintText: isMobile ? 'Buscar...' : 'Buscar por factura, proveedor, referencia...',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
@@ -145,20 +147,29 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                     fillColor: Theme.of(context).colorScheme.background,
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: isMobile ? 8 : 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Total: ${_filtered.length} pagos',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    Flexible(
+                      child: Text(
+                        'Total: ${_filtered.length} pagos',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    Text(
-                      ChileanUtils.formatCurrency(totalAmount),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Theme.of(context).colorScheme.primary,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        ChileanUtils.formatCurrency(totalAmount),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],

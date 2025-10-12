@@ -6,6 +6,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/themes/app_theme.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 
@@ -50,6 +51,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isMobile = AppTheme.isMobile(context);
     final salesService = context.watch<SalesService>();
     final isLoading = salesService.isLoadingInvoices;
     final invoices = _searchTerm.isEmpty
@@ -61,29 +64,57 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         children: [
           // Header
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Facturas',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+            padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Facturas',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: AppButton(
+                          text: 'Nueva Factura',
+                          icon: Icons.add,
+                          onPressed: () {
+                            context.push('/sales/invoices/new').then((_) {
+                              _refreshInvoices(showErrors: false);
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Facturas',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      AppButton(
+                        text: 'Nueva Factura',
+                        icon: Icons.add,
+                        onPressed: () {
+                          context.push('/sales/invoices/new').then((_) {
+                            _refreshInvoices(showErrors: false);
+                          });
+                        },
+                      ),
+                    ],
                   ),
-                ),
-                AppButton(
-                  text: 'Nueva Factura',
-                  icon: Icons.add,
-                  onPressed: () {
-                    context.push('/sales/invoices/new').then((_) {
-                      _refreshInvoices(showErrors: false);
-                    });
-                  },
-                ),
-              ],
-            ),
           ),
           
           // Search
@@ -180,6 +211,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         if (invoice.reference != null) ...[
                           const SizedBox(height: 4),
@@ -189,11 +222,14 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                               fontSize: 14,
                               color: Colors.grey[600],
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
                   _buildStatusChip(invoice.status),
                 ],
               ),
@@ -213,6 +249,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       fontSize: 14,
                       color: Colors.grey[600],
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const Spacer(),
                   Text(
@@ -222,28 +260,38 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       fontWeight: FontWeight.bold,
                       color: Colors.green,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Text(
-                    'Pagado: ${ChileanUtils.formatCurrency(invoice.paidAmount)}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                  Flexible(
+                    child: Text(
+                      'Pagado: ${ChileanUtils.formatCurrency(invoice.paidAmount)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(width: 16),
-                  Text(
-                    'Saldo: ${ChileanUtils.formatCurrency(invoice.balance)}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: invoice.balance <= 0
-                          ? Colors.green[700]
-                          : Colors.orange[800],
+                  Flexible(
+                    child: Text(
+                      'Saldo: ${ChileanUtils.formatCurrency(invoice.balance)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: invoice.balance <= 0
+                            ? Colors.green[700]
+                            : Colors.orange[800],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const Spacer(),

@@ -6,6 +6,7 @@ import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
+import '../../../shared/themes/app_theme.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
 
@@ -105,37 +106,69 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isMobile = AppTheme.isMobile(context);
+    
     return MainLayout(
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Facturas de compra',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+            padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Facturas de compra',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: AppButton(
+                          text: 'Nueva factura',
+                          icon: Icons.add,
+                          onPressed: () async {
+                            final created = await context.push<bool>('/purchases/new');
+                            if (created == true) {
+                              _loadInvoices(refresh: true);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Facturas de compra',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      AppButton(
+                        text: 'Nueva factura',
+                        icon: Icons.add,
+                        onPressed: () async {
+                          final created = await context.push<bool>('/purchases/new');
+                          if (created == true) {
+                            _loadInvoices(refresh: true);
+                          }
+                        },
+                      ),
+                    ],
                   ),
-                ),
-                AppButton(
-                  text: 'Nueva factura',
-                  icon: Icons.add,
-                  onPressed: () async {
-                    final created = await context.push<bool>('/purchases/new');
-                    if (created == true) {
-                      _loadInvoices(refresh: true);
-                    }
-                  },
-                ),
-              ],
-            ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 12.0 : 16.0),
             child: Column(
               children: [
                 SearchBarWidget(
@@ -143,34 +176,68 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   hintText: 'Buscar por número, proveedor o RUT...',
                   onChanged: _filterInvoices,
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Text('Estado:'),
-                    const SizedBox(width: 12),
-                    DropdownButton<String>(
-                      value: _selectedStatus,
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setState(() => _selectedStatus = value);
-                        _filterInvoices(_searchController.text);
-                      },
-                      items: const [
-                        DropdownMenuItem(value: 'all', child: Text('Todos')),
-                        DropdownMenuItem(value: 'draft', child: Text('Borrador')),
-                        DropdownMenuItem(value: 'received', child: Text('Recibida')),
-                        DropdownMenuItem(value: 'paid', child: Text('Pagada')),
-                        DropdownMenuItem(value: 'cancelled', child: Text('Anulada')),
-                      ],
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.refresh),
-                      tooltip: 'Actualizar',
-                      onPressed: () => _loadInvoices(refresh: true),
-                    ),
-                  ],
-                ),
+                SizedBox(height: isMobile ? 8 : 12),
+                isMobile
+                    ? Column(
+                        children: [
+                          Row(
+                            children: [
+                              const Text('Estado:', maxLines: 1, overflow: TextOverflow.ellipsis),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: DropdownButton<String>(
+                                  value: _selectedStatus,
+                                  isExpanded: true,
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    setState(() => _selectedStatus = value);
+                                    _filterInvoices(_searchController.text);
+                                  },
+                                  items: const [
+                                    DropdownMenuItem(value: 'all', child: Text('Todos', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    DropdownMenuItem(value: 'draft', child: Text('Borrador', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    DropdownMenuItem(value: 'received', child: Text('Recibida', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    DropdownMenuItem(value: 'paid', child: Text('Pagada', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    DropdownMenuItem(value: 'cancelled', child: Text('Anulada', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.refresh),
+                                tooltip: 'Actualizar',
+                                onPressed: () => _loadInvoices(refresh: true),
+                              ),
+                            ],
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          const Text('Estado:'),
+                          const SizedBox(width: 12),
+                          DropdownButton<String>(
+                            value: _selectedStatus,
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() => _selectedStatus = value);
+                              _filterInvoices(_searchController.text);
+                            },
+                            items: const [
+                              DropdownMenuItem(value: 'all', child: Text('Todos')),
+                              DropdownMenuItem(value: 'draft', child: Text('Borrador')),
+                              DropdownMenuItem(value: 'received', child: Text('Recibida')),
+                              DropdownMenuItem(value: 'paid', child: Text('Pagada')),
+                              DropdownMenuItem(value: 'cancelled', child: Text('Anulada')),
+                            ],
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Actualizar',
+                            onPressed: () => _loadInvoices(refresh: true),
+                          ),
+                        ],
+                      ),
               ],
             ),
           ),

@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/themes/app_theme.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/constants/storage_constants.dart';
@@ -185,51 +186,91 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = AppTheme.isMobile(context);
+    
     return MainLayout(
       child: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _buildForm(),
+          : _buildForm(isMobile),
     );
   }
 
-  Widget _buildForm() {
+  Widget _buildForm(bool isMobile) {
     return Form(
       key: _formKey,
       child: Column(
         children: [
           // Header
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: () => context.pop(),
-                  icon: const Icon(Icons.arrow_back),
-                ),
-                Expanded(
-                  child: Text(
-                    _existingCustomer != null 
-                        ? 'Editar Cliente'
-                        : 'Nuevo Cliente',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+            padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            onPressed: () => context.pop(),
+                            icon: const Icon(Icons.arrow_back),
+                          ),
+                          Expanded(
+                            child: Text(
+                              _existingCustomer != null 
+                                  ? 'Editar Cliente'
+                                  : 'Nuevo Cliente',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: AppButton(
+                          text: 'Guardar',
+                          icon: Icons.save,
+                          onPressed: _saveCustomer,
+                          isLoading: _isSaving,
+                          fullWidth: true,
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => context.pop(),
+                        icon: const Icon(Icons.arrow_back),
+                      ),
+                      Expanded(
+                        child: Text(
+                          _existingCustomer != null 
+                              ? 'Editar Cliente'
+                              : 'Nuevo Cliente',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      AppButton(
+                        text: 'Guardar',
+                        icon: Icons.save,
+                        onPressed: _saveCustomer,
+                        isLoading: _isSaving,
+                      ),
+                    ],
                   ),
-                ),
-                AppButton(
-                  text: 'Guardar',
-                  icon: Icons.save,
-                  onPressed: _saveCustomer,
-                  isLoading: _isSaving,
-                ),
-              ],
-            ),
           ),
           
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -240,8 +281,8 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                         GestureDetector(
                           onTap: _selectImage,
                           child: Container(
-                            width: 120,
-                            height: 120,
+                            width: isMobile ? 100 : 120,
+                            height: isMobile ? 100 : 120,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border: Border.all(
@@ -258,7 +299,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                                   )
                                 : ImageService.buildAvatarImage(
                                     imageUrl: _imageUrl,
-                                    radius: 60,
+                                    radius: isMobile ? 50 : 60,
                                     initials: _nameController.text.isNotEmpty
                                         ? Customer(name: _nameController.text, rut: '').initials
                                         : '?',
@@ -270,21 +311,27 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                           onPressed: _selectImage,
                           icon: const Icon(Icons.camera_alt),
                           label: const Text('Cambiar Foto'),
+                          style: TextButton.styleFrom(
+                            minimumSize: Size(
+                              double.infinity,
+                              isMobile ? AppTheme.mobileMinTouchTarget : 40,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  SizedBox(height: isMobile ? 24 : 32),
                   
                   // Personal information
-                  const Text(
+                  Text(
                     'Información Personal',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: isMobile ? 16 : 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isMobile ? 12 : 16),
                   
                   TextFormField(
                     controller: _nameController,
@@ -300,7 +347,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                     },
                     onChanged: (value) => setState(() {}), // Update avatar initials
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isMobile ? 12 : 16),
                   
                   TextFormField(
                     controller: _rutController,
@@ -321,7 +368,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                       }
                     },
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isMobile ? 12 : 16),
                   
                   TextFormField(
                     controller: _emailController,
@@ -337,7 +384,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isMobile ? 12 : 16),
                   
                   TextFormField(
                     controller: _phoneController,
@@ -347,17 +394,17 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                       prefixIcon: Icon(Icons.phone),
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  SizedBox(height: isMobile ? 24 : 32),
                   
                   // Address information
-                  const Text(
+                  Text(
                     'Información de Ubicación',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: isMobile ? 16 : 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isMobile ? 12 : 16),
                   
                   DropdownButtonFormField<String>(
                     value: _selectedRegion,
@@ -368,14 +415,18 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                     items: ChileanUtils.getChileanRegions().map((region) {
                       return DropdownMenuItem<String>(
                         value: region,
-                        child: Text(region),
+                        child: Text(
+                          region,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       );
                     }).toList(),
                     onChanged: (value) {
                       setState(() => _selectedRegion = value);
                     },
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isMobile ? 12 : 16),
                   
                   TextFormField(
                     controller: _addressController,
@@ -386,17 +437,17 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                       hintText: 'Calle, número, comuna',
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  SizedBox(height: isMobile ? 24 : 32),
                   
                   // Status
-                  const Text(
+                  Text(
                     'Estado del Cliente',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: isMobile ? 16 : 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isMobile ? 12 : 16),
                   
                   SwitchListTile(
                     title: const Text('Cliente Activo'),

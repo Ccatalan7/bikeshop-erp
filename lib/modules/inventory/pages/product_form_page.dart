@@ -11,8 +11,10 @@ import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
+import '../../../shared/themes/app_theme.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/mobile_dialogs.dart';
 import '../../../shared/models/supplier.dart';
 import '../../purchases/services/purchase_service.dart';
 import '../models/category_models.dart';
@@ -370,16 +372,18 @@ class _ProductFormPageState extends State<ProductFormPage> {
     @override
     Widget build(BuildContext context) {
       final theme = Theme.of(context);
+      final isMobile = AppTheme.isMobile(context);
+      
       return MainLayout(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : Column(
                 children: [
-                  _buildHeader(theme),
+                  _buildHeader(theme, isMobile),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: _buildForm(theme),
+                      padding: EdgeInsets.all(isMobile ? 12 : 16),
+                      child: _buildForm(theme, isMobile),
                     ),
                   ),
                 ],
@@ -387,10 +391,73 @@ class _ProductFormPageState extends State<ProductFormPage> {
       );
     }
 
-    Widget _buildHeader(ThemeData theme) {
+    Widget _buildHeader(ThemeData theme, bool isMobile) {
       final title = _existingProduct != null
           ? 'Editar producto'
           : 'Nuevo producto';
+
+      if (isMobile) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => context.pop(),
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: 'Volver',
+                  ),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.percent, size: 16, color: theme.colorScheme.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Margen ${_marginPercentage.toStringAsFixed(1)}%',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: AppButton(
+                  text: 'Guardar',
+                  icon: Icons.save_outlined,
+                  onPressed: _isSaving ? null : _saveProduct,
+                  isLoading: _isSaving,
+                  fullWidth: true,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
 
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -418,6 +485,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -455,12 +524,12 @@ class _ProductFormPageState extends State<ProductFormPage> {
       );
     }
 
-    Widget _buildForm(ThemeData theme) {
+    Widget _buildForm(ThemeData theme, bool isMobile) {
       return Form(
         key: _formKey,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final isWide = constraints.maxWidth > 1080;
+            final isWide = constraints.maxWidth > 1080 && !isMobile;
             if (isWide) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,21 +542,21 @@ class _ProductFormPageState extends State<ProductFormPage> {
                           theme,
                           icon: Icons.description_outlined,
                           title: 'Información básica',
-                          children: _buildBasicInfoFields(theme),
+                          children: _buildBasicInfoFields(theme, isMobile),
                         ),
                         const SizedBox(height: 16),
                         _buildSectionCard(
                           theme,
                           icon: Icons.attach_money_outlined,
                           title: 'Precios y márgenes',
-                          children: _buildPricingFields(theme),
+                          children: _buildPricingFields(theme, isMobile),
                         ),
                         const SizedBox(height: 16),
                         _buildSectionCard(
                           theme,
                           icon: Icons.text_snippet_outlined,
                           title: 'Descripción del producto',
-                          children: _buildDescriptionFields(theme),
+                          children: _buildDescriptionFields(theme, isMobile),
                         ),
                       ],
                     ),
@@ -501,21 +570,21 @@ class _ProductFormPageState extends State<ProductFormPage> {
                           theme,
                           icon: Icons.image_outlined,
                           title: 'Imágenes',
-                          children: _buildMediaFields(theme),
+                          children: _buildMediaFields(theme, isMobile),
                         ),
                         const SizedBox(height: 16),
                         _buildSectionCard(
                           theme,
                           icon: Icons.inventory_outlined,
                           title: 'Inventario',
-                          children: _buildInventoryFields(theme),
+                          children: _buildInventoryFields(theme, isMobile),
                         ),
                         const SizedBox(height: 16),
                         _buildSectionCard(
                           theme,
                           icon: Icons.settings_outlined,
                           title: 'Estado y visibilidad',
-                          children: _buildStatusFields(theme),
+                          children: _buildStatusFields(theme, isMobile),
                         ),
                       ],
                     ),
@@ -531,42 +600,42 @@ class _ProductFormPageState extends State<ProductFormPage> {
                   theme,
                   icon: Icons.description_outlined,
                   title: 'Información básica',
-                  children: _buildBasicInfoFields(theme),
+                  children: _buildBasicInfoFields(theme, isMobile),
                 ),
                 const SizedBox(height: 16),
                 _buildSectionCard(
                   theme,
                   icon: Icons.image_outlined,
                   title: 'Imágenes',
-                  children: _buildMediaFields(theme),
+                  children: _buildMediaFields(theme, isMobile),
                 ),
                 const SizedBox(height: 16),
                 _buildSectionCard(
                   theme,
                   icon: Icons.attach_money_outlined,
                   title: 'Precios y márgenes',
-                  children: _buildPricingFields(theme),
+                  children: _buildPricingFields(theme, isMobile),
                 ),
                 const SizedBox(height: 16),
                 _buildSectionCard(
                   theme,
                   icon: Icons.inventory_outlined,
                   title: 'Inventario',
-                  children: _buildInventoryFields(theme),
+                  children: _buildInventoryFields(theme, isMobile),
                 ),
                 const SizedBox(height: 16),
                 _buildSectionCard(
                   theme,
                   icon: Icons.settings_outlined,
                   title: 'Estado y visibilidad',
-                  children: _buildStatusFields(theme),
+                  children: _buildStatusFields(theme, isMobile),
                 ),
                 const SizedBox(height: 16),
                 _buildSectionCard(
                   theme,
                   icon: Icons.text_snippet_outlined,
                   title: 'Descripción del producto',
-                  children: _buildDescriptionFields(theme),
+                  children: _buildDescriptionFields(theme, isMobile),
                 ),
               ],
             );
@@ -616,7 +685,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       );
     }
 
-    List<Widget> _buildBasicInfoFields(ThemeData theme) {
+    List<Widget> _buildBasicInfoFields(ThemeData theme, bool isMobile) {
       return [
         TextFormField(
           controller: _nameController,
@@ -631,36 +700,63 @@ class _ProductFormPageState extends State<ProductFormPage> {
             return null;
           },
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: TextFormField(
-                controller: _skuController,
-                decoration: const InputDecoration(
-                  labelText: 'SKU interno',
-                  hintText: 'Ej. BIC-MTB-TRK-001',
+        SizedBox(height: isMobile ? 12 : 16),
+        if (isMobile) ...[
+          TextFormField(
+            controller: _skuController,
+            decoration: const InputDecoration(
+              labelText: 'SKU interno',
+              hintText: 'Ej. BIC-MTB-TRK-001',
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'El SKU es requerido';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _generateSku,
+              icon: const Icon(Icons.auto_fix_high_outlined),
+              label: const Text('Generar SKU'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: Size(double.infinity, AppTheme.mobileMinTouchTarget),
+              ),
+            ),
+          ),
+        ] else
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: TextFormField(
+                  controller: _skuController,
+                  decoration: const InputDecoration(
+                    labelText: 'SKU interno',
+                    hintText: 'Ej. BIC-MTB-TRK-001',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'El SKU es requerido';
+                    }
+                    return null;
+                  },
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'El SKU es requerido';
-                  }
-                  return null;
-                },
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _generateSku,
-                icon: const Icon(Icons.auto_fix_high_outlined),
-                label: const Text('Generar'),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _generateSku,
+                  icon: const Icon(Icons.auto_fix_high_outlined),
+                  label: const Text('Generar'),
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
+            ],
+          ),
+        SizedBox(height: isMobile ? 12 : 16),
         DropdownButtonFormField<String>(
           value: _selectedCategoryId,
           decoration: const InputDecoration(
@@ -671,13 +767,17 @@ class _ProductFormPageState extends State<ProductFormPage> {
               .map(
                 (category) => DropdownMenuItem<String>(
                   value: category.id,
-                  child: Text(category.name),
+                  child: Text(
+                    category.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               )
               .toList(),
           onChanged: (value) => setState(() => _selectedCategoryId = value),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: isMobile ? 12 : 16),
         DropdownButtonFormField<String?>(
           value: _selectedSupplierId,
           decoration: const InputDecoration(
@@ -692,116 +792,208 @@ class _ProductFormPageState extends State<ProductFormPage> {
             ..._suppliers.map(
               (supplier) => DropdownMenuItem<String?>(
                 value: supplier.id,
-                child: Text(supplier.name),
+                child: Text(
+                  supplier.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ],
           onChanged: (value) => setState(() => _selectedSupplierId = value),
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _brandController,
-                decoration: const InputDecoration(
-                  labelText: 'Marca',
-                  hintText: 'Ej. Trek, Specialized, Giant',
+        SizedBox(height: isMobile ? 12 : 16),
+        if (isMobile) ...[
+          TextFormField(
+            controller: _brandController,
+            decoration: const InputDecoration(
+              labelText: 'Marca',
+              hintText: 'Ej. Trek, Specialized, Giant',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _modelController,
+            decoration: const InputDecoration(
+              labelText: 'Modelo',
+              hintText: 'Ej. Marlin 7 2025',
+            ),
+          ),
+        ] else
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _brandController,
+                  decoration: const InputDecoration(
+                    labelText: 'Marca',
+                    hintText: 'Ej. Trek, Specialized, Giant',
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _modelController,
-                decoration: const InputDecoration(
-                  labelText: 'Modelo',
-                  hintText: 'Ej. Marlin 7 2025',
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  controller: _modelController,
+                  decoration: const InputDecoration(
+                    labelText: 'Modelo',
+                    hintText: 'Ej. Marlin 7 2025',
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
       ];
     }
 
-    List<Widget> _buildPricingFields(ThemeData theme) {
+    List<Widget> _buildPricingFields(ThemeData theme, bool isMobile) {
       return [
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _costController,
-                decoration: const InputDecoration(
-                  labelText: 'Costo unitario',
-                  prefixText: 'CLP ',
-                ),
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
-                ],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Indica el costo del producto';
-                  }
-                  return null;
-                },
-              ),
+        if (isMobile) ...[
+          TextFormField(
+            controller: _costController,
+            decoration: const InputDecoration(
+              labelText: 'Costo unitario',
+              prefixText: 'CLP ',
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _priceController,
-                decoration: const InputDecoration(
-                  labelText: 'Precio de venta',
-                  prefixText: 'CLP ',
-                ),
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
-                ],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Define el precio de venta';
-                  }
-                  return null;
-                },
-              ),
+            keyboardType: const TextInputType.numberWithOptions(
+              decimal: true,
             ),
-          ],
-        ),
-        const SizedBox(height: 16),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+            ],
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Indica el costo del producto';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _priceController,
+            decoration: const InputDecoration(
+              labelText: 'Precio de venta',
+              prefixText: 'CLP ',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(
+              decimal: true,
+            ),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+            ],
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Define el precio de venta';
+              }
+              return null;
+            },
+          ),
+        ] else
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _costController,
+                  decoration: const InputDecoration(
+                    labelText: 'Costo unitario',
+                    prefixText: 'CLP ',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Indica el costo del producto';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  controller: _priceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Precio de venta',
+                    prefixText: 'CLP ',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Define el precio de venta';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          ),
+        SizedBox(height: isMobile ? 12 : 16),
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(isMobile ? 12 : 16),
           decoration: BoxDecoration(
             color: theme.colorScheme.primaryContainer.withOpacity(0.25),
             borderRadius: BorderRadius.circular(16),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.show_chart,
-                      color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Margen estimado',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.primary,
+          child: isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.show_chart,
+                            color: theme.colorScheme.primary, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Margen estimado',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-              Text(
-                '${_marginPercentage.isFinite ? _marginPercentage.toStringAsFixed(1) : '0.0'}%',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
+                    const SizedBox(height: 8),
+                    Text(
+                      '${_marginPercentage.isFinite ? _marginPercentage.toStringAsFixed(1) : '0.0'}%',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: _marginPercentage < 0
+                            ? theme.colorScheme.error
+                            : theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.show_chart,
+                            color: theme.colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Margen estimado',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '${_marginPercentage.isFinite ? _marginPercentage.toStringAsFixed(1) : '0.0'}%',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
                   color: _marginPercentage < 0
                       ? theme.colorScheme.error
                       : theme.colorScheme.primary,
@@ -813,54 +1005,82 @@ class _ProductFormPageState extends State<ProductFormPage> {
       ];
     }
 
-    List<Widget> _buildInventoryFields(ThemeData theme) {
+    List<Widget> _buildInventoryFields(ThemeData theme, bool isMobile) {
       return [
         Text(
           'Controla cantidades disponibles y stock mínimo para alertas.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _inventoryQtyController,
-                decoration: const InputDecoration(
-                  labelText: 'Stock disponible',
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
-              ),
+        SizedBox(height: isMobile ? 12 : 16),
+        if (isMobile) ...[
+          TextFormField(
+            controller: _inventoryQtyController,
+            decoration: const InputDecoration(
+              labelText: 'Stock disponible',
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _minStockController,
-                decoration: const InputDecoration(
-                  labelText: 'Stock mínimo',
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
-              ),
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _minStockController,
+            decoration: const InputDecoration(
+              labelText: 'Stock mínimo',
             ),
-          ],
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+            ],
+          ),
+        ] else
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _inventoryQtyController,
+                  decoration: const InputDecoration(
+                    labelText: 'Stock disponible',
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  controller: _minStockController,
+                  decoration: const InputDecoration(
+                    labelText: 'Stock mínimo',
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ];
     }
 
-    List<Widget> _buildStatusFields(ThemeData theme) {
+    List<Widget> _buildStatusFields(ThemeData theme, bool isMobile) {
       return [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Producto activo'),
+          title: const Text('Producto activo', maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: const Text(
             'Los productos inactivos no aparecen en el POS ni en catálogos públicos.',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           value: _isActive,
           onChanged: (value) => setState(() => _isActive = value),
@@ -868,7 +1088,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       ];
     }
 
-    List<Widget> _buildDescriptionFields(ThemeData theme) {
+    List<Widget> _buildDescriptionFields(ThemeData theme, bool isMobile) {
       return [
         TextFormField(
           controller: _descriptionController,
@@ -877,15 +1097,15 @@ class _ProductFormPageState extends State<ProductFormPage> {
             hintText:
                 'Materiales, especificaciones técnicas, beneficios y advertencias.',
           ),
-          maxLines: 6,
+          maxLines: isMobile ? 5 : 6,
         ),
       ];
     }
 
-    List<Widget> _buildMediaFields(ThemeData theme) {
+    List<Widget> _buildMediaFields(ThemeData theme, bool isMobile) {
       return [
         AspectRatio(
-          aspectRatio: 1,
+          aspectRatio: isMobile ? 1.2 : 1,
           child: Stack(
             children: [
               Positioned.fill(
@@ -912,8 +1132,13 @@ class _ProductFormPageState extends State<ProductFormPage> {
                   icon: const Icon(Icons.upload_outlined),
                   label: Text(
                     _selectedImage != null || _imageUrl != null
-                        ? 'Cambiar imagen principal'
-                        : 'Agregar imagen',
+                        ? (isMobile ? 'Cambiar' : 'Cambiar imagen principal')
+                        : (isMobile ? 'Agregar' : 'Agregar imagen'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
                   ),
                 ),
               ),
@@ -935,7 +1160,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: isMobile ? 12 : 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -944,24 +1169,28 @@ class _ProductFormPageState extends State<ProductFormPage> {
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             Text(
-              '${_additionalImages.length} imágenes',
+              '${_additionalImages.length} ${isMobile ? '' : 'imágenes'}',
               style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: isMobile ? 8 : 12),
         Wrap(
-          spacing: 12,
-          runSpacing: 12,
+          spacing: isMobile ? 8 : 12,
+          runSpacing: isMobile ? 8 : 12,
           children: [
             if (_isUploadingGalleryImage)
               SizedBox(
-                width: 64,
-                height: 64,
+                width: isMobile ? 72 : 64,
+                height: isMobile ? 72 : 64,
                 child: Card(
                   elevation: 0,
                   child: Padding(

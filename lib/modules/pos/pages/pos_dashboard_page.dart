@@ -102,48 +102,99 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isWide = MediaQuery.of(context).size.width > 900;
+    final isMobile = AppTheme.isMobile(context);
 
     return SafeArea(
       child: Column(
         children: [
           // Header
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Punto de Venta',
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Consumer<POSService>(
-                  builder: (context, posService, child) {
-                    return Row(
-                      children: [
-                        Icon(Icons.person, color: theme.colorScheme.primary),
-                        const SizedBox(width: 8),
-                        Text(
-                          posService.selectedCustomer?.name ?? 'Caja',
-                          style: theme.textTheme.titleMedium,
+            padding: EdgeInsets.all(isMobile ? 12.0 : 16.0),
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Punto de Venta',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
                         ),
-                        const SizedBox(width: 16),
-                        FloatingActionButton.extended(
-                          onPressed: () => context.push('/pos/cart'),
-                          icon: const Icon(Icons.shopping_cart),
-                          label: Text(
-                            '\$${posService.cartTotal.toStringAsFixed(0)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      Consumer<POSService>(
+                        builder: (context, posService, child) {
+                          return Row(
+                            children: [
+                              Icon(Icons.person, 
+                                size: 20,
+                                color: theme.colorScheme.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  posService.selectedCustomer?.name ?? 'Caja',
+                                  style: theme.textTheme.titleSmall,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: FloatingActionButton.extended(
+                                  onPressed: () => context.push('/pos/cart'),
+                                  icon: const Icon(Icons.shopping_cart, size: 20),
+                                  label: Text(
+                                    '\$${posService.cartTotal.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Punto de Venta',
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ],
-                    );
-                  },
-                ),
-              ],
-            ),
+                      ),
+                      Consumer<POSService>(
+                        builder: (context, posService, child) {
+                          return Row(
+                            children: [
+                              Icon(Icons.person, color: theme.colorScheme.primary),
+                              const SizedBox(width: 8),
+                              Text(
+                                posService.selectedCustomer?.name ?? 'Caja',
+                                style: theme.textTheme.titleMedium,
+                              ),
+                              const SizedBox(width: 16),
+                              FloatingActionButton.extended(
+                                onPressed: () => context.push('/pos/cart'),
+                                icon: const Icon(Icons.shopping_cart),
+                                label: Text(
+                                  '\$${posService.cartTotal.toStringAsFixed(0)}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
           ),
           Expanded(
             child: isWide
@@ -248,6 +299,41 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                               ),
                                             ),
                                             const SizedBox(height: 8),
+                                            Text(
+                                              'Intenta cambiar los filtros de búsqueda',
+                                              style: theme.textTheme.bodyLarge?.copyWith(
+                                                color: theme.colorScheme.onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+                                    return GridView.builder(
+                                      padding: const EdgeInsets.all(8),
+                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 2,
+                                        childAspectRatio: 0.8,
+                                        crossAxisSpacing: 12,
+                                        mainAxisSpacing: 12,
+                                      ),
+                                      itemCount: filteredProducts.length,
+                                      itemBuilder: (context, index) {
+                                        final product = filteredProducts[index];
+                                        return ProductTile(
+                                          product: product,
+                                          onTap: () => _addToCart(product),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Right: Cashier/cart summary
                                             Text(
                                               'Intenta cambiar los filtros de búsqueda',
                                               style: theme.textTheme.bodyLarge?.copyWith(
@@ -392,6 +478,9 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                               style: theme.textTheme.headlineSmall?.copyWith(
                                                 color: theme.colorScheme.onSurfaceVariant,
                                               ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
                                             ),
                                             const SizedBox(height: 8),
                                             Text(
@@ -399,18 +488,21 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                               style: theme.textTheme.bodyLarge?.copyWith(
                                                 color: theme.colorScheme.onSurfaceVariant,
                                               ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
                                             ),
                                           ],
                                         ),
                                       );
                                     }
                                     return GridView.builder(
-                                      padding: const EdgeInsets.all(8),
-                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                      padding: EdgeInsets.all(isMobile ? 4 : 8),
+                                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                         crossAxisCount: 2,
-                                        childAspectRatio: 0.8,
-                                        crossAxisSpacing: 12,
-                                        mainAxisSpacing: 12,
+                                        childAspectRatio: isMobile ? 0.7 : 0.8,
+                                        crossAxisSpacing: isMobile ? 8 : 12,
+                                        mainAxisSpacing: isMobile ? 8 : 12,
                                       ),
                                       itemCount: filteredProducts.length,
                                       itemBuilder: (context, index) {
@@ -543,6 +635,8 @@ class _CashierPanelState extends State<_CashierPanel> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isMobile = AppTheme.isMobile(context);
+    
     return Consumer<POSService>(
       builder: (context, posService, child) {
         final serviceSelected = posService.selectedCustomer;
@@ -558,32 +652,42 @@ class _CashierPanelState extends State<_CashierPanel> {
         final currentQuery = _customerSearchController.text;
 
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(isMobile ? 12 : 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Resumen de Caja',
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: isMobile ? 12 : 16),
               if (posService.cartItems.isNotEmpty)
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(isMobile ? 12 : 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Productos (${posService.cartTotalItems})',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: isMobile ? 8 : 12),
                         ListView.separated(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: posService.cartItems.length,
-                          separatorBuilder: (_, __) => Divider(color: theme.colorScheme.outline.withOpacity(0.1)),
+                          separatorBuilder: (_, __) => Divider(
+                            color: theme.colorScheme.outline.withOpacity(0.1),
+                          ),
                           itemBuilder: (context, index) {
                             final item = posService.cartItems[index];
                             return Row(
@@ -595,23 +699,37 @@ class _CashierPanelState extends State<_CashierPanel> {
                                     children: [
                                       Text(
                                         item.product.name,
-                                        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                                        style: theme.textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         'SKU: ${item.product.sku}',
                                         style: theme.textTheme.bodySmall,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ],
                                   ),
                                 ),
+                                const SizedBox(width: 8),
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    Text('x${item.quantity}', style: theme.textTheme.bodyMedium),
+                                    Text(
+                                      'x${item.quantity}',
+                                      style: theme.textTheme.bodyMedium,
+                                    ),
                                     Text(
                                       '\$${item.subtotal.toStringAsFixed(0)}',
-                                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),
@@ -624,71 +742,107 @@ class _CashierPanelState extends State<_CashierPanel> {
                   ),
                 ),
               if (posService.cartItems.isNotEmpty)
-                const SizedBox(height: 16)
+                SizedBox(height: isMobile ? 12 : 16)
               else
                 Card(
                   color: theme.colorScheme.surface,
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
+                    padding: EdgeInsets.all(isMobile ? 16 : 24),
                     child: Row(
                       children: [
-                        Icon(Icons.shopping_cart_outlined, color: theme.colorScheme.outline),
+                        Icon(
+                          Icons.shopping_cart_outlined,
+                          color: theme.colorScheme.outline,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             'El carrito está vacío. Selecciona productos para comenzar.',
                             style: theme.textTheme.bodyMedium,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-              if (posService.cartItems.isNotEmpty) const SizedBox(height: 16),
+              if (posService.cartItems.isNotEmpty) 
+                SizedBox(height: isMobile ? 12 : 16),
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(isMobile ? 12 : 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Subtotal:', style: theme.textTheme.bodyLarge),
-                          Text('\$${posService.cartNetAmount.toStringAsFixed(0)}'),
+                          Text(
+                            'Subtotal:',
+                            style: theme.textTheme.bodyLarge,
+                          ),
+                          Text(
+                            '\$${posService.cartNetAmount.toStringAsFixed(0)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ],
                       ),
                       if (posService.cartDiscountAmount > 0)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Descuento:', style: theme.textTheme.bodyLarge),
+                            Text(
+                              'Descuento:',
+                              style: theme.textTheme.bodyLarge,
+                            ),
                             Text(
                               '-\$${posService.cartDiscountAmount.toStringAsFixed(0)}',
                               style: TextStyle(color: theme.colorScheme.error),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('IVA (19%):', style: theme.textTheme.bodyLarge),
-                          Text('\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
+                          Text(
+                            'IVA (19%):',
+                            style: theme.textTheme.bodyLarge,
+                          ),
+                          Text(
+                            '\$${posService.cartTaxAmount.toStringAsFixed(0)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ],
                       ),
                       const Divider(),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'TOTAL:',
-                            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                          Flexible(
+                            child: Text(
+                              'TOTAL:',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          Text(
-                            '\$${posService.cartTotal.toStringAsFixed(0)}',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.primary,
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              '\$${posService.cartTotal.toStringAsFixed(0)}',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -697,21 +851,29 @@ class _CashierPanelState extends State<_CashierPanel> {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: isMobile ? 16 : 24),
               Text(
                 'Cliente',
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: isMobile ? 12 : 16),
               TextField(
                 controller: _customerSearchController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Buscar cliente por nombre, RUT o email',
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.search),
+                  border: const OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(
+                    vertical: isMobile ? 12 : 16,
+                    horizontal: isMobile ? 12 : 16,
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: isMobile ? 8 : 12),
               if (_isLoadingCustomers)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
@@ -720,36 +882,54 @@ class _CashierPanelState extends State<_CashierPanel> {
               else ...[
                 if (_filteredCustomers.isEmpty && currentQuery.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
+                    padding: EdgeInsets.only(bottom: isMobile ? 8 : 12),
                     child: Text(
                       'No se encontraron clientes para "$currentQuery"',
                       style: theme.textTheme.bodyMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 DropdownButtonFormField<Customer>(
                   value: _selectedCustomer,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Seleccionar Cliente (Opcional)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.person),
+                    contentPadding: EdgeInsets.symmetric(
+                      vertical: isMobile ? 12 : 16,
+                      horizontal: isMobile ? 12 : 16,
+                    ),
                   ),
                   isExpanded: true,
                   items: [
                     const DropdownMenuItem<Customer>(
                       value: null,
-                      child: Text('Cliente Genérico'),
+                      child: Text(
+                        'Cliente Genérico',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     ..._filteredCustomers.map((customer) {
                       return DropdownMenuItem<Customer>(
                         value: customer,
-                        child: Text('${customer.name} - ${(customer.rut ?? customer.email ?? 'Sin RUT')}'),
+                        child: Text(
+                          '${customer.name} - ${(customer.rut ?? customer.email ?? 'Sin RUT')}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       );
                     }).toList(),
                     if (_selectedCustomer != null &&
                         !_filteredCustomers.any((c) => c.id == _selectedCustomer!.id))
                       DropdownMenuItem<Customer>(
                         value: _selectedCustomer,
-                        child: Text('${_selectedCustomer!.name} - ${( _selectedCustomer!.rut ?? _selectedCustomer!.email ?? 'Sin RUT')}'),
+                        child: Text(
+                          '${_selectedCustomer!.name} - ${(_selectedCustomer!.rut ?? _selectedCustomer!.email ?? 'Sin RUT')}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                   onChanged: (customer) {
@@ -760,7 +940,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                   },
                 ),
               ],
-              const SizedBox(height: 24),
+              SizedBox(height: isMobile ? 16 : 24),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -768,7 +948,13 @@ class _CashierPanelState extends State<_CashierPanel> {
                   icon: const Icon(Icons.payment),
                   label: const Text('Proceder al Pago'),
                   style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: EdgeInsets.symmetric(
+                      vertical: isMobile ? 14 : 16,
+                    ),
+                    minimumSize: Size(
+                      double.infinity,
+                      AppTheme.mobileMinTouchTarget,
+                    ),
                   ),
                 ),
               ),
