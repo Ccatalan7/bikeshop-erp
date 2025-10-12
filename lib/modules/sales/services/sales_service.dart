@@ -194,6 +194,8 @@ class SalesService extends ChangeNotifier {
     try {
       await _databaseService.delete(_paymentsCollection, paymentId);
       _payments.removeWhere((payment) => payment.id == paymentId);
+      await _accountingService.initialize();
+      await _accountingService.journalEntries.loadJournalEntries();
       notifyListeners();
     } catch (e) {
       debugPrint('SalesService.deletePayment error: $e');
