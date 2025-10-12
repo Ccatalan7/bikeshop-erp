@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/themes/app_theme.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 
@@ -452,85 +453,170 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   }
 
   Widget _buildHeader(Invoice invoice) {
+    final isMobile = AppTheme.isMobile(context);
+    
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
+      padding: EdgeInsets.all(isMobile ? 12 : 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconButton(onPressed: _closePage, icon: const Icon(Icons.arrow_back)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  invoice.invoiceNumber.isNotEmpty
-                      ? 'Factura ${invoice.invoiceNumber}'
-                      : 'Factura',
-                  style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              IconButton(onPressed: _closePage, icon: const Icon(Icons.arrow_back)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      invoice.invoiceNumber.isNotEmpty
+                          ? 'Factura ${invoice.invoiceNumber}'
+                          : 'Factura',
+                      style: TextStyle(
+                        fontSize: isMobile ? 18 : 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      invoice.customerName ?? 'Cliente',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(invoice.customerName ?? 'Cliente'),
+              ),
+            ],
+          ),
+          if (isMobile) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (invoice.status == InvoiceStatus.draft)
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _markAsSent,
+                      icon: const Icon(Icons.send_outlined, size: 18),
+                      label: const Text('Marcar como enviada'),
+                    ),
+                  ),
+                if (invoice.status == InvoiceStatus.sent) ...[
+                  SizedBox(
+                    width: (MediaQuery.of(context).size.width - 52) / 2,
+                    child: OutlinedButton.icon(
+                      onPressed: _revertToDraft,
+                      icon: const Icon(Icons.undo, size: 18),
+                      label: const Text('Borrador'),
+                    ),
+                  ),
+                  SizedBox(
+                    width: (MediaQuery.of(context).size.width - 52) / 2,
+                    child: FilledButton.icon(
+                      onPressed: _markAsConfirmed,
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text('Confirmar'),
+                      style: FilledButton.styleFrom(backgroundColor: Colors.green),
+                    ),
+                  ),
+                ],
+                if (invoice.balance > 0 && invoice.status == InvoiceStatus.confirmed)
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _openPaymentForm,
+                      icon: const Icon(Icons.payments_outlined, size: 18),
+                      label: const Text('Pagar factura'),
+                    ),
+                  ),
+                if (invoice.status == InvoiceStatus.confirmed && invoice.balance > 0)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _revertToSent,
+                      icon: const Icon(Icons.undo, size: 18),
+                      label: const Text('Revertir a Enviada'),
+                    ),
+                  ),
+                if (invoice.status == InvoiceStatus.paid)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _undoLastPayment,
+                      icon: const Icon(Icons.undo, size: 18),
+                      label: const Text('Deshacer último pago'),
+                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                    ),
+                  ),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      context.push('/sales/invoices/${invoice.id}/edit');
+                    },
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('Editar'),
+                  ),
+                ),
               ],
             ),
-          ),
-          if (invoice.balance > 0 && invoice.status == InvoiceStatus.confirmed)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: OutlinedButton.icon(
-                onPressed: _openPaymentForm,
-                icon: const Icon(Icons.payments_outlined),
-                label: const Text('Pagar factura'),
-              ),
-            ),
-          OutlinedButton.icon(
-            onPressed: () {
-              context.push('/sales/invoices/${invoice.id}/edit');
-            },
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Editar'),
-          ),
-          const SizedBox(width: 8),
-          // Draft → Sent
-          if (invoice.status == InvoiceStatus.draft)
-            FilledButton.icon(
-              onPressed: _markAsSent,
-              icon: const Icon(Icons.send_outlined),
-              label: const Text('Marcar como enviada'),
-            ),
-          // Sent → Confirmed OR Sent → Draft
-          if (invoice.status == InvoiceStatus.sent) ...[
-            OutlinedButton.icon(
-              onPressed: _revertToDraft,
-              icon: const Icon(Icons.undo),
-              label: const Text('Volver a borrador'),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: _markAsConfirmed,
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Confirmar'),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.green,
-              ),
+          ] else ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (invoice.balance > 0 && invoice.status == InvoiceStatus.confirmed)
+                  OutlinedButton.icon(
+                    onPressed: _openPaymentForm,
+                    icon: const Icon(Icons.payments_outlined),
+                    label: const Text('Pagar factura'),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    context.push('/sales/invoices/${invoice.id}/edit');
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Editar'),
+                ),
+                if (invoice.status == InvoiceStatus.draft)
+                  FilledButton.icon(
+                    onPressed: _markAsSent,
+                    icon: const Icon(Icons.send_outlined),
+                    label: const Text('Marcar como enviada'),
+                  ),
+                if (invoice.status == InvoiceStatus.sent) ...[
+                  OutlinedButton.icon(
+                    onPressed: _revertToDraft,
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Volver a borrador'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _markAsConfirmed,
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('Confirmar'),
+                    style: FilledButton.styleFrom(backgroundColor: Colors.green),
+                  ),
+                ],
+                if (invoice.status == InvoiceStatus.confirmed && invoice.balance > 0)
+                  OutlinedButton.icon(
+                    onPressed: _revertToSent,
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Volver a enviada'),
+                  ),
+                if (invoice.status == InvoiceStatus.paid)
+                  OutlinedButton.icon(
+                    onPressed: _undoLastPayment,
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Deshacer pago'),
+                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                  ),
+              ],
             ),
           ],
-          // Confirmed → Sent
-          if (invoice.status == InvoiceStatus.confirmed && invoice.balance > 0)
-            OutlinedButton.icon(
-              onPressed: _revertToSent,
-              icon: const Icon(Icons.undo),
-              label: const Text('Volver a enviada'),
-            ),
-          // Paid → Undo payment
-          if (invoice.status == InvoiceStatus.paid)
-            OutlinedButton.icon(
-              onPressed: _undoLastPayment,
-              icon: const Icon(Icons.undo),
-              label: const Text('Deshacer pago'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
-            ),
         ],
       ),
     );
@@ -538,6 +624,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
   Widget _buildSummary(Invoice invoice) {
     final theme = Theme.of(context);
+    final isMobile = AppTheme.isMobile(context);
     Color statusColor;
     String statusText;
 
@@ -570,7 +657,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -589,50 +676,86 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                       color: statusColor,
                       fontWeight: FontWeight.bold,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const Spacer(),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Total: ${ChileanUtils.formatCurrency(invoice.total)}',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Pagado: ${ChileanUtils.formatCurrency(invoice.paidAmount)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Saldo: ${ChileanUtils.formatCurrency(invoice.balance)}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: invoice.balance <= 0
+                              ? Colors.green
+                              : Colors.orange[800],
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: isMobile ? 12 : 16),
+            Wrap(
+              spacing: isMobile ? 8 : 16,
+              runSpacing: 8,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'Total: ${ChileanUtils.formatCurrency(invoice.total)}',
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                        'Pagado: ${ChileanUtils.formatCurrency(invoice.paidAmount)}'),
-                    Text(
-                      'Saldo: ${ChileanUtils.formatCurrency(invoice.balance)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: invoice.balance <= 0
-                            ? Colors.green
-                            : Colors.orange[800],
-                        fontWeight: FontWeight.w600,
+                    const Icon(Icons.calendar_today, size: 16),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        'Emisión: ${ChileanUtils.formatDate(invoice.date)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today, size: 16),
-                const SizedBox(width: 4),
-                Text('Emisión: ${ChileanUtils.formatDate(invoice.date)}'),
-                if (invoice.dueDate != null) ...[
-                  const SizedBox(width: 16),
-                  const Icon(Icons.schedule, size: 16),
-                  const SizedBox(width: 4),
-                  Text(
-                      'Vencimiento: ${ChileanUtils.formatDate(invoice.dueDate!)}'),
-                ],
+                if (invoice.dueDate != null)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.schedule, size: 16),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Venc: ${ChileanUtils.formatDate(invoice.dueDate!)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
             if (invoice.reference != null && invoice.reference!.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text('Referencia: ${invoice.reference}'),
+              Text(
+                'Referencia: ${invoice.reference}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ],
         ),

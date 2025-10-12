@@ -310,47 +310,12 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                       );
                                     }
                                     return GridView.builder(
-                                      padding: const EdgeInsets.all(8),
-                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                      padding: EdgeInsets.all(isMobile ? 4 : 8),
+                                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                         crossAxisCount: 2,
-                                        childAspectRatio: 0.8,
-                                        crossAxisSpacing: 12,
-                                        mainAxisSpacing: 12,
-                                      ),
-                                      itemCount: filteredProducts.length,
-                                      itemBuilder: (context, index) {
-                                        final product = filteredProducts[index];
-                                        return ProductTile(
-                                          product: product,
-                                          onTap: () => _addToCart(product),
-                                        );
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // Right: Cashier/cart summary
-                                            Text(
-                                              'Intenta cambiar los filtros de búsqueda',
-                                              style: theme.textTheme.bodyLarge?.copyWith(
-                                                color: theme.colorScheme.onSurfaceVariant,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }
-                                    return GridView.builder(
-                                      padding: const EdgeInsets.all(8),
-                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 2,
-                                        childAspectRatio: 0.8,
-                                        crossAxisSpacing: 12,
-                                        mainAxisSpacing: 12,
+                                        childAspectRatio: isMobile ? 0.7 : 0.8,
+                                        crossAxisSpacing: isMobile ? 8 : 12,
+                                        mainAxisSpacing: isMobile ? 8 : 12,
                                       ),
                                       itemCount: filteredProducts.length,
                                       itemBuilder: (context, index) {

@@ -264,3 +264,18 @@ Copilot must:
 - For very large datasets (100+ items), implement pagination or lazy loading with search.
 - Always place the search bar **above the list** (not hidden in a menu).
 - Respect localization: search must work with Spanish characters (ñ, á, é, í, ó, ú).
+
+---
+
+# 🧪 Testing Expectations
+
+- The AI assistant (e.g. GitHub Copilot Chat) **must never run tests directly**.
+- It should **only provide the exact commands or steps** needed for the user to run tests manually.
+- All test-related guidance must:
+  - Be terminal-friendly and copy-paste ready.
+  - Include context (e.g. test scope, affected module, expected output).
+  - Respect platform differences (e.g. Windows vs macOS/Linux).
+- The assistant should **never assume test results**—only describe what the test is expected to validate.
+- If troubleshooting is needed, the assistant should guide the user through **manual inspection and debugging**, not auto-execution.
+
+---
