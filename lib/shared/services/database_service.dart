@@ -173,11 +173,7 @@ class DatabaseService extends ChangeNotifier {
         final mappedLines = lines
             .map((line) => {
                   ...line,
-<<<<<<< HEAD
                   'entry_id': entryId, // Correct column name from core_schema.sql
-=======
-                  'journal_entry_id': entryId, // Use new column name
->>>>>>> 5815b1ea8fb42a8599024beaf0b53b9fdd4b96d6
                   'created_at': line['created_at'] ?? now,
                   'updated_at': line['updated_at'] ?? now,
                 })

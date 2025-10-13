@@ -558,6 +558,7 @@ begin
         check (lower(status) = any (array[
           'draft','borrador',
           'sent','enviado','enviada','emitido','emitida','issued',
+          'confirmed','confirmado','confirmada',
           'paid','pagado','pagada',
           'overdue','vencido','vencida',
           'cancelled','cancelado','cancelada','anulado','anulada'
@@ -1067,7 +1068,7 @@ begin
       continue;
     end if;
 
-    v_quantity_int := coalesce(v_movement.quantity::int, 0);
+    v_quantity_int := abs(coalesce(v_movement.quantity::int, 0));
 
     if v_quantity_int = 0 then
       continue;
@@ -1365,7 +1366,11 @@ security definer
 set search_path = public
 as $$
 declare
-  v_non_posted constant text[] := array['draft','borrador','cancelled','cancelado','cancelada','anulado','anulada'];
+  v_non_posted constant text[] := array[
+    'draft','borrador',
+    'sent','enviado','enviada','issued','emitido','emitida',
+    'cancelled','cancelado','cancelada','anulado','anulada'
+  ];
   v_old_status text;
   v_new_status text;
   v_old_posted boolean;
@@ -1387,13 +1392,15 @@ begin
     v_new_status := lower(coalesce(NEW.status, 'draft'));
     raise notice 'handle_sales_invoice_change: INSERT invoice %, status %', NEW.id, v_new_status;
     
-    -- If inserted with posted status, consume inventory
+    -- Only process if status is "confirmed" or "paid" (NOT "draft" or "sent")
     if not (v_new_status = any (v_non_posted)) then
+      raise notice 'handle_sales_invoice_change: INSERT with posted status, consuming inventory';
       perform public.consume_sales_invoice_inventory(NEW);
+      perform public.create_sales_invoice_journal_entry(NEW);
+    else
+      raise notice 'handle_sales_invoice_change: INSERT with non-posted status (%), skipping', v_new_status;
     end if;
     
-    -- Create journal entry
-    perform public.create_sales_invoice_journal_entry(NEW);
     perform public.recalculate_sales_invoice_payments(NEW.id);
     return NEW;
 
@@ -1425,9 +1432,31 @@ begin
       raise notice 'handle_sales_invoice_change: both non-posted, no inventory change';
     end if;
 
-    -- Update journal entries
-    perform public.delete_sales_invoice_journal_entry(OLD.id);
-    perform public.create_sales_invoice_journal_entry(NEW);
+    -- JOURNAL ENTRY HANDLING (DELETE-based reversals, Zoho Books style)
+    if v_old_posted and not v_new_posted then
+      -- Confirmed/Paid → Draft/Sent: DELETE journal entry
+      raise notice 'handle_sales_invoice_change: reverting to non-posted, deleting journal entry';
+      delete from public.journal_entries
+      where source_module = 'sales_invoices'
+        and source_reference = OLD.id::text;
+        
+    elsif not v_old_posted and v_new_posted then
+      -- Draft/Sent → Confirmed: CREATE journal entry
+      raise notice 'handle_sales_invoice_change: changing to posted, creating journal entry';
+      perform public.create_sales_invoice_journal_entry(NEW);
+      
+    elsif v_old_posted and v_new_posted then
+      -- Both posted: delete old, create new (amounts might have changed)
+      raise notice 'handle_sales_invoice_change: both posted, recreating journal entry';
+      delete from public.journal_entries
+      where source_module = 'sales_invoices'
+        and source_reference = OLD.id::text;
+      perform public.create_sales_invoice_journal_entry(NEW);
+    else
+      -- Both non-posted: no journal entry action
+      raise notice 'handle_sales_invoice_change: both non-posted, no journal entry action';
+    end if;
+    
     perform public.recalculate_sales_invoice_payments(NEW.id);
     return NEW;
 
@@ -1440,7 +1469,11 @@ begin
       perform public.restore_sales_invoice_inventory(OLD);
     end if;
     
-    perform public.delete_sales_invoice_journal_entry(OLD.id);
+    -- DELETE journal entry
+    delete from public.journal_entries
+    where source_module = 'sales_invoices'
+      and source_reference = OLD.id::text;
+    
     return OLD;
   end if;
 

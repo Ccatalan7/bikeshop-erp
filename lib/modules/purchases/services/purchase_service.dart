@@ -534,7 +534,6 @@ class PurchaseService extends ChangeNotifier {
       final paymentId = payments.first['id'];
       await _db.delete('purchase_payments', paymentId);
       
-<<<<<<< HEAD
       // Check if there are remaining payments
       final remainingPayments = await _supabase
           .from('purchase_payments')
@@ -549,8 +548,6 @@ class PurchaseService extends ChangeNotifier {
             .eq('id', invoiceId);
       }
       
-=======
->>>>>>> 5815b1ea8fb42a8599024beaf0b53b9fdd4b96d6
       // Refresh caches
       await getPurchasePayments(forceRefresh: true);
       await getPurchaseInvoices(forceRefresh: true);
