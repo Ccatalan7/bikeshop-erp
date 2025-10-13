@@ -54,12 +54,22 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
 
   Future<void> _loadBankAccounts() async {
     try {
+<<<<<<< HEAD
       // Load cash and bank accounts (codes starting with 110 or 111)
       final response = await Supabase.instance.client
           .from('accounts')
           .select()
           .eq('type', 'asset')
           .or('code.eq.1101,code.eq.1110,code.like.110%,code.like.111%')
+=======
+      // Load bank accounts (asset accounts that are cash/bank)
+      // Adjust this query based on your actual account structure
+      final response = await Supabase.instance.client
+          .from('accounts')
+          .select()
+          .eq('account_type', 'asset')
+          .or('code.like.11%,code.like.10%') // Cash and bank accounts typically start with 11 or 10
+>>>>>>> 5815b1ea8fb42a8599024beaf0b53b9fdd4b96d6
           .eq('is_active', true)
           .order('code');
 
@@ -212,6 +222,7 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
         .eq('code', '2120')
         .single();
 
+<<<<<<< HEAD
     // Get selected bank account details (if bank account is selected)
     Map<String, dynamic>? bankAccount;
     if (_selectedBankAccount != null) {
@@ -222,6 +233,8 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
           .single();
     }
 
+=======
+>>>>>>> 5815b1ea8fb42a8599024beaf0b53b9fdd4b96d6
     // Create journal entry
     final journalData = {
       'date': _paymentDate.toIso8601String(),
@@ -241,6 +254,7 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
     // Create journal lines
     final lines = [
       {
+<<<<<<< HEAD
         'entry_id': journalEntryId,
         'account_id': apAccount['id'],
         'account_code': apAccount['code'],
@@ -256,6 +270,19 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
         'account_name': bankAccount['name'],
         'debit_amount': 0.0,
         'credit_amount': amount,
+=======
+        'journal_entry_id': journalEntryId,
+        'account_id': apAccount['id'],
+        'debit': amount,
+        'credit': 0.0,
+        'description': 'Pago a proveedor ${widget.invoice.supplierName}',
+      },
+      {
+        'journal_entry_id': journalEntryId,
+        'account_id': _selectedBankAccount,
+        'debit': 0.0,
+        'credit': amount,
+>>>>>>> 5815b1ea8fb42a8599024beaf0b53b9fdd4b96d6
         'description': 'Pago de factura ${widget.invoice.invoiceNumber}',
       },
     ];

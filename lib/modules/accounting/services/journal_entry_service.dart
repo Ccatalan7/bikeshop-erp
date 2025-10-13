@@ -57,7 +57,11 @@ class JournalEntryService extends ChangeNotifier {
       // Load only lines for these entries using WHERE IN clause
       final lineDocs = await _databaseService.select(
         'journal_lines',
+<<<<<<< HEAD
         where: 'entry_id', // Correct column name from core_schema.sql
+=======
+        where: 'journal_entry_id', // Use new column name
+>>>>>>> 5815b1ea8fb42a8599024beaf0b53b9fdd4b96d6
         whereIn: entryIds,
       );
       
