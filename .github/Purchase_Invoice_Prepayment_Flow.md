@@ -142,9 +142,9 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
 - **Spanish Label**: "Confirmada"
 - **Badge Color**: Purple (`Colors.purple[100]` / `Colors.purple[800]`)
 - **Accounting Effect**: ✅ AP liability recorded
-  - **Debit**: Inventario en Tránsito (1155) $100,000
-  - **Debit**: IVA Crédito Fiscal (1140) $19,000
-  - **Credit**: Cuentas por Pagar (2120) $119,000
+  - **Debit**: Inventario (1105) $100,000
+  - **Debit**: IVA Crédito Fiscal (1107) $19,000
+  - **Credit**: Cuentas por Pagar (2101) $119,000
 - **Inventory Effect**: ❌ None (not in stock yet)
 - **Description**: Supplier has confirmed order and issued their digital invoice (factura electrónica)
 - **Available Actions**:
@@ -407,43 +407,55 @@ Future<void> confirmSupplierInvoice({
 
 **SQL Trigger**: ✅ `handle_purchase_invoice_prepaid_change()`
 
-**Trigger Logic**:
+**Trigger Logic** (integrated into main purchase trigger):
 ```sql
-CREATE OR REPLACE FUNCTION handle_purchase_invoice_prepaid_change()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- When status changes to 'confirmed' in prepayment model
-  IF (TG_OP = 'UPDATE' 
-      AND OLD.status != 'confirmed' 
-      AND NEW.status = 'confirmed'
-      AND NEW.prepayment_model = true) THEN
-    
-    -- Create AP liability journal entry
-    PERFORM create_prepaid_purchase_confirmation_entry(NEW.id);
-    
-    -- Do NOT increase inventory (wait for 'received')
-  END IF;
+-- In handle_purchase_invoice_change():
+-- Prepayment model uses same trigger, but different account codes
+IF TG_OP = 'UPDATE' THEN
+  v_old_status := lower(trim(OLD.status));
+  v_new_status := lower(trim(NEW.status));
+  v_old_posted := NOT (v_old_status = ANY(v_non_posted));
+  v_new_posted := NOT (v_new_status = ANY(v_non_posted));
   
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+  -- For prepayment: Confirmada creates entry with Inventory on Order (1155)
+  IF NOT v_old_posted AND v_new_posted AND NEW.prepayment_model = true THEN
+    PERFORM public.create_prepaid_purchase_confirmation_entry(NEW);
+  END IF;
+END IF;
 ```
 
-**Journal Entry Function**:
+**Journal Entry Function** (following core_schema.sql pattern):
 ```sql
-CREATE OR REPLACE FUNCTION create_prepaid_purchase_confirmation_entry(p_invoice_id INTEGER)
+CREATE OR REPLACE FUNCTION public.create_prepaid_purchase_confirmation_entry(p_invoice public.purchase_invoices)
 RETURNS VOID AS $$
 DECLARE
-  v_invoice RECORD;
   v_entry_id INTEGER;
+  v_inventory_transit_id INTEGER;
+  v_iva_account_id INTEGER;
+  v_ap_account_id INTEGER;
+  v_supplier_name TEXT;
 BEGIN
-  -- Get invoice data
-  SELECT * INTO v_invoice
-  FROM purchase_invoices
-  WHERE id = p_invoice_id;
+  -- Check if entry already exists
+  IF EXISTS (
+    SELECT 1 FROM public.journal_entries
+    WHERE source_module = 'purchase_invoices'
+      AND source_reference = p_invoice.id::text
+  ) THEN
+    RETURN;
+  END IF;
+  
+  -- Get supplier name
+  SELECT name INTO v_supplier_name
+  FROM public.suppliers
+  WHERE id = p_invoice.supplier_id;
+  
+  -- Ensure accounts exist
+  v_inventory_transit_id := public.ensure_account('1155', 'Inventario en Tránsito');
+  v_iva_account_id := public.ensure_account('1107', 'IVA Crédito Fiscal');
+  v_ap_account_id := public.ensure_account('2101', 'Cuentas por Pagar');
   
   -- Create journal entry
-  INSERT INTO journal_entries (
+  INSERT INTO public.journal_entries (
     entry_number,
     entry_date,
     entry_type,
@@ -452,27 +464,30 @@ BEGIN
     source_reference,
     notes
   ) VALUES (
-    'CONF-' || v_invoice.invoice_number,
-    v_invoice.confirmed_date,
+    'CONF-COMP-' || p_invoice.invoice_number,
+    p_invoice.date,
     'purchase_confirmation',
     'posted',
     'purchase_invoices',
-    p_invoice_id,
-    'Confirmación factura proveedor ' || v_invoice.supplier_invoice_number
+    p_invoice.id::text,
+    'Confirmación factura proveedor ' || 
+    COALESCE(p_invoice.supplier_invoice_number, p_invoice.invoice_number) ||
+    CASE WHEN v_supplier_name IS NOT NULL THEN ' - ' || v_supplier_name ELSE '' END
   ) RETURNING id INTO v_entry_id;
   
-  -- Option A: Using Inventory on Order account (RECOMMENDED)
-  INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description)
+  -- Create journal lines (Prepayment uses Inventory on Order - 1155)
+  INSERT INTO public.journal_lines (entry_id, account_id, debit_amount, credit_amount, description)
   VALUES
-    -- DR: Inventory on Order (1155)
-    (v_entry_id, (SELECT id FROM accounts WHERE code = '1155'), 
-     v_invoice.subtotal, 0, 'Inventario en tránsito'),
-    -- DR: IVA Crédito Fiscal (1140)
-    (v_entry_id, (SELECT id FROM accounts WHERE code = '1140'), 
-     v_invoice.tax_amount, 0, 'IVA Crédito Fiscal'),
-    -- CR: Accounts Payable (2120)
-    (v_entry_id, (SELECT id FROM accounts WHERE code = '2120'), 
-     0, v_invoice.total, 'Pasivo proveedor ' || (SELECT name FROM suppliers WHERE id = v_invoice.supplier_id));
+    -- DR: Inventory on Order (1155) - goods expected
+    (v_entry_id, v_inventory_transit_id, p_invoice.subtotal, 0, 
+     'Inventario en tránsito - FC ' || p_invoice.invoice_number),
+    -- DR: IVA Crédito Fiscal (1107)
+    (v_entry_id, v_iva_account_id, p_invoice.iva_amount, 0, 
+     'IVA Crédito Fiscal'),
+    -- CR: Accounts Payable (2101)
+    (v_entry_id, v_ap_account_id, 0, p_invoice.total, 
+     'Pasivo proveedor' || 
+     CASE WHEN v_supplier_name IS NOT NULL THEN ' - ' || v_supplier_name ELSE '' END);
 END;
 $$ LANGUAGE plpgsql;
 ```

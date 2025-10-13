@@ -195,15 +195,35 @@ GUI Update:
 #### **Confirmada → Pagada**
 ```
 User Action: Click "Pagar factura" → Fill payment form → "Marcar como pagado"
+
+Payment Form Fields:
+  • Payment Method (Dropdown) → Populated dynamically from payment_methods table
+    Examples: "Efectivo", "Transferencia Bancaria", "Tarjeta", "Cheque"
+  • Amount
+  • Date
+  • Reference (required for transfer/check based on payment_methods.requires_reference)
+  • Notes
+
 Backend Effect:
-  • Payment record CREATED
-  • Payment journal entry CREATED
+  • Payment record CREATED (with payment_method_id reference)
+  • Payment journal entry CREATED (account determined by payment_methods.account_id)
   • Status auto-updates to 'paid' when balance = 0
   • Inventory unchanged (already deducted)
-SQL Trigger: recalculate_sales_invoice_payments()
-  → Updates paid_amount, balance, status
+
+SQL Trigger: handle_sales_payment_change()
+  → create_sales_payment_journal_entry() (reads payment_methods.account_id dynamically)
+  → recalculate_sales_invoice_payments()
+
+Payment Method → Account Mapping (DYNAMIC configuration):
+  • Efectivo → 1101 Caja General (from payment_methods table)
+  • Transferencia Bancaria → 1110 Bancos (from payment_methods table)
+  • Tarjeta → 1110 Bancos (from payment_methods table)
+  • Cheque → 1110 Bancos (from payment_methods table)
+  • **Users can add new methods via UI** (e.g., "Transfer BCI", "Transfer Santander")
+
 GUI Update:
   • Badge changes to green "Pagada"
+  • Shows payment method name (e.g., "Pagado con: Efectivo")
   • Buttons: [Editar] [Deshacer pago]
   • SnackBar: "Pago registrado correctamente"
 ```
@@ -304,25 +324,58 @@ Lines:
 
 ### Payment Journal Entry (Paid Status)
 
-**Payment**: $119,000 CLP via "Efectivo"
+**Example 1: Payment via "Efectivo"** (Cash payment)
 
-**Journal Entry Created**:
+- Payment Method: Efectivo (from payment_methods table)
+- Linked Account: 1101 Caja General (from payment_methods.account_id)
+- Amount: $119,000 CLP
+
+**Journal Entry Created** (account determined dynamically):
 ```
 Entry Number: PAY-20251012144500
 Date: 2025-10-12
 Type: payment
 Status: posted
+Description: Pago factura INV-001 - Efectivo
 
 Lines:
 ┌─────────────────────────────┬──────────┬──────────┐
 │ Account                     │  Debit   │  Credit  │
 ├─────────────────────────────┼──────────┼──────────┤
-│ 1110 Caja                   │ 119,000  │          │
+│ 1101 Caja General           │ 119,000  │          │  ← From payment_methods.account_id
 │ 1120 Cuentas por Cobrar     │          │ 119,000  │
 ├─────────────────────────────┼──────────┼──────────┤
 │ TOTAL                       │ 119,000  │ 119,000  │
 └─────────────────────────────┴──────────┴──────────┘
 ```
+
+**Example 2: Payment via "Transferencia Bancaria"** (Bank transfer)
+
+- Payment Method: Transferencia Bancaria (from payment_methods table)
+- Linked Account: 1110 Bancos - Cuenta Corriente (from payment_methods.account_id)
+- Amount: $119,000 CLP
+
+**Journal Entry Created** (account determined dynamically):
+```
+Entry Number: PAY-20251012144600
+Date: 2025-10-12
+Type: payment
+Status: posted
+Description: Pago factura INV-001 - Transferencia Bancaria
+
+Lines:
+┌─────────────────────────────┬──────────┬──────────┐
+│ Account                     │  Debit   │  Credit  │
+├─────────────────────────────┼──────────┼──────────┤
+│ 1110 Bancos                 │ 119,000  │          │  ← From payment_methods.account_id
+│ 1120 Cuentas por Cobrar     │          │ 119,000  │
+├─────────────────────────────┼──────────┼──────────┤
+│ TOTAL                       │ 119,000  │ 119,000  │
+└─────────────────────────────┴──────────┴──────────┘
+```
+
+**Key Feature**: Account assignment is **100% dynamic** based on `payment_methods` table configuration. 
+No code changes needed to add new payment methods or reassign accounts!
 
 ---
 
@@ -475,12 +528,46 @@ ELSIF TG_OP = 'DELETE' THEN
 END IF
 ```
 
-### Payment Trigger: `recalculate_sales_invoice_payments()`
+### Payment Trigger: `handle_sales_payment_change()`
+
+**Trigger Events**:
+- `AFTER INSERT ON sales_payments`
+- `AFTER UPDATE ON sales_payments`
+- `AFTER DELETE ON sales_payments`
 
 **Called When**:
 - Payment is inserted
 - Payment is updated
 - Payment is deleted
+
+**Logic**:
+```sql
+IF TG_OP = 'INSERT' THEN
+  → create_sales_payment_journal_entry(NEW)  -- Reads payment_methods.account_id dynamically
+  → recalculate_sales_invoice_payments(NEW.invoice_id)
+
+ELSIF TG_OP = 'UPDATE' THEN
+  → delete_sales_payment_journal_entry(OLD.id)
+  → create_sales_payment_journal_entry(NEW)  -- Reads payment_methods.account_id dynamically
+  → recalculate_sales_invoice_payments(NEW.invoice_id)
+
+ELSIF TG_OP = 'DELETE' THEN
+  → delete_sales_payment_journal_entry(OLD.id)
+  → recalculate_sales_invoice_payments(OLD.invoice_id)
+END IF
+```
+
+**Key Feature**: Journal entry function queries `payment_methods` table to get account_id:
+```sql
+SELECT pm.id, pm.code, pm.name, a.id as account_id, a.code, a.name
+FROM payment_methods pm
+JOIN accounts a ON a.id = pm.account_id
+WHERE pm.id = p_payment.payment_method_id;
+
+-- Then uses account_id dynamically for journal lines
+```
+
+### Invoice Status Recalculation: `recalculate_sales_invoice_payments()`
 
 **Logic**:
 ```sql

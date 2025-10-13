@@ -6,6 +6,107 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 ---
 
+# 🚨 CRITICAL RULE: ALWAYS USE CORE_SCHEMA.SQL
+
+**⚠️ NEVER CREATE NEW SQL FILES!**
+
+**ALL database changes MUST go into `supabase/sql/core_schema.sql`:**
+- ✅ New tables → Add to `core_schema.sql`
+- ✅ New functions → Add to `core_schema.sql`
+- ✅ New triggers → Add to `core_schema.sql`
+- ✅ Schema fixes → Fix in `core_schema.sql`
+- ✅ Missing columns → Add to `core_schema.sql`
+- ✅ Wrong constraints → Fix in `core_schema.sql`
+- ❌ NEVER create `FIX_*.sql`, `DEPLOY_*.sql`, `add_*.sql`, etc.
+
+**⚠️ CRITICAL: AVOID DUPLICATES!**
+
+**BEFORE creating ANY database object, you MUST:**
+1. 🔍 **SEARCH `core_schema.sql` for existing similar functions/triggers/tables**
+2. ❌ **NEVER assume a function/trigger doesn't exist - ALWAYS verify first**
+3. 🔄 **UPDATE existing functions rather than creating new ones with different names**
+4. ⚠️ **Example of what NOT to do:**
+   - ❌ Creating `handle_purchase_invoice_change()` when `handle_sales_invoice_change()` pattern already exists
+   - ❌ Creating `create_purchase_journal_entry()` when similar function already exists
+   - ❌ Creating new triggers without checking for existing trigger patterns
+5. ✅ **Example of what TO do:**
+   - ✅ Find existing `handle_sales_invoice_change()` function
+   - ✅ Check how it works and what pattern it uses
+   - ✅ Create `handle_purchase_invoice_change()` following the SAME pattern
+   - ✅ Reuse existing helper functions like `ensure_account()`, `consume_inventory()`, etc.
+
+**Common mistakes to AVOID:**
+- ❌ Creating duplicate functions with slightly different names
+- ❌ Creating new helper functions when similar ones exist
+- ❌ Not checking existing trigger patterns before creating new ones
+- ❌ Assuming tables/columns don't exist without checking
+- ❌ Creating inconsistent naming (one module uses `handle_*_change`, another uses `process_*_update`)
+
+**Before making any database changes:**
+1. 🔍 **ALWAYS check `core_schema.sql` first**
+2. 🔍 **SEARCH for existing functions/triggers with similar names or purposes**
+3. 📖 Read the relevant section (tables, functions, triggers)
+4. 🤔 **Ask: "Does something similar already exist?"**
+5. ✏️ Make changes directly in `core_schema.sql`
+6. 💾 Save and inform user to deploy the updated file
+
+**This is the ONLY database schema file. Everything else has been deleted.**
+
+---
+
+# 🔧 COPILOT WORKFLOW CHECKLIST
+
+**For ANY database-related task:**
+
+1. ✅ **READ** `supabase/sql/core_schema.sql` first - ENTIRE file if needed
+2. ✅ **SEARCH** for existing tables/functions/triggers with similar names or purposes
+3. ✅ **CHECK** if similar patterns already exist (e.g., `handle_sales_invoice_change` → use same pattern for purchases)
+4. ✅ **REUSE** existing helper functions (`ensure_account`, `consume_inventory`, etc.)
+5. ✅ **UPDATE** existing code or add new code following EXISTING patterns
+6. ✅ **NEVER** create duplicate functions/triggers with different names
+7. ✅ **VERIFY** column names match what's in `core_schema.sql`
+8. ✅ **INFORM** user to deploy updated `core_schema.sql`
+
+**CRITICAL: Before creating ANY function/trigger:**
+- 🔍 Search `core_schema.sql` for: `CREATE OR REPLACE FUNCTION public.[function_name]`
+- 🔍 Search for similar patterns (e.g., if creating purchase trigger, look for sales trigger)
+- 🔍 Check what helper functions exist (ensure_account, consume_inventory, etc.)
+- ❌ NEVER create `create_purchase_invoice_journal_entry` if `create_sales_invoice_journal_entry` already exists - study the existing one first!
+
+**For ANY Flutter code changes:**
+
+1. ✅ Check if database schema needs updating first
+2. ✅ **READ `core_schema.sql`** to verify table/column names
+3. ✅ Adapt Flutter code to match database schema (not vice versa)
+4. ✅ Use correct column names from `core_schema.sql`
+5. ✅ Test compilation before marking complete
+
+**For ANY new feature:**
+
+1. ✅ **Database schema first (in `core_schema.sql`)**
+   - Check what tables/functions/triggers already exist
+   - Follow existing patterns and naming conventions
+   - Reuse existing helper functions
+2. ✅ Backend triggers/functions (in `core_schema.sql`)
+   - Search for similar triggers/functions first
+   - Use same pattern as existing code
+3. ✅ Flutter models and services
+4. ✅ UI implementation
+5. ✅ Navigation integration (add to main menu)
+
+**REMEMBER:**
+- 🚫 No new SQL files
+- 🚫 No duplicate functions/triggers (search first!)
+- 🚫 No markdown guides for simple tasks
+- 🚫 No assumptions about schema - always check first
+- 🚫 No creating new patterns when existing patterns work
+- ✅ Always search for existing similar code
+- ✅ Always follow existing naming conventions
+- ✅ Always reuse existing helper functions
+- ✅ Always verify changes compile before finishing
+
+---
+
 # 🧱 Modular Architecture
 
 Each module is independent but shares a unified data layer. Modules include:

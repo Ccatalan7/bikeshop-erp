@@ -566,12 +566,71 @@ begin
   end if;
 end $$;
 
+-- ============================================================================
+-- PAYMENT METHODS TABLE (Dynamic, UI-Configurable)
+-- ============================================================================
+-- This table allows flexible payment method configuration without code changes.
+-- Each payment method is wired to a specific accounting account.
+-- Users can add new methods via UI (e.g., "Transferencia BCI", "Transferencia Santander")
+
+create table if not exists payment_methods (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique,
+  name text not null,
+  account_id uuid not null references accounts(id),
+  requires_reference boolean not null default false,
+  icon text,
+  sort_order integer not null default 0,
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_payment_methods_code on payment_methods(code);
+create index if not exists idx_payment_methods_sort_order on payment_methods(sort_order);
+create index if not exists idx_payment_methods_account_id on payment_methods(account_id);
+
+-- Seed basic payment methods (Efectivo → Caja, Transferencia/Tarjeta → Banco)
+insert into payment_methods (code, name, account_id, requires_reference, icon, sort_order)
+select 'cash', 'Efectivo', id, false, 'cash', 1
+from accounts where code = '1101'
+on conflict (code) do update set
+  name = excluded.name,
+  account_id = excluded.account_id,
+  updated_at = now();
+
+insert into payment_methods (code, name, account_id, requires_reference, icon, sort_order)
+select 'transfer', 'Transferencia Bancaria', id, true, 'bank', 2
+from accounts where code = '1110'
+on conflict (code) do update set
+  name = excluded.name,
+  account_id = excluded.account_id,
+  updated_at = now();
+
+insert into payment_methods (code, name, account_id, requires_reference, icon, sort_order)
+select 'card', 'Tarjeta de Débito/Crédito', id, false, 'credit_card', 3
+from accounts where code = '1110'
+on conflict (code) do update set
+  name = excluded.name,
+  account_id = excluded.account_id,
+  updated_at = now();
+
+insert into payment_methods (code, name, account_id, requires_reference, icon, sort_order)
+select 'check', 'Cheque', id, true, 'receipt', 4
+from accounts where code = '1110'
+on conflict (code) do update set
+  name = excluded.name,
+  account_id = excluded.account_id,
+  updated_at = now();
+
+-- ============================================================================
+-- SALES PAYMENTS TABLE (Updated to use payment_method_id)
+-- ============================================================================
 create table if not exists sales_payments (
   id uuid primary key default gen_random_uuid(),
   invoice_id uuid not null references sales_invoices(id) on delete cascade,
   invoice_reference text,
-  method text not null
-    check (method in ('cash','card','transfer','check','other')),
+  payment_method_id uuid not null references payment_methods(id),
   amount numeric(12,2) not null default 0,
   date timestamp with time zone not null default now(),
   reference text,
@@ -582,6 +641,67 @@ create table if not exists sales_payments (
 
 create index if not exists idx_sales_payments_invoice_id
   on sales_payments(invoice_id);
+create index if not exists idx_sales_payments_payment_method_id
+  on sales_payments(payment_method_id);
+
+-- Migration: Handle existing sales_payments with old 'method' column
+do $$
+declare
+  v_has_method_column boolean;
+  v_cash_method_id uuid;
+begin
+  -- Check if old 'method' column exists
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'sales_payments'
+      and column_name = 'method'
+  ) into v_has_method_column;
+
+  if v_has_method_column then
+    raise notice 'Migrating sales_payments from method column to payment_method_id...';
+    
+    -- Get cash payment method ID as default
+    select id into v_cash_method_id from payment_methods where code = 'cash' limit 1;
+    
+    -- Add new column if not exists
+    if not exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'sales_payments'
+        and column_name = 'payment_method_id'
+    ) then
+      alter table sales_payments add column payment_method_id uuid references payment_methods(id);
+    end if;
+    
+    -- Migrate data: map old method values to payment_method_id
+    update sales_payments sp
+    set payment_method_id = pm.id
+    from payment_methods pm
+    where sp.payment_method_id is null
+      and (
+        (sp.method = 'cash' and pm.code = 'cash') or
+        (sp.method = 'transfer' and pm.code = 'transfer') or
+        (sp.method = 'card' and pm.code = 'card') or
+        (sp.method = 'check' and pm.code = 'check') or
+        (sp.method = 'other' and pm.code = 'cash')  -- Default 'other' to cash
+      );
+    
+    -- Set default for any remaining nulls
+    update sales_payments
+    set payment_method_id = v_cash_method_id
+    where payment_method_id is null;
+    
+    -- Drop old method column and constraint
+    alter table sales_payments drop constraint if exists sales_payments_method_check;
+    alter table sales_payments drop column if exists method;
+    
+    -- Make payment_method_id NOT NULL
+    alter table sales_payments alter column payment_method_id set not null;
+    
+    raise notice 'Migration complete!';
+  end if;
+end $$;
 
 alter table public.sales_payments
   add column if not exists invoice_reference text,
@@ -669,9 +789,10 @@ declare
   v_invoice record;
   v_entry_id uuid := gen_random_uuid();
   v_exists boolean;
+  v_payment_method record;
+  v_cash_account_id uuid;
   v_cash_account_code text;
   v_cash_account_name text;
-  v_cash_account_id uuid;
   v_receivable_account_id uuid;
   v_receivable_account_code text := '1130';
   v_receivable_account_name text := 'Cuentas por Cobrar Comerciales';
@@ -705,32 +826,21 @@ begin
     return;
   end if;
 
-  case coalesce(p_payment.method, 'other')
-    when 'cash' then
-      v_cash_account_code := '1101';
-      v_cash_account_name := 'Caja General';
-    when 'card' then
-      v_cash_account_code := '1110';
-      v_cash_account_name := 'Bancos - Cuenta Corriente';
-    when 'transfer' then
-      v_cash_account_code := '1110';
-      v_cash_account_name := 'Bancos - Cuenta Corriente';
-    when 'check' then
-      v_cash_account_code := '1110';
-      v_cash_account_name := 'Bancos - Cuenta Corriente';
-    else
-      v_cash_account_code := '1190';
-      v_cash_account_name := 'Otros Activos Corrientes';
-  end case;
+  -- Get payment method and its associated account (DYNAMIC!)
+  select pm.id, pm.code, pm.name, a.id as account_id, a.code as account_code, a.name as account_name
+    into v_payment_method
+    from public.payment_methods pm
+    join public.accounts a on a.id = pm.account_id
+   where pm.id = p_payment.payment_method_id;
 
-  v_cash_account_id := public.ensure_account(
-    v_cash_account_code,
-    v_cash_account_name,
-    'asset',
-    'currentAsset',
-    v_cash_account_name,
-    null
-  );
+  if not found then
+    raise exception 'Payment method not found for payment %', p_payment.id;
+  end if;
+
+  -- Use the account from payment method configuration
+  v_cash_account_id := v_payment_method.account_id;
+  v_cash_account_code := v_payment_method.account_code;
+  v_cash_account_name := v_payment_method.account_name;
 
   v_receivable_account_id := public.ensure_account(
     v_receivable_account_code,
@@ -741,7 +851,10 @@ begin
     null
   );
 
-  v_description := format('Pago factura %s', coalesce(v_invoice.invoice_number, v_invoice.id::text));
+  v_description := format('Pago factura %s - %s', 
+    coalesce(v_invoice.invoice_number, v_invoice.id::text),
+    v_payment_method.name
+  );
 
   insert into public.journal_entries (
     id,
@@ -824,6 +937,254 @@ begin
      and source_reference = p_payment_id::text;
 end;
 $$;
+
+-- ============================================================================
+-- PURCHASE PAYMENT JOURNAL ENTRY FUNCTIONS (Mirror sales payment pattern)
+-- ============================================================================
+
+create or replace function public.recalculate_purchase_invoice_payments(p_invoice_id uuid)
+returns void as $$
+declare
+  v_invoice record;
+  v_total numeric(12,2);
+  v_new_status text;
+  v_balance numeric(12,2);
+begin
+  if p_invoice_id is null then
+    return;
+  end if;
+
+  select id,
+         total,
+         status
+    into v_invoice
+    from public.purchase_invoices
+   where id = p_invoice_id
+   for update;
+
+  if not found then
+    return;
+  end if;
+
+  select coalesce(sum(amount), 0)
+    into v_total
+    from public.purchase_payments
+   where invoice_id = p_invoice_id;
+
+  v_balance := greatest(coalesce(v_invoice.total, 0) - v_total, 0);
+
+  if v_invoice.status = 'cancelled' then
+    v_new_status := v_invoice.status;
+  elsif v_invoice.status = 'draft' and v_total = 0 then
+    v_new_status := 'draft';
+  elsif v_total >= coalesce(v_invoice.total, 0) then
+    v_new_status := 'paid';
+  elsif v_total > 0 then
+    v_new_status := 'received';
+  else
+    v_new_status := v_invoice.status;
+  end if;
+
+  update public.purchase_invoices
+     set paid_amount = v_total,
+         balance = v_balance,
+         status = v_new_status,
+         updated_at = now()
+   where id = p_invoice_id;
+end;
+$$ language plpgsql;
+
+create or replace function public.create_purchase_payment_journal_entry(p_payment public.purchase_payments)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice record;
+  v_entry_id uuid := gen_random_uuid();
+  v_exists boolean;
+  v_payment_method record;
+  v_cash_account_id uuid;
+  v_cash_account_code text;
+  v_cash_account_name text;
+  v_payable_account_id uuid;
+  v_payable_account_code text := '2101';
+  v_payable_account_name text := 'Cuentas por Pagar Proveedores';
+  v_description text;
+begin
+  if p_payment.invoice_id is null then
+    return;
+  end if;
+
+  select exists (
+           select 1
+             from public.journal_entries
+            where source_module = 'purchase_payments'
+              and source_reference = p_payment.id::text
+        )
+    into v_exists;
+
+  if v_exists then
+    return;
+  end if;
+
+  select id,
+         invoice_number,
+         supplier_name,
+         total
+    into v_invoice
+    from public.purchase_invoices
+   where id = p_payment.invoice_id;
+
+  if not found then
+    return;
+  end if;
+
+  -- Get payment method and its associated account (DYNAMIC!)
+  select pm.id, pm.code, pm.name, a.id as account_id, a.code as account_code, a.name as account_name
+    into v_payment_method
+    from public.payment_methods pm
+    join public.accounts a on a.id = pm.account_id
+   where pm.id = p_payment.payment_method_id;
+
+  if not found then
+    raise exception 'Payment method not found for payment %', p_payment.id;
+  end if;
+
+  -- Use the account from payment method configuration
+  v_cash_account_id := v_payment_method.account_id;
+  v_cash_account_code := v_payment_method.account_code;
+  v_cash_account_name := v_payment_method.account_name;
+
+  v_payable_account_id := public.ensure_account(
+    v_payable_account_code,
+    v_payable_account_name,
+    'liability',
+    'currentLiability',
+    'Cuentas por pagar a proveedores',
+    null
+  );
+
+  v_description := format('Pago factura compra %s - %s', 
+    coalesce(v_invoice.invoice_number, v_invoice.id::text),
+    v_payment_method.name
+  );
+
+  insert into public.journal_entries (
+    id,
+    entry_number,
+    date,
+    description,
+    type,
+    source_module,
+    source_reference,
+    status,
+    total_debit,
+    total_credit,
+    created_at,
+    updated_at
+  ) values (
+    v_entry_id,
+    concat('PPAY-', to_char(now(), 'YYYYMMDDHH24MISS')),
+    coalesce(p_payment.date, now()),
+    v_description,
+    'payment',
+    'purchase_payments',
+    p_payment.id::text,
+    'posted',
+    p_payment.amount,
+    p_payment.amount,
+    now(),
+    now()
+  );
+
+  -- DR: Accounts Payable (reduce liability)
+  insert into public.journal_lines (
+    id,
+    entry_id,
+    account_id,
+    account_code,
+    account_name,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
+    gen_random_uuid(),
+    v_entry_id,
+    v_payable_account_id,
+    v_payable_account_code,
+    v_payable_account_name,
+    v_description,
+    p_payment.amount,
+    0,
+    now(),
+    now()
+  );
+
+  -- CR: Cash/Bank account (reduce asset)
+  insert into public.journal_lines (
+    id,
+    entry_id,
+    account_id,
+    account_code,
+    account_name,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
+    gen_random_uuid(),
+    v_entry_id,
+    v_cash_account_id,
+    v_cash_account_code,
+    v_cash_account_name,
+    v_description,
+    0,
+    p_payment.amount,
+    now(),
+    now()
+  );
+end;
+$$;
+
+create or replace function public.delete_purchase_payment_journal_entry(p_payment_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_payment_id is null then
+    return;
+  end if;
+
+  delete from public.journal_entries
+   where source_module = 'purchase_payments'
+     and source_reference = p_payment_id::text;
+end;
+$$;
+
+create or replace function public.handle_purchase_payment_change()
+returns trigger as $$
+begin
+  if TG_OP = 'INSERT' then
+    perform public.create_purchase_payment_journal_entry(NEW);
+    perform public.recalculate_purchase_invoice_payments(NEW.invoice_id);
+  elsif TG_OP = 'UPDATE' then
+    perform public.delete_purchase_payment_journal_entry(OLD.id);
+    perform public.create_purchase_payment_journal_entry(NEW);
+    perform public.recalculate_purchase_invoice_payments(NEW.invoice_id);
+  elsif TG_OP = 'DELETE' then
+    perform public.delete_purchase_payment_journal_entry(OLD.id);
+    perform public.recalculate_purchase_invoice_payments(OLD.invoice_id);
+  end if;
+  return NULL;
+end;
+$$ language plpgsql;
 
 create or replace function public.consume_sales_invoice_inventory(p_invoice public.sales_invoices)
 returns void
@@ -1615,6 +1976,59 @@ create index if not exists idx_purchase_invoices_date
 create index if not exists idx_purchase_invoices_invoice_number
   on purchase_invoices(invoice_number);
 
+-- ============================================================================
+-- PURCHASE PAYMENTS TABLE (Uses payment_method_id for dynamic configuration)
+-- ============================================================================
+create table if not exists purchase_payments (
+  id uuid primary key default gen_random_uuid(),
+  invoice_id uuid not null references purchase_invoices(id) on delete cascade,
+  invoice_reference text,
+  payment_method_id uuid not null references payment_methods(id),
+  amount numeric(12,2) not null default 0,
+  date timestamp with time zone not null default now(),
+  reference text,
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_purchase_payments_invoice_id
+  on purchase_payments(invoice_id);
+create index if not exists idx_purchase_payments_payment_method_id
+  on purchase_payments(payment_method_id);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'purchase_payments'
+      and t.tgname = 'trg_purchase_payments_updated_at'
+  ) then
+    create trigger trg_purchase_payments_updated_at
+      before update on purchase_payments
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'purchase_payments'
+      and t.tgname = 'trg_purchase_payments_change'
+  ) then
+    create trigger trg_purchase_payments_change
+      after insert or update or delete on public.purchase_payments
+      for each row execute procedure public.handle_purchase_payment_change();
+  end if;
+end $$;
+
 create table if not exists stock_movements (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references products(id) on delete cascade,
@@ -2057,6 +2471,452 @@ begin
   return new;
 end;
 $$ language plpgsql;
+
+-- ============================================================================
+-- PURCHASE INVOICE WORKFLOW FUNCTIONS (Mirror sales invoice pattern)
+-- ============================================================================
+
+create or replace function public.consume_purchase_invoice_inventory(p_invoice public.purchase_invoices)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_reference text;
+  v_item record;
+  v_items jsonb;
+  v_resolved_product_id uuid;
+  v_quantity_numeric numeric;
+  v_quantity_int integer;
+begin
+  if p_invoice.id is null then
+    raise notice 'consume_purchase_invoice_inventory: invoice ID is null, returning';
+    return;
+  end if;
+
+  v_items := p_invoice.items;
+  if v_items is null or jsonb_array_length(v_items) = 0 then
+    raise notice 'consume_purchase_invoice_inventory: no items for invoice %', p_invoice.id;
+    return;
+  end if;
+
+  v_reference := format('purchase_invoice:%s', p_invoice.id);
+
+  for v_item in
+    select
+      (item->>'product_id')::uuid as product_id,
+      (item->>'product_name')::text as product_name,
+      (item->>'quantity')::numeric as quantity
+    from jsonb_array_elements(v_items) as item
+  loop
+    v_resolved_product_id := v_item.product_id;
+    if v_resolved_product_id is null then
+      raise notice 'consume_purchase_invoice_inventory: skipping item with null product_id';
+      continue;
+    end if;
+
+    v_quantity_numeric := coalesce(v_item.quantity, 0);
+    v_quantity_int := abs(v_quantity_numeric::integer);
+
+    if v_quantity_int = 0 then
+      raise notice 'consume_purchase_invoice_inventory: skipping item % with zero quantity', v_resolved_product_id;
+      continue;
+    end if;
+
+    -- INCREASE inventory (purchase = IN movement)
+    update public.products
+    set inventory_qty = inventory_qty + v_quantity_int
+    where id = v_resolved_product_id;
+
+    -- Record stock movement
+    insert into public.stock_movements (
+      product_id,
+      quantity,
+      movement_type,
+      type,
+      reference_type,
+      reference_id,
+      notes,
+      date,
+      created_at,
+      updated_at
+    ) values (
+      v_resolved_product_id,
+      v_quantity_int,
+      'purchase_invoice',
+      'IN',
+      'purchase_invoice',
+      p_invoice.id::text,
+      format('Entrada según factura compra %s', p_invoice.invoice_number),
+      p_invoice.date,
+      now(),
+      now()
+    );
+  end loop;
+
+  raise notice 'consume_purchase_invoice_inventory: completed for invoice %', p_invoice.id;
+end;
+$$;
+
+create or replace function public.restore_purchase_invoice_inventory(p_invoice public.purchase_invoices)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_reference text;
+  v_item record;
+  v_items jsonb;
+  v_resolved_product_id uuid;
+  v_quantity_numeric numeric;
+  v_quantity_int integer;
+begin
+  if p_invoice.id is null then
+    raise notice 'restore_purchase_invoice_inventory: invoice ID is null, returning';
+    return;
+  end if;
+
+  v_items := p_invoice.items;
+  if v_items is null or jsonb_array_length(v_items) = 0 then
+    raise notice 'restore_purchase_invoice_inventory: no items for invoice %', p_invoice.id;
+    return;
+  end if;
+
+  -- Delete stock movements
+  delete from public.stock_movements
+  where reference_type = 'purchase_invoice'
+    and reference_id = p_invoice.id::text;
+
+  -- DECREASE inventory (restore = undo IN movement)
+  for v_item in
+    select
+      (item->>'product_id')::uuid as product_id,
+      (item->>'quantity')::numeric as quantity
+    from jsonb_array_elements(v_items) as item
+  loop
+    v_resolved_product_id := v_item.product_id;
+    if v_resolved_product_id is null then
+      continue;
+    end if;
+
+    v_quantity_numeric := coalesce(v_item.quantity, 0);
+    v_quantity_int := abs(v_quantity_numeric::integer);
+
+    if v_quantity_int = 0 then
+      continue;
+    end if;
+
+    update public.products
+    set inventory_qty = greatest(inventory_qty - v_quantity_int, 0)
+    where id = v_resolved_product_id;
+  end loop;
+
+  raise notice 'restore_purchase_invoice_inventory: completed for invoice %', p_invoice.id;
+end;
+$$;
+
+create or replace function public.create_purchase_invoice_journal_entry(p_invoice public.purchase_invoices)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_exists boolean;
+  v_entry_id uuid := gen_random_uuid();
+  v_inventory_account_id uuid;
+  v_iva_account_id uuid;
+  v_payable_account_id uuid;
+  v_description text;
+begin
+  if p_invoice.id is null then
+    raise notice 'create_purchase_invoice_journal_entry: invoice ID is null, returning';
+    return;
+  end if;
+
+  -- Check if journal entry already exists
+  select exists (
+    select 1
+    from public.journal_entries
+    where source_module = 'purchase_invoices'
+      and source_reference = p_invoice.id::text
+  ) into v_exists;
+
+  if v_exists then
+    raise notice 'create_purchase_invoice_journal_entry: entry already exists for invoice %', p_invoice.id;
+    return;
+  end if;
+
+  -- Ensure accounts exist
+  v_inventory_account_id := public.ensure_account(
+    '1105',
+    'Inventarios',
+    'asset',
+    'currentAsset',
+    'Valor del inventario de productos',
+    null
+  );
+
+  v_iva_account_id := public.ensure_account(
+    '1107',
+    'IVA Crédito Fiscal',
+    'asset',
+    'currentAsset',
+    'IVA pagado en compras, recuperable',
+    null
+  );
+
+  v_payable_account_id := public.ensure_account(
+    '2101',
+    'Cuentas por Pagar Proveedores',
+    'liability',
+    'currentLiability',
+    'Obligaciones con proveedores',
+    null
+  );
+
+  v_description := format('Factura compra %s - %s', 
+    p_invoice.invoice_number, 
+    coalesce(p_invoice.supplier_name, 'Proveedor')
+  );
+
+  -- Create journal entry header
+  insert into public.journal_entries (
+    id,
+    entry_number,
+    date,
+    description,
+    type,
+    source_module,
+    source_reference,
+    status,
+    total_debit,
+    total_credit,
+    created_at,
+    updated_at
+  ) values (
+    v_entry_id,
+    concat('PINV-', to_char(now(), 'YYYYMMDDHH24MISS')),
+    coalesce(p_invoice.date, now()),
+    v_description,
+    'purchase',
+    'purchase_invoices',
+    p_invoice.id::text,
+    'posted',
+    p_invoice.total,
+    p_invoice.total,
+    now(),
+    now()
+  );
+
+  -- DR: Inventory (increase asset)
+  insert into public.journal_lines (
+    id,
+    entry_id,
+    account_id,
+    account_code,
+    account_name,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
+    gen_random_uuid(),
+    v_entry_id,
+    v_inventory_account_id,
+    '1105',
+    'Inventarios',
+    v_description,
+    p_invoice.subtotal,
+    0,
+    now(),
+    now()
+  );
+
+  -- DR: IVA Crédito (increase asset, recoverable tax)
+  insert into public.journal_lines (
+    id,
+    entry_id,
+    account_id,
+    account_code,
+    account_name,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
+    gen_random_uuid(),
+    v_entry_id,
+    v_iva_account_id,
+    '1107',
+    'IVA Crédito Fiscal',
+    v_description,
+    p_invoice.iva_amount,
+    0,
+    now(),
+    now()
+  );
+
+  -- CR: Accounts Payable (increase liability)
+  insert into public.journal_lines (
+    id,
+    entry_id,
+    account_id,
+    account_code,
+    account_name,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
+    gen_random_uuid(),
+    v_entry_id,
+    v_payable_account_id,
+    '2101',
+    'Cuentas por Pagar Proveedores',
+    v_description,
+    0,
+    p_invoice.total,
+    now(),
+    now()
+  );
+
+  raise notice 'create_purchase_invoice_journal_entry: created entry for invoice %', p_invoice.id;
+end;
+$$;
+
+create or replace function public.delete_purchase_invoice_journal_entry(p_invoice_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_invoice_id is null then
+    return;
+  end if;
+
+  delete from public.journal_entries
+  where source_module = 'purchase_invoices'
+    and source_reference = p_invoice_id::text;
+
+  raise notice 'delete_purchase_invoice_journal_entry: deleted entry for invoice %', p_invoice_id;
+end;
+$$;
+
+create or replace function public.handle_purchase_invoice_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_non_posted constant text[] := array[
+    'draft', 'sent', 'cancelled'
+  ];
+  v_old_status text;
+  v_new_status text;
+  v_old_posted boolean;
+  v_new_posted boolean;
+begin
+  raise notice 'handle_purchase_invoice_change: TG_OP=%', TG_OP;
+
+  if TG_OP = 'INSERT' then
+    v_new_status := NEW.status;
+    v_new_posted := v_new_status <> ALL(v_non_posted);
+
+    raise notice 'handle_purchase_invoice_change: INSERT invoice %, status %', NEW.id, v_new_status;
+
+    if v_new_posted then
+      raise notice 'handle_purchase_invoice_change: INSERT with posted status, consuming inventory';
+      perform public.consume_purchase_invoice_inventory(NEW);
+      perform public.create_purchase_invoice_journal_entry(NEW);
+    else
+      raise notice 'handle_purchase_invoice_change: INSERT with non-posted status (%), skipping', v_new_status;
+    end if;
+
+    return NEW;
+
+  elsif TG_OP = 'UPDATE' then
+    v_old_status := OLD.status;
+    v_new_status := NEW.status;
+    v_old_posted := v_old_status <> ALL(v_non_posted);
+    v_new_posted := v_new_status <> ALL(v_non_posted);
+
+    raise notice 'handle_purchase_invoice_change: UPDATE invoice %, old status %, new status %', NEW.id, v_old_status, v_new_status;
+
+    -- Inventory handling
+    if v_old_posted and v_new_posted and v_old_status != v_new_status then
+      raise notice 'handle_purchase_invoice_change: both posted, restore and consume';
+      perform public.restore_purchase_invoice_inventory(OLD);
+      perform public.consume_purchase_invoice_inventory(NEW);
+    elsif v_old_posted and not v_new_posted then
+      raise notice 'handle_purchase_invoice_change: changed to non-posted, restore only';
+      perform public.restore_purchase_invoice_inventory(OLD);
+    elsif not v_old_posted and v_new_posted then
+      raise notice 'handle_purchase_invoice_change: changed to posted, consume';
+      perform public.consume_purchase_invoice_inventory(NEW);
+    else
+      raise notice 'handle_purchase_invoice_change: both non-posted, no inventory change';
+    end if;
+
+    -- Journal entry handling (DELETE-based reversal)
+    if v_old_posted and not v_new_posted then
+      raise notice 'handle_purchase_invoice_change: reverting to non-posted, deleting journal entry';
+      perform public.delete_purchase_invoice_journal_entry(OLD.id);
+    elsif not v_old_posted and v_new_posted then
+      raise notice 'handle_purchase_invoice_change: changing to posted, creating journal entry';
+      perform public.create_purchase_invoice_journal_entry(NEW);
+    elsif v_old_posted and v_new_posted then
+      raise notice 'handle_purchase_invoice_change: both posted, recreating journal entry';
+      perform public.delete_purchase_invoice_journal_entry(OLD.id);
+      perform public.create_purchase_invoice_journal_entry(NEW);
+    else
+      raise notice 'handle_purchase_invoice_change: both non-posted, no journal entry action';
+    end if;
+
+    return NEW;
+
+  elsif TG_OP = 'DELETE' then
+    v_old_status := OLD.status;
+    v_old_posted := v_old_status <> ALL(v_non_posted);
+
+    raise notice 'handle_purchase_invoice_change: DELETE invoice %, status %', OLD.id, v_old_status;
+
+    if v_old_posted then
+      raise notice 'handle_purchase_invoice_change: deleting posted invoice, restoring inventory';
+      perform public.restore_purchase_invoice_inventory(OLD);
+      perform public.delete_purchase_invoice_journal_entry(OLD.id);
+    else
+      raise notice 'handle_purchase_invoice_change: deleting non-posted invoice, no action needed';
+    end if;
+
+    return OLD;
+  end if;
+
+  return NULL;
+end;
+$$;
+
+do $$
+begin
+  drop trigger if exists trg_purchase_invoices_change on public.purchase_invoices;
+  
+  create trigger trg_purchase_invoices_change
+    after insert or update or delete on public.purchase_invoices
+    for each row execute procedure public.handle_purchase_invoice_change();
+    
+  raise notice 'Trigger trg_purchase_invoices_change created successfully';
+exception
+  when others then
+    raise notice 'Error creating trigger: %', SQLERRM;
+end $$;
+
 -- Basic RLS scaffolding: enable on each table; policies to be tailored per role.
 alter table customers enable row level security;
 alter table products enable row level security;

@@ -297,17 +297,59 @@ void _confirmInvoice() async {
 
 **SQL Trigger**: ✅ `handle_purchase_invoice_change()`
 
-**Trigger Logic**:
+**Trigger Logic** (following sales invoice pattern):
 ```sql
-CREATE OR REPLACE FUNCTION handle_purchase_invoice_change()
+CREATE OR REPLACE FUNCTION public.handle_purchase_invoice_change()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_old_status TEXT;
+  v_new_status TEXT;
+  v_old_posted BOOLEAN;
+  v_new_posted BOOLEAN;
+  v_non_posted constant text[] := array[
+    'draft','borrador',
+    'sent','enviado','enviada','issued','emitido','emitida',
+    'cancelled','cancelado','cancelada','anulado','anulada'
+  ];
 BEGIN
-  -- When status changes to 'confirmed'
-  IF (TG_OP = 'UPDATE' AND OLD.status != 'confirmed' AND NEW.status = 'confirmed') THEN
-    -- Create journal entry
-    PERFORM create_purchase_invoice_journal_entry(NEW.id);
+  IF TG_OP = 'INSERT' THEN
+    v_new_status := lower(trim(NEW.status));
+    v_new_posted := NOT (v_new_status = ANY(v_non_posted));
     
-    -- Do NOT increase inventory yet (wait for 'received')
+    IF v_new_posted THEN
+      PERFORM public.create_purchase_invoice_journal_entry(NEW);
+    END IF;
+    
+  ELSIF TG_OP = 'UPDATE' THEN
+    v_old_status := lower(trim(OLD.status));
+    v_new_status := lower(trim(NEW.status));
+    v_old_posted := NOT (v_old_status = ANY(v_non_posted));
+    v_new_posted := NOT (v_new_status = ANY(v_non_posted));
+    
+    IF v_old_posted AND NOT v_new_posted THEN
+      -- Confirmed → Sent: DELETE journal entry
+      DELETE FROM public.journal_entries
+      WHERE source_module = 'purchase_invoices' 
+        AND source_reference = OLD.id::text;
+        
+    ELSIF NOT v_old_posted AND v_new_posted THEN
+      -- Sent → Confirmed: CREATE journal entry
+      PERFORM public.create_purchase_invoice_journal_entry(NEW);
+      
+    ELSIF v_old_posted AND v_new_posted THEN
+      -- Both posted states: recreate
+      DELETE FROM public.journal_entries
+      WHERE source_module = 'purchase_invoices' 
+        AND source_reference = OLD.id::text;
+      PERFORM public.create_purchase_invoice_journal_entry(NEW);
+    END IF;
+    
+    -- Handle inventory transitions
+    IF v_old_status != 'received' AND v_new_status = 'received' THEN
+      PERFORM public.consume_purchase_invoice_inventory(NEW);
+    ELSIF v_old_status = 'received' AND v_new_status != 'received' THEN
+      PERFORM public.restore_purchase_invoice_inventory(NEW);
+    END IF;
   END IF;
   
   RETURN NEW;
@@ -315,37 +357,73 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-**Trigger Function**: `create_purchase_invoice_journal_entry(invoice_id)`
+**Trigger Function**: `create_purchase_invoice_journal_entry(invoice_record)`
 
-**Journal Entry Created**:
+**Function Implementation** (following sales invoice pattern):
 ```sql
-INSERT INTO journal_entries (
-  entry_number,
-  entry_date,
-  entry_type,
-  status,
-  source_module,
-  source_reference,
-  notes
-) VALUES (
-  'COMP-FC-' || invoice.invoice_number,
-  NOW(),
-  'purchase_invoice',
-  'posted',
-  'purchase_invoices',
-  invoice.id,
-  'Compra según factura ' || invoice.invoice_number
-) RETURNING id INTO v_entry_id;
-
--- Journal Lines
-INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description)
-VALUES
-  -- DR: Inventory
-  (v_entry_id, <inventory_account_id>, invoice.subtotal, 0, 'Inventario compra'),
-  -- DR: IVA Crédito
-  (v_entry_id, <iva_credit_account_id>, invoice.tax_amount, 0, 'IVA Crédito Fiscal'),
-  -- CR: Accounts Payable
-  (v_entry_id, <ap_account_id>, 0, invoice.total, 'Cuentas por Pagar - ' || supplier.name);
+CREATE OR REPLACE FUNCTION public.create_purchase_invoice_journal_entry(p_invoice public.purchase_invoices)
+RETURNS VOID AS $$
+DECLARE
+  v_entry_id INTEGER;
+  v_inventory_account_id INTEGER;
+  v_iva_account_id INTEGER;
+  v_ap_account_id INTEGER;
+  v_supplier_name TEXT;
+BEGIN
+  -- Check if entry already exists
+  IF EXISTS (
+    SELECT 1 FROM public.journal_entries
+    WHERE source_module = 'purchase_invoices'
+      AND source_reference = p_invoice.id::text
+  ) THEN
+    RETURN;
+  END IF;
+  
+  -- Get supplier name
+  SELECT name INTO v_supplier_name
+  FROM public.suppliers
+  WHERE id = p_invoice.supplier_id;
+  
+  -- Ensure accounts exist (helper function from core_schema.sql)
+  v_inventory_account_id := public.ensure_account('1105', 'Inventario');
+  v_iva_account_id := public.ensure_account('1107', 'IVA Crédito Fiscal');
+  v_ap_account_id := public.ensure_account('2101', 'Cuentas por Pagar');
+  
+  -- Create journal entry
+  INSERT INTO public.journal_entries (
+    entry_number,
+    entry_date,
+    entry_type,
+    status,
+    source_module,
+    source_reference,
+    notes
+  ) VALUES (
+    'COMP-FC-' || p_invoice.invoice_number,
+    p_invoice.date,
+    'purchase_invoice',
+    'posted',
+    'purchase_invoices',
+    p_invoice.id::text,
+    'Compra según factura ' || p_invoice.invoice_number || 
+    CASE WHEN v_supplier_name IS NOT NULL THEN ' - ' || v_supplier_name ELSE '' END
+  ) RETURNING id INTO v_entry_id;
+  
+  -- Create journal lines
+  INSERT INTO public.journal_lines (entry_id, account_id, debit_amount, credit_amount, description)
+  VALUES
+    -- DR: Inventory
+    (v_entry_id, v_inventory_account_id, p_invoice.subtotal, 0, 
+     'Inventario compra FC-' || p_invoice.invoice_number),
+    -- DR: IVA Crédito Fiscal
+    (v_entry_id, v_iva_account_id, p_invoice.iva_amount, 0, 
+     'IVA Crédito Fiscal'),
+    -- CR: Accounts Payable
+    (v_entry_id, v_ap_account_id, 0, p_invoice.total, 
+     'Cuentas por Pagar' || 
+     CASE WHEN v_supplier_name IS NOT NULL THEN ' - ' || v_supplier_name ELSE '' END);
+END;
+$$ LANGUAGE plpgsql;
 ```
 
 **Database Changes**:
@@ -431,56 +509,76 @@ Future<void> markAsReceived(int invoiceId) async {
 
 **SQL Trigger**: ✅ `handle_purchase_invoice_change()`
 
-**Trigger Logic**:
+**Trigger Logic** (shown above, handles inventory on status change):
 ```sql
-IF (TG_OP = 'UPDATE' AND OLD.status != 'received' AND NEW.status = 'received') THEN
-  -- Increase inventory
-  PERFORM consume_purchase_invoice_inventory(NEW.id);
+-- In handle_purchase_invoice_change():
+IF v_old_status != 'received' AND v_new_status = 'received' THEN
+  PERFORM public.consume_purchase_invoice_inventory(NEW);
 END IF;
 ```
 
-**Trigger Function**: `consume_purchase_invoice_inventory(invoice_id)`
+**Trigger Function**: `consume_purchase_invoice_inventory(invoice_record)`
 
-**Inventory Changes**:
+**Function Implementation** (following sales invoice pattern):
 ```sql
-CREATE OR REPLACE FUNCTION consume_purchase_invoice_inventory(p_invoice_id INTEGER)
+CREATE OR REPLACE FUNCTION public.consume_purchase_invoice_inventory(p_invoice public.purchase_invoices)
 RETURNS VOID AS $$
 DECLARE
   v_item RECORD;
+  v_items JSONB;
+  v_reference TEXT;
+  v_product_id UUID;
+  v_quantity_int INTEGER;
 BEGIN
+  v_items := p_invoice.items;
+  v_reference := 'purchase_invoice:' || p_invoice.id::text;
+  
+  -- Check if already processed
+  IF EXISTS (
+    SELECT 1 FROM public.stock_movements
+    WHERE reference = v_reference
+  ) THEN
+    RETURN;
+  END IF;
+  
   -- Loop through invoice items
-  FOR v_item IN 
-    SELECT product_id, quantity 
-    FROM purchase_invoice_items 
-    WHERE purchase_invoice_id = p_invoice_id
+  FOR v_item IN SELECT * FROM jsonb_array_elements(v_items)
   LOOP
-    -- Create stock movement (IN)
-    INSERT INTO stock_movements (
+    v_product_id := (v_item.value->>'product_id')::uuid;
+    v_quantity_int := coalesce((v_item.value->>'quantity')::integer, 0);
+    
+    IF v_product_id IS NULL OR v_quantity_int <= 0 THEN
+      CONTINUE;
+    END IF;
+    
+    -- Increase inventory (IN movement)
+    UPDATE public.products
+    SET inventory_qty = inventory_qty + v_quantity_int
+    WHERE id = v_product_id
+      AND is_service = false;
+    
+    -- Create stock movement record
+    INSERT INTO public.stock_movements (
       product_id,
       quantity,
-      type,
       movement_type,
       reference,
       notes,
       created_at
     ) VALUES (
-      v_item.product_id,
-      v_item.quantity,  -- Positive value
-      'IN',
+      v_product_id,
+      v_quantity_int,  -- Positive for IN
       'purchase_invoice',
-      p_invoice_id,
-      'Compra recibida según factura ' || (SELECT invoice_number FROM purchase_invoices WHERE id = p_invoice_id),
+      v_reference,
+      'Compra FC-' || p_invoice.invoice_number,
       NOW()
     );
-    
-    -- Increase product inventory
-    UPDATE products
-    SET 
-      inventory_qty = inventory_qty + v_item.quantity,
-      updated_at = NOW()
-    WHERE id = v_item.product_id;
   END LOOP;
 END;
+$$ LANGUAGE plpgsql;
+```
+
+**Database Changes**:
 $$ LANGUAGE plpgsql;
 ```
 
@@ -507,11 +605,13 @@ $$ LANGUAGE plpgsql;
 2. Clicks blue button **[Pagar Factura]**
 3. Navigates to **Payment Form Page** (`PurchasePaymentFormPage`)
 4. User fills payment form:
-   - Payment method (Efectivo, Transferencia, Cheque)
+   - **Payment method** (Dropdown populated from `payment_methods` table)
+     - Examples: "Efectivo", "Transferencia Bancaria", "Tarjeta", "Cheque"
+     - Dynamic: users can add new methods via Contabilidad → Métodos de Pago
    - Amount (defaults to remaining balance)
    - Payment date (defaults to today)
-   - Bank account (if Transferencia/Cheque)
-   - Reference/Notes
+   - Reference (auto-shown if `payment_methods.requires_reference = true`)
+   - Notes
 5. Clicks **[Guardar Pago]** button
 
 **Frontend Navigation**:
@@ -537,6 +637,20 @@ void _navigateToPayment() async {
 
 **Payment Form Page** (`PurchasePaymentFormPage`):
 ```dart
+// Load payment methods dynamically from database
+Future<void> _loadPaymentMethods() async {
+  final response = await _supabase
+    .from('payment_methods')
+    .select()
+    .eq('is_active', true)
+    .order('sort_order');
+    
+  setState(() {
+    _paymentMethods = response as List;
+    _selectedMethodId = _paymentMethods.first['id']; // Default to first method
+  });
+}
+
 void _savePayment() async {
   if (!_formKey.currentState!.validate()) return;
   
@@ -546,9 +660,8 @@ void _savePayment() async {
     await _purchaseService.registerPayment(
       invoiceId: widget.invoiceId,
       amount: _amountController.value,
-      paymentMethod: _selectedMethod,
+      paymentMethodId: _selectedMethodId, // UUID reference to payment_methods
       paymentDate: _selectedDate,
-      bankAccountId: _selectedBankAccountId,
       reference: _referenceController.text,
       notes: _notesController.text,
     );
@@ -572,9 +685,8 @@ void _savePayment() async {
 Future<void> registerPayment({
   required int invoiceId,
   required double amount,
-  required String paymentMethod,
+  required String paymentMethodId, // UUID from payment_methods table
   required DateTime paymentDate,
-  int? bankAccountId,
   String? reference,
   String? notes,
 }) async {
@@ -600,104 +712,151 @@ Future<void> registerPayment({
 CREATE TRIGGER recalculate_purchase_payments_trigger
 AFTER INSERT OR UPDATE OR DELETE ON purchase_payments
 FOR EACH ROW
-EXECUTE FUNCTION recalculate_purchase_invoice_payments();
+EXECUTE FUNCTION handle_purchase_payment_change();
 ```
 
-**Trigger Function**:
+**Trigger Function** (following sales payment pattern):
 ```sql
-CREATE OR REPLACE FUNCTION recalculate_purchase_invoice_payments()
+CREATE OR REPLACE FUNCTION public.handle_purchase_payment_change()
 RETURNS TRIGGER AS $$
-DECLARE
-  v_invoice_id INTEGER;
-  v_total_paid NUMERIC;
-  v_invoice_total NUMERIC;
-  v_balance NUMERIC;
-  v_new_status TEXT;
 BEGIN
-  -- Get invoice ID
-  v_invoice_id := COALESCE(NEW.purchase_invoice_id, OLD.purchase_invoice_id);
-  
-  -- Calculate total paid
-  SELECT COALESCE(SUM(amount), 0) INTO v_total_paid
-  FROM purchase_payments
-  WHERE purchase_invoice_id = v_invoice_id;
-  
-  -- Get invoice total
-  SELECT total INTO v_invoice_total
-  FROM purchase_invoices
-  WHERE id = v_invoice_id;
-  
-  -- Calculate balance
-  v_balance := v_invoice_total - v_total_paid;
-  
-  -- Determine new status
-  IF v_total_paid >= v_invoice_total THEN
-    v_new_status := 'paid';
-  ELSE
-    v_new_status := 'received'; -- Preserve received status if partially paid
-  END IF;
-  
-  -- Update invoice
-  UPDATE purchase_invoices
-  SET 
-    paid_amount = v_total_paid,
-    balance = v_balance,
-    status = v_new_status
-  WHERE id = v_invoice_id;
-  
-  -- Create payment journal entry (if INSERT)
   IF TG_OP = 'INSERT' THEN
-    PERFORM create_purchase_payment_journal_entry(NEW.id);
+    -- Create payment journal entry
+    PERFORM public.create_purchase_payment_journal_entry(NEW);
+    
+    -- Note: Invoice status update should be handled by application logic
+    -- or calculated on-the-fly when querying invoice status
+    
+  ELSIF TG_OP = 'DELETE' THEN
+    -- Delete payment journal entry
+    DELETE FROM public.journal_entries
+    WHERE source_module = 'purchase_payments'
+      AND source_reference = OLD.id::text;
   END IF;
   
-  RETURN NEW;
+  RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 ```
 
-**Payment Journal Entry Function**:
+**Payment Journal Entry Function** (Dynamic - Uses payment_methods table):
 ```sql
-CREATE OR REPLACE FUNCTION create_purchase_payment_journal_entry(p_payment_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION public.create_purchase_payment_journal_entry(p_payment public.purchase_payments)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
-  v_payment RECORD;
   v_invoice RECORD;
-  v_entry_id INTEGER;
+  v_entry_id UUID := gen_random_uuid();
+  v_exists BOOLEAN;
+  v_payment_method RECORD;
+  v_cash_account_id UUID;
+  v_cash_account_code TEXT;
+  v_cash_account_name TEXT;
+  v_payable_account_id UUID;
+  v_payable_account_code TEXT := '2101';
+  v_payable_account_name TEXT := 'Cuentas por Pagar Proveedores';
+  v_description TEXT;
 BEGIN
-  -- Get payment and invoice data
-  SELECT p.*, i.invoice_number 
-  INTO v_payment
-  FROM purchase_payments p
-  JOIN purchase_invoices i ON p.purchase_invoice_id = i.id
-  WHERE p.id = p_payment_id;
-  
-  -- Create journal entry
-  INSERT INTO journal_entries (
-    entry_number,
-    entry_date,
-    entry_type,
-    status,
-    source_module,
-    source_reference,
-    notes
+  IF p_payment.invoice_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  -- Check if entry already exists
+  SELECT EXISTS (
+    SELECT 1 FROM public.journal_entries
+    WHERE source_module = 'purchase_payments'
+      AND source_reference = p_payment.id::text
+  ) INTO v_exists;
+
+  IF v_exists THEN
+    RETURN;
+  END IF;
+
+  -- Get invoice info
+  SELECT id, invoice_number, supplier_name, total
+  INTO v_invoice
+  FROM public.purchase_invoices
+  WHERE id = p_payment.invoice_id;
+
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  -- ⭐ Get payment method and its associated account (DYNAMIC!)
+  SELECT pm.id, pm.code, pm.name, 
+         a.id as account_id, a.code as account_code, a.name as account_name
+  INTO v_payment_method
+  FROM public.payment_methods pm
+  JOIN public.accounts a ON a.id = pm.account_id
+  WHERE pm.id = p_payment.payment_method_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Payment method not found for payment %', p_payment.id;
+  END IF;
+
+  -- Use the account from payment method configuration
+  v_cash_account_id := v_payment_method.account_id;
+  v_cash_account_code := v_payment_method.account_code;
+  v_cash_account_name := v_payment_method.account_name;
+
+  v_payable_account_id := public.ensure_account(
+    v_payable_account_code,
+    v_payable_account_name,
+    'liability',
+    'currentLiability',
+    'Cuentas por pagar a proveedores',
+    NULL
+  );
+
+  v_description := format('Pago factura compra %s - %s', 
+    COALESCE(v_invoice.invoice_number, v_invoice.id::text),
+    v_payment_method.name
+  );
+
+  -- Create journal entry header
+  INSERT INTO public.journal_entries (
+    id, entry_number, date, description, type,
+    source_module, source_reference, status,
+    total_debit, total_credit, created_at, updated_at
   ) VALUES (
-    'PAGO-COMP-' || v_payment.invoice_number || '-' || p_payment_id,
-    v_payment.payment_date,
+    v_entry_id,
+    CONCAT('PPAY-', TO_CHAR(NOW(), 'YYYYMMDDHH24MISS')),
+    COALESCE(p_payment.date, NOW()),
+    v_description,
     'payment',
-    'posted',
     'purchase_payments',
-    p_payment_id,
-    'Pago factura compra ' || v_payment.invoice_number
-  ) RETURNING id INTO v_entry_id;
-  
-  -- Journal lines
-  INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description)
-  VALUES
-    -- DR: Accounts Payable
-    (v_entry_id, <ap_account_id>, v_payment.amount, 0, 'Pago a proveedor'),
-    -- CR: Bank/Cash
-    (v_entry_id, <bank_account_id>, 0, v_payment.amount, 'Salida de ' || v_payment.payment_method);
+    p_payment.id::text,
+    'posted',
+    p_payment.amount,
+    p_payment.amount,
+    NOW(),
+    NOW()
+  );
+
+  -- DR: Accounts Payable (reduce liability)
+  INSERT INTO public.journal_lines (
+    id, entry_id, account_id, account_code, account_name,
+    description, debit_amount, credit_amount, created_at, updated_at
+  ) VALUES (
+    gen_random_uuid(), v_entry_id, v_payable_account_id,
+    v_payable_account_code, v_payable_account_name,
+    v_description, p_payment.amount, 0, NOW(), NOW()
+  );
+
+  -- CR: Cash/Bank account (reduce asset) ← Account determined by payment_methods table!
+  INSERT INTO public.journal_lines (
+    id, entry_id, account_id, account_code, account_name,
+    description, debit_amount, credit_amount, created_at, updated_at
+  ) VALUES (
+    gen_random_uuid(), v_entry_id, v_cash_account_id,
+    v_cash_account_code, v_cash_account_name,
+    v_description, 0, p_payment.amount, NOW(), NOW()
+  );
 END;
+$$;
 $$ LANGUAGE plpgsql;
 ```
 
@@ -705,9 +864,9 @@ $$ LANGUAGE plpgsql;
 - ✅ `purchase_payments` record created
 - ✅ `journal_entries` record created (payment entry)
 - ✅ `journal_lines` records created (2 lines: AP DR, Bank CR)
-- `purchase_invoices.paid_amount` = total of all payments
-- `purchase_invoices.balance` = total - paid_amount
-- `purchase_invoices.status` = 'paid' (if fully paid)
+- `purchase_invoices.paid_amount` = total of all payments (calculated by app)
+- `purchase_invoices.balance` = total - paid_amount (calculated by app)
+- `purchase_invoices.status` = 'paid' (if fully paid, updated by app)
 - ❌ No inventory changes
 
 **GUI Update**:
@@ -808,7 +967,7 @@ void _revertToSent() async {
     builder: (context) => AlertDialog(
       title: Text('Revertir factura confirmada'),
       content: Text(
-        '⚠️ Esto creará un asiento contable de REVERSO y eliminará el pasivo. ¿Continuar?',
+        '⚠️ Esto ELIMINARÁ el asiento contable completamente (DELETE-based reversal). ¿Continuar?',
       ),
       actions: [
         TextButton(
@@ -858,31 +1017,21 @@ Future<void> revertToSent(int invoiceId) async {
 
 **SQL Trigger**: ✅ `handle_purchase_invoice_change()`
 
-**Trigger Logic**:
+**Trigger Logic** (shown earlier):
 ```sql
-CREATE OR REPLACE FUNCTION handle_purchase_invoice_change()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- Confirmada → Enviada: Delete journal entry
-  IF (OLD.status = 'confirmed' AND NEW.status = 'sent') THEN
-    -- Delete the journal entry completely (Zoho Books style)
-    DELETE FROM journal_entries
-    WHERE source_module = 'purchase_invoices'
-      AND source_reference = OLD.id
-      AND entry_type = 'purchase_invoice';
-    -- journal_lines cascade deleted automatically
-    
-    -- No inventory to reverse (wasn't received yet)
-  END IF;
-  
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+-- In handle_purchase_invoice_change():
+IF v_old_posted AND NOT v_new_posted THEN
+  -- Confirmed → Sent: DELETE journal entry (Zoho Books style)
+  DELETE FROM public.journal_entries
+  WHERE source_module = 'purchase_invoices' 
+    AND source_reference = OLD.id::text;
+  -- journal_lines cascade deleted automatically
+END IF;
 ```
 
 **Database Changes**:
 - `purchase_invoices.status` = 'sent'
-- ✅ `journal_entries` record **DELETED** (entry_type='purchase_invoice')
+- ✅ `journal_entries` record **DELETED** (source_module='purchase_invoices')
 - ✅ `journal_lines` records **DELETED** (cascade deletion)
 - ❌ No inventory changes (products weren't received)
 
@@ -965,63 +1114,60 @@ void _revertToConfirmed() async {
 **Backend Service**:
 ```dart
 Future<void> revertToConfirmed(int invoiceId) async {
-  // Trigger will check inventory and reverse
   await _supabase
       .from('purchase_invoices')
       .update({'status': 'confirmed'})
       .eq('id', invoiceId);
+  // Trigger will check inventory and restore
 }
 ```
 
-**SQL Trigger**: ✅ `handle_purchase_invoice_reversal()`
+**SQL Trigger**: ✅ `handle_purchase_invoice_change()`
 
-**Trigger Logic**:
+**Trigger Logic** (shown earlier):
 ```sql
-IF (OLD.status = 'received' AND NEW.status = 'confirmed') THEN
-  -- Reverse inventory (decrease stock)
-  PERFORM reverse_purchase_invoice_inventory(OLD.id);
-  
-  -- No journal entry reversal (accounting stays intact)
+-- In handle_purchase_invoice_change():
+ELSIF v_old_status = 'received' AND v_new_status != 'received' THEN
+  PERFORM public.restore_purchase_invoice_inventory(NEW);
 END IF;
 ```
 
-**Inventory Reversal Function**:
+**Inventory Restoration Function** (following sales invoice pattern):
 ```sql
-CREATE OR REPLACE FUNCTION reverse_purchase_invoice_inventory(p_invoice_id INTEGER)
+CREATE OR REPLACE FUNCTION public.restore_purchase_invoice_inventory(p_invoice public.purchase_invoices)
 RETURNS VOID AS $$
 DECLARE
-  v_item RECORD;
-  v_current_qty INTEGER;
+  v_movement RECORD;
+  v_reference TEXT;
+  v_quantity_int INTEGER;
 BEGIN
-  -- Loop through invoice items
-  FOR v_item IN 
-    SELECT product_id, quantity 
-    FROM purchase_invoice_items 
-    WHERE purchase_invoice_id = p_invoice_id
+  v_reference := 'purchase_invoice:' || p_invoice.id::text;
+  
+  -- Find all stock movements for this invoice
+  FOR v_movement IN
+    SELECT product_id, quantity
+    FROM public.stock_movements
+    WHERE reference = v_reference
+      AND movement_type = 'purchase_invoice'
   LOOP
-    -- Check if we have enough inventory
-    SELECT inventory_qty INTO v_current_qty
-    FROM products
-    WHERE id = v_item.product_id;
+    -- Use abs() to ensure we subtract the correct amount
+    v_quantity_int := abs(coalesce(v_movement.quantity::int, 0));
     
-    IF v_current_qty < v_item.quantity THEN
-      RAISE EXCEPTION 'Inventario insuficiente para producto % (disponible: %, necesario: %)',
-        v_item.product_id, v_current_qty, v_item.quantity;
+    IF v_quantity_int <= 0 THEN
+      CONTINUE;
     END IF;
     
-    -- Decrease inventory
-    UPDATE products
-    SET 
-      inventory_qty = inventory_qty - v_item.quantity,
-      updated_at = NOW()
-    WHERE id = v_item.product_id;
-    
-    -- Delete stock movements
-    DELETE FROM stock_movements
-    WHERE movement_type = 'purchase_invoice'
-      AND reference = p_invoice_id
-      AND product_id = v_item.product_id;
+    -- Decrease inventory (reverse the IN movement)
+    UPDATE public.products
+    SET inventory_qty = GREATEST(0, inventory_qty - v_quantity_int)
+    WHERE id = v_movement.product_id
+      AND is_service = false;
   END LOOP;
+  
+  -- Delete stock movement records
+  DELETE FROM public.stock_movements
+  WHERE reference = v_reference
+    AND movement_type = 'purchase_invoice';
 END;
 $$ LANGUAGE plpgsql;
 ```
@@ -1119,45 +1265,29 @@ Future<void> deletePayment(int paymentId) async {
 }
 ```
 
-**SQL Trigger**: ✅ `recalculate_purchase_invoice_payments()` (on DELETE)
+**SQL Trigger**: ✅ Similar pattern to sales payments (DELETE-based)
 
-**Trigger Logic**:
+**Expected Trigger Logic** (to be implemented in core_schema.sql):
 ```sql
-IF TG_OP = 'DELETE' THEN
+CREATE OR REPLACE FUNCTION public.handle_purchase_payment_deletion()
+RETURNS TRIGGER AS $$
+BEGIN
   -- Delete payment journal entry
-  DELETE FROM journal_entries
+  DELETE FROM public.journal_entries
   WHERE source_module = 'purchase_payments'
-    AND source_reference = OLD.id;
+    AND source_reference = OLD.id::text;
   
-  -- Recalculate invoice status
-  v_invoice_id := OLD.purchase_invoice_id;
-  
-  SELECT COALESCE(SUM(amount), 0) INTO v_total_paid
-  FROM purchase_payments
-  WHERE purchase_invoice_id = v_invoice_id;
-  
-  SELECT total INTO v_invoice_total
-  FROM purchase_invoices
-  WHERE id = v_invoice_id;
-  
-  -- If no more payments, return to 'received'
-  IF v_total_paid = 0 THEN
-    v_new_status := 'received';
-  ELSIF v_total_paid >= v_invoice_total THEN
-    v_new_status := 'paid';
-  ELSE
-    v_new_status := 'received'; -- Partially paid
-  END IF;
-  
-  UPDATE purchase_invoices
-  SET 
-    paid_amount = v_total_paid,
-    balance = v_invoice_total - v_total_paid,
-    status = v_new_status
-  WHERE id = v_invoice_id;
+  -- Note: Invoice status update should be handled by application logic
+  -- or a separate trigger that recalculates paid_amount and balance
   
   RETURN OLD;
-END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_purchase_payment_deletion
+AFTER DELETE ON purchase_payments
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_purchase_payment_deletion();
 ```
 
 **Database Changes**:
@@ -1479,7 +1609,7 @@ Row(
 | Borrador   | Enviada    | ✅ Yes   | Always | ❌ None | ❌ None |
 | Enviada    | Borrador   | ✅ Yes   | Always | ❌ None | ❌ None |
 | Enviada    | Confirmada | ✅ Yes   | Always | ✅ Creates AP entry | ❌ None |
-| Confirmada | Enviada    | ✅ Yes   | Always | ✅ Creates REVERSAL entry | ❌ None |
+| Confirmada | Enviada    | ✅ Yes   | Always | ✅ DELETES entry (Zoho Books style) | ❌ None |
 | Confirmada | Recibida   | ✅ Yes   | Always | ❌ None | ✅ Increases inventory |
 | Recibida   | Confirmada | ✅ Yes   | **Only if sufficient inventory** | ❌ None | ✅ Decreases inventory |
 | Recibida   | Pagada     | ✅ Auto  | When payment >= balance | ✅ Creates payment entry | ❌ None |
@@ -1497,10 +1627,12 @@ Row(
 
 - **Can only delete Borrador and Enviada statuses**
 - Confirmada/Recibida/Pagada invoices must be reverted step by step
-- **Journal Entries**: REVERSED (not deleted) - creates reversal entry with REV- prefix
+- **Journal Entries**: 
+  - For Confirmada → Enviada: **DELETED** (Zoho Books style, clean slate)
+  - For Recibida → Confirmada: **PRESERVED** (accounting stays intact)
 - **Stock Movements**: DELETED when reverting from Recibida → Confirmada
 - **Payments**: Can be deleted individually (via "Deshacer Pago"), invoice returns to "Recibida"
-- **Audit Trail**: Complete history maintained with reversal entries
+- **Audit Trail**: Maintained via application logs and stock movement history
 
 ---
 
@@ -1515,16 +1647,16 @@ Row(
 | **Account Type** | Accounts Receivable (AR) | Accounts Payable (AP) |
 | **Accounting Timing** | At "Confirmada" | At "Confirmada" (both same) |
 | **IVA Type** | IVA Débito Fiscal (2150) | IVA Crédito Fiscal (1107/1140) |
-| **Reversal Method** | DELETE journal entries | CREATE reversal entries (REV-xxx) |
-| **Audit Trail** | Simpler (entries deleted) | Complete (reversals kept) |
+| **Reversal Method** | DELETE journal entries | DELETE journal entries (same) |
+| **Audit Trail** | Simpler (entries deleted) | Simpler (entries deleted) |
 | **Primary Confirm Action** | "Confirmar" → Accounting + Inventory | "Confirmar Factura" → Accounting only |
 | **Secondary Action** | "Pagar factura" → Payment | "Marcar como Recibida" → Inventory |
 | **Payment Action** | Same page, inline payment | Navigates to payment form page |
 | **Movement Type** | `sales_invoice` | `purchase_invoice` |
 | **Stock Movement Type** | OUT | IN |
 | **Journal Entry** | DR: AR, CR: Sales/IVA/Inventory | DR: Inv/IVA, CR: AP |
-| **Reversal Approach** | Zoho Books style (clean) | Traditional accounting (audit) |
-| **Why Different?** | Customer-facing (simpler) | Supplier-facing (audit trail) |
+| **Reversal Approach** | Zoho Books style (DELETE) | Zoho Books style (DELETE) |
+| **Why Same Reversal?** | Both use DELETE for draft/in-progress invoices (cleaner) | Both use DELETE for draft/in-progress invoices (cleaner) |
 
 ---
 
@@ -1532,94 +1664,137 @@ Row(
 
 ### Main Trigger: `handle_purchase_invoice_change()`
 
-Located in: `supabase/sql/purchase_invoice_workflow.sql`
+**Location**: Should be in `supabase/sql/core_schema.sql` (following sales invoice pattern)
 
 **Trigger Events**:
 - `AFTER INSERT ON purchase_invoices`
 - `AFTER UPDATE ON purchase_invoices`
 
-**Logic**:
+**Logic** (mirroring `handle_sales_invoice_change()`):
 ```sql
-IF TG_OP = 'INSERT' THEN
-  IF status = 'received' THEN
-    → consume_purchase_invoice_inventory()
-    → create_purchase_invoice_journal_entry()
-  END IF
-
-ELSIF TG_OP = 'UPDATE' THEN
-  IF old_status != 'received' AND new_status = 'received' THEN
-    → consume_purchase_invoice_inventory()
-    → create_purchase_invoice_journal_entry()
-  END IF
-END IF
-```
-
-### Reversal Trigger: `handle_purchase_invoice_status_reversal()`
-
-Located in: `supabase/sql/purchase_invoice_reversal.sql`
-
-**Logic**:
-```sql
-IF old_status = 'received' AND new_status = 'draft' THEN
-  → reverse_purchase_invoice_inventory()
-  → reverse_purchase_invoice_journal_entry()
+CREATE OR REPLACE FUNCTION public.handle_purchase_invoice_change()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_old_status TEXT;
+  v_new_status TEXT;
+  v_old_posted BOOLEAN;
+  v_new_posted BOOLEAN;
+  v_non_posted constant text[] := array[
+    'draft','borrador',
+    'sent','enviado','enviada','issued','emitido','emitida',
+    'cancelled','cancelado','cancelada','anulado','anulada'
+  ];
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    v_new_status := lower(trim(NEW.status));
+    v_new_posted := NOT (v_new_status = ANY(v_non_posted));
+    
+    IF v_new_posted THEN
+      PERFORM public.create_purchase_invoice_journal_entry(NEW);
+    END IF
+    
+  ELSIF TG_OP = 'UPDATE' THEN
+    v_old_status := lower(trim(OLD.status));
+    v_new_status := lower(trim(NEW.status));
+    v_old_posted := NOT (v_old_status = ANY(v_non_posted));
+    v_new_posted := NOT (v_new_status = ANY(v_non_posted));
+    
+    -- Handle accounting (journal entries)
+    IF v_old_posted AND NOT v_new_posted THEN
+      -- Confirmed → Sent: DELETE journal entry
+      DELETE FROM public.journal_entries
+      WHERE source_module = 'purchase_invoices' 
+        AND source_reference = OLD.id::text;
+    ELSIF NOT v_old_posted AND v_new_posted THEN
+      -- Sent → Confirmed: CREATE journal entry
+      PERFORM public.create_purchase_invoice_journal_entry(NEW);
+    ELSIF v_old_posted AND v_new_posted THEN
+      -- Both posted: recreate
+      DELETE FROM public.journal_entries
+      WHERE source_module = 'purchase_invoices' 
+        AND source_reference = OLD.id::text;
+      PERFORM public.create_purchase_invoice_journal_entry(NEW);
+    END IF;
+    
+    -- Handle inventory (Confirmed ↔ Recibida)
+    IF v_old_status != 'received' AND v_new_status = 'received' THEN
+      PERFORM public.consume_purchase_invoice_inventory(NEW);
+    ELSIF v_old_status = 'received' AND v_new_status != 'received' THEN
+      PERFORM public.restore_purchase_invoice_inventory(NEW);
+    END IF;
+  END IF;
   
-ELSIF old_status = 'paid' AND new_status = 'received' THEN
-  -- Just status change, no reversals
-  
-ELSIF old_status = 'paid' AND new_status = 'draft' THEN
-  → reverse_purchase_invoice_inventory()
-  → reverse_purchase_invoice_journal_entry()
-  -- Future: Delete payment record
-END IF
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger
+CREATE TRIGGER trg_purchase_invoice_change
+AFTER INSERT OR UPDATE ON purchase_invoices
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_purchase_invoice_change();
 ```
 
 ### Inventory Functions
 
-**`consume_purchase_invoice_inventory()`**:
-- Finds all 'received' invoices without stock movements
-- Creates IN movements
+**`consume_purchase_invoice_inventory(invoice_record)`**:
+- Processes invoice items from JSONB
+- Creates IN movements (positive quantity)
 - Increases product inventory
-- Prevents duplicate processing
+- Prevents duplicate processing (checks reference)
 
-**`reverse_purchase_invoice_inventory(invoice_id)`**:
-- Checks if sufficient inventory exists
-- Decreases product quantities
-- Deletes stock movements
-- Throws exception if insufficient inventory
+**`restore_purchase_invoice_inventory(invoice_record)`**:
+- Finds stock movements by reference
+- Uses abs() to ensure correct quantity
+- Decreases product inventory
+- Deletes stock movement records
 
 ### Accounting Functions
 
-**`create_purchase_invoice_journal_entry(invoice_id)`**:
+**`create_purchase_invoice_journal_entry(invoice_record)`**:
+- Uses `ensure_account()` helper to get account IDs
 - Creates posted journal entry
-- DR: Inventory + IVA Crédito
-- CR: Accounts Payable
-- Prevents duplicate entries
+- DR: Inventory (1105) + IVA Crédito Fiscal (1107)
+- CR: Accounts Payable (2101)
+- Prevents duplicate entries (checks source_reference)
+- Uses proper column names: entry_id, debit_amount, credit_amount
 
-**`reverse_purchase_invoice_journal_entry(invoice_id)`**:
-- Finds original journal entry
-- Creates reversal entry (REV-xxx)
-- Marks original as "reversed" (future)
-- Maintains complete audit trail
+**`create_purchase_payment_journal_entry(payment_record)`**:
+- Creates payment journal entry
+- DR: Accounts Payable (2101)
+- CR: Bank/Cash (1101)
+- Linked via source_module='purchase_payments' and source_reference=payment.id
+
+**Note on Reversal Approach**:
+This document describes **DELETE-based reversals** (Zoho Books style) for draft/in-progress invoices. When reverting from Confirmed → Sent, the journal entry is **deleted completely**, not reversed with a REV- entry. This provides a cleaner approach for invoices that haven't been finalized.
 
 ---
 
 ## 🧪 TESTING SCENARIOS
 
 ### Test 1: Complete Forward Flow
-1. Create purchase invoice (Draft)
-2. Mark as Received → Verify journal entry created, inventory increased
-3. Mark as Paid → Verify payment entry created, status = Paid
+1. Create purchase invoice (Borrador)
+2. Mark as Enviada → Verify NO journal entry, NO inventory change
+3. Mark as Confirmada → Verify journal entry created, NO inventory change yet
+4. Mark as Recibida → Verify inventory INCREASED
+5. Mark as Pagada → Verify payment entry created, status = Pagada
 
-### Test 2: Backward Flow (Received → Draft)
-1. Create and mark as received
+### Test 2: Backward Flow (Recibida → Confirmada)
+1. Create, mark as enviada, confirmada, and recibida
 2. Verify journal entry exists
 3. Verify inventory increased
-4. Revert to Draft
-5. Verify REVERSAL entry created (not deleted)
+4. Revert to Confirmada
+5. Verify journal entry STILL EXISTS (accounting preserved)
 6. Verify inventory DECREASED back
 
-### Test 3: Insufficient Inventory Reversal
+### Test 3: Delete Journal Entry (Confirmada → Enviada)
+1. Create and mark as confirmada
+2. Verify journal entry exists
+3. Revert to Enviada
+4. Verify journal entry DELETED (not reversed, deleted!)
+5. Net effect: as if never confirmed
+
+### Test 4: Insufficient Inventory Reversal
 1. Create and receive purchase invoice (+50 units)
 2. Create sales invoice consuming 40 units
 3. Try to revert purchase to draft
