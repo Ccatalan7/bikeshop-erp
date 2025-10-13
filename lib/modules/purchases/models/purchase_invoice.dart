@@ -39,6 +39,17 @@ class PurchaseInvoice {
 	final List<PurchaseAdditionalCost> additionalCosts;
 	final DateTime createdAt;
 	final DateTime updatedAt;
+	
+	// New fields for 5-status workflow
+	final bool prepaymentModel;
+	final DateTime? sentDate;
+	final DateTime? confirmedDate;
+	final DateTime? receivedDate;
+	final DateTime? paidDate;
+	final String? supplierInvoiceNumber;
+	final DateTime? supplierInvoiceDate;
+	final double paidAmount;
+	final double balance;
 
 	PurchaseInvoice({
 		this.id,
@@ -58,8 +69,18 @@ class PurchaseInvoice {
 		this.additionalCosts = const [],
 		DateTime? createdAt,
 		DateTime? updatedAt,
+		this.prepaymentModel = false,
+		this.sentDate,
+		this.confirmedDate,
+		this.receivedDate,
+		this.paidDate,
+		this.supplierInvoiceNumber,
+		this.supplierInvoiceDate,
+		this.paidAmount = 0,
+		double? balance,
 	})  : createdAt = createdAt ?? DateTime.now(),
-				updatedAt = updatedAt ?? DateTime.now();
+				updatedAt = updatedAt ?? DateTime.now(),
+				balance = balance ?? (total - (paidAmount));
 
 	PurchaseInvoice copyWith({
 		String? id,
@@ -79,6 +100,15 @@ class PurchaseInvoice {
 		List<PurchaseAdditionalCost>? additionalCosts,
 		DateTime? createdAt,
 		DateTime? updatedAt,
+		bool? prepaymentModel,
+		DateTime? sentDate,
+		DateTime? confirmedDate,
+		DateTime? receivedDate,
+		DateTime? paidDate,
+		String? supplierInvoiceNumber,
+		DateTime? supplierInvoiceDate,
+		double? paidAmount,
+		double? balance,
 	}) {
 		return PurchaseInvoice(
 			id: id ?? this.id,
@@ -98,6 +128,15 @@ class PurchaseInvoice {
 			additionalCosts: additionalCosts ?? this.additionalCosts,
 			createdAt: createdAt ?? this.createdAt,
 			updatedAt: updatedAt ?? this.updatedAt,
+			prepaymentModel: prepaymentModel ?? this.prepaymentModel,
+			sentDate: sentDate ?? this.sentDate,
+			confirmedDate: confirmedDate ?? this.confirmedDate,
+			receivedDate: receivedDate ?? this.receivedDate,
+			paidDate: paidDate ?? this.paidDate,
+			supplierInvoiceNumber: supplierInvoiceNumber ?? this.supplierInvoiceNumber,
+			supplierInvoiceDate: supplierInvoiceDate ?? this.supplierInvoiceDate,
+			paidAmount: paidAmount ?? this.paidAmount,
+			balance: balance ?? this.balance,
 		);
 	}
 
@@ -122,6 +161,15 @@ class PurchaseInvoice {
 			additionalCosts: extraCosts.map((cost) => PurchaseAdditionalCost.fromJson(_ensureMap(cost))).toList(),
 			createdAt: _parseDate(json['created_at']),
 			updatedAt: _parseDate(json['updated_at']),
+			prepaymentModel: json['prepayment_model'] as bool? ?? false,
+			sentDate: json['sent_date'] != null ? _parseDate(json['sent_date']) : null,
+			confirmedDate: json['confirmed_date'] != null ? _parseDate(json['confirmed_date']) : null,
+			receivedDate: json['received_date'] != null ? _parseDate(json['received_date']) : null,
+			paidDate: json['paid_date'] != null ? _parseDate(json['paid_date']) : null,
+			supplierInvoiceNumber: json['supplier_invoice_number'] as String?,
+			supplierInvoiceDate: json['supplier_invoice_date'] != null ? _parseDate(json['supplier_invoice_date']) : null,
+			paidAmount: (json['paid_amount'] as num?)?.toDouble() ?? 0,
+			balance: (json['balance'] as num?)?.toDouble(),
 		);
 	}
 
@@ -142,12 +190,23 @@ class PurchaseInvoice {
 			'total': total,
 			'items': items.map((item) => item.toJson()).toList(),
 			'additional_costs': additionalCosts.map((cost) => cost.toJson()).toList(),
+			'prepayment_model': prepaymentModel,
+			'sent_date': sentDate?.toUtc().toIso8601String(),
+			'confirmed_date': confirmedDate?.toUtc().toIso8601String(),
+			'received_date': receivedDate?.toUtc().toIso8601String(),
+			'paid_date': paidDate?.toUtc().toIso8601String(),
+			'supplier_invoice_number': supplierInvoiceNumber,
+			'supplier_invoice_date': supplierInvoiceDate?.toUtc().toIso8601String(),
+			'paid_amount': paidAmount,
+			'balance': balance,
 		};
 	}
 }
 
 enum PurchaseInvoiceStatus {
 	draft('Borrador'),
+	sent('Enviada'),
+	confirmed('Confirmada'),
 	received('Recibida'),
 	paid('Pagada'),
 	cancelled('Anulada');

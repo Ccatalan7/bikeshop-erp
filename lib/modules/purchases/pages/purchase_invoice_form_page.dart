@@ -17,8 +17,13 @@ import '../services/purchase_service.dart';
 
 class PurchaseInvoiceFormPage extends StatefulWidget {
   final String? invoiceId;
+  final bool isPrepayment;
 
-  const PurchaseInvoiceFormPage({super.key, this.invoiceId});
+  const PurchaseInvoiceFormPage({
+    super.key,
+    this.invoiceId,
+    this.isPrepayment = false,
+  });
 
   @override
   State<PurchaseInvoiceFormPage> createState() => _PurchaseInvoiceFormPageState();
@@ -247,10 +252,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
     if (!mounted) return;
 
+    // Filter only products (not services) for purchase invoices
+    final purchasableProducts = _productCache
+        .where((p) => p.productType == ProductType.product)
+        .toList();
+
     final selected = await showModalBottomSheet<Product>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _ProductSelector(products: _productCache),
+      builder: (context) => _ProductSelector(products: purchasableProducts),
     );
 
     if (selected != null) {
@@ -373,6 +383,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       ivaAmount: _iva,
       total: _total,
       items: items,
+      // Set prepayment model when creating new invoice
+      prepaymentModel: _loadedInvoice != null 
+          ? _loadedInvoice!.prepaymentModel 
+          : widget.isPrepayment,
     );
 
     setState(() => _isSaving = true);
@@ -896,6 +910,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         color = Colors.grey;
         icon = Icons.edit;
         break;
+      case PurchaseInvoiceStatus.sent:
+        color = Colors.orange;
+        icon = Icons.send;
+        break;
+      case PurchaseInvoiceStatus.confirmed:
+        color = Colors.purple;
+        icon = Icons.verified;
+        break;
       case PurchaseInvoiceStatus.received:
         color = Colors.green;
         icon = Icons.inventory_2;
@@ -1382,25 +1404,34 @@ class _SupplierSelectorState extends State<_SupplierSelector> {
           maxChildSize: 0.95,
           initialChildSize: 0.8,
           builder: (context, controller) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
             return Container(
               padding: const EdgeInsets.all(16.0),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Seleccionar proveedor',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close),
+                        icon: Icon(
+                          Icons.close,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
                         onPressed: () => Navigator.of(context).pop(),
                       ),
                     ],
@@ -1414,12 +1445,34 @@ class _SupplierSelectorState extends State<_SupplierSelector> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _newSupplierController,
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
                     decoration: InputDecoration(
                       labelText: 'Crear proveedor rápido',
                       hintText: 'Nombre del proveedor',
+                      labelStyle: TextStyle(
+                        color: isDark ? Colors.grey[400] : Colors.grey[700],
+                      ),
+                      hintStyle: TextStyle(
+                        color: isDark ? Colors.grey[500] : Colors.grey[500],
+                      ),
                       suffixIcon: IconButton(
-                        icon: const Icon(Icons.check),
+                        icon: Icon(
+                          Icons.check,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
                         onPressed: _handleCreateSupplier,
+                      ),
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(
+                          color: isDark ? Colors.grey[700]! : Colors.grey[400]!,
+                        ),
+                      ),
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ),
                     onSubmitted: (_) => _handleCreateSupplier(),
@@ -1427,22 +1480,52 @@ class _SupplierSelectorState extends State<_SupplierSelector> {
                   const SizedBox(height: 16),
                   Expanded(
                     child: _filtered.isEmpty
-                        ? const Center(child: Text('No se encontraron proveedores'))
+                        ? Center(
+                            child: Text(
+                              'No se encontraron proveedores',
+                              style: TextStyle(
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              ),
+                            ),
+                          )
                         : ListView.builder(
                             controller: controller,
                             itemCount: _filtered.length,
                             itemBuilder: (context, index) {
                               final supplier = _filtered[index];
                               return ListTile(
-                                leading: const CircleAvatar(child: Icon(Icons.store_outlined)),
-                                title: Text(supplier.name),
+                                leading: CircleAvatar(
+                                  backgroundColor: isDark 
+                                      ? Colors.grey[800] 
+                                      : Colors.grey[200],
+                                  child: Icon(
+                                    Icons.store_outlined,
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                                title: Text(
+                                  supplier.name,
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     if (supplier.rut != null && supplier.rut!.isNotEmpty)
-                                      Text('RUT: ${ChileanUtils.formatRut(supplier.rut!)}'),
+                                      Text(
+                                        'RUT: ${ChileanUtils.formatRut(supplier.rut!)}',
+                                        style: TextStyle(
+                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                        ),
+                                      ),
                                     if (supplier.email != null && supplier.email!.isNotEmpty)
-                                      Text(supplier.email!),
+                                      Text(
+                                        supplier.email!,
+                                        style: TextStyle(
+                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                        ),
+                                      ),
                                   ],
                                 ),
                                 onTap: () => Navigator.of(context).pop(supplier),
@@ -1514,24 +1597,33 @@ class _ProductSelectorState extends State<_ProductSelector> {
           maxChildSize: 0.95,
           initialChildSize: 0.85,
           builder: (context, controller) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
             return Container(
               padding: const EdgeInsets.all(16.0),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Seleccionar producto',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close),
+                        icon: Icon(
+                          Icons.close,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
                         onPressed: () => Navigator.of(context).pop(),
                       ),
                     ],
@@ -1544,7 +1636,14 @@ class _ProductSelectorState extends State<_ProductSelector> {
                   const SizedBox(height: 16),
                   Expanded(
                     child: _filtered.isEmpty
-                        ? const Center(child: Text('No se encontraron productos'))
+                        ? Center(
+                            child: Text(
+                              'No se encontraron productos',
+                              style: TextStyle(
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              ),
+                            ),
+                          )
                         : ListView.builder(
                             controller: controller,
                             itemCount: _filtered.length,
@@ -1552,17 +1651,72 @@ class _ProductSelectorState extends State<_ProductSelector> {
                               final product = _filtered[index];
                               return ListTile(
                                 leading: CircleAvatar(
-                                  child: Text(product.name.isNotEmpty ? product.name[0].toUpperCase() : '?'),
+                                  backgroundColor: isDark 
+                                      ? Colors.grey[800] 
+                                      : Colors.grey[200],
+                                  child: Text(
+                                    product.name.isNotEmpty ? product.name[0].toUpperCase() : '?',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white : Colors.black,
+                                    ),
+                                  ),
                                 ),
-                                title: Text(product.name),
+                                title: Text(
+                                  product.name,
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('SKU: ${product.sku}'),
-                                    Text('Costo: ${ChileanUtils.formatCurrency(product.cost)}'),
+                                    Text(
+                                      'SKU: ${product.sku}',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Costo: ${ChileanUtils.formatCurrency(product.cost)}',
+                                          style: TextStyle(
+                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: product.stockQuantity > 0
+                                                ? (isDark ? Colors.green[900] : Colors.green[100])
+                                                : (isDark ? Colors.red[900] : Colors.red[100]),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            'Stock: ${product.stockQuantity}',
+                                            style: TextStyle(
+                                              color: product.stockQuantity > 0
+                                                  ? (isDark ? Colors.green[300] : Colors.green[800])
+                                                  : (isDark ? Colors.red[300] : Colors.red[800]),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ],
                                 ),
-                                trailing: const Icon(Icons.chevron_right),
+                                trailing: Icon(
+                                  Icons.chevron_right,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                ),
                                 onTap: () => Navigator.of(context).pop(product),
                               );
                             },

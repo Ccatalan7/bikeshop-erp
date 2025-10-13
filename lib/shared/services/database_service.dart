@@ -173,7 +173,7 @@ class DatabaseService extends ChangeNotifier {
         final mappedLines = lines
             .map((line) => {
                   ...line,
-                  'entry_id': entryId,
+                  'journal_entry_id': entryId, // Use new column name
                   'created_at': line['created_at'] ?? now,
                   'updated_at': line['updated_at'] ?? now,
                 })
