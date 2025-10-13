@@ -71,7 +71,7 @@ class POSTransaction {
       createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
       completedAt: json['completed_at'] != null ? DateTime.parse(json['completed_at']) : null,
       receiptNumber: json['receipt_number'],
-      journalEntryId: json['journal_entry_id'],
+      journalEntryId: json['entry_id'] ?? json['journal_entry_id'], // Fallback for old data
     );
   }
 
@@ -92,7 +92,7 @@ class POSTransaction {
       'created_at': createdAt.toIso8601String(),
       'completed_at': completedAt?.toIso8601String(),
       'receipt_number': receiptNumber,
-      'journal_entry_id': journalEntryId,
+      'entry_id': journalEntryId, // Correct column name
     };
   }
 

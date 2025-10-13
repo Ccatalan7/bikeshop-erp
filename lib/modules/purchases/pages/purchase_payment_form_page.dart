@@ -54,13 +54,12 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
 
   Future<void> _loadBankAccounts() async {
     try {
-      // Load bank accounts (asset accounts that are cash/bank)
-      // Adjust this query based on your actual account structure
+      // Load cash and bank accounts (codes starting with 110 or 111)
       final response = await Supabase.instance.client
           .from('accounts')
           .select()
-          .eq('account_type', 'asset')
-          .or('code.like.11%,code.like.10%') // Cash and bank accounts typically start with 11 or 10
+          .eq('type', 'asset')
+          .or('code.eq.1101,code.eq.1110,code.like.110%,code.like.111%')
           .eq('is_active', true)
           .order('code');
 
@@ -213,6 +212,16 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
         .eq('code', '2120')
         .single();
 
+    // Get selected bank account details (if bank account is selected)
+    Map<String, dynamic>? bankAccount;
+    if (_selectedBankAccount != null) {
+      bankAccount = await Supabase.instance.client
+          .from('accounts')
+          .select()
+          .eq('id', _selectedBankAccount!)
+          .single();
+    }
+
     // Create journal entry
     final journalData = {
       'date': _paymentDate.toIso8601String(),
@@ -232,17 +241,21 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
     // Create journal lines
     final lines = [
       {
-        'journal_entry_id': journalEntryId,
+        'entry_id': journalEntryId,
         'account_id': apAccount['id'],
-        'debit': amount,
-        'credit': 0.0,
+        'account_code': apAccount['code'],
+        'account_name': apAccount['name'],
+        'debit_amount': amount,
+        'credit_amount': 0.0,
         'description': 'Pago a proveedor ${widget.invoice.supplierName}',
       },
-      {
-        'journal_entry_id': journalEntryId,
-        'account_id': _selectedBankAccount,
-        'debit': 0.0,
-        'credit': amount,
+      if (bankAccount != null) {
+        'entry_id': journalEntryId,
+        'account_id': bankAccount['id'],
+        'account_code': bankAccount['code'],
+        'account_name': bankAccount['name'],
+        'debit_amount': 0.0,
+        'credit_amount': amount,
         'description': 'Pago de factura ${widget.invoice.invoiceNumber}',
       },
     ];

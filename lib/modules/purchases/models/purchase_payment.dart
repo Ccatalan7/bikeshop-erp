@@ -29,12 +29,12 @@ class PurchasePayment {
   factory PurchasePayment.fromJson(Map<String, dynamic> json) {
     return PurchasePayment(
       id: json['id']?.toString(),
-      invoiceId: json['invoice_id']?.toString() ?? '',
+      invoiceId: json['purchase_invoice_id']?.toString() ?? '',  // Fixed: database column
       invoiceNumber: json['invoice_number'] as String?,
       supplierName: json['supplier_name'] as String?,
-      method: json['method']?.toString() ?? 'transfer',
+      method: json['payment_method']?.toString() ?? 'transfer',  // Fixed: database column
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
-      date: _parseDate(json['date']),
+      date: _parseDate(json['payment_date']),  // Fixed: database column
       reference: json['reference'] as String?,
       notes: json['notes'] as String?,
       createdAt: _parseDate(json['created_at']),
@@ -45,12 +45,12 @@ class PurchasePayment {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
-      'invoice_id': invoiceId,
+      'purchase_invoice_id': invoiceId,  // Fixed: database column name
       'invoice_number': invoiceNumber,
       'supplier_name': supplierName,
-      'method': method,
+      'payment_method': method,  // Fixed: database column name
       'amount': amount,
-      'date': date.toIso8601String(),
+      'payment_date': date.toIso8601String(),  // Fixed: database column name
       'reference': reference,
       'notes': notes,
     };

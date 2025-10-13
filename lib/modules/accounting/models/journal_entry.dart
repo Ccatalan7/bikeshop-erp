@@ -153,7 +153,7 @@ class JournalLine {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'journal_entry_id': journalEntryId, // Use new column name
+      'entry_id': journalEntryId, // Correct column name from core_schema.sql
       'account_id': accountId,
       'account_code': accountCode,
       'account_name': accountName,

@@ -534,6 +534,20 @@ class PurchaseService extends ChangeNotifier {
       final paymentId = payments.first['id'];
       await _db.delete('purchase_payments', paymentId);
       
+      // Check if there are remaining payments
+      final remainingPayments = await _supabase
+          .from('purchase_payments')
+          .select()
+          .eq('purchase_invoice_id', invoiceId);
+      
+      // If no payments left, revert status from 'paid' to 'received'
+      if (remainingPayments.isEmpty) {
+        await _supabase
+            .from('purchase_invoices')
+            .update({'status': 'received'})
+            .eq('id', invoiceId);
+      }
+      
       // Refresh caches
       await getPurchasePayments(forceRefresh: true);
       await getPurchaseInvoices(forceRefresh: true);

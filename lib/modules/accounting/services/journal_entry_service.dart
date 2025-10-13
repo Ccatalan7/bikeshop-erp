@@ -57,7 +57,7 @@ class JournalEntryService extends ChangeNotifier {
       // Load only lines for these entries using WHERE IN clause
       final lineDocs = await _databaseService.select(
         'journal_lines',
-        where: 'journal_entry_id', // Use new column name
+        where: 'entry_id', // Correct column name from core_schema.sql
         whereIn: entryIds,
       );
       
@@ -532,7 +532,7 @@ class JournalEntryService extends ChangeNotifier {
       Map<String, dynamic> rawLine, String entryId) {
     final data = Map<String, dynamic>.from(rawLine);
     data['id'] = data['id']?.toString();
-    data['journal_entry_id'] = entryId;
+    data['entry_id'] = entryId;
     data['account_code'] = data['account_code']?.toString();
     data['account_name'] = data['account_name']?.toString();
     data['description'] = data['description']?.toString();
