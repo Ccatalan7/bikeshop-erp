@@ -16,6 +16,7 @@ class Product {
   final String? imageUrl;
   final List<String> additionalImages;
   final bool isActive;
+  final ProductType productType;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -37,6 +38,7 @@ class Product {
     this.imageUrl,
     this.additionalImages = const [],
     this.isActive = true,
+    this.productType = ProductType.product,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -63,6 +65,7 @@ class Product {
           ? List<String>.from(json['additional_images'])
           : [],
       isActive: json['is_active'] ?? true,
+      productType: _parseProductType(json['product_type']),
       createdAt: json['created_at'] is String 
           ? DateTime.parse(json['created_at'])
           : (json['created_at'] as dynamic).toDate(),
@@ -70,6 +73,17 @@ class Product {
           ? DateTime.parse(json['updated_at'])
           : (json['updated_at'] as dynamic).toDate(),
     );
+  }
+
+  static ProductType _parseProductType(dynamic value) {
+    if (value == null) return ProductType.product;
+    if (value is String) {
+      return ProductType.values.firstWhere(
+        (e) => e.name == value,
+        orElse: () => ProductType.product,
+      );
+    }
+    return ProductType.product;
   }
 
   Map<String, dynamic> toJson() {
@@ -88,6 +102,7 @@ class Product {
       'image_url': imageUrl,
       'additional_images': additionalImages,
       'is_active': isActive,
+      'product_type': productType.name,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -118,6 +133,7 @@ class Product {
     String? imageUrl,
     List<String>? additionalImages,
     bool? isActive,
+    ProductType? productType,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -139,6 +155,7 @@ class Product {
       imageUrl: imageUrl ?? this.imageUrl,
       additionalImages: additionalImages ?? this.additionalImages,
       isActive: isActive ?? this.isActive,
+      productType: productType ?? this.productType,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -313,4 +330,12 @@ class ProductStock {
       'quantity': quantity,
     };
   }
+}
+
+enum ProductType {
+  product('Producto'),
+  service('Servicio');
+
+  const ProductType(this.displayName);
+  final String displayName;
 }

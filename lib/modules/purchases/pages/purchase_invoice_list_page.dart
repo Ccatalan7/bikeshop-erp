@@ -8,6 +8,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
+import '../widgets/purchase_model_selection_dialog.dart';
 
 class PurchaseInvoiceListPage extends StatefulWidget {
   const PurchaseInvoiceListPage({super.key});
@@ -81,10 +82,14 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     switch (status) {
       case PurchaseInvoiceStatus.draft:
         return Colors.grey;
-      case PurchaseInvoiceStatus.received:
+      case PurchaseInvoiceStatus.sent:
         return Colors.blue;
-      case PurchaseInvoiceStatus.paid:
+      case PurchaseInvoiceStatus.confirmed:
+        return Colors.purple;
+      case PurchaseInvoiceStatus.received:
         return Colors.green;
+      case PurchaseInvoiceStatus.paid:
+        return Colors.blue;
       case PurchaseInvoiceStatus.cancelled:
         return Colors.red;
     }
@@ -94,6 +99,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     switch (status) {
       case PurchaseInvoiceStatus.draft:
         return 'Borrador';
+      case PurchaseInvoiceStatus.sent:
+        return 'Enviada';
+      case PurchaseInvoiceStatus.confirmed:
+        return 'Confirmada';
       case PurchaseInvoiceStatus.received:
         return 'Recibida';
       case PurchaseInvoiceStatus.paid:
@@ -125,9 +134,17 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   text: 'Nueva factura',
                   icon: Icons.add,
                   onPressed: () async {
-                    final created = await context.push<bool>('/purchases/new');
-                    if (created == true) {
-                      _loadInvoices(refresh: true);
+                    // Show model selection dialog
+                    final isPrepayment = await showPurchaseModelSelectionDialog(context);
+                    
+                    if (isPrepayment != null && mounted) {
+                      // Navigate to form with model selection
+                      final created = await context.push<bool>(
+                        '/purchases/new?prepayment=$isPrepayment',
+                      );
+                      if (created == true) {
+                        _loadInvoices(refresh: true);
+                      }
                     }
                   },
                 ),
@@ -158,6 +175,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       items: const [
                         DropdownMenuItem(value: 'all', child: Text('Todos')),
                         DropdownMenuItem(value: 'draft', child: Text('Borrador')),
+                        DropdownMenuItem(value: 'sent', child: Text('Enviada')),
+                        DropdownMenuItem(value: 'confirmed', child: Text('Confirmada')),
                         DropdownMenuItem(value: 'received', child: Text('Recibida')),
                         DropdownMenuItem(value: 'paid', child: Text('Pagada')),
                         DropdownMenuItem(value: 'cancelled', child: Text('Anulada')),
@@ -277,6 +296,22 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       Text(invoice.supplierName!),
                     Text('Fecha: ${ChileanUtils.formatDate(invoice.date)}'),
                     Text('Total: ${ChileanUtils.formatCurrency(invoice.total)}'),
+                    // Show model indicator
+                    if (invoice.prepaymentModel)
+                      Row(
+                        children: [
+                          Icon(Icons.payment, size: 12, color: Colors.orange[700]),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Prepago',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.orange[700],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     if (isDraft)
                       const Padding(
                         padding: EdgeInsets.only(top: 4.0),
@@ -315,7 +350,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   ],
                 ),
                 onTap: () async {
-                  final refreshed = await context.push<bool>('/purchases/${invoice.id}/edit');
+                  final refreshed = await context.push<bool>('/purchases/${invoice.id}/detail');
                   if (refreshed == true) {
                     _loadInvoices(refresh: true);
                   }
@@ -360,7 +395,14 @@ class _EmptyState extends StatelessWidget {
           AppButton(
             text: 'Crear factura',
             icon: Icons.add,
-            onPressed: onCreate,
+            onPressed: () async {
+              // Show model selection dialog
+              final isPrepayment = await showPurchaseModelSelectionDialog(context);
+              
+              if (isPrepayment != null && context.mounted) {
+                onCreate();
+              }
+            },
           ),
         ],
       ),

@@ -29,7 +29,7 @@ class JournalEntryService extends ChangeNotifier {
       // Load only recent entries with limit and ordering
       final entryDocs = await _databaseService.select(
         'journal_entries',
-        orderBy: 'date',
+        orderBy: 'entry_date', // Use new column name
         descending: true,
         limit: limit,
       );
@@ -57,7 +57,7 @@ class JournalEntryService extends ChangeNotifier {
       // Load only lines for these entries using WHERE IN clause
       final lineDocs = await _databaseService.select(
         'journal_lines',
-        where: 'entry_id',
+        where: 'journal_entry_id', // Use new column name
         whereIn: entryIds,
       );
       
@@ -485,8 +485,8 @@ class JournalEntryService extends ChangeNotifier {
               'account_code': line.accountCode,
               'account_name': line.accountName,
               'description': line.description,
-              'debit_amount': line.debitAmount,
-              'credit_amount': line.creditAmount,
+              'debit': line.debitAmount, // Use new column name
+              'credit': line.creditAmount, // Use new column name
             })
         .toList();
 

@@ -51,6 +51,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   List<Category> _categories = [];
   List<Supplier> _suppliers = [];
   bool _isActive = true;
+  ProductType _selectedProductType = ProductType.product;
 
   String? _imageUrl;
   File? _selectedImage;
@@ -152,6 +153,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
           _minStockController.text = product.minStockLevel.toString();
           _selectedCategoryId = product.categoryId;
           _selectedSupplierId = product.supplierId;
+          _selectedProductType = product.productType;
           _isActive = product.isActive;
           _imageUrl = product.imageUrl;
           _additionalImages
@@ -322,6 +324,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
           imageUrl: finalImageUrl,
           additionalImages: List<String>.from(_additionalImages),
           isActive: _isActive,
+          productType: _selectedProductType,
         );
 
         if (_existingProduct != null) {
@@ -676,6 +679,36 @@ class _ProductFormPageState extends State<ProductFormPage> {
               )
               .toList(),
           onChanged: (value) => setState(() => _selectedCategoryId = value),
+        ),
+        const SizedBox(height: 16),
+        // Product Type Selector
+        DropdownButtonFormField<ProductType>(
+          value: _selectedProductType,
+          decoration: const InputDecoration(
+            labelText: 'Tipo de producto',
+            helperText: 'Los productos pueden ser comprados y vendidos, los servicios solo se venden',
+            prefixIcon: Icon(Icons.category),
+          ),
+          items: ProductType.values.map((type) {
+            return DropdownMenuItem<ProductType>(
+              value: type,
+              child: Row(
+                children: [
+                  Icon(
+                    type == ProductType.product ? Icons.inventory_2 : Icons.build,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(type.displayName),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value != null) {
+              setState(() => _selectedProductType = value);
+            }
+          },
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String?>(

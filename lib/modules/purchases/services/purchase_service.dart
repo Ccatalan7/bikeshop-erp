@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/services/database_service.dart';
@@ -11,6 +12,9 @@ class PurchaseService extends ChangeNotifier {
 
   final DatabaseService _db;
   static AccountingService? _accountingService;
+  
+  // Helper to get Supabase client
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   List<shared_supplier.Supplier> _supplierCache = const [];
   List<PurchaseInvoice> _invoiceCache = const [];
@@ -350,4 +354,194 @@ class PurchaseService extends ChangeNotifier {
       throw Exception('No se pudo eliminar el pago: $e');
     }
   }
+
+  // =====================================================
+  // 5-Status Workflow Methods
+  // =====================================================
+
+  /// Mark invoice as sent to supplier (Draft → Sent)
+  Future<void> markInvoiceAsSent(String invoiceId) async {
+    try {
+      await _supabase
+          .from('purchase_invoices')
+          .update({
+            'status': 'sent',
+            'sent_date': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', invoiceId);
+      
+      await getPurchaseInvoices(forceRefresh: true);
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo marcar como enviada: $e');
+    }
+  }
+
+  /// Confirm invoice with supplier details (Sent → Confirmed)
+  Future<void> confirmInvoice({
+    required String invoiceId,
+    required String supplierInvoiceNumber,
+    required DateTime supplierInvoiceDate,
+  }) async {
+    try {
+      await _supabase
+          .from('purchase_invoices')
+          .update({
+            'status': 'confirmed',
+            'confirmed_date': DateTime.now().toUtc().toIso8601String(),
+            'supplier_invoice_number': supplierInvoiceNumber,
+            'supplier_invoice_date': supplierInvoiceDate.toIso8601String(),
+          })
+          .eq('id', invoiceId);
+      
+      await getPurchaseInvoices(forceRefresh: true);
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo confirmar la factura: $e');
+    }
+  }
+
+  /// Mark invoice as received (Confirmed → Received)
+  /// Triggers inventory update via database trigger
+  Future<void> markInvoiceAsReceived(String invoiceId) async {
+    try {
+      await _supabase
+          .from('purchase_invoices')
+          .update({
+            'status': 'received',
+            'received_date': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', invoiceId);
+      
+      await getPurchaseInvoices(forceRefresh: true);
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo marcar como recibida: $e');
+    }
+  }
+
+  /// Register payment for invoice
+  /// Creates payment record and journal entry
+  Future<void> registerInvoicePayment({
+    required String invoiceId,
+    required double amount,
+    required String paymentMethod,
+    required String bankAccountId,
+    required DateTime paymentDate,
+    String? reference,
+    String? notes,
+  }) async {
+    try {
+      final paymentData = {
+        'purchase_invoice_id': invoiceId,
+        'payment_date': paymentDate.toIso8601String(),
+        'amount': amount,
+        'payment_method': paymentMethod,
+        'bank_account_id': bankAccountId,
+        'reference': reference,
+        'notes': notes,
+      };
+
+      await _db.insert('purchase_payments', paymentData);
+      
+      // Refresh caches
+      await getPurchasePayments(forceRefresh: true);
+      await getPurchaseInvoices(forceRefresh: true);
+      
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo registrar el pago: $e');
+    }
+  }
+
+  /// Revert invoice to Draft status
+  /// Deletes journal entries and reverses inventory (via trigger)
+  Future<void> revertInvoiceToDraft(String invoiceId) async {
+    try {
+      await _supabase
+          .from('purchase_invoices')
+          .update({'status': 'draft'})
+          .eq('id', invoiceId);
+      
+      await getPurchaseInvoices(forceRefresh: true);
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo revertir a borrador: $e');
+    }
+  }
+
+  /// Revert invoice to Sent status
+  Future<void> revertInvoiceToSent(String invoiceId) async {
+    try {
+      await _supabase
+          .from('purchase_invoices')
+          .update({'status': 'sent'})
+          .eq('id', invoiceId);
+      
+      await getPurchaseInvoices(forceRefresh: true);
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo revertir a enviada: $e');
+    }
+  }
+
+  /// Revert invoice to Confirmed status
+  Future<void> revertInvoiceToConfirmed(String invoiceId) async {
+    try {
+      await _supabase
+          .from('purchase_invoices')
+          .update({'status': 'confirmed'})
+          .eq('id', invoiceId);
+      
+      await getPurchaseInvoices(forceRefresh: true);
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo revertir a confirmada: $e');
+    }
+  }
+
+  /// Revert invoice to Paid status (for prepayment model)
+  Future<void> revertInvoiceToPaid(String invoiceId) async {
+    try {
+      await _supabase
+          .from('purchase_invoices')
+          .update({'status': 'paid'})
+          .eq('id', invoiceId);
+      
+      await getPurchaseInvoices(forceRefresh: true);
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo revertir a pagada: $e');
+    }
+  }
+
+  /// Delete last payment and revert status
+  /// Deletes payment record and associated journal entry
+  Future<void> undoLastPayment(String invoiceId) async {
+    try {
+      // Get last payment
+      final payments = await _supabase
+          .from('purchase_payments')
+          .select()
+          .eq('purchase_invoice_id', invoiceId)
+          .order('payment_date', ascending: false)
+          .limit(1);
+
+      if (payments.isEmpty) {
+        throw Exception('No hay pagos para deshacer');
+      }
+
+      final paymentId = payments.first['id'];
+      await _db.delete('purchase_payments', paymentId);
+      
+      // Refresh caches
+      await getPurchasePayments(forceRefresh: true);
+      await getPurchaseInvoices(forceRefresh: true);
+      
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo deshacer el pago: $e');
+    }
+  }
 }
+

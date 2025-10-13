@@ -22,6 +22,7 @@ class Product {
   final double weight; // in kg
   final bool trackStock;
   final bool isActive;
+  final ProductType productType; // Product or Service
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -49,6 +50,7 @@ class Product {
     this.weight = 0.0,
     this.trackStock = true,
     this.isActive = true,
+    this.productType = ProductType.product,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -84,6 +86,10 @@ class Product {
       weight: (json['weight'] as num?)?.toDouble() ?? 0.0,
       trackStock: json['track_stock'] as bool? ?? true,
       isActive: json['is_active'] as bool? ?? true,
+      productType: ProductType.values.firstWhere(
+        (t) => t.name == json['product_type'],
+        orElse: () => ProductType.product,
+      ),
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
     );
@@ -114,6 +120,7 @@ class Product {
       'weight': weight,
       'track_stock': trackStock,
       'is_active': isActive,
+      'product_type': productType.name,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -143,6 +150,7 @@ class Product {
     double? weight,
     bool? trackStock,
     bool? isActive,
+    ProductType? productType,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -170,6 +178,7 @@ class Product {
       weight: weight ?? this.weight,
       trackStock: trackStock ?? this.trackStock,
       isActive: isActive ?? this.isActive,
+      productType: productType ?? this.productType,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -253,6 +262,14 @@ enum StockStatus {
   notTracked('No Controlado');
 
   const StockStatus(this.displayName);
+  final String displayName;
+}
+
+enum ProductType {
+  product('Producto'),
+  service('Servicio');
+
+  const ProductType(this.displayName);
   final String displayName;
 }
 

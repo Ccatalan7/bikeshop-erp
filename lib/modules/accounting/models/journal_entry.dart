@@ -33,10 +33,10 @@ class JournalEntry {
     return JournalEntry(
       id: json['id']?.toString(),
       entryNumber: json['entry_number'] as String,
-      date: _parseDate(json['date']),
-      description: json['description'] as String,
+      date: _parseDate(json['entry_date'] ?? json['date']), // Support both column names
+      description: json['notes'] ?? json['description'] ?? '', // Support both column names
       type: JournalEntryType.values.firstWhere(
-        (e) => e.name == json['type'],
+        (e) => e.name == (json['entry_type'] ?? json['type']),
         orElse: () => JournalEntryType.manual,
       ),
       sourceModule: json['source_module'] as String?,
@@ -59,9 +59,9 @@ class JournalEntry {
     return {
       'id': id,
       'entry_number': entryNumber,
-      'date': date.toIso8601String(),
-      'description': description,
-      'type': type.name,
+      'entry_date': date.toIso8601String(), // Use new column name
+      'notes': description, // Use new column name
+      'entry_type': type.name, // Use new column name
       'source_module': sourceModule,
       'source_reference': sourceReference,
       'lines': lines.map((line) => line.toJson()).toList(),
@@ -139,13 +139,13 @@ class JournalLine {
   factory JournalLine.fromJson(Map<String, dynamic> json) {
     return JournalLine(
       id: json['id']?.toString(),
-      journalEntryId: json['entry_id']?.toString() ?? json['journal_entry_id']?.toString(),
+      journalEntryId: json['journal_entry_id']?.toString() ?? json['entry_id']?.toString(),
       accountId: json['account_id']?.toString() ?? '',
       accountCode: json['account_code']?.toString() ?? '',
       accountName: json['account_name']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
-      debitAmount: _parseDouble(json['debit_amount']) ?? 0.0,
-      creditAmount: _parseDouble(json['credit_amount']) ?? 0.0,
+      debitAmount: _parseDouble(json['debit'] ?? json['debit_amount']) ?? 0.0, // Support both column names
+      creditAmount: _parseDouble(json['credit'] ?? json['credit_amount']) ?? 0.0, // Support both column names
       createdAt: _parseNullableDate(json['created_at']),
     );
   }
@@ -153,13 +153,13 @@ class JournalLine {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'entry_id': journalEntryId,
+      'journal_entry_id': journalEntryId, // Use new column name
       'account_id': accountId,
       'account_code': accountCode,
       'account_name': accountName,
       'description': description,
-      'debit_amount': debitAmount,
-      'credit_amount': creditAmount,
+      'debit': debitAmount, // Use new column name
+      'credit': creditAmount, // Use new column name
       'created_at': createdAt?.toIso8601String(),
     };
   }

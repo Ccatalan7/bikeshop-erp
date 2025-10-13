@@ -199,7 +199,7 @@ class MainLayout extends StatelessWidget {
                         IconButton(
                           icon: const Icon(Icons.settings_outlined),
                           onPressed: () {
-                            // TODO: Navigate to settings
+                            context.push('/settings');
                           },
                         ),
                         IconButton(
@@ -239,7 +239,7 @@ class MainLayout extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.settings),
               onPressed: () {
-                // TODO: Navigate to settings
+                context.push('/settings');
               },
             ),
             IconButton(
