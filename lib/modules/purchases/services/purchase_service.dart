@@ -405,17 +405,31 @@ class PurchaseService extends ChangeNotifier {
   /// Triggers inventory update via database trigger
   Future<void> markInvoiceAsReceived(String invoiceId) async {
     try {
+      // DEBUG: Log the update data being sent
+      final updateData = {
+        'status': 'received',
+        'received_date': DateTime.now().toUtc().toIso8601String(),
+      };
+      print('🔵 DEBUG - markInvoiceAsReceived: Updating invoice $invoiceId with data: $updateData');
+      
       await _supabase
           .from('purchase_invoices')
-          .update({
-            'status': 'received',
-            'received_date': DateTime.now().toUtc().toIso8601String(),
-          })
+          .update(updateData)
           .eq('id', invoiceId);
+      
+      print('✅ DEBUG - markInvoiceAsReceived: Successfully updated to received status');
       
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
     } catch (e) {
+      print('❌ DEBUG - markInvoiceAsReceived ERROR: $e');
+      print('   Invoice ID: $invoiceId');
+      if (e is PostgrestException) {
+        print('   Postgrest code: ${e.code}');
+        print('   Postgrest message: ${e.message}');
+        print('   Postgrest details: ${e.details}');
+        print('   Postgrest hint: ${e.hint}');
+      }
       throw Exception('No se pudo marcar como recibida: $e');
     }
   }
@@ -433,11 +447,10 @@ class PurchaseService extends ChangeNotifier {
   }) async {
     try {
       final paymentData = {
-        'purchase_invoice_id': invoiceId,
-        'payment_date': paymentDate.toIso8601String(),
+        'invoice_id': invoiceId,
+        'date': paymentDate.toIso8601String(),
         'amount': amount,
-        'payment_method': paymentMethod,
-        'bank_account_id': bankAccountId,
+        'payment_method_id': paymentMethod,
         'reference': reference,
         'notes': notes,
       };
@@ -488,14 +501,27 @@ class PurchaseService extends ChangeNotifier {
   /// Revert invoice to Confirmed status
   Future<void> revertInvoiceToConfirmed(String invoiceId) async {
     try {
+      // DEBUG: Log the revert action
+      print('🔵 DEBUG - revertInvoiceToConfirmed: Reverting invoice $invoiceId from paid to confirmed');
+      
       await _supabase
           .from('purchase_invoices')
           .update({'status': 'confirmed'})
           .eq('id', invoiceId);
       
+      print('✅ DEBUG - revertInvoiceToConfirmed: Successfully reverted to confirmed status');
+      
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
     } catch (e) {
+      print('❌ DEBUG - revertInvoiceToConfirmed ERROR: $e');
+      print('   Invoice ID: $invoiceId');
+      if (e is PostgrestException) {
+        print('   Postgrest code: ${e.code}');
+        print('   Postgrest message: ${e.message}');
+        print('   Postgrest details: ${e.details}');
+        print('   Postgrest hint: ${e.hint}');
+      }
       throw Exception('No se pudo revertir a confirmada: $e');
     }
   }
@@ -519,12 +545,21 @@ class PurchaseService extends ChangeNotifier {
   /// Deletes payment record and associated journal entry
   Future<void> undoLastPayment(String invoiceId) async {
     try {
+      // Get the invoice to check prepayment model
+      final invoiceData = await _supabase
+          .from('purchase_invoices')
+          .select('prepayment_model')
+          .eq('id', invoiceId)
+          .single();
+      
+      final isPrepayment = invoiceData['prepayment_model'] == true;
+      
       // Get last payment
       final payments = await _supabase
           .from('purchase_payments')
           .select()
-          .eq('purchase_invoice_id', invoiceId)
-          .order('payment_date', ascending: false)
+          .eq('invoice_id', invoiceId)
+          .order('date', ascending: false)
           .limit(1);
 
       if (payments.isEmpty) {
@@ -538,13 +573,14 @@ class PurchaseService extends ChangeNotifier {
       final remainingPayments = await _supabase
           .from('purchase_payments')
           .select()
-          .eq('purchase_invoice_id', invoiceId);
+          .eq('invoice_id', invoiceId);
       
-      // If no payments left, revert status from 'paid' to 'received'
+      // If no payments left, revert status based on model
       if (remainingPayments.isEmpty) {
+        final newStatus = isPrepayment ? 'confirmed' : 'received';
         await _supabase
             .from('purchase_invoices')
-            .update({'status': 'received'})
+            .update({'status': newStatus})
             .eq('id', invoiceId);
       }
       

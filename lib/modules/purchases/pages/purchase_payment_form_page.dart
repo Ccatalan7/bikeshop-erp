@@ -160,6 +160,10 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
             : _notesController.text.trim(),
       };
 
+      print('=== ATTEMPTING TO INSERT PAYMENT ===');
+      print('Payment data: $paymentData');
+      print('===================================');
+
       await Supabase.instance.client
           .from('purchase_payments')
           .insert(paymentData);
@@ -179,6 +183,12 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
         context.pop(true); // Return true to indicate success
       }
     } catch (e) {
+      // Print detailed error to console for debugging
+      print('=== PAYMENT ERROR DEBUG ===');
+      print('Error type: ${e.runtimeType}');
+      print('Error message: $e');
+      print('========================');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -81,11 +81,10 @@ class PurchaseServiceExtensions {
     String? notes,
   }) async {
     await _supabase.from('purchase_payments').insert({
-      'purchase_invoice_id': invoiceId,
+      'invoice_id': invoiceId,
       'amount': amount,
-      'payment_method': paymentMethod,
-      'payment_date': paymentDate.toUtc().toIso8601String(),
-      'bank_account_id': bankAccountId,
+      'payment_method_id': paymentMethod,
+      'date': paymentDate.toUtc().toIso8601String(),
       'reference': reference,
       'notes': notes,
       'created_at': DateTime.now().toUtc().toIso8601String(),
@@ -163,8 +162,8 @@ class PurchaseServiceExtensions {
     final response = await _supabase
         .from('purchase_payments')
         .select()
-        .eq('purchase_invoice_id', invoiceId)
-        .order('payment_date', ascending: false);
+        .eq('invoice_id', invoiceId)
+        .order('date', ascending: false);
     
     return List<Map<String, dynamic>>.from(response);
   }

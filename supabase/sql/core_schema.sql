@@ -4,6 +4,50 @@
 
 create extension if not exists "pgcrypto";
 
+-- CRITICAL: Nuclear cleanup for purchase_payments type caching issue
+-- This MUST run first before any table or function definitions
+do $$
+begin
+  -- Drop all triggers
+  drop trigger if exists trg_purchase_payments_change on purchase_payments cascade;
+  
+  -- Drop all functions (all possible signatures)
+  drop function if exists handle_purchase_payment_change() cascade;
+  drop function if exists create_purchase_payment_journal_entry(uuid) cascade;
+  drop function if exists create_purchase_payment_journal_entry(purchase_payments) cascade;
+  drop function if exists delete_purchase_payment_journal_entry(uuid) cascade;
+  
+  -- Drop OLD trigger version of recalculate function (the one causing the error!)
+  drop function if exists recalculate_purchase_invoice_payments() cascade;
+  
+  -- Drop old columns if they exist
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'purchase_payments' and column_name = 'payment_date'
+  ) then
+    alter table purchase_payments drop column payment_date cascade;
+  end if;
+  
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'purchase_payments' and column_name = 'bank_account_id'
+  ) then
+    alter table purchase_payments drop column bank_account_id cascade;
+  end if;
+  
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'purchase_payments' and column_name = 'purchase_invoice_id'
+  ) then
+    alter table purchase_payments drop column purchase_invoice_id cascade;
+  end if;
+  
+  raise notice 'Nuclear cleanup complete for purchase_payments';
+exception
+  when others then
+    raise notice 'Cleanup error (may be safe to ignore): %', sqlerrm;
+end $$;
+
 create table if not exists customers (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -1188,13 +1232,23 @@ begin
 end;
 $$ language plpgsql;
 
-create or replace function public.create_purchase_payment_journal_entry(p_payment public.purchase_payments)
+-- CRITICAL: Drop ALL versions of function to clear cached type definition
+-- Drop old version with uuid parameter (if exists from previous schema)
+drop function if exists public.create_purchase_payment_journal_entry(uuid) cascade;
+drop function if exists public.create_purchase_payment_journal_entry(p_payment_id uuid) cascade;
+-- Drop new version with composite type parameter
+drop function if exists public.create_purchase_payment_journal_entry(public.purchase_payments) cascade;
+drop function if exists public.create_purchase_payment_journal_entry(p_payment public.purchase_payments) cascade;
+
+-- WORKAROUND: Use payment ID instead of composite type to avoid type cache issues
+create or replace function public.create_purchase_payment_journal_entry(p_payment_id uuid)
 returns void
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
+  v_payment record;
   v_invoice record;
   v_entry_id uuid := gen_random_uuid();
   v_exists boolean;
@@ -1207,7 +1261,13 @@ declare
   v_payable_account_name text := 'Cuentas por Pagar Proveedores';
   v_description text;
 begin
-  if p_payment.invoice_id is null then
+  -- Fetch payment data from table instead of using composite type parameter
+  select id, invoice_id, amount, date, payment_method_id
+    into v_payment
+    from public.purchase_payments
+   where id = p_payment_id;
+
+  if not found or v_payment.invoice_id is null then
     return;
   end if;
 
@@ -1215,7 +1275,7 @@ begin
            select 1
              from public.journal_entries
             where source_module = 'purchase_payments'
-              and source_reference = p_payment.id::text
+              and source_reference = v_payment.id::text
         )
     into v_exists;
 
@@ -1229,7 +1289,7 @@ begin
          total
     into v_invoice
     from public.purchase_invoices
-   where id = p_payment.invoice_id;
+   where id = v_payment.invoice_id;
 
   if not found then
     return;
@@ -1240,10 +1300,10 @@ begin
     into v_payment_method
     from public.payment_methods pm
     join public.accounts a on a.id = pm.account_id
-   where pm.id = p_payment.payment_method_id;
+   where pm.id = v_payment.payment_method_id;
 
   if not found then
-    raise exception 'Payment method not found for payment %', p_payment.id;
+    raise exception 'Payment method not found for payment %', v_payment.id;
   end if;
 
   -- Use the account from payment method configuration
@@ -1281,14 +1341,14 @@ begin
   ) values (
     v_entry_id,
     concat('PPAY-', to_char(now(), 'YYYYMMDDHH24MISS')),
-    coalesce(p_payment.date, now()),
+    coalesce(v_payment.date, now()),
     v_description,
     'payment',
     'purchase_payments',
-    p_payment.id::text,
+    v_payment.id::text,
     'posted',
-    p_payment.amount,
-    p_payment.amount,
+    v_payment.amount,
+    v_payment.amount,
     now(),
     now()
   );
@@ -1312,7 +1372,7 @@ begin
     v_payable_account_code,
     v_payable_account_name,
     v_description,
-    p_payment.amount,
+    v_payment.amount,
     0,
     now(),
     now()
@@ -1338,7 +1398,7 @@ begin
     v_cash_account_name,
     v_description,
     0,
-    p_payment.amount,
+    v_payment.amount,
     now(),
     now()
   );
@@ -1362,15 +1422,20 @@ begin
 end;
 $$;
 
+-- CRITICAL: Drop trigger FIRST, then function to clear cached type definition
+-- Using CASCADE to ensure all dependencies are dropped
+drop trigger if exists trg_purchase_payments_change on public.purchase_payments cascade;
+drop function if exists public.handle_purchase_payment_change() cascade;
+
 create or replace function public.handle_purchase_payment_change()
 returns trigger as $$
 begin
   if TG_OP = 'INSERT' then
-    perform public.create_purchase_payment_journal_entry(NEW);
+    perform public.create_purchase_payment_journal_entry(NEW.id);
     perform public.recalculate_purchase_invoice_payments(NEW.invoice_id);
   elsif TG_OP = 'UPDATE' then
     perform public.delete_purchase_payment_journal_entry(OLD.id);
-    perform public.create_purchase_payment_journal_entry(NEW);
+    perform public.create_purchase_payment_journal_entry(NEW.id);
     perform public.recalculate_purchase_invoice_payments(NEW.invoice_id);
   elsif TG_OP = 'DELETE' then
     perform public.delete_purchase_payment_journal_entry(OLD.id);
@@ -2204,6 +2269,7 @@ declare
   v_has_old_invoice_id boolean;
   v_has_payment_method_id boolean;
   v_has_old_method boolean;
+  v_has_date boolean;
   v_cash_method_id uuid;
 begin
   -- Check if columns exist
@@ -2235,11 +2301,61 @@ begin
       and column_name in ('method', 'payment_method')
   ) into v_has_old_method;
 
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'purchase_payments'
+      and column_name = 'date'
+  ) into v_has_date;
+
+  -- Add date column if missing
+  if not v_has_date then
+    raise notice 'Adding date column to purchase_payments...';
+    alter table purchase_payments add column date timestamp with time zone not null default now();
+  end if;
+
+  -- Check for old payment_date column and migrate
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'purchase_payments'
+      and column_name = 'payment_date'
+  ) then
+    raise notice 'Found old payment_date column, migrating to date...';
+    -- Copy data if date is default and payment_date has real data
+    update purchase_payments 
+    set date = payment_date 
+    where payment_date != date;
+    -- Drop old column
+    alter table purchase_payments drop column payment_date;
+  end if;
+
+  -- Check for old bank_account_id column and drop it
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'purchase_payments'
+      and column_name = 'bank_account_id'
+  ) then
+    raise notice 'Found old bank_account_id column, dropping it (use payment_method_id instead)...';
+    alter table purchase_payments drop column bank_account_id;
+  end if;
+
   -- Migrate invoice_id column name
-  if v_has_old_invoice_id and not v_has_invoice_id then
+  if v_has_old_invoice_id and v_has_invoice_id then
+    -- BOTH columns exist - this shouldn't happen, but let's fix it
+    raise notice 'WARNING: Both purchase_invoice_id and invoice_id exist! Copying data and dropping old column...';
+    -- Copy data from old column to new column if new is null
+    update purchase_payments set invoice_id = purchase_invoice_id where invoice_id is null;
+    -- Drop the old column
+    alter table purchase_payments drop column purchase_invoice_id;
+    v_has_old_invoice_id := false;
+  elsif v_has_old_invoice_id and not v_has_invoice_id then
     raise notice 'Renaming purchase_invoice_id to invoice_id...';
     alter table purchase_payments rename column purchase_invoice_id to invoice_id;
     v_has_invoice_id := true;
+  elsif not v_has_invoice_id then
+    raise notice 'ERROR: Neither purchase_invoice_id nor invoice_id exists!';
   end if;
 
   -- Add invoice_id if it doesn't exist at all
@@ -2346,21 +2462,11 @@ begin
   end if;
 end $$;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_trigger t
-    join pg_class c on c.oid = t.tgrelid
-    join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public'
-      and c.relname = 'purchase_payments'
-      and t.tgname = 'trg_purchase_payments_change'
-  ) then
-    create trigger trg_purchase_payments_change
-      after insert or update or delete on public.purchase_payments
-      for each row execute procedure public.handle_purchase_payment_change();
-  end if;
-end $$;
+-- Trigger already dropped and function recreated earlier (line ~1367)
+-- Now just create the trigger with the refreshed function
+create trigger trg_purchase_payments_change
+  after insert or update or delete on public.purchase_payments
+  for each row execute procedure public.handle_purchase_payment_change();
 
 create table if not exists stock_movements (
   id uuid primary key default gen_random_uuid(),
@@ -2868,8 +2974,7 @@ begin
       quantity,
       movement_type,
       type,
-      reference_type,
-      reference_id,
+      reference,
       notes,
       date,
       created_at,
@@ -2879,8 +2984,7 @@ begin
       v_quantity_int,
       'purchase_invoice',
       'IN',
-      'purchase_invoice',
-      p_invoice.id::text,
+      v_reference,
       format('Entrada según factura compra %s', p_invoice.invoice_number),
       p_invoice.date,
       now(),
@@ -2917,10 +3021,11 @@ begin
     return;
   end if;
 
-  -- Delete stock movements
+  v_reference := format('purchase_invoice:%s', p_invoice.id);
+
+  -- Delete stock movements (same pattern as sales)
   delete from public.stock_movements
-  where reference_type = 'purchase_invoice'
-    and reference_id = p_invoice.id::text;
+  where reference = v_reference;
 
   -- DECREASE inventory (restore = undo IN movement)
   for v_item in
@@ -3180,23 +3285,54 @@ begin
     raise notice 'handle_purchase_invoice_change: UPDATE invoice %, old status %, new status %', NEW.id, v_old_status, v_new_status;
 
     -- INVENTORY HANDLING: ONLY at 'received' status
-    -- This is correct for BOTH prepayment and standard models
-    -- Inventory should only change when goods are physically received
-    if v_old_status != 'received' AND v_new_status = 'received' then
-      -- Transitioning TO received: consume inventory (add stock)
-      raise notice 'handle_purchase_invoice_change: transitioning TO received, consuming inventory';
-      perform public.consume_purchase_invoice_inventory(NEW);
+    -- Different logic for standard vs prepayment models:
+    --
+    -- STANDARD MODEL: Draft→Confirmed→RECEIVED→Paid
+    --   Inventory added at 'received', stays through 'paid'
+    --   So: received<->paid transitions do NOT change inventory
+    --
+    -- PREPAYMENT MODEL: Draft→Confirmed→Paid→RECEIVED
+    --   Inventory added at 'received' (after payment)
+    --   So: received<->paid transitions DO change inventory
+    
+    if NEW.prepayment_model then
+      -- PREPAYMENT MODEL: Inventory changes whenever entering/leaving 'received'
+      if v_old_status != 'received' AND v_new_status = 'received' then
+        -- Transitioning TO received (from any status): add inventory
+        raise notice 'handle_purchase_invoice_change: [PREPAYMENT] transitioning TO received from %, consuming inventory', v_old_status;
+        perform public.consume_purchase_invoice_inventory(NEW);
+        
+      elsif v_old_status = 'received' AND v_new_status != 'received' then
+        -- Transitioning FROM received (to any status): remove inventory
+        raise notice 'handle_purchase_invoice_change: [PREPAYMENT] transitioning FROM received to %, restoring inventory', v_new_status;
+        perform public.restore_purchase_invoice_inventory(OLD);
+        
+      elsif v_old_status = 'received' AND v_new_status = 'received' then
+        -- Staying at received but invoice data changed: update inventory
+        raise notice 'handle_purchase_invoice_change: [PREPAYMENT] staying at received, updating inventory';
+        perform public.restore_purchase_invoice_inventory(OLD);
+        perform public.consume_purchase_invoice_inventory(NEW);
+      end if;
       
-    elsif v_old_status = 'received' AND v_new_status != 'received' then
-      -- Transitioning FROM received: restore inventory (remove stock)
-      raise notice 'handle_purchase_invoice_change: transitioning FROM received, restoring inventory';
-      perform public.restore_purchase_invoice_inventory(OLD);
-      
-    elsif v_old_status = 'received' AND v_new_status = 'received' then
-      -- Staying at received but invoice data changed: restore old, consume new
-      raise notice 'handle_purchase_invoice_change: staying at received, updating inventory';
-      perform public.restore_purchase_invoice_inventory(OLD);
-      perform public.consume_purchase_invoice_inventory(NEW);
+    else
+      -- STANDARD MODEL: Inventory changes only when entering/leaving 'received' from/to non-paid statuses
+      if v_old_status NOT IN ('received', 'paid') AND v_new_status = 'received' then
+        -- Transitioning TO received from confirmed/sent/draft: add inventory
+        raise notice 'handle_purchase_invoice_change: [STANDARD] transitioning TO received from %, consuming inventory', v_old_status;
+        perform public.consume_purchase_invoice_inventory(NEW);
+        
+      elsif v_old_status = 'received' AND v_new_status NOT IN ('received', 'paid') then
+        -- Transitioning FROM received to confirmed/sent/draft: remove inventory
+        -- Note: received→paid does NOT remove (goods stay in standard flow)
+        raise notice 'handle_purchase_invoice_change: [STANDARD] transitioning FROM received to %, restoring inventory', v_new_status;
+        perform public.restore_purchase_invoice_inventory(OLD);
+        
+      elsif v_old_status = 'received' AND v_new_status = 'received' then
+        -- Staying at received but invoice data changed: update inventory
+        raise notice 'handle_purchase_invoice_change: [STANDARD] staying at received, updating inventory';
+        perform public.restore_purchase_invoice_inventory(OLD);
+        perform public.consume_purchase_invoice_inventory(NEW);
+      end if;
     end if;
 
     -- JOURNAL ENTRY HANDLING: Create ONCE at 'confirmed', delete when reverting
