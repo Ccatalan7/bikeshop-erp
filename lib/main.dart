@@ -16,6 +16,7 @@ import 'modules/accounting/services/accounting_service.dart';
 import 'modules/pos/services/pos_service.dart';
 import 'modules/purchases/services/purchase_service.dart';
 import 'modules/sales/services/sales_service.dart';
+import 'modules/settings/services/appearance_service.dart';
 import 'shared/routes/app_router.dart';
 
 Future<void> main() async {
@@ -57,6 +58,7 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider(create: (_) => DatabaseService()),
         ChangeNotifierProvider(create: (_) => PaymentMethodService()),
+        ChangeNotifierProvider(create: (_) => AppearanceService()),
         
         // Business services
         ChangeNotifierProvider(create: (context) => InventoryService(

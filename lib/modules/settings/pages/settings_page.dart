@@ -80,6 +80,14 @@ class SettingsPage extends StatelessWidget {
             children: [
               _buildSettingTile(
                 context,
+                icon: Icons.image_outlined,
+                title: 'Logo de la Empresa',
+                subtitle: 'Subir logo personalizado para el encabezado',
+                iconColor: Colors.blue,
+                onTap: () => context.push('/settings/appearance'),
+              ),
+              _buildSettingTile(
+                context,
                 icon: Icons.dark_mode,
                 title: 'Tema',
                 subtitle: 'Claro, oscuro, automático',

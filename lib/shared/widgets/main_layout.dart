@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/auth_service.dart';
+import '../../modules/settings/services/appearance_service.dart';
 import 'expandable_menu_item.dart';
 
 const List<MenuSubItem> _accountingMenuItems = [
@@ -361,43 +363,42 @@ class _AppSidebarState extends State<AppSidebar> {
                 ),
               ),
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: theme.primaryColor,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(
-                    Icons.pedal_bike,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
+            child: Consumer<AppearanceService>(
+              builder: (context, appearanceService, _) {
+                return InkWell(
+                  onTap: () {
+                    // Navigate to dashboard when header is clicked
+                    context.go('/dashboard');
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Row(
                     children: [
-                      Text(
-                        'Vinabike',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        'ERP Sistema',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.7),
-                        ),
-                      ),
+                      if (appearanceService.hasCustomLogo)
+                        // Show custom logo
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: CachedNetworkImage(
+                              imageUrl: appearanceService.companyLogoUrl!,
+                              fit: BoxFit.contain,
+                              placeholder: (context, url) => const Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => _buildDefaultHeader(context, theme, appearanceService),
+                            ),
+                          ),
+                        )
+                      else
+                        // Show default header with icon and text
+                        ..._buildDefaultHeaderWidgets(context, theme, appearanceService),
                     ],
                   ),
-                ),
-              ],
+                );
+              },
             ),
           ),
           
@@ -617,6 +618,61 @@ class _AppSidebarState extends State<AppSidebar> {
       ),
     );
   }
+
+  // Helper method to build default header widgets
+  static List<Widget> _buildDefaultHeaderWidgets(
+    BuildContext context, 
+    ThemeData theme, 
+    AppearanceService appearanceService,
+  ) {
+    return [
+      Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: theme.primaryColor,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(
+          appearanceService.homeIcon,
+          color: Colors.white,
+          size: 18,
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Vinabike',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Text(
+              'ERP Sistema',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.7),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  // Helper method to build default header as a single widget
+  static Widget _buildDefaultHeader(
+    BuildContext context, 
+    ThemeData theme, 
+    AppearanceService appearanceService,
+  ) {
+    return Row(
+      children: _buildDefaultHeaderWidgets(context, theme, appearanceService),
+    );
+  }
 }
 
 class AppDrawer extends StatelessWidget {
@@ -641,31 +697,32 @@ class AppDrawer extends StatelessWidget {
                 end: Alignment.bottomRight,
               ),
             ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.pedal_bike,
-                  color: Colors.white,
-                  size: 48,
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Vinabike ERP',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  'Sistema Integral de Gestión',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
+            child: Consumer<AppearanceService>(
+              builder: (context, appearanceService, _) {
+                return InkWell(
+                  onTap: () {
+                    // Navigate to dashboard when header is clicked
+                    Navigator.pop(context); // Close drawer first
+                    context.go('/dashboard');
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: appearanceService.hasCustomLogo
+                      ? Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: CachedNetworkImage(
+                            imageUrl: appearanceService.companyLogoUrl!,
+                            fit: BoxFit.contain,
+                            placeholder: (context, url) => const Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => _buildDefaultDrawerHeader(context, appearanceService),
+                          ),
+                        )
+                      : _buildDefaultDrawerHeader(context, appearanceService),
+                );
+              },
             ),
           ),
           
@@ -907,6 +964,39 @@ class AppDrawer extends StatelessWidget {
               Navigator.pop(context);
             }
           : null,
+    );
+  }
+
+  Widget _buildDefaultDrawerHeader(BuildContext context, AppearanceService appearanceService) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(
+            appearanceService.homeIcon,
+            color: Colors.white,
+            size: 48,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Vinabike ERP',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const Text(
+          'Sistema Integral de Gestión',
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: 14,
+          ),
+        ),
+      ],
     );
   }
 }

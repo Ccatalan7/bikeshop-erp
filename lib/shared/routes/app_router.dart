@@ -34,6 +34,7 @@ import '../../modules/pos/pages/pos_receipt_page.dart';
 import '../../modules/pos/models/pos_transaction.dart';
 import '../../modules/settings/pages/settings_page.dart';
 import '../../modules/settings/pages/factory_reset_page.dart';
+import '../../modules/settings/pages/appearance_settings_page.dart';
 
 // Helper function to create pages without transitions
 Page<dynamic> _buildPageWithNoTransition(
@@ -453,6 +454,16 @@ class AppRouter {
           state,
           const MainLayout(
             child: FactoryResetPage(),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/settings/appearance',
+        pageBuilder: (context, state) => _buildPageWithNoTransition(
+          context,
+          state,
+          const MainLayout(
+            child: AppearanceSettingsPage(),
           ),
         ),
       ),
