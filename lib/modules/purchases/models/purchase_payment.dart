@@ -1,12 +1,14 @@
+/// Purchase payment model matching purchase_payments table in core_schema.sql
+/// CRITICAL: Uses payment_method_id (uuid) to reference payment_methods table
 class PurchasePayment {
-  final String? id;
-  final String invoiceId;
-  final String? invoiceNumber;
-  final String? supplierName;
-  final String method; // cash, card, transfer, check, other
+  final String? id; // uuid
+  final String invoiceId; // uuid - references purchase_invoices(id)
+  final String? invoiceNumber; // for display
+  final String? supplierName; // for display
+  final String paymentMethodId; // uuid - references payment_methods(id)
   final double amount;
   final DateTime date;
-  final String? reference;
+  final String? reference; // bank reference, check number, etc.
   final String? notes;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -16,7 +18,7 @@ class PurchasePayment {
     required this.invoiceId,
     this.invoiceNumber,
     this.supplierName,
-    required this.method,
+    required this.paymentMethodId,
     required this.amount,
     required this.date,
     this.reference,
@@ -29,12 +31,12 @@ class PurchasePayment {
   factory PurchasePayment.fromJson(Map<String, dynamic> json) {
     return PurchasePayment(
       id: json['id']?.toString(),
-      invoiceId: json['purchase_invoice_id']?.toString() ?? '',  // Fixed: database column
+      invoiceId: json['invoice_id']?.toString() ?? '',
       invoiceNumber: json['invoice_number'] as String?,
       supplierName: json['supplier_name'] as String?,
-      method: json['payment_method']?.toString() ?? 'transfer',  // Fixed: database column
+      paymentMethodId: json['payment_method_id']?.toString() ?? '',
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
-      date: _parseDate(json['payment_date']),  // Fixed: database column
+      date: _parseDate(json['date']),
       reference: json['reference'] as String?,
       notes: json['notes'] as String?,
       createdAt: _parseDate(json['created_at']),
@@ -45,12 +47,12 @@ class PurchasePayment {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
-      'purchase_invoice_id': invoiceId,  // Fixed: database column name
+      'invoice_id': invoiceId,
       'invoice_number': invoiceNumber,
       'supplier_name': supplierName,
-      'payment_method': method,  // Fixed: database column name
+      'payment_method_id': paymentMethodId,
       'amount': amount,
-      'payment_date': date.toIso8601String(),  // Fixed: database column name
+      'date': date.toIso8601String(),
       'reference': reference,
       'notes': notes,
     };
@@ -61,7 +63,7 @@ class PurchasePayment {
     String? invoiceId,
     String? invoiceNumber,
     String? supplierName,
-    String? method,
+    String? paymentMethodId,
     double? amount,
     DateTime? date,
     String? reference,
@@ -74,7 +76,7 @@ class PurchasePayment {
       invoiceId: invoiceId ?? this.invoiceId,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       supplierName: supplierName ?? this.supplierName,
-      method: method ?? this.method,
+      paymentMethodId: paymentMethodId ?? this.paymentMethodId,
       amount: amount ?? this.amount,
       date: date ?? this.date,
       reference: reference ?? this.reference,

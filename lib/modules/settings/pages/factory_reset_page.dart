@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../accounting/services/accounting_service.dart';
+import '../../sales/services/sales_service.dart';
+import '../../purchases/services/purchase_service.dart';
+import '../../inventory/services/inventory_service.dart';
 import '../services/factory_reset_service.dart';
 
 class FactoryResetPage extends StatefulWidget {
@@ -41,6 +46,28 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
       await _resetService.performFactoryReset();
       
       if (!mounted) return;
+      
+      // Clear all service caches to force reload
+      try {
+        final accountingService = context.read<AccountingService>();
+        await accountingService.reloadJournalEntries();
+      } catch (e) {
+        debugPrint('Could not reload accounting service: $e');
+      }
+      
+      try {
+        final salesService = context.read<SalesService>();
+        // Sales service will reload on next access
+      } catch (e) {
+        debugPrint('Could not access sales service: $e');
+      }
+      
+      try {
+        final inventoryService = context.read<InventoryService>();
+        // Inventory service will reload on next access
+      } catch (e) {
+        debugPrint('Could not access inventory service: $e');
+      }
       
       // Show success and navigate to login
       ScaffoldMessenger.of(context).showSnackBar(

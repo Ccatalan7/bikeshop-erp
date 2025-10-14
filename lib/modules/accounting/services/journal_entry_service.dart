@@ -21,6 +21,12 @@ class JournalEntryService extends ChangeNotifier {
     await loadJournalEntries();
   }
 
+  /// Force reload of journal entries from database
+  Future<void> reload({int limit = 100}) async {
+    _isLoaded = false;
+    await loadJournalEntries(limit: limit);
+  }
+
   Future<void> loadJournalEntries({int limit = 100}) async {
     try {
       debugPrint('🔍 Loading journal entries with limit: $limit');
@@ -464,6 +470,48 @@ class JournalEntryService extends ChangeNotifier {
     _journalEntries.sort((a, b) => b.date.compareTo(a.date));
     _syncNextEntryNumber();
     notifyListeners();
+  }
+
+  /// Delete a journal entry and its lines (TEMP: for testing)
+  Future<void> deleteEntry(String entryId) async {
+    await ensureLoaded();
+
+    final entryIndex = _journalEntries.indexWhere((entry) => entry.id == entryId);
+    if (entryIndex == -1) {
+      throw Exception('Journal entry not found');
+    }
+
+    final entry = _journalEntries[entryIndex];
+    if (entry.id == null) {
+      throw Exception('Cannot delete journal entry without ID');
+    }
+
+    try {
+      // Delete all lines first
+      final lineDocs = await _databaseService.select(
+        'journal_lines',
+        where: 'entry_id',
+        whereIn: [entry.id!],
+      );
+
+      for (final line in lineDocs) {
+        final lineId = line['id'] as String?;
+        if (lineId != null) {
+          await _databaseService.delete('journal_lines', lineId);
+        }
+      }
+
+      // Delete the entry
+      await _databaseService.delete('journal_entries', entry.id!);
+
+      // Remove from local cache
+      _journalEntries.removeAt(entryIndex);
+      _syncNextEntryNumber();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error deleting journal entry: $e');
+      rethrow;
+    }
   }
 
   Future<JournalEntry> _persistEntry(JournalEntry entry) async {

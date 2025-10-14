@@ -7,7 +7,7 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
-import '../widgets/payment_form.dart';
+import '../widgets/payment_form.dart' show PaymentForm;
 
 class InvoicePaymentPage extends StatefulWidget {
   const InvoicePaymentPage({super.key, required this.invoiceId});

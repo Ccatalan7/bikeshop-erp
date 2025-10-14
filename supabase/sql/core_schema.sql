@@ -20,6 +20,113 @@ create table if not exists products (
   inventory_qty integer not null default 0,
   created_at timestamp with time zone not null default now()
 );
+
+-- Migration: Add missing columns to products table
+do $$
+begin
+  -- Add barcode if not exists
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'barcode') then
+    alter table products add column barcode text;
+  end if;
+
+  -- Add stock_quantity (alias for inventory_qty)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'stock_quantity') then
+    alter table products add column stock_quantity integer not null default 0;
+  end if;
+
+  -- Add min_stock_level
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'min_stock_level') then
+    alter table products add column min_stock_level integer not null default 5;
+  end if;
+
+  -- Add max_stock_level
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'max_stock_level') then
+    alter table products add column max_stock_level integer not null default 100;
+  end if;
+
+  -- Add image_url
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'image_url') then
+    alter table products add column image_url text;
+  end if;
+
+  -- Add image_urls array
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'image_urls') then
+    alter table products add column image_urls text[] not null default array[]::text[];
+  end if;
+
+  -- Add description
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'description') then
+    alter table products add column description text;
+  end if;
+
+  -- Add category (enum/text)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'category') then
+    alter table products add column category text not null default 'other';
+  end if;
+
+  -- Add category_id (FK to categories table)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'category_id') then
+    alter table products add column category_id uuid;
+  end if;
+
+  -- Add category_name (resolved name)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'category_name') then
+    alter table products add column category_name text;
+  end if;
+
+  -- Add brand
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'brand') then
+    alter table products add column brand text;
+  end if;
+
+  -- Add model
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'model') then
+    alter table products add column model text;
+  end if;
+
+  -- Add specifications (jsonb)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'specifications') then
+    alter table products add column specifications jsonb not null default '{}'::jsonb;
+  end if;
+
+  -- Add tags array
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'tags') then
+    alter table products add column tags text[] not null default array[]::text[];
+  end if;
+
+  -- Add unit
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'unit') then
+    alter table products add column unit text not null default 'unit';
+  end if;
+
+  -- Add weight
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'weight') then
+    alter table products add column weight numeric(10,2) not null default 0;
+  end if;
+
+  -- Add track_stock
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'track_stock') then
+    alter table products add column track_stock boolean not null default true;
+  end if;
+
+  -- Add is_active
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'is_active') then
+    alter table products add column is_active boolean not null default true;
+  end if;
+
+  -- Add product_type (product or service)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'product_type') then
+    alter table products add column product_type text not null default 'product';
+  end if;
+
+  -- Add updated_at
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'updated_at') then
+    alter table products add column updated_at timestamp with time zone not null default now();
+  end if;
+
+  -- Sync inventory_qty to stock_quantity for existing records
+  update products set stock_quantity = inventory_qty where stock_quantity = 0 and inventory_qty > 0;
+end $$;
  
 create table if not exists suppliers (
   id uuid primary key default gen_random_uuid(),
@@ -424,7 +531,11 @@ begin
 end;
 $$ language plpgsql;
 
-select public.migrate_accounts_to_uuid();
+-- Execute migration silently
+do $$
+begin
+  perform public.migrate_accounts_to_uuid();
+end $$;
 
 insert into public.accounts (code, name, type, category, description)
 values
@@ -639,17 +750,22 @@ create table if not exists sales_payments (
   updated_at timestamp with time zone not null default now()
 );
 
-create index if not exists idx_sales_payments_invoice_id
-  on sales_payments(invoice_id);
-create index if not exists idx_sales_payments_payment_method_id
-  on sales_payments(payment_method_id);
-
 -- Migration: Handle existing sales_payments with old 'method' column
+-- CRITICAL: This must run BEFORE creating indexes on payment_method_id
 do $$
 declare
   v_has_method_column boolean;
+  v_has_payment_method_id boolean;
   v_cash_method_id uuid;
 begin
+  -- Check if payment_method_id column already exists
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'sales_payments'
+      and column_name = 'payment_method_id'
+  ) into v_has_payment_method_id;
+
   -- Check if old 'method' column exists
   select exists (
     select 1 from information_schema.columns
@@ -658,21 +774,18 @@ begin
       and column_name = 'method'
   ) into v_has_method_column;
 
-  if v_has_method_column then
+  if v_has_method_column and not v_has_payment_method_id then
     raise notice 'Migrating sales_payments from method column to payment_method_id...';
     
     -- Get cash payment method ID as default
     select id into v_cash_method_id from payment_methods where code = 'cash' limit 1;
     
-    -- Add new column if not exists
-    if not exists (
-      select 1 from information_schema.columns
-      where table_schema = 'public'
-        and table_name = 'sales_payments'
-        and column_name = 'payment_method_id'
-    ) then
-      alter table sales_payments add column payment_method_id uuid references payment_methods(id);
+    if v_cash_method_id is null then
+      raise exception 'Cash payment method not found! Ensure payment_methods table is populated.';
     end if;
+    
+    -- Add new column (nullable first)
+    alter table sales_payments add column payment_method_id uuid;
     
     -- Migrate data: map old method values to payment_method_id
     update sales_payments sp
@@ -692,6 +805,12 @@ begin
     set payment_method_id = v_cash_method_id
     where payment_method_id is null;
     
+    -- Add foreign key constraint
+    alter table sales_payments 
+      add constraint sales_payments_payment_method_id_fkey 
+      foreign key (payment_method_id) 
+      references payment_methods(id);
+    
     -- Drop old method column and constraint
     alter table sales_payments drop constraint if exists sales_payments_method_check;
     alter table sales_payments drop column if exists method;
@@ -700,8 +819,17 @@ begin
     alter table sales_payments alter column payment_method_id set not null;
     
     raise notice 'Migration complete!';
+  elsif not v_has_payment_method_id then
+    raise notice 'No existing sales_payments data, payment_method_id will be added by CREATE TABLE';
+  else
+    raise notice 'payment_method_id already exists, skipping migration';
   end if;
 end $$;
+
+create index if not exists idx_sales_payments_invoice_id
+  on sales_payments(invoice_id);
+create index if not exists idx_sales_payments_payment_method_id
+  on sales_payments(payment_method_id);
 
 alter table public.sales_payments
   add column if not exists invoice_reference text,
@@ -756,17 +884,38 @@ begin
 
   v_balance := greatest(coalesce(v_invoice.total, 0) - v_total, 0);
 
+  -- Determine new status based on payment totals and current status
   if v_invoice.status = 'cancelled' then
+    -- Keep cancelled status
     v_new_status := v_invoice.status;
-  elsif v_invoice.status = 'draft' and v_total = 0 then
-    v_new_status := 'draft';
-  elsif v_total >= coalesce(v_invoice.total, 0) then
+  elsif v_invoice.status = 'draft' then
+    -- Draft stays draft unless fully paid
+    if v_total >= coalesce(v_invoice.total, 0) and v_total > 0 then
+      v_new_status := 'paid';
+    else
+      v_new_status := 'draft';
+    end if;
+  elsif v_total >= coalesce(v_invoice.total, 0) and v_total > 0 then
+    -- Fully paid
     v_new_status := 'paid';
-  elsif v_invoice.status = 'overdue' and v_balance > 0 then
-    v_new_status := 'overdue';
-  elsif v_total > 0 then
-    v_new_status := 'sent';
+  elsif v_total > 0 and v_total < coalesce(v_invoice.total, 0) then
+    -- Partially paid - keep current status if it's overdue, otherwise set to confirmed
+    if v_invoice.status = 'overdue' then
+      v_new_status := 'overdue';
+    else
+      v_new_status := 'confirmed';
+    end if;
+  elsif v_total = 0 then
+    -- No payments
+    if v_invoice.status = 'paid' then
+      -- If was paid but now has no payments, revert to confirmed
+      v_new_status := 'confirmed';
+    else
+      -- Otherwise keep current status (draft/sent/confirmed/overdue)
+      v_new_status := v_invoice.status;
+    end if;
   else
+    -- Fallback: keep current status
     v_new_status := v_invoice.status;
   end if;
 
@@ -1991,6 +2140,135 @@ create table if not exists purchase_payments (
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+-- Migration: Handle existing purchase_payments with old column names
+-- CRITICAL: This must run BEFORE creating indexes
+do $$
+declare
+  v_has_invoice_id boolean;
+  v_has_old_invoice_id boolean;
+  v_has_payment_method_id boolean;
+  v_has_old_method boolean;
+  v_cash_method_id uuid;
+begin
+  -- Check if columns exist
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'purchase_payments'
+      and column_name = 'invoice_id'
+  ) into v_has_invoice_id;
+
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'purchase_payments'
+      and column_name = 'purchase_invoice_id'
+  ) into v_has_old_invoice_id;
+
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'purchase_payments'
+      and column_name = 'payment_method_id'
+  ) into v_has_payment_method_id;
+
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'purchase_payments'
+      and column_name in ('method', 'payment_method')
+  ) into v_has_old_method;
+
+  -- Migrate invoice_id column name
+  if v_has_old_invoice_id and not v_has_invoice_id then
+    raise notice 'Renaming purchase_invoice_id to invoice_id...';
+    alter table purchase_payments rename column purchase_invoice_id to invoice_id;
+    v_has_invoice_id := true;
+  end if;
+
+  -- Add invoice_id if it doesn't exist at all
+  if not v_has_invoice_id then
+    raise notice 'Adding invoice_id column to purchase_payments...';
+    alter table purchase_payments add column invoice_id uuid not null references purchase_invoices(id) on delete cascade;
+  end if;
+
+  -- Migrate payment method column
+  if v_has_old_method and not v_has_payment_method_id then
+    raise notice 'Migrating purchase_payments payment method to payment_method_id...';
+    
+    -- Get cash payment method ID as default
+    select id into v_cash_method_id from payment_methods where code = 'cash' limit 1;
+    
+    if v_cash_method_id is null then
+      raise exception 'Cash payment method not found! Ensure payment_methods table is populated.';
+    end if;
+    
+    -- Add new column (nullable first)
+    alter table purchase_payments add column payment_method_id uuid;
+    
+    -- Try to migrate from 'method' column
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'purchase_payments'
+        and column_name = 'method'
+    ) then
+      update purchase_payments pp
+      set payment_method_id = pm.id
+      from payment_methods pm
+      where pp.payment_method_id is null
+        and (
+          (lower(pp.method) = 'cash' and pm.code = 'cash') or
+          (lower(pp.method) in ('transfer', 'transferencia') and pm.code = 'transfer') or
+          (lower(pp.method) in ('card', 'tarjeta') and pm.code = 'card') or
+          (lower(pp.method) in ('check', 'cheque') and pm.code = 'check')
+        );
+      alter table purchase_payments drop column method;
+    end if;
+
+    -- Try to migrate from 'payment_method' column
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'purchase_payments'
+        and column_name = 'payment_method'
+    ) then
+      update purchase_payments pp
+      set payment_method_id = pm.id
+      from payment_methods pm
+      where pp.payment_method_id is null
+        and (
+          (lower(pp.payment_method) = 'cash' and pm.code = 'cash') or
+          (lower(pp.payment_method) in ('transfer', 'transferencia') and pm.code = 'transfer') or
+          (lower(pp.payment_method) in ('card', 'tarjeta') and pm.code = 'card') or
+          (lower(pp.payment_method) in ('check', 'cheque') and pm.code = 'check')
+        );
+      alter table purchase_payments drop column payment_method;
+    end if;
+    
+    -- Set default for any remaining nulls
+    update purchase_payments
+    set payment_method_id = v_cash_method_id
+    where payment_method_id is null;
+    
+    -- Add foreign key constraint
+    alter table purchase_payments 
+      add constraint purchase_payments_payment_method_id_fkey 
+      foreign key (payment_method_id) 
+      references payment_methods(id);
+    
+    -- Make payment_method_id NOT NULL
+    alter table purchase_payments alter column payment_method_id set not null;
+    
+    raise notice 'Migration complete for purchase_payments!';
+  elsif not v_has_payment_method_id then
+    raise notice 'Adding payment_method_id to purchase_payments...';
+    alter table purchase_payments add column payment_method_id uuid not null references payment_methods(id);
+  end if;
+
+  raise notice 'purchase_payments migration check complete';
+end $$;
 
 create index if not exists idx_purchase_payments_invoice_id
   on purchase_payments(invoice_id);

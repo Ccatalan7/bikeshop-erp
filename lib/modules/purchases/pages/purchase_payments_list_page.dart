@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/services/payment_method_service.dart';
 import '../models/purchase_payment.dart';
 import '../services/purchase_service.dart';
 
@@ -16,10 +17,12 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
   List<PurchasePayment> _payments = [];
   List<PurchasePayment> _filtered = [];
   final TextEditingController _searchController = TextEditingController();
+  late PaymentMethodService _paymentMethodService;
 
   @override
   void initState() {
     super.initState();
+    _paymentMethodService = context.read<PaymentMethodService>();
     _loadPayments();
     _searchController.addListener(_filterPayments);
   }
@@ -70,8 +73,16 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
     setState(() => _filtered = filtered);
   }
 
-  Color _getMethodColor(String method) {
-    switch (method.toLowerCase()) {
+  String _getPaymentMethodName(String paymentMethodId) {
+    final method = _paymentMethodService.getPaymentMethodById(paymentMethodId);
+    return method?.name ?? 'Desconocido';
+  }
+
+  Color _getPaymentMethodColor(String paymentMethodId) {
+    final method = _paymentMethodService.getPaymentMethodById(paymentMethodId);
+    if (method == null) return Colors.grey;
+    
+    switch (method.code.toLowerCase()) {
       case 'cash':
         return Colors.green;
       case 'card':
@@ -82,21 +93,6 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
         return Colors.orange;
       default:
         return Colors.grey;
-    }
-  }
-
-  String _getMethodLabel(String method) {
-    switch (method.toLowerCase()) {
-      case 'cash':
-        return 'Efectivo';
-      case 'card':
-        return 'Tarjeta';
-      case 'transfer':
-        return 'Transferencia';
-      case 'check':
-        return 'Cheque';
-      default:
-        return 'Otro';
     }
   }
 
@@ -204,7 +200,7 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                               margin: const EdgeInsets.only(bottom: 12),
                               child: ListTile(
                                 leading: CircleAvatar(
-                                  backgroundColor: _getMethodColor(payment.method),
+                                  backgroundColor: _getPaymentMethodColor(payment.paymentMethodId),
                                   child: const Icon(
                                     Icons.payments,
                                     color: Colors.white,
@@ -227,15 +223,15 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: _getMethodColor(payment.method)
+                                        color: _getPaymentMethodColor(payment.paymentMethodId)
                                             .withOpacity(0.15),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
-                                        _getMethodLabel(payment.method),
+                                        _getPaymentMethodName(payment.paymentMethodId),
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: _getMethodColor(payment.method),
+                                          color: _getPaymentMethodColor(payment.paymentMethodId),
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),

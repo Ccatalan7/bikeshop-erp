@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -282,6 +283,10 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   }
 
   void _showPaymentDetails(Payment payment) {
+    final paymentMethodService = context.read<PaymentMethodService>();
+    final paymentMethod = paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
+    final methodName = paymentMethod?.name ?? 'Desconocido';
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -294,7 +299,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             children: [
               _buildDetailRow('Monto', ChileanUtils.formatCurrency(payment.amount)),
               const SizedBox(height: 12),
-              _buildDetailRow('Método', payment.method.displayName),
+              _buildDetailRow('Método', methodName),
               const SizedBox(height: 12),
               _buildDetailRow('Fecha', ChileanUtils.formatDate(payment.date)),
               if (payment.reference != null && payment.reference!.isNotEmpty) ...[
@@ -729,6 +734,10 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                 separatorBuilder: (_, __) => const Divider(height: 16),
                 itemBuilder: (context, index) {
                   final payment = payments[index];
+                  final paymentMethodService = context.read<PaymentMethodService>();
+                  final paymentMethod = paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
+                  final methodName = paymentMethod?.name ?? 'Desconocido';
+                  
                   return InkWell(
                     onTap: () => _showPaymentDetails(payment),
                     borderRadius: BorderRadius.circular(8),
@@ -748,7 +757,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                    '${payment.method.displayName} · ${ChileanUtils.formatDate(payment.date)}'),
+                                    '$methodName · ${ChileanUtils.formatDate(payment.date)}'),
                                 if (payment.reference != null &&
                                     payment.reference!.isNotEmpty)
                                   Text('Ref: ${payment.reference}',

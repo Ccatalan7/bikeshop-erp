@@ -42,6 +42,8 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
     setState(() => _isLoading = true);
     
     try {
+      // Force reload from database to get fresh data
+      await _accountingService.reloadJournalEntries();
       final entries = await _accountingService.getJournalEntries();
       
       if (!mounted) return;
@@ -91,6 +93,48 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
     if (!mounted) return;
     setState(() => _selectedType = type);
     _filterEntries();
+  }
+
+  // 🗑️ TEMP: Quick delete for testing (no confirmation)
+  Future<void> _quickDeleteEntry(JournalEntry entry) async {
+    // Check if entry has ID
+    if (entry.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error: Entrada sin ID'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Delete journal entry using accounting service
+      await _accountingService.deleteJournalEntry(entry.id!);
+      
+      if (!mounted) return;
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Asiento ${entry.entryNumber} eliminado'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 1),
+        ),
+      );
+      
+      // Reload entries
+      await _loadJournalEntries();
+    } catch (e) {
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -148,6 +192,15 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                       ),
                     ),
                     const SizedBox(width: 16),
+                    IconButton(
+                      onPressed: _isLoading ? null : _loadJournalEntries,
+                      icon: const Icon(Icons.refresh),
+                      tooltip: 'Actualizar',
+                      style: IconButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     AppButton(
                       text: 'Nuevo Asiento',
                       onPressed: () => context.push('/accounting/journal-entries/new'),
@@ -312,6 +365,17 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                       ),
                                     )
                                   : null,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // 🗑️ TEMP: Quick delete button for testing
+                                  IconButton(
+                                    onPressed: () => _quickDeleteEntry(entry),
+                                    icon: const Icon(Icons.delete_forever, color: Colors.red, size: 20),
+                                    tooltip: 'Eliminar (Testing)',
+                                  ),
+                                ],
+                              ),
                               children: [
                                 Container(
                                   margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),

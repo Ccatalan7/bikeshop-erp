@@ -48,6 +48,50 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     setState(() => _searchTerm = searchTerm);
   }
 
+  // 🗑️ TEMP: Quick delete for testing (no confirmation)
+  Future<void> _quickDeleteInvoice(Invoice invoice) async {
+    final salesService = context.read<SalesService>();
+    
+    // Check if invoice has ID
+    if (invoice.id == null || invoice.id!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error: Factura sin ID'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    try {
+      // Delete invoice directly
+      await salesService.deleteInvoice(invoice.id!);
+      
+      if (!mounted) return;
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Factura ${invoice.invoiceNumber} eliminada'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 1),
+        ),
+      );
+      
+      // Refresh list
+      await _refreshInvoices(showErrors: false);
+    } catch (e) {
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final salesService = context.watch<SalesService>();
@@ -247,6 +291,13 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                     ),
                   ),
                   const Spacer(),
+                  // 🗑️ TEMP: Quick delete button for testing
+                  IconButton(
+                    onPressed: () => _quickDeleteInvoice(invoice),
+                    icon: const Icon(Icons.delete_forever, color: Colors.red),
+                    tooltip: 'Eliminar (Testing)',
+                    iconSize: 20,
+                  ),
                   if (invoice.balance > 0 && invoice.status != InvoiceStatus.cancelled)
                     TextButton.icon(
                       onPressed: () {

@@ -3,7 +3,9 @@ import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/models/customer.dart';
+import '../../../shared/models/payment_method.dart' as pm;
 import '../../../shared/services/inventory_service.dart';
+import '../../../shared/services/payment_method_service.dart';
 import '../../sales/models/sales_models.dart' as sales_models;
 import '../../sales/services/sales_service.dart';
 import '../models/payment_method.dart';
@@ -13,6 +15,7 @@ import '../models/pos_transaction.dart';
 class POSService extends ChangeNotifier {
   InventoryService _inventoryService;
   SalesService _salesService;
+  PaymentMethodService _paymentMethodService;
   final Uuid _uuid = const Uuid();
 
   // Current sale state
@@ -23,18 +26,24 @@ class POSService extends ChangeNotifier {
   POSService({
     required InventoryService inventoryService,
     required SalesService salesService,
+    required PaymentMethodService paymentMethodService,
   })  : _inventoryService = inventoryService,
-        _salesService = salesService;
+        _salesService = salesService,
+        _paymentMethodService = paymentMethodService;
 
   void updateDependencies({
     InventoryService? inventoryService,
     SalesService? salesService,
+    PaymentMethodService? paymentMethodService,
   }) {
     if (inventoryService != null) {
       _inventoryService = inventoryService;
     }
     if (salesService != null) {
       _salesService = salesService;
+    }
+    if (paymentMethodService != null) {
+      _paymentMethodService = paymentMethodService;
     }
   }
 
@@ -234,12 +243,33 @@ class POSService extends ChangeNotifier {
           continue;
         }
 
+        // Map POS payment method to payment_method_id
+        String? paymentMethodId;
+        switch (payment.method.type) {
+          case PaymentType.cash:
+            paymentMethodId = _paymentMethodService.getPaymentMethodByCode('cash')?.id;
+            break;
+          case PaymentType.card:
+            paymentMethodId = _paymentMethodService.getPaymentMethodByCode('card')?.id;
+            break;
+          case PaymentType.transfer:
+            paymentMethodId = _paymentMethodService.getPaymentMethodByCode('transfer')?.id;
+            break;
+          case PaymentType.voucher:
+            paymentMethodId = _paymentMethodService.getPaymentMethodByCode('cash')?.id; // fallback
+            break;
+        }
+
+        if (paymentMethodId == null) {
+          throw Exception('Payment method not found in database');
+        }
+
         final salesPayment = sales_models.Payment(
           invoiceId: invoiceId,
           invoiceReference: savedInvoice.invoiceNumber.isNotEmpty
               ? savedInvoice.invoiceNumber
               : invoiceId,
-          method: _mapPaymentMethod(payment.method),
+          paymentMethodId: paymentMethodId,
           amount: appliedAmount,
           date: timestamp,
           reference: payment.reference,
@@ -325,19 +355,6 @@ class POSService extends ChangeNotifier {
   // Get available payment methods
   List<PaymentMethod> getAvailablePaymentMethods() {
     return PaymentMethod.defaultMethods.where((method) => method.isActive).toList();
-  }
-
-  sales_models.PaymentMethod _mapPaymentMethod(PaymentMethod method) {
-    switch (method.type) {
-      case PaymentType.cash:
-        return sales_models.PaymentMethod.cash;
-      case PaymentType.card:
-        return sales_models.PaymentMethod.card;
-      case PaymentType.transfer:
-        return sales_models.PaymentMethod.transfer;
-      case PaymentType.voucher:
-        return sales_models.PaymentMethod.other;
-    }
   }
 
   String _buildInvoiceNumber(DateTime timestamp) {

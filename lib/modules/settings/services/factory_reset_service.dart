@@ -40,8 +40,8 @@ class FactoryResetService {
       // 6. Delete purchase invoices
       await safeDelete('purchase_invoices');
 
-      // 7. Delete POS transactions
-      await safeDelete('pos_transactions');
+      // 7. Delete sales orders (before customers due to FK)
+      await safeDelete('sales_orders');
 
       // 8. Delete stock movements
       await safeDelete('stock_movements');
@@ -52,7 +52,7 @@ class FactoryResetService {
       // 10. SKIP categories (keep for testing)
       // await safeDelete('categories');
 
-      // 11. Delete customers
+      // 11. Delete customers (after sales_orders)
       await safeDelete('customers');
 
       // 12. SKIP suppliers (keep for testing)
@@ -67,11 +67,11 @@ class FactoryResetService {
       // 15. Delete contracts
       await safeDelete('contracts');
 
-      // 16. Delete attendance records
-      await safeDelete('attendance');
+      // 16. Delete attendance records (correct table name)
+      await safeDelete('attendance_records');
 
-      // 17. Delete payroll
-      await safeDelete('payroll');
+      // 17. Delete payroll (correct table name)
+      await safeDelete('payroll_runs');
 
       // 18. Delete warehouses (if exists)
       await safeDelete('warehouses');

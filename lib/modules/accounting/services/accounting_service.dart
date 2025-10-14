@@ -214,6 +214,17 @@ class AccountingService extends ChangeNotifier {
     await _journalEntryService.reverseEntry(entryId);
   }
 
+  /// Delete a journal entry (TEMP: for testing)
+  Future<void> deleteJournalEntry(String entryId) async {
+    await initialize();
+    await _journalEntryService.deleteEntry(entryId);
+  }
+
+  /// Force reload of journal entries from database
+  Future<void> reloadJournalEntries({int limit = 100}) async {
+    await _journalEntryService.reload(limit: limit);
+  }
+
   @override
   void dispose() {
     _chartOfAccountsService.removeListener(_notifyListeners);

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/models/payment_method.dart';
+import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
@@ -27,9 +29,10 @@ class _PaymentFormState extends State<PaymentForm> {
   final TextEditingController _referenceController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
-  PaymentMethod _method = PaymentMethod.cash;
+  PaymentMethod? _selectedPaymentMethod;
   DateTime _paymentDate = DateTime.now();
   bool _isSaving = false;
+  bool _isLoadingMethods = true;
 
   @override
   void initState() {
@@ -37,6 +40,21 @@ class _PaymentFormState extends State<PaymentForm> {
     _amountController = TextEditingController(
       text: widget.invoice.balance.toStringAsFixed(0),
     );
+    _loadPaymentMethods();
+  }
+
+  Future<void> _loadPaymentMethods() async {
+    final paymentMethodService = context.read<PaymentMethodService>();
+    await paymentMethodService.loadPaymentMethods();
+    if (mounted) {
+      setState(() {
+        _isLoadingMethods = false;
+        // Default to first payment method (usually cash)
+        if (paymentMethodService.paymentMethods.isNotEmpty) {
+          _selectedPaymentMethod = paymentMethodService.paymentMethods.first;
+        }
+      });
+    }
   }
 
   @override
@@ -61,6 +79,13 @@ class _PaymentFormState extends State<PaymentForm> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_selectedPaymentMethod == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona un método de pago.')),
+      );
       return;
     }
 
@@ -97,8 +122,8 @@ class _PaymentFormState extends State<PaymentForm> {
         invoiceReference: widget.invoice.invoiceNumber.isNotEmpty
             ? widget.invoice.invoiceNumber
             : null,
-        method: _method,
-  amount: effectiveAmount,
+        paymentMethodId: _selectedPaymentMethod!.id,
+        amount: effectiveAmount,
         date: _paymentDate,
         reference: _referenceController.text.trim().isEmpty
             ? null
@@ -139,6 +164,8 @@ class _PaymentFormState extends State<PaymentForm> {
   @override
   Widget build(BuildContext context) {
     final invoice = widget.invoice;
+    final paymentMethodService = context.watch<PaymentMethodService>();
+
     return SizedBox(
       width: 480,
       child: Form(
@@ -190,21 +217,44 @@ class _PaymentFormState extends State<PaymentForm> {
               },
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<PaymentMethod>(
-              value: _method,
-              decoration: const InputDecoration(labelText: 'Medio de pago'),
-              items: PaymentMethod.values
-                  .map((method) => DropdownMenuItem(
-                        value: method,
-                        child: Text(method.displayName),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _method = value);
-                }
-              },
-            ),
+            if (_isLoadingMethods)
+              const LinearProgressIndicator()
+            else if (paymentMethodService.paymentMethods.isEmpty)
+              const Text(
+                'No hay métodos de pago disponibles',
+                style: TextStyle(color: Colors.red),
+              )
+            else
+              DropdownButtonFormField<PaymentMethod>(
+                value: _selectedPaymentMethod,
+                decoration: const InputDecoration(labelText: 'Medio de pago'),
+                items: paymentMethodService.paymentMethods
+                    .map((method) => DropdownMenuItem(
+                          value: method,
+                          child: Row(
+                            children: [
+                              if (method.icon != null) ...[
+                                Icon(_getIconForPaymentMethod(method.icon!),
+                                    size: 18),
+                                const SizedBox(width: 8),
+                              ],
+                              Text(method.name),
+                            ],
+                          ),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _selectedPaymentMethod = value);
+                  }
+                },
+                validator: (value) {
+                  if (value == null) {
+                    return 'Selecciona un método de pago';
+                  }
+                  return null;
+                },
+              ),
             const SizedBox(height: 12),
             InkWell(
               onTap: _selectDate,
@@ -226,13 +276,30 @@ class _PaymentFormState extends State<PaymentForm> {
               ),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _referenceController,
-              decoration: const InputDecoration(
-                labelText: 'Referencia',
-                hintText: 'Número de documento, comprobante, etc.',
+            if (_selectedPaymentMethod?.requiresReference == true) ...[
+              TextFormField(
+                controller: _referenceController,
+                decoration: const InputDecoration(
+                  labelText: 'Referencia *',
+                  hintText: 'Número de transferencia, cheque, etc.',
+                ),
+                validator: (value) {
+                  if (_selectedPaymentMethod?.requiresReference == true &&
+                      (value == null || value.trim().isEmpty)) {
+                    return 'Este método de pago requiere una referencia';
+                  }
+                  return null;
+                },
               ),
-            ),
+            ] else ...[
+              TextFormField(
+                controller: _referenceController,
+                decoration: const InputDecoration(
+                  labelText: 'Referencia',
+                  hintText: 'Número de documento, comprobante, etc. (opcional)',
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             TextFormField(
               controller: _notesController,
@@ -248,17 +315,32 @@ class _PaymentFormState extends State<PaymentForm> {
                 onPressed: _isSaving ? null : _submit,
                 icon: _isSaving
                     ? const SizedBox(
-                        height: 16,
                         width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.check),
-                label: const Text('Marcar como pagado'),
+                label: const Text('Registrar pago'),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  IconData _getIconForPaymentMethod(String iconName) {
+    switch (iconName.toLowerCase()) {
+      case 'cash':
+        return Icons.attach_money;
+      case 'bank':
+        return Icons.account_balance;
+      case 'credit_card':
+        return Icons.credit_card;
+      case 'receipt':
+        return Icons.receipt;
+      default:
+        return Icons.payment;
+    }
   }
 }

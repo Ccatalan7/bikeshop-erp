@@ -8,6 +8,7 @@ import 'shared/themes/app_theme.dart';
 import 'shared/services/auth_service.dart';
 import 'shared/services/database_service.dart';
 import 'shared/services/inventory_service.dart';
+import 'shared/services/payment_method_service.dart';
 import 'shared/config/supabase_config.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/crm/services/customer_service.dart';
@@ -55,6 +56,7 @@ class VinabikeApp extends StatelessWidget {
         // Core services
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider(create: (_) => DatabaseService()),
+        ChangeNotifierProvider(create: (_) => PaymentMethodService()),
         
         // Business services
         ChangeNotifierProvider(create: (context) => InventoryService(
@@ -84,20 +86,23 @@ class VinabikeApp extends StatelessWidget {
           },
         ),
         
-        // POS service depends on Inventory and Sales
-        ChangeNotifierProxyProvider2<InventoryService, SalesService, POSService>(
+        // POS service depends on Inventory, Sales, and PaymentMethod
+        ChangeNotifierProxyProvider3<InventoryService, SalesService, PaymentMethodService, POSService>(
           create: (context) => POSService(
             inventoryService: context.read<InventoryService>(),
             salesService: context.read<SalesService>(),
+            paymentMethodService: context.read<PaymentMethodService>(),
           ),
-          update: (context, inventoryService, salesService, previous) {
+          update: (context, inventoryService, salesService, paymentMethodService, previous) {
             final service = previous ?? POSService(
               inventoryService: inventoryService,
               salesService: salesService,
+              paymentMethodService: paymentMethodService,
             );
             service.updateDependencies(
               inventoryService: inventoryService,
               salesService: salesService,
+              paymentMethodService: paymentMethodService,
             );
             return service;
           },

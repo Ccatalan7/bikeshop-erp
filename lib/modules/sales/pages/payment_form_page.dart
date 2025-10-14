@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
@@ -90,10 +91,13 @@ class _PaymentsPageState extends State<PaymentsPage> {
   List<Payment> _filterPayments(List<Payment> payments, String term) {
     if (term.isEmpty) return payments;
     final query = term.toLowerCase();
+    final paymentMethodService = context.read<PaymentMethodService>();
+    
     return payments.where((payment) {
       final reference = payment.reference?.toLowerCase() ?? '';
       final amount = payment.amount.toStringAsFixed(0);
-      final method = payment.method.displayName.toLowerCase();
+      final paymentMethod = paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
+      final method = paymentMethod?.name.toLowerCase() ?? '';
       return reference.contains(query) || amount.contains(query) || method.contains(query);
     }).toList();
   }
@@ -121,6 +125,10 @@ class _PaymentsPageState extends State<PaymentsPage> {
   }
 
   Widget _buildPaymentTile(Payment payment) {
+    final paymentMethodService = context.read<PaymentMethodService>();
+    final paymentMethod = paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
+    final methodName = paymentMethod?.name ?? 'Desconocido';
+    
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
@@ -158,7 +166,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${payment.method.displayName} · ${ChileanUtils.formatDate(payment.date)}'),
+            Text('$methodName · ${ChileanUtils.formatDate(payment.date)}'),
             if (payment.reference != null && payment.reference!.isNotEmpty)
               Text('Ref: ${payment.reference}'),
           ],

@@ -263,50 +263,57 @@ class InvoiceItem {
   }
 }
 
+/// Sales payment model matching sales_payments table in core_schema.sql
+/// CRITICAL: Uses payment_method_id (uuid) to reference payment_methods table
 class Payment {
-  final String? id;
-  final String invoiceId;
-  final String? invoiceReference;
-  final PaymentMethod method;
+  final String? id; // uuid
+  final String invoiceId; // uuid - references sales_invoices(id)
+  final String? invoiceReference; // invoice number for display
+  final String paymentMethodId; // uuid - references payment_methods(id)
   final double amount;
   final DateTime date;
-  final String? reference;
+  final String? reference; // bank reference, check number, etc.
   final String? notes;
   final DateTime createdAt;
+  final DateTime updatedAt;
 
   Payment({
     this.id,
     required this.invoiceId,
     this.invoiceReference,
-    required this.method,
+    required this.paymentMethodId,
     required this.amount,
     required this.date,
     this.reference,
     this.notes,
     DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
 
   Payment copyWith({
     String? id,
     String? invoiceId,
     String? invoiceReference,
-    PaymentMethod? method,
+    String? paymentMethodId,
     double? amount,
     DateTime? date,
     String? reference,
     String? notes,
     DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return Payment(
       id: id ?? this.id,
       invoiceId: invoiceId ?? this.invoiceId,
       invoiceReference: invoiceReference ?? this.invoiceReference,
-      method: method ?? this.method,
+      paymentMethodId: paymentMethodId ?? this.paymentMethodId,
       amount: amount ?? this.amount,
       date: date ?? this.date,
       reference: reference ?? this.reference,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -315,12 +322,13 @@ class Payment {
       id: json['id']?.toString(),
       invoiceId: json['invoice_id']?.toString() ?? '',
       invoiceReference: json['invoice_reference'] as String?,
-      method: PaymentMethodX.fromName(json['method']) ?? PaymentMethod.cash,
+      paymentMethodId: json['payment_method_id']?.toString() ?? '',
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
       date: _parseDate(json['date']),
       reference: json['reference'] as String?,
       notes: json['notes'] as String?,
       createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
     );
   }
 
@@ -329,51 +337,11 @@ class Payment {
       if (id != null) 'id': id,
       'invoice_id': invoiceId,
       'invoice_reference': invoiceReference,
-      'method': method.name,
+      'payment_method_id': paymentMethodId,
       'amount': amount,
       'date': date.toIso8601String(),
       'reference': reference,
       'notes': notes,
     };
-  }
-}
-
-enum PaymentMethod {
-  cash,
-  card,
-  transfer,
-  check,
-  other,
-}
-
-extension PaymentMethodX on PaymentMethod {
-  static PaymentMethod? fromName(dynamic raw) {
-    if (raw == null) return null;
-    final value = raw.toString();
-    return PaymentMethod.values.firstWhere(
-      (method) => method.name == value,
-      orElse: () {
-        final normalized = value.toLowerCase();
-        return PaymentMethod.values.firstWhere(
-          (method) => method.name.toLowerCase() == normalized,
-          orElse: () => PaymentMethod.cash,
-        );
-      },
-    );
-  }
-
-  String get displayName {
-    switch (this) {
-      case PaymentMethod.cash:
-        return 'Efectivo';
-      case PaymentMethod.card:
-        return 'Tarjeta';
-      case PaymentMethod.transfer:
-        return 'Transferencia';
-      case PaymentMethod.check:
-        return 'Cheque';
-      case PaymentMethod.other:
-        return 'Otro';
-    }
   }
 }
