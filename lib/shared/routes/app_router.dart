@@ -349,7 +349,9 @@ class AppRouter {
       GoRoute(
         path: '/purchases/new',
         pageBuilder: (context, state) {
-          final isPrepayment = state.uri.queryParameters['prepayment'] == 'true';
+          final prepaymentParam = state.uri.queryParameters['prepayment'];
+          final isPrepayment = prepaymentParam == 'true';
+          print('🔍 DEBUG: prepayment param = "$prepaymentParam", isPrepayment = $isPrepayment');
           return _buildPageWithNoTransition(
             context,
             state,

@@ -155,7 +155,7 @@ class PurchaseInvoice {
 			notes: json['notes'] as String?,
 			status: PurchaseInvoiceStatusX.fromName(json['status']) ?? PurchaseInvoiceStatus.draft,
 			subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0,
-			ivaAmount: (json['iva_amount'] as num?)?.toDouble() ?? 0,
+			ivaAmount: (json['tax'] as num?)?.toDouble() ?? 0,  // Database column is 'tax'
 			total: (json['total'] as num?)?.toDouble() ?? 0,
 			items: items.map((item) => PurchaseInvoiceItem.fromJson(_ensureMap(item))).toList(),
 			additionalCosts: extraCosts.map((cost) => PurchaseAdditionalCost.fromJson(_ensureMap(cost))).toList(),
@@ -186,7 +186,7 @@ class PurchaseInvoice {
 			'notes': notes,
 			'status': status.name,
 			'subtotal': subtotal,
-			'iva_amount': ivaAmount,
+			'tax': ivaAmount,  // Database column is 'tax', not 'iva_amount'
 			'total': total,
 			'items': items.map((item) => item.toJson()).toList(),
 			'additional_costs': additionalCosts.map((cost) => cost.toJson()).toList(),

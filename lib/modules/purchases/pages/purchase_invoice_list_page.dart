@@ -198,7 +198,22 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filtered.isEmpty
-                    ? _EmptyState(onCreate: () => context.push('/purchases/new'))
+                    ? _EmptyState(
+                        onCreate: () async {
+                          // Show model selection dialog
+                          final isPrepayment = await showPurchaseModelSelectionDialog(context);
+                          
+                          if (isPrepayment != null && mounted) {
+                            // Navigate to form with model selection
+                            final created = await context.push<bool>(
+                              '/purchases/new?prepayment=$isPrepayment',
+                            );
+                            if (created == true) {
+                              _loadInvoices(refresh: true);
+                            }
+                          }
+                        },
+                      )
                     : _buildList(),
           ),
         ],
@@ -395,14 +410,7 @@ class _EmptyState extends StatelessWidget {
           AppButton(
             text: 'Crear factura',
             icon: Icons.add,
-            onPressed: () async {
-              // Show model selection dialog
-              final isPrepayment = await showPurchaseModelSelectionDialog(context);
-              
-              if (isPrepayment != null && context.mounted) {
-                onCreate();
-              }
-            },
+            onPressed: onCreate,
           ),
         ],
       ),

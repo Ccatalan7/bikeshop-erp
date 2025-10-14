@@ -58,6 +58,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   @override
   void initState() {
     super.initState();
+    print('🔍 DEBUG Form: isPrepayment = ${widget.isPrepayment}');
     _dueDate = _issueDate.add(const Duration(days: 30));
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
   }
@@ -388,6 +389,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           ? _loadedInvoice!.prepaymentModel 
           : widget.isPrepayment,
     );
+
+    print('🔍 DEBUG Save: prepaymentModel = ${invoice.prepaymentModel}');
+    print('🔍 DEBUG Save: invoice toJson = ${invoice.toJson()}');
 
     setState(() => _isSaving = true);
 

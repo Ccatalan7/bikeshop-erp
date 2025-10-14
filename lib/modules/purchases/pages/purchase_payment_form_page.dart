@@ -4,10 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/models/payment_method.dart';
+import '../../../shared/services/payment_method_service.dart';
 import '../models/purchase_invoice.dart';
 
 /// Payment Form Page for Purchase Invoices
 /// Handles payment registration for both Standard and Prepayment models
+/// Uses dynamic payment methods from database
 class PurchasePaymentFormPage extends StatefulWidget {
   final String invoiceId;
   final PurchaseInvoice invoice;
@@ -27,21 +30,21 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
   final _amountController = TextEditingController();
   final _referenceController = TextEditingController();
   final _notesController = TextEditingController();
+  final _paymentMethodService = PaymentMethodService();
 
-  String _paymentMethod = 'transfer';
-  String? _selectedBankAccount;
+  PaymentMethod? _selectedPaymentMethod;
   DateTime _paymentDate = DateTime.now();
   bool _isSaving = false;
 
-  List<Map<String, dynamic>> _bankAccounts = [];
-  bool _isLoadingAccounts = true;
+  List<PaymentMethod> _paymentMethods = [];
+  bool _isLoadingPaymentMethods = true;
 
   @override
   void initState() {
     super.initState();
     // Pre-fill amount with invoice balance
     _amountController.text = widget.invoice.balance.toStringAsFixed(0);
-    _loadBankAccounts();
+    _loadPaymentMethods();
   }
 
   @override
@@ -52,32 +55,25 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
     super.dispose();
   }
 
-  Future<void> _loadBankAccounts() async {
+  Future<void> _loadPaymentMethods() async {
     try {
-      // Load cash and bank accounts (codes starting with 110 or 111)
-      final response = await Supabase.instance.client
-          .from('accounts')
-          .select()
-          .eq('type', 'asset')
-          .or('code.eq.1101,code.eq.1110,code.like.110%,code.like.111%')
-          .eq('is_active', true)
-          .order('code');
-
+      await _paymentMethodService.loadPaymentMethods();
       if (mounted) {
         setState(() {
-          _bankAccounts = List<Map<String, dynamic>>.from(response);
-          if (_bankAccounts.isNotEmpty) {
-            _selectedBankAccount = _bankAccounts.first['id'].toString();
+          _paymentMethods = _paymentMethodService.paymentMethods;
+          // Select first payment method by default (usually "Efectivo")
+          if (_paymentMethods.isNotEmpty) {
+            _selectedPaymentMethod = _paymentMethods.first;
           }
-          _isLoadingAccounts = false;
+          _isLoadingPaymentMethods = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoadingAccounts = false);
+        setState(() => _isLoadingPaymentMethods = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error loading bank accounts: $e'),
+            content: Text('Error loading payment methods: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -88,10 +84,22 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
   Future<void> _savePayment() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_selectedBankAccount == null) {
+    if (_selectedPaymentMethod == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Debe seleccionar una cuenta bancaria'),
+          content: Text('Debe seleccionar un método de pago'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Validate reference if required
+    if (_selectedPaymentMethod!.requiresReference && 
+        _referenceController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_selectedPaymentMethod!.name} requiere número de referencia'),
           backgroundColor: Colors.red,
         ),
       );
@@ -138,13 +146,12 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
     setState(() => _isSaving = true);
 
     try {
-      // Create payment record
+      // Create payment record - use correct column names from core_schema.sql
       final paymentData = {
-        'purchase_invoice_id': widget.invoiceId,
-        'payment_date': _paymentDate.toIso8601String(),
+        'invoice_id': widget.invoiceId,  // Correct column name (not purchase_invoice_id)
+        'date': _paymentDate.toIso8601String(),
         'amount': amount,
-        'payment_method': _paymentMethod,
-        'bank_account_id': _selectedBankAccount,
+        'payment_method_id': _selectedPaymentMethod!.id,  // UUID foreign key
         'reference': _referenceController.text.trim().isEmpty 
             ? null 
             : _referenceController.text.trim(),
@@ -153,31 +160,14 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
             : _notesController.text.trim(),
       };
 
-      final paymentResponse = await Supabase.instance.client
-          .from('purchase_payments')
-          .insert(paymentData)
-          .select()
-          .single();
-
-      final paymentId = paymentResponse['id'];
-
-      // Create journal entry for payment
-      await _createPaymentJournalEntry(paymentId, amount);
-
-      // Update invoice paid_amount and balance
-      final newPaidAmount = widget.invoice.paidAmount + amount;
-      final newBalance = widget.invoice.total - newPaidAmount;
-      final newStatus = newBalance <= 0.01 ? 'paid' : widget.invoice.status.name;
-
       await Supabase.instance.client
-          .from('purchase_invoices')
-          .update({
-            'paid_amount': newPaidAmount,
-            'balance': newBalance,
-            'status': newStatus,
-            if (newStatus == 'paid') 'paid_date': DateTime.now().toIso8601String(),
-          })
-          .eq('id', widget.invoiceId);
+          .from('purchase_payments')
+          .insert(paymentData);
+
+      // Trigger automatically:
+      // 1. Creates journal entry via handle_purchase_payment_change()
+      // 2. Updates invoice paid_amount and balance via recalculate_purchase_invoice_payments()
+      // 3. Updates invoice status if fully paid
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -204,67 +194,6 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
     }
   }
 
-  Future<void> _createPaymentJournalEntry(String paymentId, double amount) async {
-    // Get AP account (2120)
-    final apAccount = await Supabase.instance.client
-        .from('accounts')
-        .select()
-        .eq('code', '2120')
-        .single();
-
-    // Get selected bank account details (if bank account is selected)
-    Map<String, dynamic>? bankAccount;
-    if (_selectedBankAccount != null) {
-      bankAccount = await Supabase.instance.client
-          .from('accounts')
-          .select()
-          .eq('id', _selectedBankAccount!)
-          .single();
-    }
-
-    // Create journal entry
-    final journalData = {
-      'date': _paymentDate.toIso8601String(),
-      'description': 'Pago de factura ${widget.invoice.invoiceNumber}',
-      'reference': 'PAGO-${widget.invoice.invoiceNumber}',
-      'entry_type': 'manual',
-    };
-
-    final journalResponse = await Supabase.instance.client
-        .from('journal_entries')
-        .insert(journalData)
-        .select()
-        .single();
-
-    final journalEntryId = journalResponse['id'];
-
-    // Create journal lines
-    final lines = [
-      {
-        'entry_id': journalEntryId,
-        'account_id': apAccount['id'],
-        'account_code': apAccount['code'],
-        'account_name': apAccount['name'],
-        'debit_amount': amount,
-        'credit_amount': 0.0,
-        'description': 'Pago a proveedor ${widget.invoice.supplierName}',
-      },
-      if (bankAccount != null) {
-        'entry_id': journalEntryId,
-        'account_id': bankAccount['id'],
-        'account_code': bankAccount['code'],
-        'account_name': bankAccount['name'],
-        'debit_amount': 0.0,
-        'credit_amount': amount,
-        'description': 'Pago de factura ${widget.invoice.invoiceNumber}',
-      },
-    ];
-
-    await Supabase.instance.client
-        .from('journal_entry_lines')
-        .insert(lines);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -284,7 +213,7 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
             ),
         ],
       ),
-      body: _isLoadingAccounts
+      body: _isLoadingPaymentMethods
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -424,86 +353,71 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
             ),
             const SizedBox(height: 16),
 
-            // Payment Method
-            DropdownButtonFormField<String>(
-              value: _paymentMethod,
+            // Payment Method (Dynamic from database)
+            DropdownButtonFormField<PaymentMethod>(
+              value: _selectedPaymentMethod,
               decoration: const InputDecoration(
                 labelText: 'Método de Pago *',
                 prefixIcon: Icon(Icons.payment),
               ),
-              items: const [
-                DropdownMenuItem(value: 'cash', child: Text('Efectivo')),
-                DropdownMenuItem(value: 'transfer', child: Text('Transferencia')),
-                DropdownMenuItem(value: 'check', child: Text('Cheque')),
-                DropdownMenuItem(value: 'card', child: Text('Tarjeta')),
-                DropdownMenuItem(value: 'other', child: Text('Otro')),
-              ],
+              items: _paymentMethods.map((method) {
+                return DropdownMenuItem<PaymentMethod>(
+                  value: method,
+                  child: Row(
+                    children: [
+                      Icon(_getPaymentMethodIcon(method.icon), size: 20),
+                      const SizedBox(width: 8),
+                      Text(method.name),
+                    ],
+                  ),
+                );
+              }).toList(),
               onChanged: (value) {
-                if (value != null) {
-                  setState(() => _paymentMethod = value);
+                setState(() => _selectedPaymentMethod = value);
+              },
+              validator: (value) {
+                if (value == null) {
+                  return 'Seleccione un método de pago';
                 }
+                return null;
               },
             ),
             const SizedBox(height: 16),
 
-            // Bank Account
-            if (_bankAccounts.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange[300]!),
+            // Reference field (conditional based on payment method)
+            if (_selectedPaymentMethod?.requiresReference == true) ...[
+              TextFormField(
+                controller: _referenceController,
+                decoration: InputDecoration(
+                  labelText: 'Referencia *',
+                  hintText: 'Ej: Transferencia #12345',
+                  prefixIcon: const Icon(Icons.numbers),
+                  helperText: 'Campo requerido para ${_selectedPaymentMethod?.name}',
+                  helperStyle: const TextStyle(color: Colors.red),
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.warning, color: Colors.orange[700]),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'No hay cuentas bancarias disponibles. '
-                        'Cree una cuenta de tipo Activo con código 11xx.',
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              DropdownButtonFormField<String>(
-                value: _selectedBankAccount,
-                decoration: const InputDecoration(
-                  labelText: 'Cuenta Bancaria *',
-                  prefixIcon: Icon(Icons.account_balance),
-                ),
-                items: _bankAccounts.map((account) {
-                  return DropdownMenuItem<String>(
-                    value: account['id'].toString(),
-                    child: Text('${account['code']} - ${account['name']}'),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() => _selectedBankAccount = value);
-                },
+                maxLength: 100,
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Seleccione una cuenta bancaria';
+                  if (_selectedPaymentMethod?.requiresReference == true &&
+                      (value == null || value.trim().isEmpty)) {
+                    return 'La referencia es requerida para ${_selectedPaymentMethod?.name}';
                   }
                   return null;
                 },
               ),
-            const SizedBox(height: 16),
-
-            // Reference
-            TextFormField(
-              controller: _referenceController,
-              decoration: const InputDecoration(
-                labelText: 'Referencia',
-                hintText: 'Ej: Transferencia #12345',
-                prefixIcon: Icon(Icons.numbers),
+              const SizedBox(height: 8),
+            ],
+            if (_selectedPaymentMethod?.requiresReference != true) ...[
+              TextFormField(
+                controller: _referenceController,
+                decoration: const InputDecoration(
+                  labelText: 'Referencia (opcional)',
+                  hintText: 'Ej: Comprobante #12345',
+                  prefixIcon: Icon(Icons.numbers),
+                ),
+                maxLength: 100,
               ),
-              maxLength: 100,
-            ),
-            const SizedBox(height: 8),
+              const SizedBox(height: 8),
+            ],
 
             // Notes
             TextFormField(
@@ -551,5 +465,20 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
         ),
       ],
     );
+  }
+
+  IconData _getPaymentMethodIcon(String? iconName) {
+    switch (iconName?.toLowerCase()) {
+      case 'cash':
+        return Icons.money;
+      case 'bank':
+        return Icons.account_balance;
+      case 'credit_card':
+        return Icons.credit_card;
+      case 'receipt':
+        return Icons.receipt;
+      default:
+        return Icons.payment;
+    }
   }
 }

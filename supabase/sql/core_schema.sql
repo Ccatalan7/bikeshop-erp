@@ -1105,7 +1105,8 @@ begin
 
   select id,
          total,
-         status
+         status,
+         prepayment_model
     into v_invoice
     from public.purchase_invoices
    where id = p_invoice_id
@@ -1122,16 +1123,60 @@ begin
 
   v_balance := greatest(coalesce(v_invoice.total, 0) - v_total, 0);
 
+  -- Status transition logic based on prepayment model
+  -- Standard model: Draft→Sent→Confirmed→Received→Paid
+  -- Prepayment model: Draft→Sent→Confirmed→Paid→Received
+  
   if v_invoice.status = 'cancelled' then
+    -- Cancelled invoices stay cancelled regardless of payments
+    v_new_status := 'cancelled';
+    
+  elsif v_invoice.status IN ('draft', 'sent') then
+    -- Pre-confirmation statuses: stay as-is regardless of payments
     v_new_status := v_invoice.status;
-  elsif v_invoice.status = 'draft' and v_total = 0 then
-    v_new_status := 'draft';
+    
   elsif v_total >= coalesce(v_invoice.total, 0) then
+    -- Fully paid
     v_new_status := 'paid';
+    
   elsif v_total > 0 then
-    v_new_status := 'received';
+    -- Partially paid
+    if v_invoice.prepayment_model then
+      -- Prepayment model: partial payment keeps it at 'paid' if was paid/received
+      if v_invoice.status IN ('paid', 'received') then
+        v_new_status := 'paid';
+      else
+        v_new_status := 'confirmed';
+      end if;
+    else
+      -- Standard model: partial payment keeps it at 'received' if was received/paid
+      if v_invoice.status IN ('received', 'paid') then
+        v_new_status := 'received';
+      else
+        v_new_status := 'confirmed';
+      end if;
+    end if;
+    
   else
-    v_new_status := v_invoice.status;
+    -- No payments (v_total = 0): revert to previous status in workflow
+    if v_invoice.prepayment_model then
+      -- Prepayment model: Confirmed→Paid→Received
+      if v_invoice.status IN ('paid', 'received') then
+        -- If was paid or received, revert to confirmed (no payment means not paid yet)
+        v_new_status := 'confirmed';
+      else
+        v_new_status := v_invoice.status;
+      end if;
+    else
+      -- Standard model: Confirmed→Received→Paid
+      if v_invoice.status = 'paid' then
+        -- If was paid, revert to received (goods received but payment removed)
+        v_new_status := 'received';
+      else
+        -- If at received/confirmed, stay there (never reached paid)
+        v_new_status := v_invoice.status;
+      end if;
+    end if;
   end if;
 
   update public.purchase_invoices
@@ -2058,10 +2103,13 @@ create table if not exists purchase_invoices (
   reference text,
   notes text,
   status text not null default 'draft'
-    check (status in ('draft','received','paid','cancelled')),
+    check (status in ('draft','sent','confirmed','received','paid','cancelled')),
   subtotal numeric(12,2) not null default 0,
-  iva_amount numeric(12,2) not null default 0,
+  tax numeric(12,2) not null default 0,
   total numeric(12,2) not null default 0,
+  paid_amount numeric(12,2) not null default 0,
+  balance numeric(12,2) not null default 0,
+  prepayment_model boolean not null default false,
   items jsonb not null default '[]'::jsonb,
   additional_costs jsonb not null default '[]'::jsonb,
   created_at timestamp with time zone not null default now(),
@@ -2079,12 +2127,19 @@ alter table public.purchase_invoices
   add column if not exists notes text,
   add column if not exists status text not null default 'draft',
   add column if not exists subtotal numeric(12,2) not null default 0,
-  add column if not exists iva_amount numeric(12,2) not null default 0,
+  add column if not exists tax numeric(12,2) not null default 0,
   add column if not exists total numeric(12,2) not null default 0,
+  add column if not exists paid_amount numeric(12,2) not null default 0,
+  add column if not exists balance numeric(12,2) not null default 0,
+  add column if not exists prepayment_model boolean not null default false,
   add column if not exists items jsonb not null default '[]'::jsonb,
   add column if not exists additional_costs jsonb not null default '[]'::jsonb,
   add column if not exists created_at timestamp with time zone not null default now(),
-  add column if not exists updated_at timestamp with time zone not null default now();
+  add column if not exists updated_at timestamp with time zone not null default now(),
+  add column if not exists tax numeric(12,2) not null default 0,
+  add column if not exists paid_amount numeric(12,2) not null default 0,
+  add column if not exists balance numeric(12,2) not null default 0,
+  add column if not exists prepayment_model boolean not null default false;
 
 do $$
 begin
@@ -2096,7 +2151,7 @@ begin
   ) then
     alter table public.purchase_invoices
       add constraint purchase_invoices_status_check
-        check (status in ('draft','received','paid','cancelled'));
+        check (status in ('draft','sent','confirmed','received','paid','cancelled'));
   end if;
 end $$;
 
@@ -3094,86 +3149,117 @@ security definer
 set search_path = public
 as $$
 declare
-  v_non_posted constant text[] := array[
-    'draft', 'sent', 'cancelled'
-  ];
   v_old_status text;
   v_new_status text;
-  v_old_posted boolean;
-  v_new_posted boolean;
 begin
   raise notice 'handle_purchase_invoice_change: TG_OP=%', TG_OP;
 
   if TG_OP = 'INSERT' then
     v_new_status := NEW.status;
-    v_new_posted := v_new_status <> ALL(v_non_posted);
-
     raise notice 'handle_purchase_invoice_change: INSERT invoice %, status %', NEW.id, v_new_status;
-
-    if v_new_posted then
-      raise notice 'handle_purchase_invoice_change: INSERT with posted status, consuming inventory';
+    
+    -- Inventory: ONLY if inserted directly as 'received' (rare case)
+    if v_new_status = 'received' then
+      raise notice 'handle_purchase_invoice_change: INSERT at received, consuming inventory';
       perform public.consume_purchase_invoice_inventory(NEW);
-      perform public.create_purchase_invoice_journal_entry(NEW);
-    else
-      raise notice 'handle_purchase_invoice_change: INSERT with non-posted status (%), skipping', v_new_status;
     end if;
-
+    
+    -- Journal: If inserted at 'confirmed' or later
+    if v_new_status IN ('confirmed', 'received', 'paid') then
+      raise notice 'handle_purchase_invoice_change: INSERT at confirmed/received/paid, creating journal entry';
+      perform public.create_purchase_invoice_journal_entry(NEW);
+    end if;
+    
+    perform public.recalculate_purchase_invoice_payments(NEW.id);
     return NEW;
 
   elsif TG_OP = 'UPDATE' then
     v_old_status := OLD.status;
     v_new_status := NEW.status;
-    v_old_posted := v_old_status <> ALL(v_non_posted);
-    v_new_posted := v_new_status <> ALL(v_non_posted);
-
+    
     raise notice 'handle_purchase_invoice_change: UPDATE invoice %, old status %, new status %', NEW.id, v_old_status, v_new_status;
 
-    -- Inventory handling
-    if v_old_posted and v_new_posted and v_old_status != v_new_status then
-      raise notice 'handle_purchase_invoice_change: both posted, restore and consume';
+    -- INVENTORY HANDLING: ONLY at 'received' status
+    -- This is correct for BOTH prepayment and standard models
+    -- Inventory should only change when goods are physically received
+    if v_old_status != 'received' AND v_new_status = 'received' then
+      -- Transitioning TO received: consume inventory (add stock)
+      raise notice 'handle_purchase_invoice_change: transitioning TO received, consuming inventory';
+      perform public.consume_purchase_invoice_inventory(NEW);
+      
+    elsif v_old_status = 'received' AND v_new_status != 'received' then
+      -- Transitioning FROM received: restore inventory (remove stock)
+      raise notice 'handle_purchase_invoice_change: transitioning FROM received, restoring inventory';
+      perform public.restore_purchase_invoice_inventory(OLD);
+      
+    elsif v_old_status = 'received' AND v_new_status = 'received' then
+      -- Staying at received but invoice data changed: restore old, consume new
+      raise notice 'handle_purchase_invoice_change: staying at received, updating inventory';
       perform public.restore_purchase_invoice_inventory(OLD);
       perform public.consume_purchase_invoice_inventory(NEW);
-    elsif v_old_posted and not v_new_posted then
-      raise notice 'handle_purchase_invoice_change: changed to non-posted, restore only';
-      perform public.restore_purchase_invoice_inventory(OLD);
-    elsif not v_old_posted and v_new_posted then
-      raise notice 'handle_purchase_invoice_change: changed to posted, consume';
-      perform public.consume_purchase_invoice_inventory(NEW);
-    else
-      raise notice 'handle_purchase_invoice_change: both non-posted, no inventory change';
     end if;
 
-    -- Journal entry handling (DELETE-based reversal)
-    if v_old_posted and not v_new_posted then
-      raise notice 'handle_purchase_invoice_change: reverting to non-posted, deleting journal entry';
-      perform public.delete_purchase_invoice_journal_entry(OLD.id);
-    elsif not v_old_posted and v_new_posted then
-      raise notice 'handle_purchase_invoice_change: changing to posted, creating journal entry';
+    -- JOURNAL ENTRY HANDLING: Create ONCE at 'confirmed', delete when reverting
+    -- The journal entry represents the purchase transaction (Dr Inventory / Cr Accounts Payable)
+    -- It should NOT be recreated when moving between confirmed→received→paid
+    -- It should ONLY be recreated if staying at same status but amounts changed
+    
+    if v_old_status IN ('draft', 'sent', 'cancelled') AND v_new_status IN ('confirmed', 'received', 'paid') then
+      -- Transitioning TO confirmed/received/paid: create journal entry
+      raise notice 'handle_purchase_invoice_change: transitioning TO confirmed/received/paid, creating journal entry';
       perform public.create_purchase_invoice_journal_entry(NEW);
-    elsif v_old_posted and v_new_posted then
-      raise notice 'handle_purchase_invoice_change: both posted, recreating journal entry';
+      
+    elsif v_old_status IN ('confirmed', 'received', 'paid') AND v_new_status IN ('draft', 'sent', 'cancelled') then
+      -- Transitioning FROM confirmed/received/paid to draft/sent/cancelled: delete journal entry
+      raise notice 'handle_purchase_invoice_change: transitioning FROM confirmed/received/paid, deleting journal entry';
       perform public.delete_purchase_invoice_journal_entry(OLD.id);
-      perform public.create_purchase_invoice_journal_entry(NEW);
-    else
-      raise notice 'handle_purchase_invoice_change: both non-posted, no journal entry action';
+      
+    elsif v_old_status = v_new_status AND v_old_status IN ('confirmed', 'received', 'paid') then
+      -- Staying at same confirmed+ status but invoice data might have changed
+      -- Only recreate journal if amounts changed (not just status transition)
+      if OLD.subtotal IS DISTINCT FROM NEW.subtotal OR 
+         OLD.tax IS DISTINCT FROM NEW.tax OR 
+         OLD.total IS DISTINCT FROM NEW.total OR
+         OLD.supplier_id IS DISTINCT FROM NEW.supplier_id then
+        raise notice 'handle_purchase_invoice_change: amounts changed at same status, recreating journal entry';
+        perform public.delete_purchase_invoice_journal_entry(OLD.id);
+        perform public.create_purchase_invoice_journal_entry(NEW);
+      end if;
     end if;
-
+    
+    -- Only recalculate if this is NOT a payment-only update (prevents infinite recursion)
+    -- If only paid_amount, balance, or status changed → skip recalculate (it's from recalculate itself)
+    -- If items, total, subtotal, tax, or other fields changed → call recalculate
+    if OLD.items IS DISTINCT FROM NEW.items OR
+       OLD.subtotal IS DISTINCT FROM NEW.subtotal OR
+       OLD.tax IS DISTINCT FROM NEW.tax OR
+       OLD.total IS DISTINCT FROM NEW.total OR
+       OLD.supplier_id IS DISTINCT FROM NEW.supplier_id OR
+       OLD.prepayment_model IS DISTINCT FROM NEW.prepayment_model then
+      raise notice 'handle_purchase_invoice_change: invoice data changed, recalculating payments';
+      perform public.recalculate_purchase_invoice_payments(NEW.id);
+    else
+      raise notice 'handle_purchase_invoice_change: only payment fields changed, skipping recalculate to avoid recursion';
+    end if;
+    
     return NEW;
 
   elsif TG_OP = 'DELETE' then
     v_old_status := OLD.status;
-    v_old_posted := v_old_status <> ALL(v_non_posted);
-
     raise notice 'handle_purchase_invoice_change: DELETE invoice %, status %', OLD.id, v_old_status;
-
-    if v_old_posted then
-      raise notice 'handle_purchase_invoice_change: deleting posted invoice, restoring inventory';
+    
+    -- Restore inventory if was received
+    if v_old_status = 'received' then
+      raise notice 'handle_purchase_invoice_change: deleting received invoice, restoring inventory';
       perform public.restore_purchase_invoice_inventory(OLD);
-      perform public.delete_purchase_invoice_journal_entry(OLD.id);
-    else
-      raise notice 'handle_purchase_invoice_change: deleting non-posted invoice, no action needed';
     end if;
-
+    
+    -- Delete journal entry if was confirmed or later
+    if v_old_status IN ('confirmed', 'received', 'paid') then
+      raise notice 'handle_purchase_invoice_change: deleting confirmed/received/paid invoice, deleting journal entry';
+      perform public.delete_purchase_invoice_journal_entry(OLD.id);
+    end if;
+    
     return OLD;
   end if;
 
