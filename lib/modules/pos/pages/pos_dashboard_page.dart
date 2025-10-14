@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/models/customer.dart';
 import '../../crm/services/customer_service.dart';
 import '../../../shared/services/inventory_service.dart';
+import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../services/pos_service.dart';
 import '../widgets/product_tile.dart';
+import '../models/payment_method.dart';
+import '../models/pos_transaction.dart';
 
 class POSDashboardPage extends StatefulWidget {
   const POSDashboardPage({super.key});
@@ -25,10 +29,13 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   @override
   void initState() {
     super.initState();
-    // Load products from Firestore when page loads
+    // Load products and payment methods when page loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final inventoryService = Provider.of<InventoryService>(context, listen: false);
+      final paymentMethodService = Provider.of<PaymentMethodService>(context, listen: false);
+      
       inventoryService.getProducts();
+      paymentMethodService.loadPaymentMethods();
     });
   }
 
@@ -61,14 +68,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${product.name} agregado al carrito'),
-            action: SnackBarAction(
-              label: 'Ver Carrito',
-              onPressed: () {
-                if (mounted) {
-                  context.push('/pos/cart');
-                }
-              },
-            ),
+            duration: const Duration(seconds: 1),
           ),
         );
       }
@@ -129,13 +129,13 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                           style: theme.textTheme.titleMedium,
                         ),
                         const SizedBox(width: 16),
-                        FloatingActionButton.extended(
-                          onPressed: () => context.push('/pos/cart'),
-                          icon: const Icon(Icons.shopping_cart),
+                        Chip(
+                          avatar: const Icon(Icons.shopping_cart, size: 18),
                           label: Text(
                             '\$${posService.cartTotal.toStringAsFixed(0)}',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
+                          backgroundColor: theme.colorScheme.primaryContainer,
                         ),
                       ],
                     );
@@ -260,10 +260,10 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                     return GridView.builder(
                                       padding: const EdgeInsets.all(8),
                                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 2,
-                                        childAspectRatio: 0.8,
-                                        crossAxisSpacing: 12,
-                                        mainAxisSpacing: 12,
+                                        crossAxisCount: 4,
+                                        childAspectRatio: 0.75,
+                                        crossAxisSpacing: 8,
+                                        mainAxisSpacing: 8,
                                       ),
                                       itemCount: filteredProducts.length,
                                       itemBuilder: (context, index) {
@@ -406,10 +406,10 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                     return GridView.builder(
                                       padding: const EdgeInsets.all(8),
                                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 2,
-                                        childAspectRatio: 0.8,
-                                        crossAxisSpacing: 12,
-                                        mainAxisSpacing: 12,
+                                        crossAxisCount: 3,
+                                        childAspectRatio: 0.75,
+                                        crossAxisSpacing: 8,
+                                        mainAxisSpacing: 8,
                                       ),
                                       itemCount: filteredProducts.length,
                                       itemBuilder: (context, index) {
@@ -454,6 +454,16 @@ class _CashierPanelState extends State<_CashierPanel> {
   List<Customer> _filteredCustomers = [];
   bool _isLoadingCustomers = true;
   final TextEditingController _customerSearchController = TextEditingController();
+  
+  // Payment flow state
+  bool _showPaymentView = false;
+  bool _showReceiptView = false;
+  POSTransaction? _completedTransaction;
+  PaymentMethod? _selectedPaymentMethod;
+  final TextEditingController _amountController = TextEditingController();
+  double _amountReceived = 0.0;
+  bool _isProcessing = false;
+  final Uuid _uuid = const Uuid();
 
   @override
   void initState() {
@@ -465,6 +475,7 @@ class _CashierPanelState extends State<_CashierPanel> {
       });
     });
     _customerSearchController.addListener(_onSearchChanged);
+    _selectedPaymentMethod = PaymentMethod.cash;
     _loadCustomers();
   }
 
@@ -472,6 +483,7 @@ class _CashierPanelState extends State<_CashierPanel> {
   void dispose() {
     _customerSearchController.removeListener(_onSearchChanged);
     _customerSearchController.dispose();
+    _amountController.dispose();
     super.dispose();
   }
 
@@ -535,7 +547,91 @@ class _CashierPanelState extends State<_CashierPanel> {
     final posService = Provider.of<POSService>(context, listen: false);
     if (posService.hasItemsInCart) {
       posService.setCustomer(_selectedCustomer);
-      context.push('/pos/payment');
+      setState(() {
+        _showPaymentView = true;
+        _amountReceived = posService.cartTotal;
+        _amountController.text = posService.cartTotal.toStringAsFixed(0);
+      });
+    }
+  }
+  
+  void _cancelPayment() {
+    setState(() {
+      _showPaymentView = false;
+      _showReceiptView = false;
+      _completedTransaction = null;
+      _selectedPaymentMethod = PaymentMethod.cash;
+      _amountReceived = 0.0;
+      _amountController.clear();
+    });
+  }
+  
+  void _finishTransaction() {
+    setState(() {
+      _showPaymentView = false;
+      _showReceiptView = false;
+      _completedTransaction = null;
+      _selectedPaymentMethod = PaymentMethod.cash;
+      _amountReceived = 0.0;
+      _amountController.clear();
+    });
+  }
+  
+  Future<void> _processPayment() async {
+    if (_selectedPaymentMethod == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Seleccione un método de pago')),
+      );
+      return;
+    }
+
+    final posService = context.read<POSService>();
+    posService.setCustomer(_selectedCustomer);
+
+    if (_amountReceived < posService.cartTotal) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Monto insuficiente')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      final payment = POSPayment(
+        id: _uuid.v4(),
+        method: _selectedPaymentMethod!,
+        amount: _amountReceived,
+        createdAt: DateTime.now(),
+      );
+
+      final transaction = await posService.checkout([payment]);
+
+      if (mounted && transaction != null) {
+        setState(() {
+          _showPaymentView = false;
+          _showReceiptView = true;
+          _completedTransaction = transaction;
+          _isProcessing = false;
+        });
+      } else {
+        throw Exception('Failed to process transaction');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al procesar pago: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -556,7 +652,24 @@ class _CashierPanelState extends State<_CashierPanel> {
 
         final currentQuery = _customerSearchController.text;
 
-        return SingleChildScrollView(
+        // Show receipt view if transaction completed
+        if (_showReceiptView && _completedTransaction != null) {
+          return _buildReceiptView(theme, _completedTransaction!);
+        }
+
+        // Show payment view if activated
+        if (_showPaymentView) {
+          return _buildPaymentView(theme, posService);
+        }
+
+        // Show cart/checkout view
+        return _buildCartView(theme, posService, currentQuery);
+      },
+    );
+  }
+  
+  Widget _buildCartView(ThemeData theme, POSService posService, String currentQuery) {
+    return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -585,32 +698,93 @@ class _CashierPanelState extends State<_CashierPanel> {
                           separatorBuilder: (_, __) => Divider(color: theme.colorScheme.outline.withOpacity(0.1)),
                           itemBuilder: (context, index) {
                             final item = posService.cartItems[index];
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            return Column(
                               children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.product.name,
-                                        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'SKU: ${item.product.sku}',
-                                        style: theme.textTheme.bodySmall,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('x${item.quantity}', style: theme.textTheme.bodyMedium),
-                                    Text(
-                                      '\$${item.subtotal.toStringAsFixed(0)}',
-                                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item.product.name,
+                                            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'SKU: ${item.product.sku}',
+                                            style: theme.textTheme.bodySmall,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '\$${item.unitPrice.toStringAsFixed(0)} c/u',
+                                            style: theme.textTheme.bodySmall?.copyWith(
+                                              color: theme.colorScheme.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          '\$${item.subtotal.toStringAsFixed(0)}',
+                                          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.remove_circle_outline, size: 20),
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(),
+                                              onPressed: () {
+                                                if (item.quantity > 1) {
+                                                  posService.updateCartItemQuantity(item.id, item.quantity - 1);
+                                                } else {
+                                                  posService.removeFromCart(item.id);
+                                                }
+                                              },
+                                            ),
+                                            Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                                              child: Text(
+                                                '${item.quantity}',
+                                                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.add_circle_outline, size: 20),
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(),
+                                              onPressed: () {
+                                                if (item.quantity < item.product.stockQuantity) {
+                                                  posService.updateCartItemQuantity(item.id, item.quantity + 1);
+                                                } else {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text('Stock máximo: ${item.product.stockQuantity}'),
+                                                      duration: const Duration(seconds: 1),
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                            const SizedBox(width: 4),
+                                            IconButton(
+                                              icon: Icon(Icons.delete_outline, size: 20, color: theme.colorScheme.error),
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(),
+                                              onPressed: () {
+                                                posService.removeFromCart(item.id);
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -774,7 +948,372 @@ class _CashierPanelState extends State<_CashierPanel> {
             ],
           ),
         );
-      },
+  }
+  
+  Widget _buildPaymentView(ThemeData theme, POSService posService) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: _cancelPayment,
+              ),
+              Expanded(
+                child: Text(
+                  'Procesar Pago',
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Order Summary
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Resumen',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Subtotal:', style: theme.textTheme.bodyMedium),
+                      Text('\$${posService.cartNetAmount.toStringAsFixed(0)}'),
+                    ],
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('IVA (19%):', style: theme.textTheme.bodyMedium),
+                      Text('\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
+                    ],
+                  ),
+                  const Divider(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'TOTAL:',
+                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '\$${posService.cartTotal.toStringAsFixed(0)}',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Payment Method
+          Text(
+            'Método de Pago',
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: PaymentMethod.defaultMethods.map((method) {
+              final isSelected = _selectedPaymentMethod?.id == method.id;
+              return FilterChip(
+                label: Text(method.name),
+                selected: isSelected,
+                onSelected: (selected) {
+                  setState(() {
+                    _selectedPaymentMethod = method;
+                    if (method != PaymentMethod.cash) {
+                      _amountReceived = posService.cartTotal;
+                      _amountController.text = posService.cartTotal.toStringAsFixed(0);
+                    }
+                  });
+                },
+                avatar: Icon(
+                  _getPaymentIcon(method.type),
+                  size: 18,
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          // Amount Received (only for cash)
+          if (_selectedPaymentMethod == PaymentMethod.cash) ...[
+            Text(
+              'Monto Recibido',
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _amountController,
+              onChanged: (value) {
+                setState(() {
+                  _amountReceived = double.tryParse(value) ?? 0.0;
+                });
+              },
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Monto en efectivo',
+                prefixText: '\$',
+                border: const OutlineInputBorder(),
+                hintText: posService.cartTotal.toStringAsFixed(0),
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_amountReceived >= posService.cartTotal)
+              Card(
+                color: theme.colorScheme.primaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Vuelto:',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                      Text(
+                        '\$${(_amountReceived - posService.cartTotal).toStringAsFixed(0)}',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 16),
+          ],
+          // Confirm Payment Button
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _isProcessing ? null : _processPayment,
+              icon: _isProcessing
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.check),
+              label: Text(_isProcessing ? 'Procesando...' : 'Confirmar Pago'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  IconData _getPaymentIcon(PaymentType type) {
+    switch (type) {
+      case PaymentType.cash:
+        return Icons.attach_money;
+      case PaymentType.card:
+        return Icons.credit_card;
+      case PaymentType.voucher:
+        return Icons.receipt;
+      case PaymentType.transfer:
+        return Icons.account_balance;
+    }
+  }
+  
+  Widget _buildReceiptView(ThemeData theme, POSTransaction transaction) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Success Header
+          Card(
+            color: theme.colorScheme.primaryContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.check_circle,
+                    size: 64,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '¡Venta Exitosa!',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                  Text(
+                    'Transacción completada correctamente',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Receipt Details
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'VINABIKE',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const Center(
+                    child: Text(
+                      'Venta de Bicicletas y Accesorios',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  _buildReceiptRow('Recibo:', transaction.receiptNumber ?? transaction.id, theme),
+                  _buildReceiptRow(
+                    'Fecha:',
+                    '${transaction.createdAt.day.toString().padLeft(2, '0')}/${transaction.createdAt.month.toString().padLeft(2, '0')}/${transaction.createdAt.year} ${transaction.createdAt.hour.toString().padLeft(2, '0')}:${transaction.createdAt.minute.toString().padLeft(2, '0')}',
+                    theme,
+                  ),
+                  _buildReceiptRow(
+                    'Cliente:',
+                    transaction.customer?.name ?? 'Cliente Genérico',
+                    theme,
+                  ),
+                  const Divider(height: 24),
+                  // Items
+                  ...transaction.items.map((item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.product.name,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '${item.quantity} x \$${item.unitPrice.toStringAsFixed(0)}',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                                Text(
+                                  '\$${item.subtotal.toStringAsFixed(0)}',
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      )),
+                  const Divider(height: 24),
+                  _buildReceiptRow('Subtotal:', '\$${transaction.subtotal.toStringAsFixed(0)}', theme),
+                  _buildReceiptRow('IVA (19%):', '\$${transaction.taxAmount.toStringAsFixed(0)}', theme),
+                  const Divider(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'TOTAL:',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '\$${transaction.total.toStringAsFixed(0)}',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 24),
+                  // Payment Info
+                  ...transaction.payments.map((payment) => _buildReceiptRow(
+                        payment.method.name,
+                        '\$${payment.amount.toStringAsFixed(0)}',
+                        theme,
+                      )),
+                  const SizedBox(height: 16),
+                  const Center(
+                    child: Text(
+                      '¡Gracias por su compra!',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                  const Center(
+                    child: Text(
+                      'Garantía 30 días',
+                      style: TextStyle(fontSize: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Actions
+          FilledButton.icon(
+            onPressed: _finishTransaction,
+            icon: const Icon(Icons.check),
+            label: const Text('Nueva Venta'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildReceiptRow(String label, String value, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: theme.textTheme.bodyMedium),
+          Text(
+            value,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

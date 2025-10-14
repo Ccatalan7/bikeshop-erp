@@ -26,17 +26,7 @@ class PaymentMethodSelector extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Payment method selection
-        Text(
-          'Método de Pago',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        
-        const SizedBox(height: 12),
-        
-        // Payment method grid
+        // Payment method grid (without duplicate label)
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -94,18 +84,9 @@ class PaymentMethodSelector extends StatelessWidget {
           },
         ),
         
-        // Amount input
+        // Amount input (without duplicate label - controlled by parent page)
         if (showAmountInput && selectedMethod != null) ...[
           const SizedBox(height: 16),
-          
-          Text(
-            'Monto Recibido',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          
-          const SizedBox(height: 8),
           
           TextFormField(
             initialValue: amount?.toStringAsFixed(0),

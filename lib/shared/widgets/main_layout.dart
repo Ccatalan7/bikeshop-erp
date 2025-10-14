@@ -291,7 +291,9 @@ class _AppSidebarState extends State<AppSidebar> {
       _lastLocation = currentLocation;
       final matchingSection = _resolveSectionForPath(currentLocation);
       if (matchingSection != _expandedSection) {
-        _expandedSection = matchingSection;
+        setState(() {
+          _expandedSection = matchingSection;
+        });
       }
     }
   }
@@ -620,7 +622,7 @@ class _AppSidebarState extends State<AppSidebar> {
   }
 
   // Helper method to build default header widgets
-  static List<Widget> _buildDefaultHeaderWidgets(
+  List<Widget> _buildDefaultHeaderWidgets(
     BuildContext context, 
     ThemeData theme, 
     AppearanceService appearanceService,
@@ -664,7 +666,7 @@ class _AppSidebarState extends State<AppSidebar> {
   }
 
   // Helper method to build default header as a single widget
-  static Widget _buildDefaultHeader(
+  Widget _buildDefaultHeader(
     BuildContext context, 
     ThemeData theme, 
     AppearanceService appearanceService,

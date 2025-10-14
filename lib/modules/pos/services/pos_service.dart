@@ -190,6 +190,12 @@ class POSService extends ChangeNotifier {
     final timestamp = DateTime.now();
 
     try {
+      // CRITICAL: Ensure payment methods are loaded from database
+      if (_paymentMethodService.paymentMethods.isEmpty) {
+        if (kDebugMode) print('POSService: Loading payment methods before checkout...');
+        await _paymentMethodService.loadPaymentMethods(forceRefresh: true);
+      }
+
       final totalPaid = payments.fold<double>(0, (sum, payment) => sum + payment.amount);
       if (totalPaid < cartTotal) {
         throw Exception('Monto insuficiente para completar la venta.');
@@ -244,24 +250,32 @@ class POSService extends ChangeNotifier {
         }
 
         // Map POS payment method to payment_method_id
-        String? paymentMethodId;
+        pm.PaymentMethod? dbPaymentMethod;
         switch (payment.method.type) {
           case PaymentType.cash:
-            paymentMethodId = _paymentMethodService.getPaymentMethodByCode('cash')?.id;
+            dbPaymentMethod = _paymentMethodService.getPaymentMethodByCode('cash');
+            if (kDebugMode) print('POSService: Cash payment method: $dbPaymentMethod');
             break;
           case PaymentType.card:
-            paymentMethodId = _paymentMethodService.getPaymentMethodByCode('card')?.id;
+            dbPaymentMethod = _paymentMethodService.getPaymentMethodByCode('card');
+            if (kDebugMode) print('POSService: Card payment method: $dbPaymentMethod');
             break;
           case PaymentType.transfer:
-            paymentMethodId = _paymentMethodService.getPaymentMethodByCode('transfer')?.id;
+            dbPaymentMethod = _paymentMethodService.getPaymentMethodByCode('transfer');
+            if (kDebugMode) print('POSService: Transfer payment method: $dbPaymentMethod');
             break;
           case PaymentType.voucher:
-            paymentMethodId = _paymentMethodService.getPaymentMethodByCode('cash')?.id; // fallback
+            dbPaymentMethod = _paymentMethodService.getPaymentMethodByCode('cash'); // fallback
+            if (kDebugMode) print('POSService: Voucher (cash fallback) payment method: $dbPaymentMethod');
             break;
         }
 
-        if (paymentMethodId == null) {
-          throw Exception('Payment method not found in database');
+        if (dbPaymentMethod == null) {
+          if (kDebugMode) {
+            print('POSService: Payment method not found for ${payment.method.type}');
+            print('POSService: Available payment methods: ${_paymentMethodService.paymentMethods.map((pm) => '${pm.code} (${pm.name})').join(', ')}');
+          }
+          throw Exception('Método de pago "${payment.method.name}" no encontrado en la base de datos. Por favor, configure los métodos de pago en Configuración.');
         }
 
         final salesPayment = sales_models.Payment(
@@ -269,7 +283,7 @@ class POSService extends ChangeNotifier {
           invoiceReference: savedInvoice.invoiceNumber.isNotEmpty
               ? savedInvoice.invoiceNumber
               : invoiceId,
-          paymentMethodId: paymentMethodId,
+          paymentMethodId: dbPaymentMethod.id,
           amount: appliedAmount,
           date: timestamp,
           reference: payment.reference,

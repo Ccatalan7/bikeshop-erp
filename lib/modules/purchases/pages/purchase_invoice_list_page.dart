@@ -36,6 +36,15 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Auto-refresh when returning to this page
+    if (!_isLoading && mounted) {
+      _loadInvoices(refresh: true);
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -343,8 +352,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       ),
                   ],
                 ),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -357,10 +366,11 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                         style: TextStyle(
                           color: _statusColor(invoice.status),
                           fontWeight: FontWeight.w600,
+                          fontSize: 12,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(width: 4),
                     const Icon(Icons.chevron_right),
                   ],
                 ),

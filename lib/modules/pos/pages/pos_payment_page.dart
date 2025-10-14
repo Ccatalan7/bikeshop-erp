@@ -23,6 +23,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
   double _amountReceived = 0.0;
   bool _isProcessing = false;
   final Uuid _uuid = const Uuid();
+  final TextEditingController _amountController = TextEditingController();
 
   shared_customer.Customer? _selectedCustomer;
   List<shared_customer.Customer> _customers = [];
@@ -38,6 +39,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
       final posService = context.read<POSService>();
       setState(() {
         _amountReceived = posService.cartTotal;
+        _amountController.text = posService.cartTotal.toStringAsFixed(0);
       });
     });
 
@@ -47,6 +49,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
   @override
   void dispose() {
     _customerSearchController.dispose();
+    _amountController.dispose();
     super.dispose();
   }
 
@@ -295,6 +298,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                     PaymentMethodSelector(
                       paymentMethods: PaymentMethod.defaultMethods,
                       selectedMethod: _selectedPaymentMethod,
+                      showAmountInput: false, // Parent page handles amount input
                       onMethodSelected: (method) {
                         setState(() {
                           _selectedPaymentMethod = method;
@@ -314,6 +318,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                       ),
                       const SizedBox(height: 16),
                       TextField(
+                        controller: _amountController,
                         onChanged: (value) {
                           setState(() {
                             _amountReceived = double.tryParse(value) ?? 0.0;

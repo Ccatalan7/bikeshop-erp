@@ -29,6 +29,7 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
   PurchaseInvoice? _invoice;
   bool _isLoading = true;
   bool _isProcessing = false;
+  bool _hasChanges = false; // Track if any changes were made
 
   @override
   void initState() {
@@ -68,7 +69,7 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
             child: Row(
               children: [
                 IconButton(
-                  onPressed: () => context.pop(),
+                  onPressed: () => context.pop(_hasChanges),
                   icon: const Icon(Icons.arrow_back),
                 ),
                 Expanded(
@@ -511,7 +512,13 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
           OutlinedButton.icon(
             icon: const Icon(Icons.edit),
             label: const Text('Editar'),
-            onPressed: () => context.push('/purchases/${_invoice!.id}/edit'),
+            onPressed: () async {
+              final edited = await context.push<bool>('/purchases/${_invoice!.id}/edit');
+              if (edited == true) {
+                setState(() => _hasChanges = true);
+                await _loadInvoice();
+              }
+            },
           ),
         ];
         break;
@@ -788,6 +795,7 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
     );
 
     if (result == true) {
+      setState(() => _hasChanges = true); // Mark that changes were made
       await _loadInvoice(); // Refresh invoice data
     }
   }
@@ -866,6 +874,7 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
     try {
       await action();
       await _loadInvoice();
+      setState(() => _hasChanges = true); // Mark that changes were made
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

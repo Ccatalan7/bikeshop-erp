@@ -144,8 +144,8 @@ class JournalLine {
       accountCode: json['account_code']?.toString() ?? '',
       accountName: json['account_name']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
-      debitAmount: _parseDouble(json['debit'] ?? json['debit_amount']) ?? 0.0, // Support both column names
-      creditAmount: _parseDouble(json['credit'] ?? json['credit_amount']) ?? 0.0, // Support both column names
+      debitAmount: _parseDouble(json['debit_amount'] ?? json['debit']) ?? 0.0, // Check debit_amount first
+      creditAmount: _parseDouble(json['credit_amount'] ?? json['credit']) ?? 0.0, // Check credit_amount first
       createdAt: _parseNullableDate(json['created_at']),
     );
   }

@@ -387,7 +387,9 @@ class AppRouter {
         pageBuilder: (context, state) => _buildPageWithNoTransition(
           context,
           state,
-          const PurchasePaymentsListPage(),
+          const MainLayout(
+            child: PurchasePaymentsListPage(),
+          ),
         ),
       ),
       
