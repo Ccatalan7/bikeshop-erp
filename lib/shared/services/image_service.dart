@@ -1,4 +1,3 @@
-import 'dart:io' show File, Platform;
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_selector/file_selector.dart';
@@ -69,32 +68,7 @@ class ImageService {
   // Pick image from gallery or camera (returns XFile for cross-platform compatibility)
   static Future<XFile?> pickImage({ImageSource source = ImageSource.gallery}) async {
     try {
-      // On desktop platforms (Windows, Linux), use file_selector
-      if (!kIsWeb) {
-        try {
-          if (Platform.isWindows || Platform.isLinux) {
-            final typeGroup = XTypeGroup(
-              label: 'Imágenes',
-              extensions: const ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic'],
-            );
-
-            final XFile? selectedFile = await openFile(
-              acceptedTypeGroups: [typeGroup],
-            );
-
-            if (selectedFile == null || selectedFile.path.isEmpty) {
-              return null;
-            }
-
-            return selectedFile;
-          }
-        } catch (e) {
-          // Platform check failed, fall through to image_picker
-          if (kDebugMode) print('Platform check failed: $e');
-        }
-      }
-
-      // For web and mobile, use image_picker
+      // Use image_picker for all platforms (works on web, mobile, and desktop)
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
         maxWidth: 1920,

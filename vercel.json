@@ -2,5 +2,16 @@
   "buildCommand": "",
   "outputDirectory": "web",
   "installCommand": "echo 'No install needed'",
-  "devCommand": "echo 'No dev command'"
+  "devCommand": "echo 'No dev command'",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ]
 }
