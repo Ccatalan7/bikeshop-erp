@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -19,6 +21,8 @@ import 'modules/purchases/services/purchase_service.dart';
 import 'modules/sales/services/sales_service.dart';
 import 'modules/settings/services/appearance_service.dart';
 import 'shared/routes/app_router.dart';
+import 'shared/services/error_reporting_service.dart';
+import 'shared/widgets/global_error_overlay.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,7 +49,17 @@ Future<void> main() async {
     });
   }
 
-  runApp(const VinabikeApp());
+  FlutterError.onError = (FlutterErrorDetails details) {
+    ErrorReportingService.report(details.exception, details.stack);
+    FlutterError.dumpErrorToConsole(details);
+  };
+
+  runZonedGuarded(() {
+    runApp(const VinabikeApp());
+  }, (error, stack) {
+    ErrorReportingService.report(error, stack);
+    debugPrint('Uncaught error: $error\n$stack');
+  });
 }
 
 class VinabikeApp extends StatelessWidget {
@@ -129,6 +143,18 @@ class VinabikeApp extends StatelessWidget {
             themeMode: ThemeMode.system,
             routerConfig: AppRouter.createRouter(authService),
             debugShowCheckedModeBanner: false,
+            builder: (context, child) {
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  child ?? const SizedBox.shrink(),
+                  IgnorePointer(
+                    ignoring: false,
+                    child: GlobalErrorOverlay(notifier: ErrorReportingService.notifier),
+                  ),
+                ],
+              );
+            },
           );
         },
       ),

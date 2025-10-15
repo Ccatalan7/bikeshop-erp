@@ -2,7 +2,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:cross_file/cross_file.dart';
 
 import '../../../shared/widgets/main_layout.dart';
@@ -29,7 +28,8 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
   
   bool _isActive = true;
   String? _imageUrl;
-  XFile? _selectedImage;
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
   
   bool _isLoading = false;
   bool _isSaving = false;
@@ -85,10 +85,11 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
 
   Future<void> _pickImage() async {
     try {
-      final imageFile = await ImageService.pickImage(source: ImageSource.gallery);
-      if (imageFile != null) {
+      final result = await ImageService.pickImage();
+      if (result != null) {
         setState(() {
-          _selectedImage = imageFile;
+          _selectedImageBytes = result.bytes;
+          _selectedImageName = result.name;
         });
       }
     } catch (e) {
@@ -112,10 +113,12 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
       String? finalImageUrl = _imageUrl;
       
       // Upload new image if selected
-      if (_selectedImage != null) {
-        final uploadUrl = await ImageService.uploadToDefaultBucket(
-          _selectedImage!,
-          StorageFolders.categories,
+      if (_selectedImageBytes != null && _selectedImageName != null) {
+        final uploadUrl = await ImageService.uploadBytes(
+          bytes: _selectedImageBytes!,
+          fileName: _selectedImageName!,
+          bucket: StorageConfig.defaultBucket,
+          folder: StorageFolders.categories,
         );
 
         if (uploadUrl == null) {
@@ -317,24 +320,16 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
   }
 
   Widget _buildImagePicker() {
-    if (_selectedImage != null) {
+    if (_selectedImageBytes != null) {
       return Stack(
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: FutureBuilder<Uint8List>(
-              future: _selectedImage!.readAsBytes(),
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  return Image.memory(
-                    snapshot.data!,
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                  );
-                }
-                return const Center(child: CircularProgressIndicator());
-              },
+            child: Image.memory(
+              _selectedImageBytes!,
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.cover,
             ),
           ),
           Positioned(
@@ -349,7 +344,8 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                 icon: const Icon(Icons.close, color: Colors.white),
                 onPressed: () {
                   setState(() {
-                    _selectedImage = null;
+                    _selectedImageBytes = null;
+                    _selectedImageName = null;
                   });
                 },
               ),

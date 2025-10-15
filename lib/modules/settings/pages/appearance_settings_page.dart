@@ -201,9 +201,9 @@ class AppearanceSettingsPage extends StatelessWidget {
   Future<void> _handleLogoUpload(BuildContext context, AppearanceService appearanceService) async {
     try {
       // Pick image
-      final imageFile = await ImageService.pickImage();
+      final result = await ImageService.pickImage();
       
-      if (imageFile == null) {
+      if (result == null) {
         return; // User cancelled
       }
 
@@ -231,7 +231,7 @@ class AppearanceSettingsPage extends StatelessWidget {
       );
 
       // Upload image
-      await appearanceService.uploadCompanyLogo(imageFile);
+      await appearanceService.uploadCompanyLogo(result.bytes, result.name);
 
       if (!context.mounted) return;
       Navigator.pop(context); // Close loading dialog

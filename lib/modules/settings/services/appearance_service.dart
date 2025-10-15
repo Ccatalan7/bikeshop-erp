@@ -1,7 +1,8 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cross_file/cross_file.dart';
 import '../../../shared/services/image_service.dart';
+import '../../../shared/constants/storage_constants.dart';
 
 class AppearanceService extends ChangeNotifier {
   static const String _homeIconKey = 'appearance_home_icon';
@@ -91,12 +92,14 @@ class AppearanceService extends ChangeNotifier {
     return option.code;
   }
 
-  Future<void> uploadCompanyLogo(XFile imageFile) async {
+  Future<void> uploadCompanyLogo(Uint8List imageBytes, String fileName) async {
     try {
       // Upload to Supabase storage
-      final imageUrl = await ImageService.uploadToDefaultBucket(
-        imageFile,
-        'company_logos',
+      final imageUrl = await ImageService.uploadBytes(
+        bytes: imageBytes,
+        fileName: fileName,
+        bucket: StorageConfig.defaultBucket,
+        folder: 'company_logos',
       );
 
       if (imageUrl != null) {

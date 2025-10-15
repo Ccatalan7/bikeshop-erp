@@ -5,14 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:cross_file/cross_file.dart';
 
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
+import '../../../shared/services/error_reporting_service.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/models/supplier.dart';
@@ -56,13 +55,20 @@ class _ProductFormPageState extends State<ProductFormPage> {
   ProductType _selectedProductType = ProductType.product;
 
   String? _imageUrl;
-  XFile? _selectedImage;
+  // --- ARCHITECTURAL FIX ---
+  // Do not store XFile in state. Store only pure, platform-agnostic data.
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
   final List<String> _additionalImages = [];
   bool _isUploadingGalleryImage = false;
 
   bool _isLoading = false;
   bool _isSaving = false;
   Product? _existingProduct;
+  
+  // Debug error tracking
+  String? _lastError;
+  String? _lastStackTrace;
 
     @override
     void initState() {
@@ -177,11 +183,24 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
     Future<void> _selectMainImage() async {
       try {
-        final image = await ImageService.pickImage(source: ImageSource.gallery);
-        if (image != null) {
-          setState(() => _selectedImage = image);
+        final result = await ImageService.pickImage();
+        if (result != null) {
+          setState(() {
+            _selectedImageBytes = result.bytes;
+            _selectedImageName = result.name;
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Imagen seleccionada correctamente'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 1),
+              ),
+            );
+          }
         }
-      } catch (e) {
+      } catch (e, stackTrace) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -194,7 +213,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
     void _clearMainImage() {
       setState(() {
-        _selectedImage = null;
+        _selectedImageBytes = null;
+        _selectedImageName = null;
         _imageUrl = null;
       });
     }
@@ -202,15 +222,17 @@ class _ProductFormPageState extends State<ProductFormPage> {
     Future<void> _addGalleryImage() async {
       setState(() => _isUploadingGalleryImage = true);
       try {
-        final file = await ImageService.pickImage(source: ImageSource.gallery);
-        if (file == null) {
+        final result = await ImageService.pickImage();
+        if (result == null) {
           setState(() => _isUploadingGalleryImage = false);
           return;
         }
 
-        final url = await ImageService.uploadToDefaultBucket(
-          file,
-          StorageFolders.productGallery,
+        final url = await ImageService.uploadBytes(
+          bytes: result.bytes,
+          fileName: result.name,
+          bucket: StorageConfig.defaultBucket,
+          folder: StorageFolders.productGallery,
         );
 
         if (url == null) {
@@ -287,22 +309,29 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
       FocusScope.of(context).unfocus();
       setState(() => _isSaving = true);
+      debugPrint("[DIAGNOSTIC] _saveProduct: Save process started.");
 
       try {
         String? finalImageUrl = _imageUrl;
 
-        if (_selectedImage != null) {
-          final uploadUrl = await ImageService.uploadToDefaultBucket(
-            _selectedImage!,
-            StorageFolders.productMain,
+        // --- ARCHITECTURAL FIX ---
+        // Use the platform-agnostic bytes and name from the state.
+        if (_selectedImageBytes != null && _selectedImageName != null) {
+          final uploadUrl = await ImageService.uploadBytes(
+            bytes: _selectedImageBytes!,
+            fileName: _selectedImageName!,
+            bucket: StorageConfig.defaultBucket,
+            folder: StorageFolders.productMain,
           );
-
           if (uploadUrl == null) {
             throw Exception('No se pudo subir la imagen principal.');
           }
-
           finalImageUrl = uploadUrl;
         }
+
+        // --- SAFEGUARD ---
+        // Ensure only valid strings are passed to the model.
+        final safeAdditionalImages = _additionalImages.whereType<String>().toList();
 
         final product = Product(
           id: _existingProduct?.id,
@@ -324,7 +353,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
           inventoryQty: int.tryParse(_inventoryQtyController.text) ?? 0,
           minStockLevel: int.tryParse(_minStockController.text) ?? 1,
           imageUrl: finalImageUrl,
-          additionalImages: List<String>.from(_additionalImages),
+          additionalImages: safeAdditionalImages,
           isActive: _isActive,
           productType: _selectedProductType,
         );
@@ -350,8 +379,23 @@ class _ProductFormPageState extends State<ProductFormPage> {
         );
 
         context.pop();
-      } catch (e) {
+      } catch (e, stackTrace) {
+        // Log to console immediately
+        print('🔴🔴🔴 PRODUCT SAVE ERROR 🔴🔴🔴');
+        print('Error: $e');
+        print('Error Type: ${e.runtimeType}');
+        print('Stack Trace:');
+        print(stackTrace.toString());
+        
+        // Save error for display
+        setState(() {
+          _lastError = e.toString();
+          _lastStackTrace = stackTrace.toString();
+        });
+        ErrorReportingService.report('Error guardando producto: $e', stackTrace);
+        
         if (!mounted) return;
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error guardando producto: $e'),
@@ -380,6 +424,23 @@ class _ProductFormPageState extends State<ProductFormPage> {
             ? const Center(child: CircularProgressIndicator())
             : Column(
                 children: [
+                  // Debug error banner
+                  if (_lastError != null)
+                    Container(
+                      width: double.infinity,
+                      color: Colors.red,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('ERROR:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          SelectableText(_lastError!, style: const TextStyle(color: Colors.white)),
+                          const SizedBox(height: 8),
+                          const Text('STACK:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
+                          SelectableText(_lastStackTrace ?? '', style: const TextStyle(color: Colors.white, fontSize: 8)),
+                        ],
+                      ),
+                    ),
                   _buildHeader(theme),
                   Expanded(
                     child: SingleChildScrollView(
@@ -926,18 +987,10 @@ class _ProductFormPageState extends State<ProductFormPage> {
               Positioned.fill(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: _selectedImage != null
-                      ? FutureBuilder<Uint8List>(
-                          future: _selectedImage!.readAsBytes(),
-                          builder: (context, snapshot) {
-                            if (snapshot.hasData) {
-                              return Image.memory(
-                                snapshot.data!,
-                                fit: BoxFit.cover,
-                              );
-                            }
-                            return const Center(child: CircularProgressIndicator());
-                          },
+                  child: _selectedImageBytes != null
+                      ? Image.memory(
+                          _selectedImageBytes!,
+                          fit: BoxFit.cover,
                         )
                       : ImageService.buildProductImage(
                           imageUrl: _imageUrl,
@@ -954,13 +1007,13 @@ class _ProductFormPageState extends State<ProductFormPage> {
                   onPressed: _selectMainImage,
                   icon: const Icon(Icons.upload_outlined),
                   label: Text(
-                    _selectedImage != null || _imageUrl != null
+                    _selectedImageBytes != null || _imageUrl != null
                         ? 'Cambiar imagen principal'
                         : 'Agregar imagen',
                   ),
                 ),
               ),
-              if (_selectedImage != null || _imageUrl != null)
+              if (_selectedImageBytes != null || _imageUrl != null)
                 Positioned(
                   top: 8,
                   right: 8,

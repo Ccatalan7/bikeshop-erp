@@ -2,7 +2,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:cross_file/cross_file.dart';
 
 import '../../../shared/widgets/main_layout.dart';
@@ -36,7 +35,8 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
   String? _selectedRegion;
   bool _isActive = true;
   String? _imageUrl;
-  XFile? _selectedImage;
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
   
   bool _isLoading = false;
   bool _isSaving = false;
@@ -94,9 +94,12 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
 
   Future<void> _selectImage() async {
     try {
-      final image = await ImageService.pickImage(source: ImageSource.gallery);
-      if (image != null) {
-        setState(() => _selectedImage = image);
+      final result = await ImageService.pickImage();
+      if (result != null) {
+        setState(() {
+          _selectedImageBytes = result.bytes;
+          _selectedImageName = result.name;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -118,10 +121,12 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
       String? finalImageUrl = _imageUrl;
       
       // Upload image if selected
-      if (_selectedImage != null) {
-        final uploadUrl = await ImageService.uploadToDefaultBucket(
-          _selectedImage!,
-          StorageFolders.customers,
+      if (_selectedImageBytes != null && _selectedImageName != null) {
+        final uploadUrl = await ImageService.uploadBytes(
+          bytes: _selectedImageBytes!,
+          fileName: _selectedImageName!,
+          bucket: StorageConfig.defaultBucket,
+          folder: StorageFolders.customers,
         );
 
         if (uploadUrl == null) {
@@ -250,19 +255,11 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                                 width: 2,
                               ),
                             ),
-                            child: _selectedImage != null
+                            child: _selectedImageBytes != null
                                 ? ClipOval(
-                                    child: FutureBuilder<Uint8List>(
-                                      future: _selectedImage!.readAsBytes(),
-                                      builder: (context, snapshot) {
-                                        if (snapshot.hasData) {
-                                          return Image.memory(
-                                            snapshot.data!,
-                                            fit: BoxFit.cover,
-                                          );
-                                        }
-                                        return const CircularProgressIndicator();
-                                      },
+                                    child: Image.memory(
+                                      _selectedImageBytes!,
+                                      fit: BoxFit.cover,
                                     ),
                                   )
                                 : ImageService.buildAvatarImage(

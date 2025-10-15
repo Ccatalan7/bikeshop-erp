@@ -1,85 +1,75 @@
+import 'dart:typed_data';
+import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:cross_file/cross_file.dart';
+import 'package:mime/mime.dart';
 
 import '../constants/storage_constants.dart';
+import 'error_reporting_service.dart';
 
 class ImageService {
   static final SupabaseClient _client = Supabase.instance.client;
-  static final ImagePicker _picker = ImagePicker();
 
-  // Upload image to Supabase Storage using XFile (cross-platform)
-  static Future<String?> uploadImage(
-    XFile imageFile,
-    String bucket,
-    String folder,
-  ) async {
+  /// Upload image bytes directly - WEB ONLY VERSION
+  static Future<String?> uploadBytes({
+    required Uint8List bytes,
+    required String fileName,
+    required String bucket,
+    required String folder,
+  }) async {
     try {
-      final fileName = _buildFileName(imageFile);
+      final uniqueFileName = '${DateTime.now().millisecondsSinceEpoch}_${fileName.replaceAll(' ', '_')}';
       final normalizedFolder = _normalizePath(folder);
       final segments = <String>[];
       if (normalizedFolder.isNotEmpty) {
         segments.add(normalizedFolder);
       }
-      segments.add(fileName);
+      segments.add(uniqueFileName);
       final objectPath = segments.join('/');
 
-      final bytes = await imageFile.readAsBytes();
       final storageFile = _client.storage.from(bucket);
 
       final options = FileOptions(
         cacheControl: '3600',
         upsert: true,
-        contentType: _inferContentType(fileName),
+        contentType: lookupMimeType(uniqueFileName, headerBytes: bytes) ?? 'application/octet-stream',
       );
-
-      if (kDebugMode) {
-        debugPrint('[ImageService] Uploading to bucket="$bucket" path="$objectPath"');
-      }
 
       await storageFile.uploadBinary(objectPath, bytes, fileOptions: options);
 
       final publicUrl = storageFile.getPublicUrl(objectPath);
-
-      if (kDebugMode) {
-        debugPrint('[ImageService] Upload complete. Public URL: $publicUrl');
-      }
-
       return publicUrl;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Image upload error: $e');
-      }
+    } catch (e, stackTrace) {
+      ErrorReportingService.report('Image upload failed: $e', stackTrace);
       rethrow;
     }
   }
 
-  static Future<String?> uploadToDefaultBucket(
-    XFile imageFile,
-    String folder,
-  ) {
-    return uploadImage(imageFile, StorageConfig.defaultBucket, folder);
-  }
-  
-  // Pick image from gallery or camera (returns XFile for cross-platform compatibility)
-  static Future<XFile?> pickImage({ImageSource source = ImageSource.gallery}) async {
+  /// Pick image from file system - WEB ONLY VERSION using dart:html
+  static Future<({Uint8List bytes, String name})?> pickImage() async {
     try {
-      // Use image_picker for all platforms (works on web, mobile, and desktop)
-      final XFile? pickedFile = await _picker.pickImage(
-        source: source,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        imageQuality: 85,
-      );
-      
-      return pickedFile;
-    } catch (e) {
-      if (kDebugMode) print('Image picker error: $e');
-      return null;
+      final html.FileUploadInputElement input = html.FileUploadInputElement()
+        ..accept = 'image/*';
+      input.click();
+
+      await input.onChange.first;
+
+      if (input.files == null || input.files!.isEmpty) {
+        return null;
+      }
+
+      final html.File file = input.files!.first;
+      final reader = html.FileReader();
+      reader.readAsArrayBuffer(file);
+      await reader.onLoad.first;
+
+      final bytes = reader.result as Uint8List;
+      return (bytes: bytes, name: file.name);
+    } catch (e, stackTrace) {
+      ErrorReportingService.report('Image pick failed: $e', stackTrace);
+      rethrow;
     }
   }
   
@@ -227,13 +217,6 @@ class ImageService {
     }
   }
 
-  static String _buildFileName(XFile imageFile) {
-    final originalName = imageFile.name.isNotEmpty
-        ? imageFile.name
-        : 'image_${DateTime.now().millisecondsSinceEpoch}';
-    return '${DateTime.now().millisecondsSinceEpoch}_${originalName.replaceAll(' ', '_')}';
-  }
-
   static String _normalizePath(String value) {
     return value
         .split(RegExp(r'[\\/]+'))
@@ -243,25 +226,7 @@ class ImageService {
   }
 
   static String? _inferContentType(String fileName) {
-    final extension = fileName.split('.').last.toLowerCase();
-    switch (extension) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'gif':
-        return 'image/gif';
-      case 'bmp':
-        return 'image/bmp';
-      case 'webp':
-        return 'image/webp';
-      case 'heic':
-      case 'heif':
-        return 'image/heic';
-      default:
-        return 'image/jpeg';
-    }
+    return lookupMimeType(fileName);
   }
 
   static String? _extractObjectPath(String imageUrl, String bucket) {
