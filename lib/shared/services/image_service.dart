@@ -68,23 +68,32 @@ class ImageService {
   // Pick image from gallery or camera
   static Future<File?> pickImage({ImageSource source = ImageSource.gallery}) async {
     try {
-      if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
-        final typeGroup = XTypeGroup(
-          label: 'Imágenes',
-          extensions: const ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic'],
-        );
+      // On desktop platforms (Windows, Linux), use file_selector
+      if (!kIsWeb) {
+        try {
+          if (Platform.isWindows || Platform.isLinux) {
+            final typeGroup = XTypeGroup(
+              label: 'Imágenes',
+              extensions: const ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic'],
+            );
 
-        final XFile? selectedFile = await openFile(
-          acceptedTypeGroups: [typeGroup],
-        );
+            final XFile? selectedFile = await openFile(
+              acceptedTypeGroups: [typeGroup],
+            );
 
-        if (selectedFile == null || selectedFile.path.isEmpty) {
-          return null;
+            if (selectedFile == null || selectedFile.path.isEmpty) {
+              return null;
+            }
+
+            return File(selectedFile.path);
+          }
+        } catch (e) {
+          // Platform check failed, fall through to image_picker
+          if (kDebugMode) print('Platform check failed: $e');
         }
-
-        return File(selectedFile.path);
       }
 
+      // For web and mobile, use image_picker
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
         maxWidth: 1920,
