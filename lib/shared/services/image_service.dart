@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +7,10 @@ import 'package:mime/mime.dart';
 
 import '../constants/storage_constants.dart';
 import 'error_reporting_service.dart';
+
+// Conditional import: use web implementation on web, mobile on other platforms
+import 'image_service_mobile.dart'
+    if (dart.library.html) 'image_service_web.dart';
 
 class ImageService {
   static final SupabaseClient _client = Supabase.instance.client;
@@ -47,30 +50,9 @@ class ImageService {
     }
   }
 
-  /// Pick image from file system - WEB ONLY VERSION using dart:html
+  /// Pick image from file system - delegates to platform-specific implementation
   static Future<({Uint8List bytes, String name})?> pickImage() async {
-    try {
-      final html.FileUploadInputElement input = html.FileUploadInputElement()
-        ..accept = 'image/*';
-      input.click();
-
-      await input.onChange.first;
-
-      if (input.files == null || input.files!.isEmpty) {
-        return null;
-      }
-
-      final html.File file = input.files!.first;
-      final reader = html.FileReader();
-      reader.readAsArrayBuffer(file);
-      await reader.onLoad.first;
-
-      final bytes = reader.result as Uint8List;
-      return (bytes: bytes, name: file.name);
-    } catch (e, stackTrace) {
-      ErrorReportingService.report('Image pick failed: $e', stackTrace);
-      rethrow;
-    }
+    return ImageServicePlatform.pickImagePlatform();
   }
   
   // Widget for displaying cached network images with fallback
