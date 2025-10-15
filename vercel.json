@@ -1,13 +1,6 @@
 {
-  "buildCommand": null,
-  "devCommand": null,
-  "installCommand": null,
+  "buildCommand": "",
   "outputDirectory": "web",
-  "framework": null,
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
+  "installCommand": "echo 'No install needed'",
+  "devCommand": "echo 'No dev command'"
 }
