@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cross_file/cross_file.dart';
 import '../../../shared/services/image_service.dart';
 
 class AppearanceService extends ChangeNotifier {
@@ -91,7 +91,7 @@ class AppearanceService extends ChangeNotifier {
     return option.code;
   }
 
-  Future<void> uploadCompanyLogo(File imageFile) async {
+  Future<void> uploadCompanyLogo(XFile imageFile) async {
     try {
       // Upload to Supabase storage
       final imageUrl = await ImageService.uploadToDefaultBucket(

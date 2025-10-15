@@ -1,10 +1,11 @@
-import 'dart:io';
+import 'dart:io' show File, Platform;
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cross_file/cross_file.dart';
 
 import '../constants/storage_constants.dart';
 
@@ -12,9 +13,9 @@ class ImageService {
   static final SupabaseClient _client = Supabase.instance.client;
   static final ImagePicker _picker = ImagePicker();
 
-  // Upload image to Supabase Storage
+  // Upload image to Supabase Storage using XFile (cross-platform)
   static Future<String?> uploadImage(
-    File imageFile,
+    XFile imageFile,
     String bucket,
     String folder,
   ) async {
@@ -59,14 +60,14 @@ class ImageService {
   }
 
   static Future<String?> uploadToDefaultBucket(
-    File imageFile,
+    XFile imageFile,
     String folder,
   ) {
     return uploadImage(imageFile, StorageConfig.defaultBucket, folder);
   }
   
-  // Pick image from gallery or camera
-  static Future<File?> pickImage({ImageSource source = ImageSource.gallery}) async {
+  // Pick image from gallery or camera (returns XFile for cross-platform compatibility)
+  static Future<XFile?> pickImage({ImageSource source = ImageSource.gallery}) async {
     try {
       // On desktop platforms (Windows, Linux), use file_selector
       if (!kIsWeb) {
@@ -85,7 +86,7 @@ class ImageService {
               return null;
             }
 
-            return File(selectedFile.path);
+            return selectedFile;
           }
         } catch (e) {
           // Platform check failed, fall through to image_picker
@@ -101,10 +102,7 @@ class ImageService {
         imageQuality: 85,
       );
       
-      if (pickedFile != null) {
-        return File(pickedFile.path);
-      }
-      return null;
+      return pickedFile;
     } catch (e) {
       if (kDebugMode) print('Image picker error: $e');
       return null;
@@ -255,10 +253,10 @@ class ImageService {
     }
   }
 
-  static String _buildFileName(File imageFile) {
-    final originalName = imageFile.uri.pathSegments.isNotEmpty
-        ? imageFile.uri.pathSegments.last
-        : imageFile.path.split(Platform.pathSeparator).last;
+  static String _buildFileName(XFile imageFile) {
+    final originalName = imageFile.name.isNotEmpty
+        ? imageFile.name
+        : 'image_${DateTime.now().millisecondsSinceEpoch}';
     return '${DateTime.now().millisecondsSinceEpoch}_${originalName.replaceAll(' ', '_')}';
   }
 

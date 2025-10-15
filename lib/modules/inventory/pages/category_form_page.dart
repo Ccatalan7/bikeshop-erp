@@ -1,8 +1,9 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'package:cross_file/cross_file.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -28,7 +29,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
   
   bool _isActive = true;
   String? _imageUrl;
-  File? _selectedImage;
+  XFile? _selectedImage;
   
   bool _isLoading = false;
   bool _isSaving = false;
@@ -321,11 +322,19 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.file(
-              _selectedImage!,
-              width: double.infinity,
-              height: double.infinity,
-              fit: BoxFit.cover,
+            child: FutureBuilder<Uint8List>(
+              future: _selectedImage!.readAsBytes(),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  return Image.memory(
+                    snapshot.data!,
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.cover,
+                  );
+                }
+                return const Center(child: CircularProgressIndicator());
+              },
             ),
           ),
           Positioned(

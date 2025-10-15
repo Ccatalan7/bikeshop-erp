@@ -1,8 +1,9 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cross_file/cross_file.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -35,7 +36,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
   String? _selectedRegion;
   bool _isActive = true;
   String? _imageUrl;
-  File? _selectedImage;
+  XFile? _selectedImage;
   
   bool _isLoading = false;
   bool _isSaving = false;
@@ -251,9 +252,17 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                             ),
                             child: _selectedImage != null
                                 ? ClipOval(
-                                    child: Image.file(
-                                      _selectedImage!,
-                                      fit: BoxFit.cover,
+                                    child: FutureBuilder<Uint8List>(
+                                      future: _selectedImage!.readAsBytes(),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.hasData) {
+                                          return Image.memory(
+                                            snapshot.data!,
+                                            fit: BoxFit.cover,
+                                          );
+                                        }
+                                        return const CircularProgressIndicator();
+                                      },
                                     ),
                                   )
                                 : ImageService.buildAvatarImage(

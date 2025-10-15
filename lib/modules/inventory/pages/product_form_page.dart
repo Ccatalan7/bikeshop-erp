@@ -1,11 +1,13 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:cross_file/cross_file.dart';
 
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/database_service.dart';
@@ -15,7 +17,7 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/models/supplier.dart';
 import '../../purchases/services/purchase_service.dart';
-import '../models/category_models.dart';
+import '../models/category_models.dart' as category_models;
 import '../models/inventory_models.dart';
 import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
@@ -48,13 +50,13 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
   String? _selectedCategoryId;
   String? _selectedSupplierId;
-  List<Category> _categories = [];
+  List<category_models.Category> _categories = [];
   List<Supplier> _suppliers = [];
   bool _isActive = true;
   ProductType _selectedProductType = ProductType.product;
 
   String? _imageUrl;
-  File? _selectedImage;
+  XFile? _selectedImage;
   final List<String> _additionalImages = [];
   bool _isUploadingGalleryImage = false;
 
@@ -246,7 +248,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         (c) => c.id == _selectedCategoryId,
         orElse: () => _categories.isNotEmpty
             ? _categories.first
-            : Category(id: null, name: 'PRD'),
+            : category_models.Category(id: null, name: 'PRD'),
       );
 
       final categorySegment = category.name
@@ -925,9 +927,17 @@ class _ProductFormPageState extends State<ProductFormPage> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: _selectedImage != null
-                      ? Image.file(
-                          _selectedImage!,
-                          fit: BoxFit.cover,
+                      ? FutureBuilder<Uint8List>(
+                          future: _selectedImage!.readAsBytes(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData) {
+                              return Image.memory(
+                                snapshot.data!,
+                                fit: BoxFit.cover,
+                              );
+                            }
+                            return const Center(child: CircularProgressIndicator());
+                          },
                         )
                       : ImageService.buildProductImage(
                           imageUrl: _imageUrl,
