@@ -13,6 +13,7 @@ import 'shared/config/supabase_config.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/crm/services/customer_service.dart';
 import 'modules/accounting/services/accounting_service.dart';
+import 'modules/accounting/services/financial_reports_service.dart';
 import 'modules/pos/services/pos_service.dart';
 import 'modules/purchases/services/purchase_service.dart';
 import 'modules/sales/services/sales_service.dart';
@@ -71,6 +72,9 @@ class VinabikeApp extends StatelessWidget {
           Provider.of<DatabaseService>(context, listen: false),
         )),
         ChangeNotifierProvider(create: (context) => AccountingService(
+          Provider.of<DatabaseService>(context, listen: false),
+        )),
+        ChangeNotifierProvider(create: (context) => FinancialReportsService(
           Provider.of<DatabaseService>(context, listen: false),
         )),
         ChangeNotifierProvider(create: (context) => PurchaseService(

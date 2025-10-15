@@ -4022,4 +4022,563 @@ end $$;
 
 -- TODO: add role-specific policies matching Sales, Inventory, HR, Mechanic, Cashier profiles.
 
+-- ============================================================================
+-- FINANCIAL REPORTING FUNCTIONS
+-- Professional accounting reports for Chilean GAAP compliance
+-- ============================================================================
+
+-- Function 1: Get account balance for a specific period
+-- Returns the net balance (debits - credits for assets/expenses, credits - debits for liabilities/equity/income)
+create or replace function public.get_account_balance(
+  p_account_id uuid,
+  p_start_date timestamp with time zone,
+  p_end_date timestamp with time zone
+)
+returns numeric(14,2)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_account record;
+  v_total_debit numeric(14,2) := 0;
+  v_total_credit numeric(14,2) := 0;
+  v_balance numeric(14,2) := 0;
+begin
+  -- Get account type to determine balance calculation
+  select type into v_account
+  from accounts
+  where id = p_account_id;
+  
+  if not found then
+    raise exception 'Account not found: %', p_account_id;
+  end if;
+  
+  -- Sum debits and credits for this account in the period
+  select
+    coalesce(sum(debit_amount), 0),
+    coalesce(sum(credit_amount), 0)
+  into v_total_debit, v_total_credit
+  from journal_lines jl
+  inner join journal_entries je on je.id = jl.entry_id
+  where jl.account_id = p_account_id
+    and je.entry_date >= p_start_date
+    and je.entry_date <= p_end_date
+    and je.status = 'posted';
+  
+  -- Calculate balance based on account type
+  -- Assets and Expenses: Debit increases balance (debit - credit)
+  -- Liabilities, Equity, Income: Credit increases balance (credit - debit)
+  if v_account.type in ('asset', 'expense') then
+    v_balance := v_total_debit - v_total_credit;
+  else
+    v_balance := v_total_credit - v_total_debit;
+  end if;
+  
+  return v_balance;
+end;
+$$;
+
+-- Function 2: Get balances by account type with details
+-- Returns all accounts of a specific type with their balances for a period
+create or replace function public.get_balances_by_type(
+  p_account_type text,
+  p_start_date timestamp with time zone,
+  p_end_date timestamp with time zone
+)
+returns table (
+  account_id uuid,
+  account_code text,
+  account_name text,
+  account_category text,
+  parent_id uuid,
+  debit_total numeric(14,2),
+  credit_total numeric(14,2),
+  balance numeric(14,2)
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select
+    a.id as account_id,
+    a.code as account_code,
+    a.name as account_name,
+    a.category as account_category,
+    a.parent_id,
+    coalesce(sum(jl.debit_amount), 0)::numeric(14,2) as debit_total,
+    coalesce(sum(jl.credit_amount), 0)::numeric(14,2) as credit_total,
+    case
+      -- Assets and Expenses: Debit balance
+      when a.type in ('asset', 'expense') then
+        coalesce(sum(jl.debit_amount), 0) - coalesce(sum(jl.credit_amount), 0)
+      -- Liabilities, Equity, Income: Credit balance
+      else
+        coalesce(sum(jl.credit_amount), 0) - coalesce(sum(jl.debit_amount), 0)
+    end::numeric(14,2) as balance
+  from accounts a
+  left join journal_lines jl on jl.account_id = a.id
+  left join journal_entries je on je.id = jl.entry_id
+    and je.entry_date >= p_start_date
+    and je.entry_date <= p_end_date
+    and je.status = 'posted'
+  where a.type = p_account_type
+    and a.is_active = true
+  group by a.id, a.code, a.name, a.category, a.parent_id, a.type
+  order by a.code;
+end;
+$$;
+
+-- Function 3: Get balances by category (more granular than type)
+-- Useful for grouping in financial statements
+create or replace function public.get_balances_by_category(
+  p_account_category text,
+  p_start_date timestamp with time zone,
+  p_end_date timestamp with time zone
+)
+returns table (
+  account_id uuid,
+  account_code text,
+  account_name text,
+  account_type text,
+  parent_id uuid,
+  debit_total numeric(14,2),
+  credit_total numeric(14,2),
+  balance numeric(14,2)
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select
+    a.id as account_id,
+    a.code as account_code,
+    a.name as account_name,
+    a.type as account_type,
+    a.parent_id,
+    coalesce(sum(jl.debit_amount), 0)::numeric(14,2) as debit_total,
+    coalesce(sum(jl.credit_amount), 0)::numeric(14,2) as credit_total,
+    case
+      when a.type in ('asset', 'expense') then
+        coalesce(sum(jl.debit_amount), 0) - coalesce(sum(jl.credit_amount), 0)
+      else
+        coalesce(sum(jl.credit_amount), 0) - coalesce(sum(jl.debit_amount), 0)
+    end::numeric(14,2) as balance
+  from accounts a
+  left join journal_lines jl on jl.account_id = a.id
+  left join journal_entries je on je.id = jl.entry_id
+    and je.entry_date >= p_start_date
+    and je.entry_date <= p_end_date
+    and je.status = 'posted'
+  where a.category = p_account_category
+    and a.is_active = true
+  group by a.id, a.code, a.name, a.type, a.parent_id
+  order by a.code;
+end;
+$$;
+
+-- Function 4: Get trial balance (all accounts with balances)
+-- Essential for verifying that debits = credits
+create or replace function public.get_trial_balance(
+  p_start_date timestamp with time zone,
+  p_end_date timestamp with time zone
+)
+returns table (
+  account_code text,
+  account_name text,
+  account_type text,
+  account_category text,
+  debit_total numeric(14,2),
+  credit_total numeric(14,2),
+  balance numeric(14,2)
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select
+    a.code as account_code,
+    a.name as account_name,
+    a.type as account_type,
+    a.category as account_category,
+    coalesce(sum(jl.debit_amount), 0)::numeric(14,2) as debit_total,
+    coalesce(sum(jl.credit_amount), 0)::numeric(14,2) as credit_total,
+    case
+      when a.type in ('asset', 'expense') then
+        coalesce(sum(jl.debit_amount), 0) - coalesce(sum(jl.credit_amount), 0)
+      else
+        coalesce(sum(jl.credit_amount), 0) - coalesce(sum(jl.debit_amount), 0)
+    end::numeric(14,2) as balance
+  from accounts a
+  left join journal_lines jl on jl.account_id = a.id
+  left join journal_entries je on je.id = jl.entry_id
+    and je.entry_date >= p_start_date
+    and je.entry_date <= p_end_date
+    and je.status = 'posted'
+  where a.is_active = true
+  group by a.id, a.code, a.name, a.type, a.category
+  having coalesce(sum(jl.debit_amount), 0) <> 0 
+      or coalesce(sum(jl.credit_amount), 0) <> 0
+  order by a.code;
+end;
+$$;
+
+-- Function 5: Calculate net income for a period
+-- Income Statement bottom line: Total Income - Total Expenses
+create or replace function public.calculate_net_income(
+  p_start_date timestamp with time zone,
+  p_end_date timestamp with time zone
+)
+returns numeric(14,2)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_total_income numeric(14,2) := 0;
+  v_total_expense numeric(14,2) := 0;
+  v_net_income numeric(14,2) := 0;
+begin
+  -- Calculate total income (credit balance for income accounts)
+  select coalesce(sum(
+    case
+      when a.type = 'income' then
+        coalesce(jl.credit_amount, 0) - coalesce(jl.debit_amount, 0)
+      else 0
+    end
+  ), 0)
+  into v_total_income
+  from journal_lines jl
+  inner join journal_entries je on je.id = jl.entry_id
+  inner join accounts a on a.id = jl.account_id
+  where je.entry_date >= p_start_date
+    and je.entry_date <= p_end_date
+    and je.status = 'posted'
+    and a.type = 'income';
+  
+  -- Calculate total expenses (debit balance for expense accounts)
+  select coalesce(sum(
+    case
+      when a.type = 'expense' then
+        coalesce(jl.debit_amount, 0) - coalesce(jl.credit_amount, 0)
+      else 0
+    end
+  ), 0)
+  into v_total_expense
+  from journal_lines jl
+  inner join journal_entries je on je.id = jl.entry_id
+  inner join accounts a on a.id = jl.account_id
+  where je.entry_date >= p_start_date
+    and je.entry_date <= p_end_date
+    and je.status = 'posted'
+    and a.type = 'expense';
+  
+  -- Net Income = Income - Expenses
+  v_net_income := v_total_income - v_total_expense;
+  
+  return v_net_income;
+end;
+$$;
+
+-- Function 6: Get cumulative balance (for Balance Sheet - all transactions up to date)
+-- Unlike period balance, this includes ALL transactions from the beginning of time
+create or replace function public.get_cumulative_balance(
+  p_account_id uuid,
+  p_as_of_date timestamp with time zone
+)
+returns numeric(14,2)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_account record;
+  v_total_debit numeric(14,2) := 0;
+  v_total_credit numeric(14,2) := 0;
+  v_balance numeric(14,2) := 0;
+begin
+  select type into v_account
+  from accounts
+  where id = p_account_id;
+  
+  if not found then
+    raise exception 'Account not found: %', p_account_id;
+  end if;
+  
+  -- Sum all debits and credits up to the date
+  select
+    coalesce(sum(debit_amount), 0),
+    coalesce(sum(credit_amount), 0)
+  into v_total_debit, v_total_credit
+  from journal_lines jl
+  inner join journal_entries je on je.id = jl.entry_id
+  where jl.account_id = p_account_id
+    and je.entry_date <= p_as_of_date
+    and je.status = 'posted';
+  
+  -- Calculate balance based on account type
+  if v_account.type in ('asset', 'expense') then
+    v_balance := v_total_debit - v_total_credit;
+  else
+    v_balance := v_total_credit - v_total_debit;
+  end if;
+  
+  return v_balance;
+end;
+$$;
+
+-- Function 7: Get cumulative balances by type (for Balance Sheet)
+create or replace function public.get_cumulative_balances_by_type(
+  p_account_type text,
+  p_as_of_date timestamp with time zone
+)
+returns table (
+  account_id uuid,
+  account_code text,
+  account_name text,
+  account_category text,
+  parent_id uuid,
+  debit_total numeric(14,2),
+  credit_total numeric(14,2),
+  balance numeric(14,2)
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select
+    a.id as account_id,
+    a.code as account_code,
+    a.name as account_name,
+    a.category as account_category,
+    a.parent_id,
+    coalesce(sum(jl.debit_amount), 0)::numeric(14,2) as debit_total,
+    coalesce(sum(jl.credit_amount), 0)::numeric(14,2) as credit_total,
+    case
+      when a.type in ('asset', 'expense') then
+        coalesce(sum(jl.debit_amount), 0) - coalesce(sum(jl.credit_amount), 0)
+      else
+        coalesce(sum(jl.credit_amount), 0) - coalesce(sum(jl.debit_amount), 0)
+    end::numeric(14,2) as balance
+  from accounts a
+  left join journal_lines jl on jl.account_id = a.id
+  left join journal_entries je on je.id = jl.entry_id
+    and je.entry_date <= p_as_of_date
+    and je.status = 'posted'
+  where a.type = p_account_type
+    and a.is_active = true
+  group by a.id, a.code, a.name, a.category, a.parent_id, a.type
+  order by a.code;
+end;
+$$;
+
+-- Function 8: Verify accounting equation (Assets = Liabilities + Equity)
+-- Returns true if balanced, false if not (with difference amount)
+create or replace function public.verify_accounting_equation(
+  p_as_of_date timestamp with time zone
+)
+returns table (
+  is_balanced boolean,
+  total_assets numeric(14,2),
+  total_liabilities numeric(14,2),
+  total_equity numeric(14,2),
+  difference numeric(14,2)
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_assets numeric(14,2) := 0;
+  v_liabilities numeric(14,2) := 0;
+  v_equity numeric(14,2) := 0;
+  v_diff numeric(14,2) := 0;
+  v_is_balanced boolean := false;
+begin
+  -- Calculate total assets
+  select coalesce(sum(
+    coalesce(jl.debit_amount, 0) - coalesce(jl.credit_amount, 0)
+  ), 0)
+  into v_assets
+  from journal_lines jl
+  inner join journal_entries je on je.id = jl.entry_id
+  inner join accounts a on a.id = jl.account_id
+  where je.entry_date <= p_as_of_date
+    and je.status = 'posted'
+    and a.type = 'asset';
+  
+  -- Calculate total liabilities
+  select coalesce(sum(
+    coalesce(jl.credit_amount, 0) - coalesce(jl.debit_amount, 0)
+  ), 0)
+  into v_liabilities
+  from journal_lines jl
+  inner join journal_entries je on je.id = jl.entry_id
+  inner join accounts a on a.id = jl.account_id
+  where je.entry_date <= p_as_of_date
+    and je.status = 'posted'
+    and a.type = 'liability';
+  
+  -- Calculate total equity
+  select coalesce(sum(
+    coalesce(jl.credit_amount, 0) - coalesce(jl.debit_amount, 0)
+  ), 0)
+  into v_equity
+  from journal_lines jl
+  inner join journal_entries je on je.id = jl.entry_id
+  inner join accounts a on a.id = jl.account_id
+  where je.entry_date <= p_as_of_date
+    and je.status = 'posted'
+    and a.type = 'equity';
+  
+  -- Calculate difference (should be near zero)
+  v_diff := v_assets - (v_liabilities + v_equity);
+  
+  -- Consider balanced if difference is less than 1 peso (rounding tolerance)
+  v_is_balanced := abs(v_diff) < 1.00;
+  
+  return query
+  select v_is_balanced, v_assets, v_liabilities, v_equity, v_diff;
+end;
+$$;
+
+-- Function 9: Get income statement data grouped by category
+-- Returns structured data ready for Income Statement report
+create or replace function public.get_income_statement_data(
+  p_start_date timestamp with time zone,
+  p_end_date timestamp with time zone
+)
+returns table (
+  category text,
+  category_label text,
+  account_code text,
+  account_name text,
+  amount numeric(14,2)
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select
+    a.category,
+    case a.category
+      when 'operatingIncome' then 'Ingresos Operacionales'
+      when 'nonOperatingIncome' then 'Ingresos No Operacionales'
+      when 'costOfGoodsSold' then 'Costo de Ventas'
+      when 'operatingExpense' then 'Gastos Operacionales'
+      when 'financialExpense' then 'Gastos Financieros'
+      when 'taxExpense' then 'Impuestos'
+      else a.category
+    end as category_label,
+    a.code as account_code,
+    a.name as account_name,
+    case
+      when a.type = 'income' then
+        coalesce(sum(jl.credit_amount), 0) - coalesce(sum(jl.debit_amount), 0)
+      when a.type = 'expense' then
+        coalesce(sum(jl.debit_amount), 0) - coalesce(sum(jl.credit_amount), 0)
+      else 0
+    end::numeric(14,2) as amount
+  from accounts a
+  left join journal_lines jl on jl.account_id = a.id
+  left join journal_entries je on je.id = jl.entry_id
+    and je.entry_date >= p_start_date
+    and je.entry_date <= p_end_date
+    and je.status = 'posted'
+  where a.type in ('income', 'expense')
+    and a.is_active = true
+  group by a.id, a.code, a.name, a.type, a.category
+  having (coalesce(sum(jl.debit_amount), 0) <> 0 
+       or coalesce(sum(jl.credit_amount), 0) <> 0)
+  order by 
+    case a.type 
+      when 'income' then 1 
+      when 'expense' then 2 
+      else 3 
+    end,
+    a.category,
+    a.code;
+end;
+$$;
+
+-- Function 10: Get balance sheet data grouped by category
+-- Returns structured data ready for Balance Sheet report
+create or replace function public.get_balance_sheet_data(
+  p_as_of_date timestamp with time zone
+)
+returns table (
+  account_type text,
+  type_label text,
+  category text,
+  category_label text,
+  account_code text,
+  account_name text,
+  amount numeric(14,2)
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select
+    a.type as account_type,
+    case a.type
+      when 'asset' then 'ACTIVOS'
+      when 'liability' then 'PASIVOS'
+      when 'equity' then 'PATRIMONIO'
+      else a.type
+    end as type_label,
+    a.category,
+    case a.category
+      when 'currentAsset' then 'Activos Circulantes'
+      when 'fixedAsset' then 'Activos Fijos'
+      when 'otherAsset' then 'Otros Activos'
+      when 'currentLiability' then 'Pasivos Circulantes'
+      when 'longTermLiability' then 'Pasivos Largo Plazo'
+      when 'capital' then 'Capital'
+      when 'retainedEarnings' then 'Utilidades Retenidas'
+      else a.category
+    end as category_label,
+    a.code as account_code,
+    a.name as account_name,
+    case
+      when a.type = 'asset' then
+        coalesce(sum(jl.debit_amount), 0) - coalesce(sum(jl.credit_amount), 0)
+      when a.type in ('liability', 'equity') then
+        coalesce(sum(jl.credit_amount), 0) - coalesce(sum(jl.debit_amount), 0)
+      else 0
+    end::numeric(14,2) as amount
+  from accounts a
+  left join journal_lines jl on jl.account_id = a.id
+  left join journal_entries je on je.id = jl.entry_id
+    and je.entry_date <= p_as_of_date
+    and je.status = 'posted'
+  where a.type in ('asset', 'liability', 'equity')
+    and a.is_active = true
+  group by a.id, a.code, a.name, a.type, a.category
+  having (coalesce(sum(jl.debit_amount), 0) <> 0 
+       or coalesce(sum(jl.credit_amount), 0) <> 0)
+  order by 
+    case a.type 
+      when 'asset' then 1 
+      when 'liability' then 2 
+      when 'equity' then 3 
+      else 4 
+    end,
+    a.category,
+    a.code;
+end;
+$$;
+
 notify pgrst, 'reload schema';

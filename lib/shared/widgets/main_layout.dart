@@ -23,6 +23,21 @@ const List<MenuSubItem> _accountingMenuItems = [
     title: 'Nuevo asiento',
     route: '/accounting/journal-entries/new',
   ),
+  MenuSubItem(
+    icon: Icons.assessment_outlined,
+    title: 'Reportes Financieros',
+    route: '/accounting/reports',
+  ),
+  MenuSubItem(
+    icon: Icons.trending_up,
+    title: 'Estado de Resultados',
+    route: '/accounting/reports/income-statement',
+  ),
+  MenuSubItem(
+    icon: Icons.account_balance,
+    title: 'Balance General',
+    route: '/accounting/reports/balance-sheet',
+  ),
 ];
 
 const String _accountingSectionKey = 'accounting';

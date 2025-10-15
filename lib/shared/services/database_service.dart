@@ -257,6 +257,25 @@ class DatabaseService extends ChangeNotifier {
     }
   }
 
+  // Generic RPC call for custom PostgreSQL functions
+  Future<dynamic> rpc(String functionName, {Map<String, dynamic>? params}) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('🔧 RPC Call: $functionName | params: $params');
+      }
+      final result = await _client.rpc(functionName, params: params);
+      if (kDebugMode) {
+        debugPrint('✅ RPC Result: $functionName completed');
+      }
+      return result;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ RPC error on $functionName: $e');
+      }
+      rethrow;
+    }
+  }
+
   void _applyTimestamps(Map<String, dynamic> data, {required bool isInsert}) {
     final now = DateTime.now().toUtc().toIso8601String();
     if (isInsert) {

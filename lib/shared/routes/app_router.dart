@@ -9,6 +9,9 @@ import '../../modules/accounting/pages/account_list_page.dart';
 import '../../modules/accounting/pages/account_form_page.dart';
 import '../../modules/accounting/pages/journal_entry_list_page.dart';
 import '../../modules/accounting/pages/journal_entry_form_page.dart';
+import '../../modules/accounting/pages/financial_reports_hub_page.dart';
+import '../../modules/accounting/pages/income_statement_page.dart';
+import '../../modules/accounting/pages/balance_sheet_page.dart';
 import '../../modules/crm/pages/customer_list_page.dart';
 import '../../modules/crm/pages/customer_form_page.dart';
 import '../../modules/inventory/pages/product_list_page.dart';
@@ -148,6 +151,32 @@ class AppRouter {
             JournalEntryFormPage(entryId: entryId),
           );
         },
+      ),
+      
+      // Financial Reports
+      GoRoute(
+        path: '/accounting/reports',
+        pageBuilder: (context, state) => _buildPageWithNoTransition(
+          context,
+          state,
+          const FinancialReportsHubPage(),
+        ),
+      ),
+      GoRoute(
+        path: '/accounting/reports/income-statement',
+        pageBuilder: (context, state) => _buildPageWithNoTransition(
+          context,
+          state,
+          const IncomeStatementPage(),
+        ),
+      ),
+      GoRoute(
+        path: '/accounting/reports/balance-sheet',
+        pageBuilder: (context, state) => _buildPageWithNoTransition(
+          context,
+          state,
+          const BalanceSheetPage(),
+        ),
       ),
       
       // CRM Module
