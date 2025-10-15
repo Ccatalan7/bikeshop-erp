@@ -1,0 +1,8 @@
+{
+  "name": "vinabike-erp",
+  "version": "1.0.0",
+  "description": "Vinabike ERP - Flutter Web Application",
+  "scripts": {
+    "build": "flutter build web --release --web-renderer canvaskit"
+  }
+}
