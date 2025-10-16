@@ -4930,7 +4930,8 @@ create table if not exists mechanic_job_items (
   unit_price numeric(12,2) not null default 0,
   total_price numeric(12,2) not null default 0,
   notes text,
-  created_at timestamp with time zone not null default now()
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
 );
 
 do $$
@@ -4962,6 +4963,9 @@ begin
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'created_at') then
     alter table mechanic_job_items add column created_at timestamp with time zone not null default now();
   end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'updated_at') then
+    alter table mechanic_job_items add column updated_at timestamp with time zone not null default now();
+  end if;
 end $$;
 
 create index if not exists idx_mechanic_job_items_job_id on mechanic_job_items(job_id);
@@ -4979,7 +4983,8 @@ create table if not exists mechanic_job_labor (
   hourly_rate numeric(12,2) not null default 0,
   total_cost numeric(12,2) not null default 0,
   work_date timestamp with time zone not null default now(),
-  created_at timestamp with time zone not null default now()
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
 );
 
 do $$
@@ -5010,6 +5015,9 @@ begin
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'created_at') then
     alter table mechanic_job_labor add column created_at timestamp with time zone not null default now();
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'updated_at') then
+    alter table mechanic_job_labor add column updated_at timestamp with time zone not null default now();
   end if;
 end $$;
 
@@ -5553,39 +5561,47 @@ begin
   end if;
 
   if TG_OP = 'INSERT' then
-    -- Generate job number if not provided
-    if NEW.job_number is null or NEW.job_number = '' then
-      NEW.job_number := public.generate_mechanic_job_number();
+    -- For BEFORE INSERT: Only set job_number and timestamps
+    if TG_WHEN = 'BEFORE' then
+      -- Generate job number if not provided
+      if NEW.job_number is null or NEW.job_number = '' then
+        NEW.job_number := public.generate_mechanic_job_number();
+      end if;
+
+      -- Set timestamps based on status
+      if NEW.status = 'EN_CURSO' and NEW.started_at is null then
+        NEW.started_at := now();
+      end if;
+      if NEW.status = 'FINALIZADO' and NEW.completed_at is null then
+        NEW.completed_at := now();
+      end if;
+      if NEW.status = 'ENTREGADO' and NEW.delivered_at is null then
+        NEW.delivered_at := now();
+      end if;
+
+      return NEW;
     end if;
 
-    -- Set timestamps based on status
-    if NEW.status = 'EN_CURSO' and NEW.started_at is null then
-      NEW.started_at := now();
-    end if;
-    if NEW.status = 'FINALIZADO' and NEW.completed_at is null then
-      NEW.completed_at := now();
-    end if;
-    if NEW.status = 'ENTREGADO' and NEW.delivered_at is null then
-      NEW.delivered_at := now();
-    end if;
+    -- For AFTER INSERT: Log timeline and handle inventory/journal
+    if TG_WHEN = 'AFTER' then
+      -- Log creation
+      perform public.log_mechanic_job_timeline(
+        NEW.id,
+        'created',
+        null,
+        NEW.status,
+        'Job created: ' || coalesce(NEW.client_request, 'Service request')
+      );
 
-    -- Log creation
-    perform public.log_mechanic_job_timeline(
-      NEW.id,
-      'created',
-      null,
-      NEW.status,
-      'Job created: ' || coalesce(NEW.client_request, 'Service request')
-    );
+      -- Consume inventory if starting with EN_CURSO or FINALIZADO status
+      if NEW.status in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO') then
+        v_should_consume_inventory := true;
+      end if;
 
-    -- Consume inventory if starting with EN_CURSO or FINALIZADO status
-    if NEW.status in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO') then
-      v_should_consume_inventory := true;
-    end if;
-
-    -- Create journal entry if starting with FINALIZADO
-    if NEW.status in ('FINALIZADO', 'ENTREGADO') and not NEW.is_invoiced then
-      v_should_create_journal := true;
+      -- Create journal entry if starting with FINALIZADO
+      if NEW.status in ('FINALIZADO', 'ENTREGADO') and not NEW.is_invoiced then
+        v_should_create_journal := true;
+      end if;
     end if;
 
     return NEW;
@@ -5695,28 +5711,41 @@ begin
     return OLD;
   end if;
 
-  -- Execute deferred operations after RETURN to avoid modification conflicts
-  if v_should_restore_inventory then
-    perform public.restore_mechanic_job_inventory(NEW.id);
+  -- For BEFORE triggers on INSERT, must return NEW to allow the insert
+  if TG_WHEN = 'BEFORE' and TG_OP = 'INSERT' then
+    return NEW;
   end if;
 
-  if v_should_consume_inventory then
-    perform public.consume_mechanic_job_inventory(NEW.id);
-  end if;
+  -- Execute deferred operations for AFTER triggers
+  if TG_WHEN = 'AFTER' then
+    if v_should_restore_inventory then
+      perform public.restore_mechanic_job_inventory(NEW.id);
+    end if;
 
-  if v_should_delete_journal then
-    perform public.delete_mechanic_job_journal_entry(NEW.id);
-  end if;
+    if v_should_consume_inventory then
+      perform public.consume_mechanic_job_inventory(NEW.id);
+    end if;
 
-  if v_should_create_journal then
-    perform public.create_mechanic_job_journal_entry(NEW.id);
+    if v_should_delete_journal then
+      perform public.delete_mechanic_job_journal_entry(NEW.id);
+    end if;
+
+    if v_should_create_journal then
+      perform public.create_mechanic_job_journal_entry(NEW.id);
+    end if;
   end if;
 
   return NULL;
 end;
 $$;
 
--- Create trigger for mechanic jobs
+-- Create trigger for mechanic jobs (BEFORE INSERT to set job_number)
+drop trigger if exists trg_mechanic_jobs_before_insert on mechanic_jobs cascade;
+create trigger trg_mechanic_jobs_before_insert
+  before insert on mechanic_jobs
+  for each row execute procedure public.handle_mechanic_job_change();
+
+-- Create trigger for mechanic jobs (AFTER INSERT/UPDATE/DELETE for logging and business logic)
 drop trigger if exists trg_mechanic_jobs_change on mechanic_jobs cascade;
 create trigger trg_mechanic_jobs_change
   after insert or update or delete on mechanic_jobs
@@ -5834,6 +5863,16 @@ create trigger trg_service_packages_updated_at
 drop trigger if exists trg_mechanic_jobs_updated_at on mechanic_jobs cascade;
 create trigger trg_mechanic_jobs_updated_at
   before update on mechanic_jobs
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_mechanic_job_items_updated_at on mechanic_job_items cascade;
+create trigger trg_mechanic_job_items_updated_at
+  before update on mechanic_job_items
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_mechanic_job_labor_updated_at on mechanic_job_labor cascade;
+create trigger trg_mechanic_job_labor_updated_at
+  before update on mechanic_job_labor
   for each row execute procedure public.set_updated_at();
 
 notify pgrst, 'reload schema';

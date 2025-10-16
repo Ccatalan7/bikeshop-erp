@@ -484,7 +484,7 @@ class MechanicJob {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
-      'job_number': jobNumber,
+      if (jobNumber.isNotEmpty) 'job_number': jobNumber, // Only include if not empty (let DB generate it)
       'customer_id': customerId,
       'bike_id': bikeId,
       'service_package_id': servicePackageId,

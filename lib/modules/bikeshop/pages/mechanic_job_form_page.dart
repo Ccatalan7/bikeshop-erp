@@ -502,9 +502,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       IconButton(
                         icon: const Icon(Icons.edit),
                         onPressed: () async {
-                          Navigator.pop(context); // Close dialog
+                          Navigator.pop(context); // Close management dialog
                           
-                          final editedBike = await showDialog<Bike>(
+                          final result = await showDialog<Bike?>(
                             context: context,
                             builder: (context) => BikeFormDialog(
                               customerId: _selectedCustomer!.id!,
@@ -512,11 +512,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                             ),
                           );
                           
-                          if (editedBike != null) {
-                            final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
-                            final bikes = await bikeshopService.getBikes(customerId: _selectedCustomer!.id);
-                            setState(() => _bikes = bikes);
-                          }
+                          // Refresh bike list if edited (result != null) or deleted (result == null but dialog was closed after action)
+                          // We check if dialog returned (result is not false) to refresh
+                          final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
+                          final bikes = await bikeshopService.getBikes(customerId: _selectedCustomer!.id);
+                          setState(() {
+                            _bikes = bikes;
+                            // Clear selection if deleted bike was selected
+                            if (_selectedBike?.id == bike.id && !bikes.any((b) => b.id == bike.id)) {
+                              _selectedBike = null;
+                            }
+                          });
                         },
                         tooltip: 'Editar',
                       ),
@@ -620,35 +626,35 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   const SizedBox(width: 16),
                   OutlinedButton.icon(
                     onPressed: () async {
-                      final newBike = await showDialog<Bike>(
+                      final newBike = await showDialog<Bike?>(
                         context: context,
                         builder: (context) => BikeFormDialog(
                           customerId: _selectedCustomer!.id!,
                         ),
                       );
                       
-                      if (newBike != null) {
-                        // Reload bikes for this customer
-                        final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
-                        final bikes = await bikeshopService.getBikes(customerId: _selectedCustomer!.id);
-                        
-                        // Auto-select the newly created bike
-                        setState(() {
-                          _bikes = bikes;
+                      // Reload bikes for this customer (handles both creation and any unexpected deletion)
+                      final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
+                      final bikes = await bikeshopService.getBikes(customerId: _selectedCustomer!.id);
+                      
+                      setState(() {
+                        _bikes = bikes;
+                        // Auto-select the newly created bike if it exists
+                        if (newBike != null) {
                           _selectedBike = _bikes.firstWhere(
                             (bike) => bike.id == newBike.id,
                             orElse: () => newBike,
                           );
-                        });
-                        
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Bicicleta "${newBike.displayName}" creada exitosamente'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
                         }
+                      });
+                      
+                      if (mounted && newBike != null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Bicicleta "${newBike.displayName}" creada exitosamente'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
                       }
                     },
                     icon: const Icon(Icons.add),

@@ -28,7 +28,7 @@ class PegasTablePage extends StatefulWidget {
   State<PegasTablePage> createState() => _PegasTablePageState();
 }
 
-class _PegasTablePageState extends State<PegasTablePage> {
+class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObserver {
   late BikeshopService _bikeshopService;
   late CustomerService _customerService;
   
@@ -39,6 +39,7 @@ class _PegasTablePageState extends State<PegasTablePage> {
   Map<String, List<Bike>> _customerBikes = {}; // customer_id -> bikes
   
   bool _isLoading = true;
+  bool _needsRefresh = false; // Track if we need to refresh on next visibility
   String _searchTerm = '';
   
   // Column visibility and sorting
@@ -68,10 +69,42 @@ class _PegasTablePageState extends State<PegasTablePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final db = Provider.of<DatabaseService>(context, listen: false);
     _bikeshopService = BikeshopService(db);
     _customerService = CustomerService(db);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Refresh when app becomes visible again (user returns from another route)
+    if (state == AppLifecycleState.resumed && _needsRefresh) {
+      _needsRefresh = false;
+      _loadData();
+    }
+  }
+
+  // Called when page becomes active again after navigating back
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Check if we're becoming visible and need refresh
+    if (ModalRoute.of(context)?.isCurrent == true && _needsRefresh) {
+      _needsRefresh = false;
+      _loadData();
+    }
+  }
+
+  // Mark that refresh is needed when navigating away
+  void _markNeedsRefresh() {
+    _needsRefresh = true;
   }
 
   Future<void> _loadData() async {
@@ -655,7 +688,10 @@ class _PegasTablePageState extends State<PegasTablePage> {
       final daysElapsed = DateTime.now().difference(job.arrivalDate).inDays;
 
       return DataRow(
-        onSelectChanged: (_) => context.push('/bikeshop/jobs/${job.id}'),
+        onSelectChanged: (_) {
+          _markNeedsRefresh(); // Mark for refresh when returning
+          context.push('/bikeshop/jobs/${job.id}');
+        },
         cells: _visibleColumns
             .where((col) => _getAllColumnIds().contains(col))
             .map((col) => _buildPowerfulCell(
@@ -1359,6 +1395,7 @@ class _PegasTablePageState extends State<PegasTablePage> {
   }
 
   void _showQuickCreateDialog() {
+    _markNeedsRefresh(); // Mark for refresh when returning
     context.push('/bikeshop/jobs/new');
   }
 
