@@ -185,10 +185,15 @@ class _ProductFormPageState extends State<ProductFormPage> {
       try {
         final result = await ImageService.pickImage();
         if (result != null) {
+          print('PRODUCT FORM: Got image result - name: ${result.name}, bytes length: ${result.bytes.length}');
+          print('PRODUCT FORM: Bytes type: ${result.bytes.runtimeType}');
+          
           setState(() {
             _selectedImageBytes = result.bytes;
             _selectedImageName = result.name;
           });
+          
+          print('PRODUCT FORM: State updated - _selectedImageBytes is null? ${_selectedImageBytes == null}');
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -201,6 +206,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
           }
         }
       } catch (e, stackTrace) {
+        print('PRODUCT FORM ERROR: $e');
+        print('PRODUCT FORM STACK: $stackTrace');
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -37,7 +37,7 @@ class ImageService {
       final options = FileOptions(
         cacheControl: '3600',
         upsert: true,
-        contentType: lookupMimeType(uniqueFileName, headerBytes: bytes) ?? 'application/octet-stream',
+        contentType: 'image/jpeg', // Hardcoded - avoid lookupMimeType
       );
 
       await storageFile.uploadBinary(objectPath, bytes, fileOptions: options);
