@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:html' as html;
+import 'dart:convert';
 
 class ImageServicePlatform {
   static Future<({Uint8List bytes, String name})?> pickImagePlatform() async {
@@ -16,13 +17,17 @@ class ImageServicePlatform {
 
       final html.File file = input.files!.first;
       final reader = html.FileReader();
-      reader.readAsArrayBuffer(file);
+      
+      // Use readAsDataUrl instead of readAsArrayBuffer
+      // This is more web-native and avoids ByteBuffer issues
+      reader.readAsDataUrl(file);
       await reader.onLoad.first;
 
-      // CRITICAL: Must create a COPY of the bytes, not a view
-      // ByteBuffer.asUint8List() creates a TypedData view which can cause issues in release mode
-      final ByteBuffer buffer = reader.result as ByteBuffer;
-      final bytes = Uint8List.fromList(buffer.asUint8List());
+      final dataUrl = reader.result as String;
+      
+      // Remove the data:image/xxx;base64, prefix
+      final base64Data = dataUrl.split(',')[1];
+      final bytes = base64Decode(base64Data);
       
       return (bytes: bytes, name: file.name);
     } catch (e) {
