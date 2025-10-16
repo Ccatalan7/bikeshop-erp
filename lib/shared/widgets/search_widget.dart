@@ -49,7 +49,6 @@ class _SearchWidgetState extends State<SearchWidget> {
           ),
         ),
         onChanged: (value) {
-          setState(() {});
           widget.onSearchChanged(value);
         },
       ),

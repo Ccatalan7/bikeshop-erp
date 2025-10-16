@@ -528,4 +528,32 @@ class BikeshopService extends ChangeNotifier {
       return {};
     }
   }
+
+  /// Create an invoice from a mechanic job (AWESOME feature!)
+  /// Calls database function to generate invoice with all items + labor + IVA
+  Future<String?> createInvoiceFromJob(String jobId) async {
+    try {
+      if (jobId.isEmpty) return null;
+      
+      // Call the database function to create invoice
+      // This will include all job items, labor costs, and calculate IVA
+      final result = await _db.rpc(
+        'create_invoice_from_mechanic_job',
+        params: {'p_job_id': jobId},
+      );
+      
+      if (result != null) {
+        notifyListeners();
+        if (kDebugMode) print('✅ Invoice created from job: $result');
+        return result.toString();
+      }
+      
+      if (kDebugMode) print('⚠️ Invoice creation returned null for job: $jobId');
+      return null;
+    } catch (e) {
+      if (kDebugMode) print('❌ Error creating invoice from job: $e');
+      // Don't rethrow - invoice creation failure shouldn't prevent job from being saved
+      return null;
+    }
+  }
 }

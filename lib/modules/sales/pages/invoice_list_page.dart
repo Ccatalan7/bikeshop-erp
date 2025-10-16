@@ -189,21 +189,29 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       child: ListView.builder(
         padding: const EdgeInsets.all(16.0),
         itemCount: invoices.length,
+        // Add key to prevent unnecessary rebuilds
+        key: ValueKey('invoice_list_${invoices.length}'),
         itemBuilder: (context, index) {
           final invoice = invoices[index];
-          return _buildInvoiceCard(invoice);
+          return _buildInvoiceCard(invoice, key: ValueKey(invoice.id));
         },
       ),
     );
   }
 
-  Widget _buildInvoiceCard(Invoice invoice) {
+  Widget _buildInvoiceCard(Invoice invoice, {required Key key}) {
     return Card(
+      key: key,
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
         onTap: () {
           context.push('/sales/invoices/${invoice.id}').then((_) {
-            _refreshInvoices(showErrors: false);
+            // Defer refresh slightly to allow GPU context to stabilize
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (mounted) {
+                _refreshInvoices(showErrors: false);
+              }
+            });
           });
         },
         borderRadius: BorderRadius.circular(12),

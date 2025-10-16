@@ -54,53 +54,6 @@ class DashboardScreen extends StatelessWidget {
             
             const SizedBox(height: 32),
             
-            // Quick Stats
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                    'Cuentas Contables',
-                    '46',
-                    Icons.account_balance,
-                    Colors.blue,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                    'Productos',
-                    '120',
-                    Icons.inventory,
-                    Colors.green,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                    'Clientes',
-                    '85',
-                    Icons.people,
-                    Colors.orange,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                    'Proveedores',
-                    '25',
-                    Icons.business,
-                    Colors.purple,
-                  ),
-                ),
-              ],
-            ),
-            
-            const SizedBox(height: 32),
-            
             // Module Cards Section
             const Text(
               'Módulos Principales',
@@ -170,107 +123,8 @@ class DashboardScreen extends StatelessWidget {
                 ),
               ],
             ),
-            
-            const SizedBox(height: 32),
-            
-            // Quick Actions Section
-            const Text(
-              'Acciones Rápidas',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // Quick Action Buttons
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: [
-                _buildQuickActionButton(
-                  context,
-                  'Nueva Venta',
-                  Icons.add_shopping_cart,
-                  Colors.green,
-                  () => context.push('/sales/invoices/new'),
-                ),
-                _buildQuickActionButton(
-                  context,
-                  'Nuevo Cliente',
-                  Icons.person_add,
-                  Colors.blue,
-                  () => context.push('/crm/customers/new'),
-                ),
-                _buildQuickActionButton(
-                  context,
-                  'Nuevo Producto',
-                  Icons.add_box,
-                  Colors.orange,
-                  () => context.push('/inventory/products/new'),
-                ),
-                _buildQuickActionButton(
-                  context,
-                  'Asiento Manual',
-                  Icons.edit_note,
-                  Colors.purple,
-                  () => context.push('/accounting/journal-entries/new'),
-                ),
-                _buildQuickActionButton(
-                  context,
-                  'Nueva Compra',
-                  Icons.add_business,
-                  Colors.indigo,
-                  () => context.push('/purchases/suppliers/new'),
-                ),
-              ],
-            ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(
-    BuildContext context,
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).dividerColor,
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 24),
-              const Spacer(),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
       ),
     );
   }
@@ -325,28 +179,6 @@ class DashboardScreen extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickActionButton(
-    BuildContext context,
-    String label,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return ElevatedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 20),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
         ),
       ),
     );

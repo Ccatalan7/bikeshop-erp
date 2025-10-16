@@ -395,6 +395,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         );
         await bikeshopService.createJobLabor(jobLabor);
       }
+
+      // Create invoice AFTER items are added (awesome feature!)
+      // Only for new jobs to avoid recreating invoices on edits
+      if (widget.jobId == null) {
+        await bikeshopService.createInvoiceFromJob(jobId);
+      }
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -573,6 +579,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     _buildLaborSection(),
                     const SizedBox(height: 24),
                     _buildCostSummary(),
+                    if (_existingJob?.invoiceId != null) ...[
+                      const SizedBox(height: 24),
+                      _buildInvoiceSection(),
+                    ],
                     const SizedBox(height: 32),
                     _buildActionButtons(),
                   ],
@@ -1250,6 +1260,69 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ),
         ),
       ],
+    );
+  }
+  
+  Widget _buildInvoiceSection() {
+    return Card(
+      color: Colors.green[50],
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.receipt, color: Colors.green[700]),
+                const SizedBox(width: 12),
+                Text(
+                  'Factura Vinculada',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[900],
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.green[300]!),
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.white,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Factura: ${_existingJob?.invoiceId ?? "N/A"}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Estado: Factura creada automáticamente con los repuestos y servicios de esta pega',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      if (_existingJob?.invoiceId != null) {
+                        context.push('/sales/invoices/${_existingJob!.invoiceId}');
+                      }
+                    },
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('Ver Factura'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
   

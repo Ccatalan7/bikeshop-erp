@@ -757,11 +757,6 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   ),
                 ),
                 const SizedBox(width: 24),
-                if (_shouldShowReadOnlyNotice)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _buildReadOnlyNotice(theme),
-                  ),
                 SizedBox(
                   width: 360,
                   child: Column(
@@ -1325,7 +1320,10 @@ class _InvoiceLineEntry {
     final value = double.tryParse(quantityController.text.replaceAll(',', '.'));
     if (value != null && value >= 0) {
       line.quantity = value;
-      _listener?.call();
+      // Defer callback to avoid setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _listener?.call();
+      });
     }
   }
 
@@ -1334,7 +1332,10 @@ class _InvoiceLineEntry {
         double.tryParse(unitPriceController.text.replaceAll(',', '.'));
     if (value != null && value >= 0) {
       line.unitPrice = value;
-      _listener?.call();
+      // Defer callback to avoid setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _listener?.call();
+      });
     }
   }
 
@@ -1342,7 +1343,10 @@ class _InvoiceLineEntry {
     final value = double.tryParse(discountController.text.replaceAll(',', '.'));
     if (value != null && value >= 0) {
       line.discount = value;
-      _listener?.call();
+      // Defer callback to avoid setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _listener?.call();
+      });
     }
   }
 
