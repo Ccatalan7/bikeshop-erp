@@ -57,6 +57,21 @@ const List<MenuSubItem> _crmMenuItems = [
 
 const String _crmSectionKey = 'crm';
 
+const List<MenuSubItem> _bikeshopMenuItems = [
+  MenuSubItem(
+    icon: Icons.people_outline,
+    title: 'Clientes',
+    route: '/bikeshop/clients',
+  ),
+  MenuSubItem(
+    icon: Icons.build_outlined,
+    title: 'Pegas',
+    route: '/bikeshop/jobs',
+  ),
+];
+
+const String _bikeshopSectionKey = 'bikeshop';
+
 const List<MenuSubItem> _inventoryMenuItems = [
   MenuSubItem(
     icon: Icons.shopping_bag_outlined,
@@ -335,6 +350,9 @@ class _AppSidebarState extends State<AppSidebar> {
     if (_matchesLocation(location, _crmMenuItems)) {
       return _crmSectionKey;
     }
+    if (_matchesLocation(location, _bikeshopMenuItems)) {
+      return _bikeshopSectionKey;
+    }
     if (_matchesLocation(location, _inventoryMenuItems)) {
       return _inventorySectionKey;
     }
@@ -457,6 +475,16 @@ class _AppSidebarState extends State<AppSidebar> {
                   subItems: _crmMenuItems,
                   isExpanded: _expandedSection == _crmSectionKey,
                   onExpansionChanged: (expand) => _handleExpansionChange(_crmSectionKey, expand),
+                ),
+
+                ExpandableMenuItem(
+                  icon: Icons.two_wheeler_outlined,
+                  activeIcon: Icons.two_wheeler,
+                  title: 'Taller',
+                  currentLocation: currentLocation,
+                  subItems: _bikeshopMenuItems,
+                  isExpanded: _expandedSection == _bikeshopSectionKey,
+                  onExpansionChanged: (expand) => _handleExpansionChange(_bikeshopSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -770,6 +798,14 @@ class AppDrawer extends StatelessWidget {
             icon: Icons.people,
             title: 'Clientes',
             subItems: _crmMenuItems,
+            currentLocation: currentLocation,
+          ),
+
+          _buildDrawerExpandableItem(
+            context,
+            icon: Icons.two_wheeler,
+            title: 'Taller',
+            subItems: _bikeshopMenuItems,
             currentLocation: currentLocation,
           ),
 

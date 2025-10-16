@@ -14,6 +14,10 @@ import '../../modules/accounting/pages/income_statement_page.dart';
 import '../../modules/accounting/pages/balance_sheet_page.dart';
 import '../../modules/crm/pages/customer_list_page.dart';
 import '../../modules/crm/pages/customer_form_page.dart';
+import '../../modules/bikeshop/pages/clients_list_page.dart';
+import '../../modules/bikeshop/pages/client_logbook_page.dart';
+import '../../modules/bikeshop/pages/pegas_table_page.dart';
+import '../../modules/bikeshop/pages/mechanic_job_form_page.dart';
 import '../../modules/inventory/pages/product_list_page.dart';
 import '../../modules/inventory/pages/product_form_page.dart';
 import '../../modules/inventory/pages/category_list_page.dart';
@@ -204,6 +208,57 @@ class AppRouter {
             context,
             state,
             CustomerFormPage(customerId: id),
+          );
+        },
+      ),
+      
+      // Bikeshop Module
+      GoRoute(
+        path: '/bikeshop/clients',
+        pageBuilder: (context, state) => _buildPageWithNoTransition(
+          context,
+          state,
+          const BikeshopClientsListPage(),
+        ),
+      ),
+      GoRoute(
+        path: '/bikeshop/clients/:id',
+        pageBuilder: (context, state) {
+          final customerId = state.pathParameters['id']!;
+          return _buildPageWithNoTransition(
+            context,
+            state,
+            ClientLogbookPage(customerId: customerId),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/bikeshop/jobs',
+        pageBuilder: (context, state) => _buildPageWithNoTransition(
+          context,
+          state,
+          const PegasTablePage(),
+        ),
+      ),
+      GoRoute(
+        path: '/bikeshop/jobs/new',
+        pageBuilder: (context, state) {
+          final customerId = state.uri.queryParameters['customer_id'];
+          return _buildPageWithNoTransition(
+            context,
+            state,
+            MechanicJobFormPage(customerId: customerId),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/bikeshop/jobs/:id',
+        pageBuilder: (context, state) {
+          final jobId = state.pathParameters['id']!;
+          return _buildPageWithNoTransition(
+            context,
+            state,
+            MechanicJobFormPage(jobId: jobId), // Using form page in edit mode
           );
         },
       ),

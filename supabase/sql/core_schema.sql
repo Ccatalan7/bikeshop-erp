@@ -4581,4 +4581,1259 @@ begin
 end;
 $$;
 
+-- ============================================================
+-- BIKESHOP MODULE - Mechanic & Service Manager
+-- ============================================================
+-- Complete bikeshop/workshop management system with:
+-- - Bike registration and tracking
+-- - Service jobs (pegas) with workflow management
+-- - Service packages/templates
+-- - Labor and parts tracking
+-- - Timeline/history for each bike
+-- - Photos and documentation
+-- - Integration with inventory, accounting, and CRM
+
+-- Table: bikes
+-- Stores registered bicycles linked to customers
+create table if not exists bikes (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references customers(id) on delete cascade,
+  brand text,
+  model text,
+  year integer,
+  serial_number text unique,
+  color text,
+  frame_size text,
+  wheel_size text,
+  bike_type text check (bike_type in ('road','mountain','hybrid','electric','bmx','folding','cruiser','gravel','other')),
+  purchase_date date,
+  purchase_price numeric(12,2),
+  warranty_until date,
+  qr_code text unique, -- For quick bike lookup via QR scan
+  notes text,
+  image_url text, -- Primary image
+  image_urls text[] not null default array[]::text[], -- Multiple images
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+-- Migration: Add missing columns to bikes table
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'customer_id') then
+    alter table bikes add column customer_id uuid not null references customers(id) on delete cascade;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'brand') then
+    alter table bikes add column brand text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'model') then
+    alter table bikes add column model text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'year') then
+    alter table bikes add column year integer;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'serial_number') then
+    alter table bikes add column serial_number text unique;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'color') then
+    alter table bikes add column color text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'frame_size') then
+    alter table bikes add column frame_size text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'wheel_size') then
+    alter table bikes add column wheel_size text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'bike_type') then
+    alter table bikes add column bike_type text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'purchase_date') then
+    alter table bikes add column purchase_date date;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'purchase_price') then
+    alter table bikes add column purchase_price numeric(12,2);
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'warranty_until') then
+    alter table bikes add column warranty_until date;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'qr_code') then
+    alter table bikes add column qr_code text unique;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'notes') then
+    alter table bikes add column notes text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'image_url') then
+    alter table bikes add column image_url text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'image_urls') then
+    alter table bikes add column image_urls text[] not null default array[]::text[];
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'is_active') then
+    alter table bikes add column is_active boolean not null default true;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'created_at') then
+    alter table bikes add column created_at timestamp with time zone not null default now();
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'updated_at') then
+    alter table bikes add column updated_at timestamp with time zone not null default now();
+  end if;
+end $$;
+
+create index if not exists idx_bikes_customer_id on bikes(customer_id);
+create index if not exists idx_bikes_serial_number on bikes(serial_number) where serial_number is not null;
+create index if not exists idx_bikes_qr_code on bikes(qr_code) where qr_code is not null;
+create index if not exists idx_bikes_brand_model on bikes using gin (to_tsvector('spanish', coalesce(brand || ' ' || model, '')));
+
+-- Table: service_packages
+-- Predefined service templates (e.g., "Basic Tune-up", "Full Overhaul")
+create table if not exists service_packages (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text,
+  estimated_duration_hours numeric(5,2) not null default 1,
+  base_labor_cost numeric(12,2) not null default 0,
+  items jsonb not null default '[]'::jsonb, -- Array of {product_id, quantity, description}
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'name') then
+    alter table service_packages add column name text not null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'description') then
+    alter table service_packages add column description text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'estimated_duration_hours') then
+    alter table service_packages add column estimated_duration_hours numeric(5,2) not null default 1;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'base_labor_cost') then
+    alter table service_packages add column base_labor_cost numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'items') then
+    alter table service_packages add column items jsonb not null default '[]'::jsonb;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'is_active') then
+    alter table service_packages add column is_active boolean not null default true;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'created_at') then
+    alter table service_packages add column created_at timestamp with time zone not null default now();
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'updated_at') then
+    alter table service_packages add column updated_at timestamp with time zone not null default now();
+  end if;
+end $$;
+
+create index if not exists idx_service_packages_name on service_packages using gin (to_tsvector('spanish', coalesce(name, '')));
+
+-- Table: mechanic_jobs (pegas)
+-- Main table for tracking service jobs/work orders
+create table if not exists mechanic_jobs (
+  id uuid primary key default gen_random_uuid(),
+  job_number text not null unique, -- Auto-generated: MJ-YYYYMMDD-001
+  customer_id uuid not null references customers(id) on delete cascade,
+  bike_id uuid not null references bikes(id) on delete cascade,
+  service_package_id uuid references service_packages(id) on delete set null,
+  
+  -- Dates and timeline
+  arrival_date timestamp with time zone not null default now(),
+  deadline timestamp with time zone,
+  started_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  delivered_at timestamp with time zone,
+  
+  -- Status and priority
+  status text not null default 'PENDIENTE'
+    check (status in (
+      'PENDIENTE',         -- Waiting to start
+      'DIAGNOSTICO',       -- Being diagnosed
+      'ESPERANDO_APROBACION', -- Waiting for customer approval
+      'ESPERANDO_REPUESTOS',  -- Waiting for parts
+      'EN_CURSO',          -- Work in progress
+      'FINALIZADO',        -- Work completed
+      'ENTREGADO',         -- Delivered to customer
+      'CANCELADO'          -- Cancelled
+    )),
+  priority text not null default 'NORMAL'
+    check (priority in ('URGENTE','ALTA','NORMAL','BAJA')),
+  
+  -- Job details
+  client_request text, -- What the client reported
+  diagnosis text, -- Mechanic's diagnosis
+  work_performed text, -- What was actually done
+  notes text, -- Internal notes
+  
+  -- Assignment
+  assigned_to uuid references customers(id) on delete set null, -- Will be employee_id when HR module exists
+  assigned_technician_name text, -- Temporary until employees table exists
+  
+  -- Costs and invoicing
+  estimated_cost numeric(12,2) not null default 0,
+  final_cost numeric(12,2) not null default 0,
+  parts_cost numeric(12,2) not null default 0,
+  labor_cost numeric(12,2) not null default 0,
+  discount_amount numeric(12,2) not null default 0,
+  tax_amount numeric(12,2) not null default 0,
+  total_cost numeric(12,2) not null default 0,
+  
+  -- Invoicing
+  invoice_id uuid references sales_invoices(id) on delete set null,
+  is_invoiced boolean not null default false,
+  is_paid boolean not null default false,
+  
+  -- Warranty
+  is_warranty_job boolean not null default false,
+  warranty_notes text,
+  
+  -- Customer approval
+  requires_approval boolean not null default false,
+  approved_by_customer boolean not null default false,
+  approved_at timestamp with time zone,
+  
+  -- Images and attachments
+  image_urls text[] not null default array[]::text[],
+  
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+-- Migration: Add missing columns to mechanic_jobs table
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'job_number') then
+    alter table mechanic_jobs add column job_number text not null unique;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'customer_id') then
+    alter table mechanic_jobs add column customer_id uuid not null references customers(id) on delete cascade;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'bike_id') then
+    alter table mechanic_jobs add column bike_id uuid not null references bikes(id) on delete cascade;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'service_package_id') then
+    alter table mechanic_jobs add column service_package_id uuid references service_packages(id) on delete set null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'arrival_date') then
+    alter table mechanic_jobs add column arrival_date timestamp with time zone not null default now();
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'deadline') then
+    alter table mechanic_jobs add column deadline timestamp with time zone;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'started_at') then
+    alter table mechanic_jobs add column started_at timestamp with time zone;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'completed_at') then
+    alter table mechanic_jobs add column completed_at timestamp with time zone;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'delivered_at') then
+    alter table mechanic_jobs add column delivered_at timestamp with time zone;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'status') then
+    alter table mechanic_jobs add column status text not null default 'PENDIENTE';
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'priority') then
+    alter table mechanic_jobs add column priority text not null default 'NORMAL';
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'client_request') then
+    alter table mechanic_jobs add column client_request text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'diagnosis') then
+    alter table mechanic_jobs add column diagnosis text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'work_performed') then
+    alter table mechanic_jobs add column work_performed text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'notes') then
+    alter table mechanic_jobs add column notes text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'assigned_to') then
+    alter table mechanic_jobs add column assigned_to uuid references customers(id) on delete set null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'assigned_technician_name') then
+    alter table mechanic_jobs add column assigned_technician_name text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'estimated_cost') then
+    alter table mechanic_jobs add column estimated_cost numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'final_cost') then
+    alter table mechanic_jobs add column final_cost numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'parts_cost') then
+    alter table mechanic_jobs add column parts_cost numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'labor_cost') then
+    alter table mechanic_jobs add column labor_cost numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'discount_amount') then
+    alter table mechanic_jobs add column discount_amount numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'tax_amount') then
+    alter table mechanic_jobs add column tax_amount numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'total_cost') then
+    alter table mechanic_jobs add column total_cost numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'invoice_id') then
+    alter table mechanic_jobs add column invoice_id uuid references sales_invoices(id) on delete set null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'is_invoiced') then
+    alter table mechanic_jobs add column is_invoiced boolean not null default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'is_paid') then
+    alter table mechanic_jobs add column is_paid boolean not null default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'is_warranty_job') then
+    alter table mechanic_jobs add column is_warranty_job boolean not null default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'warranty_notes') then
+    alter table mechanic_jobs add column warranty_notes text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'requires_approval') then
+    alter table mechanic_jobs add column requires_approval boolean not null default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'approved_by_customer') then
+    alter table mechanic_jobs add column approved_by_customer boolean not null default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'approved_at') then
+    alter table mechanic_jobs add column approved_at timestamp with time zone;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'image_urls') then
+    alter table mechanic_jobs add column image_urls text[] not null default array[]::text[];
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'created_at') then
+    alter table mechanic_jobs add column created_at timestamp with time zone not null default now();
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'updated_at') then
+    alter table mechanic_jobs add column updated_at timestamp with time zone not null default now();
+  end if;
+end $$;
+
+create index if not exists idx_mechanic_jobs_customer_id on mechanic_jobs(customer_id);
+create index if not exists idx_mechanic_jobs_bike_id on mechanic_jobs(bike_id);
+create index if not exists idx_mechanic_jobs_status on mechanic_jobs(status);
+create index if not exists idx_mechanic_jobs_priority on mechanic_jobs(priority);
+create index if not exists idx_mechanic_jobs_assigned_to on mechanic_jobs(assigned_to) where assigned_to is not null;
+create index if not exists idx_mechanic_jobs_deadline on mechanic_jobs(deadline) where deadline is not null;
+create index if not exists idx_mechanic_jobs_job_number on mechanic_jobs(job_number);
+
+-- Table: mechanic_job_items
+-- Parts/products used in a job
+create table if not exists mechanic_job_items (
+  id uuid primary key default gen_random_uuid(),
+  job_id uuid not null references mechanic_jobs(id) on delete cascade,
+  product_id uuid references products(id) on delete set null,
+  product_name text not null, -- Cached in case product is deleted
+  product_sku text,
+  quantity numeric(10,2) not null default 1,
+  unit_price numeric(12,2) not null default 0,
+  total_price numeric(12,2) not null default 0,
+  notes text,
+  created_at timestamp with time zone not null default now()
+);
+
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'job_id') then
+    alter table mechanic_job_items add column job_id uuid not null references mechanic_jobs(id) on delete cascade;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'product_id') then
+    alter table mechanic_job_items add column product_id uuid references products(id) on delete set null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'product_name') then
+    alter table mechanic_job_items add column product_name text not null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'product_sku') then
+    alter table mechanic_job_items add column product_sku text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'quantity') then
+    alter table mechanic_job_items add column quantity numeric(10,2) not null default 1;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'unit_price') then
+    alter table mechanic_job_items add column unit_price numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'total_price') then
+    alter table mechanic_job_items add column total_price numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'notes') then
+    alter table mechanic_job_items add column notes text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'created_at') then
+    alter table mechanic_job_items add column created_at timestamp with time zone not null default now();
+  end if;
+end $$;
+
+create index if not exists idx_mechanic_job_items_job_id on mechanic_job_items(job_id);
+create index if not exists idx_mechanic_job_items_product_id on mechanic_job_items(product_id) where product_id is not null;
+
+-- Table: mechanic_job_labor
+-- Labor hours tracked per job
+create table if not exists mechanic_job_labor (
+  id uuid primary key default gen_random_uuid(),
+  job_id uuid not null references mechanic_jobs(id) on delete cascade,
+  technician_id uuid references customers(id) on delete set null, -- Will be employee_id when HR exists
+  technician_name text not null,
+  description text,
+  hours_worked numeric(5,2) not null default 0,
+  hourly_rate numeric(12,2) not null default 0,
+  total_cost numeric(12,2) not null default 0,
+  work_date timestamp with time zone not null default now(),
+  created_at timestamp with time zone not null default now()
+);
+
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'job_id') then
+    alter table mechanic_job_labor add column job_id uuid not null references mechanic_jobs(id) on delete cascade;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'technician_id') then
+    alter table mechanic_job_labor add column technician_id uuid references customers(id) on delete set null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'technician_name') then
+    alter table mechanic_job_labor add column technician_name text not null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'description') then
+    alter table mechanic_job_labor add column description text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'hours_worked') then
+    alter table mechanic_job_labor add column hours_worked numeric(5,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'hourly_rate') then
+    alter table mechanic_job_labor add column hourly_rate numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'total_cost') then
+    alter table mechanic_job_labor add column total_cost numeric(12,2) not null default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'work_date') then
+    alter table mechanic_job_labor add column work_date timestamp with time zone not null default now();
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'created_at') then
+    alter table mechanic_job_labor add column created_at timestamp with time zone not null default now();
+  end if;
+end $$;
+
+create index if not exists idx_mechanic_job_labor_job_id on mechanic_job_labor(job_id);
+create index if not exists idx_mechanic_job_labor_technician_id on mechanic_job_labor(technician_id) where technician_id is not null;
+
+-- Table: mechanic_job_timeline
+-- Audit trail / history of status changes and events
+create table if not exists mechanic_job_timeline (
+  id uuid primary key default gen_random_uuid(),
+  job_id uuid not null references mechanic_jobs(id) on delete cascade,
+  event_type text not null check (event_type in (
+    'created',
+    'status_changed',
+    'assigned',
+    'diagnosis_added',
+    'parts_added',
+    'labor_added',
+    'photo_added',
+    'note_added',
+    'approved',
+    'invoiced',
+    'paid',
+    'completed',
+    'delivered'
+  )),
+  old_value text,
+  new_value text,
+  description text,
+  created_by uuid references customers(id) on delete set null, -- Will be user_id
+  created_by_name text,
+  created_at timestamp with time zone not null default now()
+);
+
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_timeline' and column_name = 'job_id') then
+    alter table mechanic_job_timeline add column job_id uuid not null references mechanic_jobs(id) on delete cascade;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_timeline' and column_name = 'event_type') then
+    alter table mechanic_job_timeline add column event_type text not null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_timeline' and column_name = 'old_value') then
+    alter table mechanic_job_timeline add column old_value text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_timeline' and column_name = 'new_value') then
+    alter table mechanic_job_timeline add column new_value text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_timeline' and column_name = 'description') then
+    alter table mechanic_job_timeline add column description text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_timeline' and column_name = 'created_by') then
+    alter table mechanic_job_timeline add column created_by uuid references customers(id) on delete set null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_timeline' and column_name = 'created_by_name') then
+    alter table mechanic_job_timeline add column created_by_name text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_timeline' and column_name = 'created_at') then
+    alter table mechanic_job_timeline add column created_at timestamp with time zone not null default now();
+  end if;
+end $$;
+
+create index if not exists idx_mechanic_job_timeline_job_id on mechanic_job_timeline(job_id);
+create index if not exists idx_mechanic_job_timeline_created_at on mechanic_job_timeline(created_at desc);
+
+-- ============================================================
+-- BIKESHOP MODULE - Trigger Functions and Business Logic
+-- ============================================================
+
+-- Function: Auto-generate job number (MJ-YYYYMMDD-###)
+create or replace function public.generate_mechanic_job_number()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_date_prefix text;
+  v_count integer;
+  v_job_number text;
+begin
+  v_date_prefix := 'MJ-' || to_char(now(), 'YYYYMMDD') || '-';
+  
+  select count(*) + 1
+  into v_count
+  from mechanic_jobs
+  where job_number like v_date_prefix || '%';
+  
+  v_job_number := v_date_prefix || lpad(v_count::text, 3, '0');
+  
+  return v_job_number;
+end;
+$$;
+
+-- Function: Recalculate mechanic job costs
+-- Sums parts and labor, applies tax, calculates total
+create or replace function public.recalculate_mechanic_job_costs(p_job_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_parts_cost numeric(12,2) := 0;
+  v_labor_cost numeric(12,2) := 0;
+  v_subtotal numeric(12,2) := 0;
+  v_discount numeric(12,2) := 0;
+  v_tax_amount numeric(12,2) := 0;
+  v_total numeric(12,2) := 0;
+  v_tax_rate numeric(5,4) := 0.19; -- 19% IVA in Chile
+begin
+  if p_job_id is null then
+    return;
+  end if;
+
+  -- Sum parts cost
+  select coalesce(sum(total_price), 0)
+  into v_parts_cost
+  from mechanic_job_items
+  where job_id = p_job_id;
+
+  -- Sum labor cost
+  select coalesce(sum(total_cost), 0)
+  into v_labor_cost
+  from mechanic_job_labor
+  where job_id = p_job_id;
+
+  -- Get current discount from job
+  select coalesce(discount_amount, 0)
+  into v_discount
+  from mechanic_jobs
+  where id = p_job_id;
+
+  -- Calculate totals
+  v_subtotal := v_parts_cost + v_labor_cost;
+  v_tax_amount := (v_subtotal - v_discount) * v_tax_rate;
+  v_total := v_subtotal - v_discount + v_tax_amount;
+
+  -- Update job costs
+  update mechanic_jobs
+  set
+    parts_cost = v_parts_cost,
+    labor_cost = v_labor_cost,
+    final_cost = v_subtotal,
+    tax_amount = v_tax_amount,
+    total_cost = v_total,
+    updated_at = now()
+  where id = p_job_id;
+
+  raise notice 'Recalculated job % costs: parts=%, labor=%, total=%', p_job_id, v_parts_cost, v_labor_cost, v_total;
+end;
+$$;
+
+-- Function: Consume inventory for mechanic job
+-- Called when job status changes to EN_CURSO or FINALIZADO
+create or replace function public.consume_mechanic_job_inventory(p_job_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_reference text;
+  v_item record;
+  v_job_number text;
+begin
+  if p_job_id is null then
+    return;
+  end if;
+
+  -- Get job number
+  select job_number into v_job_number
+  from mechanic_jobs
+  where id = p_job_id;
+
+  v_reference := concat('mechanic_job:', p_job_id::text);
+
+  -- Check if inventory already consumed
+  if exists (
+    select 1 from stock_movements
+    where reference = v_reference and type = 'OUT'
+  ) then
+    raise notice 'Inventory already consumed for job %', v_job_number;
+    return;
+  end if;
+
+  -- Consume inventory for each item
+  for v_item in
+    select 
+      product_id,
+      product_name,
+      quantity
+    from mechanic_job_items
+    where job_id = p_job_id
+      and product_id is not null
+  loop
+    -- Create stock movement
+    insert into stock_movements (
+      product_id,
+      type,
+      quantity,
+      reference,
+      notes,
+      date,
+      created_at
+    ) values (
+      v_item.product_id,
+      'OUT',
+      v_item.quantity,
+      v_reference,
+      'Mechanic Job ' || v_job_number || ': ' || v_item.product_name,
+      now(),
+      now()
+    );
+
+    -- Update product inventory
+    update products
+    set 
+      inventory_qty = inventory_qty - v_item.quantity::integer,
+      stock_quantity = stock_quantity - v_item.quantity::integer,
+      updated_at = now()
+    where id = v_item.product_id;
+
+    raise notice 'Consumed % x % for job %', v_item.quantity, v_item.product_name, v_job_number;
+  end loop;
+end;
+$$;
+
+-- Function: Restore inventory for mechanic job
+-- Called when job is cancelled or parts removed
+create or replace function public.restore_mechanic_job_inventory(p_job_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_reference text;
+  v_movement record;
+begin
+  if p_job_id is null then
+    return;
+  end if;
+
+  v_reference := concat('mechanic_job:', p_job_id::text);
+
+  -- Restore inventory from each stock movement
+  for v_movement in
+    select 
+      product_id,
+      quantity
+    from stock_movements
+    where reference = v_reference and type = 'OUT'
+  loop
+    -- Create reversal stock movement
+    insert into stock_movements (
+      product_id,
+      type,
+      quantity,
+      reference,
+      notes,
+      date,
+      created_at
+    ) values (
+      v_movement.product_id,
+      'IN',
+      v_movement.quantity,
+      v_reference || ':reversed',
+      'Inventory restored - job cancelled or modified',
+      now(),
+      now()
+    );
+
+    -- Update product inventory
+    update products
+    set 
+      inventory_qty = inventory_qty + v_movement.quantity::integer,
+      stock_quantity = stock_quantity + v_movement.quantity::integer,
+      updated_at = now()
+    where id = v_movement.product_id;
+  end loop;
+
+  -- Delete original stock movements
+  delete from stock_movements
+  where reference = v_reference and type = 'OUT';
+end;
+$$;
+
+-- Function: Create journal entry for completed mechanic job
+-- Posts revenue when job is marked as FINALIZADO
+create or replace function public.create_mechanic_job_journal_entry(p_job_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_job record;
+  v_entry_id uuid;
+  v_revenue_account_id uuid;
+  v_cogs_account_id uuid;
+  v_inventory_account_id uuid;
+  v_tax_payable_account_id uuid;
+  v_ar_account_id uuid;
+begin
+  if p_job_id is null then
+    return;
+  end if;
+
+  -- Get job details
+  select * into v_job
+  from mechanic_jobs
+  where id = p_job_id;
+
+  if not found then
+    raise notice 'Job % not found', p_job_id;
+    return;
+  end if;
+
+  -- Don't create journal entry if already invoiced (invoice will handle it)
+  if v_job.is_invoiced then
+    raise notice 'Job % already invoiced, skipping journal entry', v_job.job_number;
+    return;
+  end if;
+
+  -- Check if journal entry already exists
+  if exists (
+    select 1 from journal_entries
+    where source_module = 'mechanic_jobs'
+      and source_reference = p_job_id::text
+  ) then
+    raise notice 'Journal entry already exists for job %', v_job.job_number;
+    return;
+  end if;
+
+  -- Get or create necessary accounts
+  v_revenue_account_id := public.ensure_account('410000', 'Service Revenue', 'income', 'operatingIncome');
+  v_cogs_account_id := public.ensure_account('510000', 'Cost of Services', 'expense', 'costOfGoodsSold');
+  v_inventory_account_id := public.ensure_account('140000', 'Inventory', 'asset', 'currentAsset');
+  v_tax_payable_account_id := public.ensure_account('210200', 'IVA por Pagar', 'liability', 'currentLiability');
+  v_ar_account_id := public.ensure_account('110200', 'Accounts Receivable', 'asset', 'currentAsset');
+
+  -- Create journal entry
+  insert into journal_entries (
+    entry_number,
+    entry_date,
+    description,
+    source_module,
+    source_reference,
+    status,
+    created_at,
+    updated_at
+  ) values (
+    public.generate_journal_entry_number(),
+    coalesce(v_job.completed_at, now()),
+    'Mechanic Job ' || v_job.job_number || ' - ' || coalesce(v_job.diagnosis, 'Service completed'),
+    'mechanic_jobs',
+    p_job_id::text,
+    'posted',
+    now(),
+    now()
+  ) returning id into v_entry_id;
+
+  -- Debit: Accounts Receivable (total including tax)
+  insert into journal_lines (
+    entry_id,
+    account_id,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
+    v_entry_id,
+    v_ar_account_id,
+    'Service Revenue - Job ' || v_job.job_number,
+    v_job.total_cost,
+    0,
+    now(),
+    now()
+  );
+
+  -- Credit: Service Revenue (subtotal minus discount)
+  insert into journal_lines (
+    entry_id,
+    account_id,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
+    v_entry_id,
+    v_revenue_account_id,
+    'Service Revenue - Job ' || v_job.job_number,
+    0,
+    v_job.final_cost - v_job.discount_amount,
+    now(),
+    now()
+  );
+
+  -- Credit: Tax Payable (IVA)
+  if v_job.tax_amount > 0 then
+    insert into journal_lines (
+      entry_id,
+      account_id,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      v_entry_id,
+      v_tax_payable_account_id,
+      'IVA - Job ' || v_job.job_number,
+      0,
+      v_job.tax_amount,
+      now(),
+      now()
+    );
+  end if;
+
+  -- Debit: Cost of Services (parts cost)
+  -- Credit: Inventory (parts cost)
+  if v_job.parts_cost > 0 then
+    insert into journal_lines (
+      entry_id,
+      account_id,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      v_entry_id,
+      v_cogs_account_id,
+      'COGS - Parts - Job ' || v_job.job_number,
+      v_job.parts_cost,
+      0,
+      now(),
+      now()
+    );
+
+    insert into journal_lines (
+      entry_id,
+      account_id,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      v_entry_id,
+      v_inventory_account_id,
+      'Inventory Reduction - Job ' || v_job.job_number,
+      0,
+      v_job.parts_cost,
+      now(),
+      now()
+    );
+  end if;
+
+  raise notice 'Created journal entry for job %', v_job.job_number;
+end;
+$$;
+
+-- Function: Delete journal entry for mechanic job
+create or replace function public.delete_mechanic_job_journal_entry(p_job_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_job_id is null then
+    return;
+  end if;
+
+  delete from journal_entries
+  where source_module = 'mechanic_jobs'
+    and source_reference = p_job_id::text;
+end;
+$$;
+
+-- Function: Log timeline event
+create or replace function public.log_mechanic_job_timeline(
+  p_job_id uuid,
+  p_event_type text,
+  p_old_value text default null,
+  p_new_value text default null,
+  p_description text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into mechanic_job_timeline (
+    job_id,
+    event_type,
+    old_value,
+    new_value,
+    description,
+    created_at
+  ) values (
+    p_job_id,
+    p_event_type,
+    p_old_value,
+    p_new_value,
+    p_description,
+    now()
+  );
+end;
+$$;
+
+-- Main trigger function: Handle mechanic job changes
+create or replace function public.handle_mechanic_job_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_old_status text;
+  v_new_status text;
+  v_should_consume_inventory boolean := false;
+  v_should_restore_inventory boolean := false;
+  v_should_create_journal boolean := false;
+  v_should_delete_journal boolean := false;
+begin
+  raise notice 'handle_mechanic_job_change: TG_OP=%', TG_OP;
+
+  -- Prevent infinite recursion
+  if pg_trigger_depth() > 1 then
+    if TG_OP = 'DELETE' then
+      return OLD;
+    else
+      return NEW;
+    end if;
+  end if;
+
+  if TG_OP = 'INSERT' then
+    -- Generate job number if not provided
+    if NEW.job_number is null or NEW.job_number = '' then
+      NEW.job_number := public.generate_mechanic_job_number();
+    end if;
+
+    -- Set timestamps based on status
+    if NEW.status = 'EN_CURSO' and NEW.started_at is null then
+      NEW.started_at := now();
+    end if;
+    if NEW.status = 'FINALIZADO' and NEW.completed_at is null then
+      NEW.completed_at := now();
+    end if;
+    if NEW.status = 'ENTREGADO' and NEW.delivered_at is null then
+      NEW.delivered_at := now();
+    end if;
+
+    -- Log creation
+    perform public.log_mechanic_job_timeline(
+      NEW.id,
+      'created',
+      null,
+      NEW.status,
+      'Job created: ' || coalesce(NEW.client_request, 'Service request')
+    );
+
+    -- Consume inventory if starting with EN_CURSO or FINALIZADO status
+    if NEW.status in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO') then
+      v_should_consume_inventory := true;
+    end if;
+
+    -- Create journal entry if starting with FINALIZADO
+    if NEW.status in ('FINALIZADO', 'ENTREGADO') and not NEW.is_invoiced then
+      v_should_create_journal := true;
+    end if;
+
+    return NEW;
+
+  elsif TG_OP = 'UPDATE' then
+    v_old_status := OLD.status;
+    v_new_status := NEW.status;
+
+    -- Update timestamps on status change
+    if v_old_status <> v_new_status then
+      perform public.log_mechanic_job_timeline(
+        NEW.id,
+        'status_changed',
+        v_old_status,
+        v_new_status,
+        'Status changed from ' || v_old_status || ' to ' || v_new_status
+      );
+
+      if v_new_status = 'EN_CURSO' and NEW.started_at is null then
+        NEW.started_at := now();
+      end if;
+      if v_new_status = 'FINALIZADO' and NEW.completed_at is null then
+        NEW.completed_at := now();
+      end if;
+      if v_new_status = 'ENTREGADO' and NEW.delivered_at is null then
+        NEW.delivered_at := now();
+      end if;
+
+      -- Handle inventory consumption/restoration based on status transitions
+      if v_old_status not in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO') 
+         and v_new_status in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO') then
+        -- Moving to active/completed status: consume inventory
+        v_should_consume_inventory := true;
+      elsif v_old_status in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO') 
+            and v_new_status = 'CANCELADO' then
+        -- Cancelling: restore inventory
+        v_should_restore_inventory := true;
+      end if;
+
+      -- Handle journal entries based on status transitions
+      if v_new_status in ('FINALIZADO', 'ENTREGADO') 
+         and v_old_status not in ('FINALIZADO', 'ENTREGADO')
+         and not NEW.is_invoiced then
+        -- Job completed: create journal entry
+        v_should_create_journal := true;
+      elsif v_new_status = 'CANCELADO' 
+            and v_old_status in ('FINALIZADO', 'ENTREGADO') then
+        -- Job cancelled after completion: delete journal entry
+        v_should_delete_journal := true;
+      end if;
+    end if;
+
+    -- Log other changes
+    if OLD.diagnosis is distinct from NEW.diagnosis and NEW.diagnosis is not null then
+      perform public.log_mechanic_job_timeline(
+        NEW.id,
+        'diagnosis_added',
+        null,
+        null,
+        'Diagnosis updated'
+      );
+    end if;
+
+    if OLD.assigned_to is distinct from NEW.assigned_to then
+      perform public.log_mechanic_job_timeline(
+        NEW.id,
+        'assigned',
+        OLD.assigned_technician_name,
+        NEW.assigned_technician_name,
+        'Technician assigned'
+      );
+    end if;
+
+    if OLD.approved_by_customer <> NEW.approved_by_customer and NEW.approved_by_customer then
+      perform public.log_mechanic_job_timeline(
+        NEW.id,
+        'approved',
+        null,
+        null,
+        'Customer approved the work'
+      );
+    end if;
+
+    if OLD.is_invoiced <> NEW.is_invoiced and NEW.is_invoiced then
+      perform public.log_mechanic_job_timeline(
+        NEW.id,
+        'invoiced',
+        null,
+        NEW.invoice_id::text,
+        'Job invoiced'
+      );
+      -- Delete our journal entry since invoice will create its own
+      v_should_delete_journal := true;
+    end if;
+
+    return NEW;
+
+  elsif TG_OP = 'DELETE' then
+    -- Restore inventory if job was active
+    if OLD.status in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO') then
+      perform public.restore_mechanic_job_inventory(OLD.id);
+    end if;
+
+    -- Delete journal entry if exists
+    perform public.delete_mechanic_job_journal_entry(OLD.id);
+
+    return OLD;
+  end if;
+
+  -- Execute deferred operations after RETURN to avoid modification conflicts
+  if v_should_restore_inventory then
+    perform public.restore_mechanic_job_inventory(NEW.id);
+  end if;
+
+  if v_should_consume_inventory then
+    perform public.consume_mechanic_job_inventory(NEW.id);
+  end if;
+
+  if v_should_delete_journal then
+    perform public.delete_mechanic_job_journal_entry(NEW.id);
+  end if;
+
+  if v_should_create_journal then
+    perform public.create_mechanic_job_journal_entry(NEW.id);
+  end if;
+
+  return NULL;
+end;
+$$;
+
+-- Create trigger for mechanic jobs
+drop trigger if exists trg_mechanic_jobs_change on mechanic_jobs cascade;
+create trigger trg_mechanic_jobs_change
+  after insert or update or delete on mechanic_jobs
+  for each row execute procedure public.handle_mechanic_job_change();
+
+-- Trigger function: Handle mechanic job items changes
+create or replace function public.handle_mechanic_job_items_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if TG_OP = 'INSERT' then
+    -- Recalculate job costs
+    perform public.recalculate_mechanic_job_costs(NEW.job_id);
+    
+    -- Log event
+    perform public.log_mechanic_job_timeline(
+      NEW.job_id,
+      'parts_added',
+      null,
+      NEW.product_name,
+      'Added part: ' || NEW.product_name || ' (Qty: ' || NEW.quantity || ')'
+    );
+    
+    return NEW;
+
+  elsif TG_OP = 'UPDATE' then
+    -- Recalculate job costs
+    perform public.recalculate_mechanic_job_costs(NEW.job_id);
+    return NEW;
+
+  elsif TG_OP = 'DELETE' then
+    -- Recalculate job costs
+    perform public.recalculate_mechanic_job_costs(OLD.job_id);
+    return OLD;
+  end if;
+
+  return NULL;
+end;
+$$;
+
+-- Create trigger for mechanic job items
+drop trigger if exists trg_mechanic_job_items_change on mechanic_job_items cascade;
+create trigger trg_mechanic_job_items_change
+  after insert or update or delete on mechanic_job_items
+  for each row execute procedure public.handle_mechanic_job_items_change();
+
+-- Trigger function: Handle mechanic job labor changes
+create or replace function public.handle_mechanic_job_labor_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if TG_OP = 'INSERT' then
+    -- Recalculate job costs
+    perform public.recalculate_mechanic_job_costs(NEW.job_id);
+    
+    -- Log event
+    perform public.log_mechanic_job_timeline(
+      NEW.job_id,
+      'labor_added',
+      null,
+      NEW.technician_name,
+      'Added labor: ' || NEW.hours_worked || ' hours by ' || NEW.technician_name
+    );
+    
+    return NEW;
+
+  elsif TG_OP = 'UPDATE' then
+    -- Recalculate job costs
+    perform public.recalculate_mechanic_job_costs(NEW.job_id);
+    return NEW;
+
+  elsif TG_OP = 'DELETE' then
+    -- Recalculate job costs
+    perform public.recalculate_mechanic_job_costs(OLD.job_id);
+    return OLD;
+  end if;
+
+  return NULL;
+end;
+$$;
+
+-- Create trigger for mechanic job labor
+drop trigger if exists trg_mechanic_job_labor_change on mechanic_job_labor cascade;
+create trigger trg_mechanic_job_labor_change
+  after insert or update or delete on mechanic_job_labor
+  for each row execute procedure public.handle_mechanic_job_labor_change();
+
+-- Trigger: Auto-update updated_at timestamp
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  NEW.updated_at := now();
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_bikes_updated_at on bikes cascade;
+create trigger trg_bikes_updated_at
+  before update on bikes
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_service_packages_updated_at on service_packages cascade;
+create trigger trg_service_packages_updated_at
+  before update on service_packages
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_mechanic_jobs_updated_at on mechanic_jobs cascade;
+create trigger trg_mechanic_jobs_updated_at
+  before update on mechanic_jobs
+  for each row execute procedure public.set_updated_at();
+
 notify pgrst, 'reload schema';

@@ -224,7 +224,8 @@ class _CustomerListPageState extends State<CustomerListPage> {
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
         onTap: () {
-          context.push('/crm/customers/${customer.id}').then((_) {
+          // Navigate to bikeshop client logbook (comprehensive customer view)
+          context.push('/bikeshop/clients/${customer.id}').then((_) {
             _loadCustomers();
           });
         },
