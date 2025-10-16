@@ -19,8 +19,10 @@ class ImageServicePlatform {
       reader.readAsArrayBuffer(file);
       await reader.onLoad.first;
 
+      // CRITICAL: Must create a COPY of the bytes, not a view
+      // ByteBuffer.asUint8List() creates a TypedData view which can cause issues in release mode
       final ByteBuffer buffer = reader.result as ByteBuffer;
-      final bytes = buffer.asUint8List();
+      final bytes = Uint8List.fromList(buffer.asUint8List());
       
       return (bytes: bytes, name: file.name);
     } catch (e) {
