@@ -317,7 +317,12 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.orange[600]!, Colors.orange[400]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.grey[850]!,
+            Colors.grey[800]!,
+          ],
         ),
       ),
       child: Column(
@@ -327,8 +332,22 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.blue[700]!,
+                      Colors.blue[600]!,
+                    ],
+                  ),
                   borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: const Icon(Icons.construction, size: 32, color: Colors.white),
               ),
@@ -344,18 +363,28 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
                       color: Colors.white,
                     ),
                   ),
-                  Text(
-                    '${_filteredJobs.length} trabajos mostrados',
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.analytics_outlined,
+                        size: 14,
+                        color: Colors.blue[300],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${_filteredJobs.length} trabajos mostrados',
+                        style: TextStyle(color: Colors.blue[200], fontSize: 14),
+                      ),
+                    ],
                   ),
                 ],
               ),
               const Spacer(),
-              _buildQuickStatCard('Activos', activeCount, Icons.pending_actions, Colors.white),
+              _buildQuickStatCard('Activos', activeCount, Icons.pending_actions, Colors.amber),
               const SizedBox(width: 12),
-              _buildQuickStatCard('Listos', readyCount, Icons.check_circle, Colors.green[300]!),
+              _buildQuickStatCard('Listos', readyCount, Icons.check_circle, Colors.green),
               const SizedBox(width: 12),
-              _buildQuickStatCard('Vencidos', overdueCount, Icons.warning, Colors.red[300]!),
+              _buildQuickStatCard('Vencidos', overdueCount, Icons.warning, Colors.red),
               const SizedBox(width: 24),
               ElevatedButton.icon(
                 onPressed: () => _showQuickCreateDialog(),
@@ -363,9 +392,6 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
                 label: const Text('Nueva Pega'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.orange[700],
-                  elevation: 0,
                 ),
               ),
             ],
@@ -379,33 +405,35 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? Colors.white.withOpacity(0.1)
-            : Colors.white.withOpacity(0.2),
+        color: Colors.grey[850],
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[700]!, width: 1),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
                 style: TextStyle(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white70
-                      : Colors.white70,
+                  color: Colors.grey[400],
                   fontSize: 12,
                 ),
               ),
               Text(
                 count.toString(),
-                style: TextStyle(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white
-                      : Colors.white,
+                style: const TextStyle(
+                  color: Colors.white,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
@@ -424,7 +452,7 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
         color: Theme.of(context).cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -454,12 +482,14 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
               // Search with live suggestions
               Expanded(
                 child: TextField(
+                  style: TextStyle(color: Colors.grey[100]),
                   decoration: InputDecoration(
                     hintText: '🔍 Buscar: N° trabajo, cliente, teléfono, bici...',
-                    prefixIcon: const Icon(Icons.search),
+                    hintStyle: TextStyle(color: Colors.grey[500]),
+                    prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
                     suffixIcon: _searchTerm.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear),
+                            icon: Icon(Icons.clear, color: Colors.grey[400]),
                             onPressed: () {
                               setState(() => _searchTerm = '');
                               _applyFiltersAndSort();
@@ -468,9 +498,18 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
                         : null,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey[700]!),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey[700]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.blue[400]!, width: 2),
                     ),
                     filled: true,
-                    fillColor: Colors.grey[50],
+                    fillColor: Colors.grey[850],
                   ),
                   onChanged: (value) {
                     setState(() => _searchTerm = value);
@@ -1082,10 +1121,11 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: isPaid ? Colors.green[50] : Colors.orange[50],
+          color: isPaid ? Colors.green[100] : Colors.orange[100],
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isPaid ? Colors.green[300]! : Colors.orange[300]!,
+            width: 2,
           ),
         ),
         child: Column(
@@ -1097,7 +1137,7 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
                 Icon(
                   isPaid ? Icons.check_circle : Icons.attach_money,
                   size: 16,
-                  color: isPaid ? Colors.green[700] : Colors.orange[700],
+                  color: isPaid ? Colors.green[900] : Colors.orange[900],
                 ),
                 const SizedBox(width: 4),
                 Text(
@@ -1105,16 +1145,17 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: isPaid ? Colors.green[700] : Colors.orange[700],
+                    color: isPaid ? Colors.green[900] : Colors.orange[900],
                   ),
                 ),
               ],
             ),
             Text(
               NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(job.totalCost),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
+                color: Colors.grey[900],
               ),
             ),
           ],
