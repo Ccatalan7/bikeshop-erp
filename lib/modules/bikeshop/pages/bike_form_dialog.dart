@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'dart:typed_data';
 
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
@@ -41,7 +40,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   
   // Image handling
   List<String> _imageUrls = [];
-  List<File> _newImages = [];
+  List<({Uint8List bytes, String name})> _newImages = [];
   bool _isUploadingImage = false;
   
   bool _isSaving = false;
@@ -109,20 +108,26 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   Future<void> _pickImage() async {
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        imageQuality: 85,
-      );
+      setState(() {
+        _isUploadingImage = true;
+      });
 
-      if (image != null) {
+      final result = await ImageService.pickImage();
+
+      setState(() {
+        _isUploadingImage = false;
+      });
+
+      if (result != null) {
         setState(() {
-          _newImages.add(File(image.path));
+          _newImages.add(result);
         });
       }
     } catch (e) {
+      setState(() {
+        _isUploadingImage = false;
+      });
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al seleccionar imagen: $e')),
@@ -161,14 +166,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           _isUploadingImage = true;
         });
         
-        for (var imageFile in _newImages) {
+        for (var imageData in _newImages) {
           try {
-            final bytes = await imageFile.readAsBytes();
             final timestamp = DateTime.now().millisecondsSinceEpoch;
             final fileName = 'bike_${widget.customerId}_$timestamp.jpg';
             
             final url = await ImageService.uploadBytes(
-              bytes: bytes,
+              bytes: imageData.bytes,
               fileName: fileName,
               bucket: 'bike-images',
               folder: widget.customerId,
@@ -611,7 +615,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                               // New images (not yet uploaded)
                               ..._newImages.asMap().entries.map((entry) {
                                 final index = entry.key;
-                                final file = entry.value;
+                                final imageData = entry.value;
                                 return Stack(
                                   children: [
                                     Container(
@@ -621,7 +625,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(color: Colors.blue[300]!, width: 2),
                                         image: DecorationImage(
-                                          image: FileImage(file),
+                                          image: MemoryImage(imageData.bytes),
                                           fit: BoxFit.cover,
                                         ),
                                       ),

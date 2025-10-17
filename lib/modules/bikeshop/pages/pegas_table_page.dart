@@ -51,7 +51,7 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
     'status_indicator', // Visual status dot
     'job_number',
     'customer_quick',
-    'bike_image', // Bike thumbnail with zoom
+    // 'bike_image', // DISABLED - causes freeze, needs investigation
     'bike_quick',
     'time_elapsed',
     'status',
@@ -702,7 +702,7 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
       'invoice_quick': ('Factura/Pago', 140.0, true),
       'deadline': ('Plazo', 120.0, true),
       'total_cost': ('Total', 100.0, true),
-      'actions_quick': ('Acciones', 180.0, false),
+      'actions_quick': ('Acciones', 300.0, false), // Increased to fit all buttons
     };
 
     return _visibleColumns
@@ -779,15 +779,16 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
     bool isOverdue,
     int daysElapsed,
   ) {
-    switch (column) {
-      case 'status_indicator':
-        return DataCell(
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _getStatusConfig(job.status)['indicatorColor'],
+    try {
+      switch (column) {
+        case 'status_indicator':
+          return DataCell(
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _getStatusConfig(job.status)['indicatorColor'],
               boxShadow: [
                 BoxShadow(
                   color: (_getStatusConfig(job.status)['indicatorColor'] as Color).withOpacity(0.5),
@@ -823,7 +824,7 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
       case 'customer_quick':
         return DataCell(
           InkWell(
-            onTap: customer?.id != null ? () => context.push('/crm/customers/${customer!.id}') : null,
+            onTap: customer?.id != null ? () => context.push('/bikeshop/clients/${customer!.id}') : null,
             borderRadius: BorderRadius.circular(8),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1211,6 +1212,16 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
       default:
         return const DataCell(Text('-'));
     }
+    } catch (e) {
+      // If any cell fails to render, show error instead of crashing
+      debugPrint('Error building cell $column: $e');
+      return DataCell(
+        Tooltip(
+          message: 'Error: $e',
+          child: const Icon(Icons.error, color: Colors.red, size: 16),
+        ),
+      );
+    }
   }
 
   Widget _buildInteractiveStatusBadge(MechanicJob job) {
@@ -1391,7 +1402,41 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Invoice icon - Most important action
+        // Phone icon - Copy customer phone
+        if (customer?.phone != null)
+          Tooltip(
+            message: 'Copiar teléfono',
+            child: IconButton(
+              icon: Icon(Icons.phone, size: 18, color: Colors.blue[600]),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: customer!.phone!));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Teléfono copiado'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              },
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+          ),
+        if (customer?.phone != null) const SizedBox(width: 4),
+        
+        // WhatsApp icon
+        if (customer?.phone != null)
+          Tooltip(
+            message: 'WhatsApp',
+            child: IconButton(
+              icon: Icon(Icons.message, size: 18, color: Colors.green[600]),
+              onPressed: () => _whatsappCustomer(customer!.phone!),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+          ),
+        if (customer?.phone != null) const SizedBox(width: 4),
+        
+        // Invoice icon
         Tooltip(
           message: job.invoiceId != null ? 'Ver factura' : 'Crear factura',
           child: IconButton(
@@ -1413,7 +1458,19 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
         ),
         const SizedBox(width: 4),
         
-        // Checkmark icon - Mark as complete
+        // Print icon
+        Tooltip(
+          message: 'Imprimir orden',
+          child: IconButton(
+            icon: Icon(Icons.print, size: 18, color: Colors.grey[700]),
+            onPressed: () => _printWorkOrder(job),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ),
+        const SizedBox(width: 4),
+        
+        // Checkmark icon
         if (job.status != JobStatus.finalizado && job.status != JobStatus.entregado)
           Tooltip(
             message: 'Marcar como completado',
@@ -1432,39 +1489,6 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
           tooltip: 'Más acciones',
           padding: EdgeInsets.zero,
           itemBuilder: (context) => <PopupMenuEntry<String>>[
-            if (customer?.phone != null)
-              PopupMenuItem<String>(
-                value: 'phone',
-                child: Row(
-                  children: [
-                    Icon(Icons.phone, size: 18, color: Colors.blue[600]),
-                    const SizedBox(width: 8),
-                    const Text('Copiar teléfono'),
-                  ],
-                ),
-              ),
-            if (customer?.phone != null)
-              PopupMenuItem<String>(
-                value: 'whatsapp',
-                child: Row(
-                  children: [
-                    Icon(Icons.message, size: 18, color: Colors.green[600]),
-                    const SizedBox(width: 8),
-                    const Text('WhatsApp'),
-                  ],
-                ),
-              ),
-            if (customer?.phone != null) const PopupMenuDivider(),
-            const PopupMenuItem<String>(
-              value: 'print',
-              child: Row(
-                children: [
-                  Icon(Icons.print, size: 18),
-                  SizedBox(width: 8),
-                  Text('Imprimir orden'),
-                ],
-              ),
-            ),
             const PopupMenuItem<String>(
               value: 'view',
               child: Row(
@@ -1509,25 +1533,6 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
           ],
           onSelected: (value) {
             switch (value) {
-              case 'phone':
-                if (customer?.phone != null) {
-                  Clipboard.setData(ClipboardData(text: customer!.phone!));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Teléfono copiado'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
-                }
-                break;
-              case 'whatsapp':
-                if (customer?.phone != null) {
-                  _whatsappCustomer(customer!.phone!);
-                }
-                break;
-              case 'print':
-                _printWorkOrder(job);
-                break;
               case 'view':
                 context.push('/bikeshop/jobs/${job.id}');
                 break;
@@ -1910,7 +1915,7 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
       initialDate: job.deadline ?? DateTime.now(),
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      locale: const Locale('es', 'ES'),
+      // Removed locale to avoid freeze issues - will use system locale
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
