@@ -1,0 +1,65 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "🚀 Flutter: Run (Development)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=ENV=development"
+      ]
+    },
+    {
+      "name": "🌐 Flutter: Run (Web - Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "--web-renderer=html",
+        "-d",
+        "chrome"
+      ]
+    },
+    {
+      "name": "🪟 Flutter: Run (Windows)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "windows"
+      ]
+    },
+    {
+      "name": "📱 Flutter: Run (Android)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "android"
+      ]
+    },
+    {
+      "name": "⚡ Flutter: Profile Mode",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "profile",
+      "program": "lib/main.dart"
+    },
+    {
+      "name": "🚢 Flutter: Release Mode",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "program": "lib/main.dart"
+    },
+    {
+      "name": "🔧 Flutter: Debug Current File",
+      "request": "launch",
+      "type": "dart",
+      "program": "${file}"
+    }
+  ]
+}
