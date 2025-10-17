@@ -57,8 +57,7 @@ class Customer {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
+    final json = {
       'name': name,
       'rut': rut,
       'email': email,
@@ -70,6 +69,13 @@ class Customer {
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
+    
+    // Only include id if it's not null (for updates)
+    if (id != null) {
+      json['id'] = id;
+    }
+    
+    return json;
   }
 
   Customer copyWith({

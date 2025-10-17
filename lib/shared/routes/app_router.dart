@@ -14,6 +14,7 @@ import '../../modules/accounting/pages/income_statement_page.dart';
 import '../../modules/accounting/pages/balance_sheet_page.dart';
 import '../../modules/crm/pages/customer_list_page.dart';
 import '../../modules/crm/pages/customer_form_page.dart';
+import '../../modules/crm/pages/customer_detail_page.dart';
 import '../../modules/bikeshop/pages/clients_list_page.dart';
 import '../../modules/bikeshop/pages/client_logbook_page.dart';
 import '../../modules/bikeshop/pages/pegas_table_page.dart';
@@ -211,6 +212,17 @@ class AppRouter {
           );
         },
       ),
+      GoRoute(
+        path: '/crm/customers/:id',
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return _buildPageWithNoTransition(
+            context,
+            state,
+            CustomerDetailPage(customerId: id),
+          );
+        },
+      ),
       
       // Bikeshop Module
       GoRoute(
@@ -345,11 +357,18 @@ class AppRouter {
       ),
       GoRoute(
         path: '/sales/invoices/new',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const InvoiceFormPage(),
-        ),
+        pageBuilder: (context, state) {
+          final jobId = state.uri.queryParameters['job_id'];
+          final customerId = state.uri.queryParameters['customer_id'];
+          return _buildPageWithNoTransition(
+            context,
+            state,
+            InvoiceFormPage(
+              preselectedJobId: jobId,
+              preselectedCustomerId: customerId,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: '/sales/invoices/:id',

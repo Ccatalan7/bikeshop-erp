@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/auth_service.dart';
+import '../services/navigation_service.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import 'expandable_menu_item.dart';
 
@@ -173,25 +174,32 @@ class MainLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final showSidebar = screenWidth > 768; // Show sidebar on larger screens
+    final navigationService = Provider.of<NavigationService>(context);
     
     if (showSidebar) {
-      // Desktop layout with persistent sidebar
+      // Desktop layout with collapsible sidebar
       return Scaffold(
         body: Row(
           children: [
-            // Persistent Sidebar
-            Container(
-              width: 280,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                border: Border(
-                  right: BorderSide(
-                    color: Theme.of(context).dividerColor,
-                    width: 1,
-                  ),
-                ),
-              ),
-              child: const AppSidebar(),
+            // Collapsible Sidebar
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              width: navigationService.isDrawerVisible ? 280 : 0,
+              child: navigationService.isDrawerVisible
+                  ? Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        border: Border(
+                          right: BorderSide(
+                            color: Theme.of(context).dividerColor,
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      child: const AppSidebar(),
+                    )
+                  : const SizedBox.shrink(),
             ),
             // Main Content Area
             Expanded(
@@ -211,6 +219,20 @@ class MainLayout extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
+                        // Toggle drawer button
+                        IconButton(
+                          icon: Icon(
+                            navigationService.isDrawerVisible 
+                                ? Icons.menu_open 
+                                : Icons.menu,
+                          ),
+                          tooltip: navigationService.isDrawerVisible
+                              ? 'Ocultar menú'
+                              : 'Mostrar menú',
+                          onPressed: () {
+                            navigationService.toggleDrawer();
+                          },
+                        ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Text(

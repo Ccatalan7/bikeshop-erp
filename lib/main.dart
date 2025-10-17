@@ -11,6 +11,7 @@ import 'shared/services/auth_service.dart';
 import 'shared/services/database_service.dart';
 import 'shared/services/inventory_service.dart';
 import 'shared/services/payment_method_service.dart';
+import 'shared/services/navigation_service.dart';
 import 'shared/config/supabase_config.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/crm/services/customer_service.dart';
@@ -75,6 +76,7 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => DatabaseService()),
         ChangeNotifierProvider(create: (_) => PaymentMethodService()),
         ChangeNotifierProvider(create: (_) => AppearanceService()),
+        ChangeNotifierProvider(create: (_) => NavigationService()),
         
         // Business services
         ChangeNotifierProvider(create: (context) => InventoryService(

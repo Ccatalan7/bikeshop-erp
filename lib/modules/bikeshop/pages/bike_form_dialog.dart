@@ -89,15 +89,19 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           : (_warrantyUntil ?? DateTime.now().add(const Duration(days: 365))),
       firstDate: DateTime(2000),
       lastDate: DateTime(2030),
-      locale: const Locale('es', 'ES'),
+      // Removed locale parameter - it can cause freezes on web
     );
     
-    if (picked != null) {
-      setState(() {
-        if (isPurchaseDate) {
-          _purchaseDate = picked;
-        } else {
-          _warrantyUntil = picked;
+    if (picked != null && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            if (isPurchaseDate) {
+              _purchaseDate = picked;
+            } else {
+              _warrantyUntil = picked;
+            }
+          });
         }
       });
     }

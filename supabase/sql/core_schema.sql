@@ -55,6 +55,68 @@ create table if not exists customers (
   created_at timestamp with time zone not null default now()
 );
 
+-- Migration: Add missing columns to customers table
+do $$
+begin
+  -- Fix id column default if missing
+  begin
+    alter table customers alter column id set default gen_random_uuid();
+  exception when others then
+    raise notice 'Could not set default for customers.id: %', sqlerrm;
+  end;
+
+  -- Drop or make company_id nullable (not needed for customers table)
+  if exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'company_id') then
+    begin
+      alter table customers drop column company_id cascade;
+      raise notice 'Dropped company_id column from customers table';
+    exception when others then
+      -- If can't drop, make it nullable
+      begin
+        alter table customers alter column company_id drop not null;
+        raise notice 'Made company_id nullable in customers table';
+      exception when others then
+        raise notice 'Could not modify company_id: %', sqlerrm;
+      end;
+    end;
+  end if;
+
+  -- Add rut column
+  if not exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'rut') then
+    alter table customers add column rut text;
+  end if;
+
+  -- Add phone column
+  if not exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'phone') then
+    alter table customers add column phone text;
+  end if;
+
+  -- Add address column
+  if not exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'address') then
+    alter table customers add column address text;
+  end if;
+
+  -- Add region column
+  if not exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'region') then
+    alter table customers add column region text;
+  end if;
+
+  -- Add is_active column
+  if not exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'is_active') then
+    alter table customers add column is_active boolean not null default true;
+  end if;
+
+  -- Add image_url column
+  if not exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'image_url') then
+    alter table customers add column image_url text;
+  end if;
+
+  -- Add updated_at column
+  if not exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'updated_at') then
+    alter table customers add column updated_at timestamp with time zone not null default now();
+  end if;
+end $$;
+
 create table if not exists products (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -969,6 +1031,13 @@ begin
          status = v_new_status,
          updated_at = now()
    where id = p_invoice_id;
+
+  -- Update mechanic_jobs if this invoice is linked to a job
+  update public.mechanic_jobs
+     set is_invoiced = true,
+         is_paid = (v_new_status = 'paid'),
+         updated_at = now()
+   where invoice_id = p_invoice_id;
 end;
 $$ language plpgsql;
 

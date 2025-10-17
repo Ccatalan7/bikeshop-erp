@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
+import '../../../shared/services/database_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -17,8 +18,15 @@ import '../services/sales_service.dart';
 
 class InvoiceFormPage extends StatefulWidget {
   final String? invoiceId;
+  final String? preselectedJobId;
+  final String? preselectedCustomerId;
 
-  const InvoiceFormPage({super.key, this.invoiceId});
+  const InvoiceFormPage({
+    super.key,
+    this.invoiceId,
+    this.preselectedJobId,
+    this.preselectedCustomerId,
+  });
 
   @override
   State<InvoiceFormPage> createState() => _InvoiceFormPageState();
@@ -118,6 +126,13 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         }
       } else {
         _invoiceNumberController.text = _buildSuggestedNumber();
+        
+        // Preselect customer if coming from a job
+        if (widget.preselectedJobId != null) {
+          await _loadJobAndPreselectCustomer(widget.preselectedJobId!);
+        } else if (widget.preselectedCustomerId != null) {
+          _preselectCustomer(widget.preselectedCustomerId!);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -206,6 +221,38 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final timePortion = now.millisecondsSinceEpoch.toString().substring(7);
     return 'FV-$datePortion-$timePortion';
+  }
+
+  Future<void> _loadJobAndPreselectCustomer(String jobId) async {
+    try {
+      // Get database service from context
+      final db = Provider.of<DatabaseService>(context, listen: false);
+      final jobData = await db.selectById('mechanic_jobs', jobId);
+      
+      if (jobData != null) {
+        final customerId = jobData['customer_id'] as String?;
+        if (customerId != null) {
+          _preselectCustomer(customerId);
+          
+          // Set reference to job number
+          final jobNumber = jobData['job_number'] as String?;
+          if (jobNumber != null) {
+            _referenceController.text = 'Pega $jobNumber';
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading job for invoice: $e');
+    }
+  }
+
+  void _preselectCustomer(String customerId) {
+    final customer = _cachedCustomers.where((c) => c.id == customerId).firstOrNull;
+    if (customer != null) {
+      setState(() {
+        _selectedCustomer = customer;
+      });
+    }
   }
 
   void _handleLinesChanged() {

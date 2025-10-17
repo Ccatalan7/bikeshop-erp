@@ -265,9 +265,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                                 : ImageService.buildAvatarImage(
                                     imageUrl: _imageUrl,
                                     radius: 60,
-                                    initials: _nameController.text.isNotEmpty
-                                        ? Customer(name: _nameController.text, rut: '').initials
-                                        : '?',
+                                    initials: '?', // Temporarily disabled to debug freeze
                                   ),
                           ),
                         ),
@@ -304,7 +302,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                       }
                       return null;
                     },
-                    onChanged: (value) => setState(() {}), // Update avatar initials
+                    // No onChanged - avatar updates via ListenableBuilder
                   ),
                   const SizedBox(height: 16),
                   
