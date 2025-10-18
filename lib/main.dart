@@ -74,7 +74,14 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider(create: (_) => DatabaseService()),
         ChangeNotifierProvider(create: (_) => PaymentMethodService()),
-        ChangeNotifierProvider(create: (_) => AppearanceService()),
+        ChangeNotifierProvider(create: (_) {
+          final service = AppearanceService();
+          // Auto-refresh logo on app start to get latest version
+          Future.delayed(const Duration(seconds: 2), () {
+            service.refreshLogo();
+          });
+          return service;
+        }),
         ChangeNotifierProvider(create: (_) => NavigationService()),
         
         // Business services

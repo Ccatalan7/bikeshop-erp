@@ -117,6 +117,29 @@ begin
   end if;
 end $$;
 
+-- Company settings table for global app configuration
+create table if not exists company_settings (
+  id uuid primary key default gen_random_uuid(),
+  key text unique not null,
+  value text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+-- Migration: Insert default settings if not exists
+do $$
+begin
+  -- Ensure home_icon setting exists
+  if not exists (select 1 from company_settings where key = 'home_icon') then
+    insert into company_settings (key, value) values ('home_icon', 'pedal_bike');
+  end if;
+
+  -- Ensure company_logo setting exists (can be null)
+  if not exists (select 1 from company_settings where key = 'company_logo') then
+    insert into company_settings (key, value) values ('company_logo', null);
+  end if;
+end $$;
+
 create table if not exists products (
   id uuid primary key default gen_random_uuid(),
   name text not null,

@@ -15,6 +15,23 @@ import 'image_service_mobile.dart'
 class ImageService {
   static final SupabaseClient _client = Supabase.instance.client;
 
+  /// Sanitize filename to be storage-safe
+  static String _sanitizeFileName(String fileName) {
+    // Remove or replace problematic characters
+    String sanitized = fileName
+        .replaceAll(RegExp(r'[^\w\s\-\.]'), '_')  // Replace special chars with underscore
+        .replaceAll(RegExp(r'\s+'), '_')           // Replace spaces with underscore
+        .replaceAll(RegExp(r'_+'), '_')            // Replace multiple underscores with single
+        .replaceAll(RegExp(r'^_+|_+$'), '');       // Trim leading/trailing underscores
+    
+    // Ensure we have a valid extension
+    if (!sanitized.contains('.')) {
+      sanitized = '$sanitized.png';
+    }
+    
+    return sanitized;
+  }
+
   /// Upload image bytes directly - WEB ONLY VERSION
   static Future<String?> uploadBytes({
     required Uint8List bytes,
@@ -23,7 +40,8 @@ class ImageService {
     required String folder,
   }) async {
     try {
-      final uniqueFileName = '${DateTime.now().millisecondsSinceEpoch}_${fileName.replaceAll(' ', '_')}';
+      final sanitizedFileName = _sanitizeFileName(fileName);
+      final uniqueFileName = '${DateTime.now().millisecondsSinceEpoch}_$sanitizedFileName';
       final normalizedFolder = _normalizePath(folder);
       final segments = <String>[];
       if (normalizedFolder.isNotEmpty) {

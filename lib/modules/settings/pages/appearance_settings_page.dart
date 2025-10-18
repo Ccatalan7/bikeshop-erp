@@ -144,13 +144,33 @@ class AppearanceSettingsPage extends StatelessWidget {
                           ),
                           if (appearanceService.hasCustomLogo) ...[
                             const SizedBox(width: 12),
+                            Tooltip(
+                              message: 'Refrescar logo para ver la última versión',
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  appearanceService.refreshLogo();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Logo actualizado'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('Refrescar'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.all(16),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () async {
                                   await _handleLogoRemove(context, appearanceService);
                                 },
                                 icon: const Icon(Icons.delete_outline),
-                                label: const Text('Eliminar Logo'),
+                                label: const Text('Eliminar'),
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.all(16),
                                   foregroundColor: Colors.red,
