@@ -556,4 +556,24 @@ class BikeshopService extends ChangeNotifier {
       return null;
     }
   }
+
+  /// Sync a mechanic job to its linked invoice
+  /// Called after updating job items to ensure invoice totals are fresh
+  Future<void> syncJobToInvoice(String jobId) async {
+    try {
+      if (jobId.isEmpty) return;
+      
+      // Call the database function to sync job to invoice
+      await _db.rpc(
+        'sync_job_to_invoice',
+        params: {'p_job_id': jobId},
+      );
+      
+      notifyListeners();
+      if (kDebugMode) print('✅ Job synced to invoice: $jobId');
+    } catch (e) {
+      if (kDebugMode) print('❌ Error syncing job to invoice: $e');
+      rethrow;
+    }
+  }
 }

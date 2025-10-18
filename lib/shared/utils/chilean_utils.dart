@@ -58,9 +58,9 @@ class ChileanUtils {
     return totalAmount / (1 + ivaRate);
   }
   
-  // Validate Chilean RUT
-  static bool isValidRut(String rut) {
-    if (rut.isEmpty) return false;
+  // Validate Chilean RUT (accepts nullable String)
+  static bool isValidRut(String? rut) {
+    if (rut == null || rut.isEmpty) return false;
     
     // Remove dots and hyphens
     String cleanRut = rut.replaceAll(RegExp(r'[.-]'), '');
@@ -97,9 +97,9 @@ class ChileanUtils {
     return remainder.toString();
   }
   
-  // Format RUT for display
-  static String formatRut(String rut) {
-    if (rut.isEmpty) return '';
+  // Format RUT for display (accepts nullable String)
+  static String formatRut(String? rut) {
+    if (rut == null || rut.isEmpty) return '';
     
     // Remove existing formatting
     String cleanRut = rut.replaceAll(RegExp(r'[.-]'), '');

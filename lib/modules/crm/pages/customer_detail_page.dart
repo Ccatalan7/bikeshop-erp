@@ -9,6 +9,7 @@ import '../../../shared/services/image_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/crm_models.dart';
 import '../services/customer_service.dart';
+import '../../bikeshop/services/bikeshop_service.dart';
 
 class CustomerDetailPage extends StatefulWidget {
   final String customerId;
@@ -21,6 +22,7 @@ class CustomerDetailPage extends StatefulWidget {
 
 class _CustomerDetailPageState extends State<CustomerDetailPage> {
   late CustomerService _customerService;
+  late BikeshopService _bikeshopService;
   Customer? _customer;
   Loyalty? _loyalty;
   List<BikeHistory> _bikeHistory = [];
@@ -32,6 +34,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     _customerService = CustomerService(
       Provider.of<DatabaseService>(context, listen: false),
     );
+    _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
     _loadCustomerData();
   }
 
@@ -526,6 +529,39 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 ],
               ),
             ),
+            // 3-dot menu
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert, color: Colors.grey[600]),
+              onSelected: (value) {
+                if (value == 'edit') {
+                  _editBike(bike);
+                } else if (value == 'delete') {
+                  _confirmDeleteBike(bike);
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit, size: 20),
+                      SizedBox(width: 8),
+                      Text('Editar'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, size: 20, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Eliminar', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -764,5 +800,80 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
         ],
       ),
     );
+  }
+
+  // ============================================================
+  // BIKE MANAGEMENT
+  // ============================================================
+
+  void _editBike(BikeHistory bike) {
+    // TODO: Navigate to bike edit form
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Editar bicicleta - Por implementar'),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteBike(BikeHistory bike) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar eliminación'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('¿Está seguro de eliminar esta bicicleta?'),
+            const SizedBox(height: 16),
+            Text(
+              '${bike.brand} ${bike.model}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            if (bike.year != null) Text('Año: ${bike.year}'),
+            if (bike.serialNumber != null && bike.serialNumber!.isNotEmpty)
+              Text('N° Serie: ${bike.serialNumber}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && bike.id != null) {
+      try {
+        await _bikeshopService.deleteBike(bike.id!);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Bicicleta eliminada exitosamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          
+          // Refresh the bike list automatically
+          _loadCustomerData();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error eliminando bicicleta: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 }

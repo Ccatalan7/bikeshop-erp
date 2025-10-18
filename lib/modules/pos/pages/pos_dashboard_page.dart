@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/models/customer.dart';
 import '../../crm/services/customer_service.dart';
+import '../../inventory/models/category_models.dart' as inventory_models;
+import '../../inventory/services/category_service.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
@@ -24,18 +25,27 @@ class POSDashboardPage extends StatefulWidget {
 class _POSDashboardPageState extends State<POSDashboardPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  String? _selectedCategoryId;
+  String? _selectedCategoryKey;
+  Set<String> _selectedCategoryMatchers = const <String>{};
+  List<_CategoryOption> _serviceCategoryOptions = [];
+  bool _isLoadingCategories = false;
+  ProductType? _selectedProductType;
 
   @override
   void initState() {
     super.initState();
     // Load products and payment methods when page loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final inventoryService = Provider.of<InventoryService>(context, listen: false);
-      final paymentMethodService = Provider.of<PaymentMethodService>(context, listen: false);
-      
+      final inventoryService =
+          Provider.of<InventoryService>(context, listen: false);
+      final paymentMethodService =
+          Provider.of<PaymentMethodService>(context, listen: false);
+      final categoryService =
+          Provider.of<CategoryService>(context, listen: false);
+
       inventoryService.getProducts();
       paymentMethodService.loadPaymentMethods();
+      _loadCategories(categoryService);
     });
   }
 
@@ -47,54 +57,229 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
 
   void _addToCart(Product product, {int quantity = 1}) {
     final posService = Provider.of<POSService>(context, listen: false);
-    
-    // Check stock availability
-    if (product.stockQuantity < quantity) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Stock insuficiente. Disponible: ${product.stockQuantity}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+
+    final requiresStock =
+        product.productType == ProductType.product && product.trackStock;
+    if (requiresStock && product.stockQuantity < quantity) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Stock insuficiente. Disponible: ${product.stockQuantity}'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
     try {
       posService.addToCart(product, quantity: quantity);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${product.name} agregado al carrito'),
-            duration: const Duration(seconds: 1),
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${product.name} agregado al carrito'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al agregar producto: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadCategories([CategoryService? existingService]) async {
+    final service =
+        existingService ?? Provider.of<CategoryService>(context, listen: false);
+
+    if (mounted) {
+      setState(() {
+        _isLoadingCategories = true;
+      });
+    }
+
+    try {
+      final categories = await service.getCategories(activeOnly: true);
+      if (!mounted) return;
+
+      final options = <_CategoryOption>[];
+      for (final inventory_models.Category category in categories) {
+        final id = category.id?.trim();
+        final normalizedName = _normalizeCategoryName(category.name);
+        final key = id != null && id.isNotEmpty ? id : (normalizedName ?? '');
+        if (key.isEmpty) {
+          continue;
+        }
+
+        final matchers = <String>[
+          if (id != null && id.isNotEmpty) id,
+          if (normalizedName != null) normalizedName,
+        ];
+
+        options.add(
+          _CategoryOption(
+            key: key,
+            label: category.name,
+            matchers: matchers,
           ),
         );
       }
+
+      options.sort((a, b) => a.label.compareTo(b.label));
+
+      final selectedKey = _selectedCategoryKey;
+      _CategoryOption? updatedSelectedOption;
+      if (selectedKey != null) {
+        updatedSelectedOption = _findCategoryOptionByKey(options, selectedKey);
+      }
+
+      setState(() {
+        _serviceCategoryOptions = options;
+        if (updatedSelectedOption != null) {
+          _selectedCategoryMatchers = updatedSelectedOption.matchers;
+        }
+      });
     } catch (e) {
+      if (!mounted) return;
+      final theme = Theme.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al cargar categorías: $e'),
+          backgroundColor: theme.colorScheme.error,
+        ),
+      );
+    } finally {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al agregar producto: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() {
+          _isLoadingCategories = false;
+        });
       }
     }
   }
 
-  List<Product> _getFilteredProducts(List<Product> products) {
+  String? _normalizeCategoryName(String? value) {
+    if (value == null) {
+      return null;
+    }
+    final normalized = value.trim().toLowerCase();
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  _CategoryOption? _findCategoryOptionByKey(
+    Iterable<_CategoryOption> options,
+    String key,
+  ) {
+    for (final option in options) {
+      if (option.key == key || option.matchers.contains(key)) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  String _categoryKeyFor(Product product) {
+    final id = product.categoryId?.trim();
+    if (id != null && id.isNotEmpty) {
+      return id;
+    }
+
+    final name = product.categoryName?.trim();
+    if (name != null && name.isNotEmpty) {
+      return name.toLowerCase();
+    }
+
+    return product.category.name;
+  }
+
+  String _categoryLabelFor(Product product) {
+    final name = product.categoryName?.trim();
+    if (name != null && name.isNotEmpty) {
+      return name;
+    }
+
+    return product.category.displayName;
+  }
+
+  List<Product> _getFilteredProducts(
+    List<Product> products, {
+    Set<String> categoryMatchers = const <String>{},
+  }) {
     return products.where((product) {
       final matchesSearch = _searchQuery.isEmpty ||
           product.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           product.sku.toLowerCase().contains(_searchQuery.toLowerCase());
 
-      final matchesCategory = _selectedCategoryId == null ||
-          product.category.name == _selectedCategoryId;
+      final categoryKey = _categoryKeyFor(product);
+      final normalizedLabel =
+          _normalizeCategoryName(_categoryLabelFor(product));
+      final productCategoryId = product.categoryId?.trim();
+      final matchesCategory = _selectedCategoryKey == null ||
+          categoryKey == _selectedCategoryKey ||
+          (productCategoryId != null &&
+              productCategoryId == _selectedCategoryKey) ||
+          categoryMatchers.contains(categoryKey) ||
+          (productCategoryId != null &&
+              categoryMatchers.contains(productCategoryId)) ||
+          (normalizedLabel != null &&
+              categoryMatchers.contains(normalizedLabel)) ||
+          categoryMatchers.contains(product.category.name);
 
-      return matchesSearch && matchesCategory && product.stockQuantity > 0;
+      final matchesType = _selectedProductType == null ||
+          product.productType == _selectedProductType;
+
+      final requiresStock =
+          product.productType == ProductType.product && product.trackStock;
+      final hasStock = !requiresStock || product.stockQuantity > 0;
+
+      return matchesSearch && matchesCategory && matchesType && hasStock;
     }).toList();
+  }
+
+  List<_CategoryOption> _getCategoryOptions(List<Product> products) {
+    final Map<String, _CategoryOption> options = {
+      for (final option in _serviceCategoryOptions) option.key: option,
+    };
+
+    for (final product in products) {
+      final key = _categoryKeyFor(product);
+      final label = _categoryLabelFor(product);
+      final normalizedLabel = _normalizeCategoryName(label);
+      final productCategoryId = product.categoryId?.trim();
+      final categoryDisplayMatcher =
+          _normalizeCategoryName(product.category.displayName);
+
+      final matchers = <String>[
+        if (productCategoryId != null && productCategoryId.isNotEmpty)
+          productCategoryId,
+        if (normalizedLabel != null) normalizedLabel,
+        product.category.name,
+        if (categoryDisplayMatcher != null) categoryDisplayMatcher,
+      ];
+
+      final existing = options[key];
+      if (existing != null) {
+        options[key] = _CategoryOption(
+          key: existing.key,
+          label: existing.label,
+          matchers: {...existing.matchers, ...matchers},
+        );
+      } else {
+        options[key] = _CategoryOption(
+          key: key,
+          label: label,
+          matchers: matchers,
+        );
+      }
+    }
+
+    final list = options.values.toList()
+      ..sort((a, b) => a.label.compareTo(b.label));
+    return list;
   }
 
   @override
@@ -153,7 +338,8 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                       Expanded(
                         flex: 2,
                         child: Padding(
-                          padding: const EdgeInsets.only(left: 16, right: 8, bottom: 16),
+                          padding: const EdgeInsets.only(
+                              left: 16, right: 8, bottom: 16),
                           child: Column(
                             children: [
                               // Search bar
@@ -167,41 +353,113 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                 },
                               ),
                               const SizedBox(height: 12),
-                              // Category filter
-                              SizedBox(
-                                height: 40,
-                                child: ListView(
-                                  scrollDirection: Axis.horizontal,
-                                  children: [
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 8),
-                                      child: FilterChip(
+                              // Filters
+                              Consumer<InventoryService>(
+                                builder: (context, inventoryService, child) {
+                                  final categoryOptions = _getCategoryOptions(
+                                      inventoryService.products);
+                                  final optionsByKey = {
+                                    for (final option in categoryOptions)
+                                      option.key: option,
+                                  };
+                                  return Row(
+                                    children: [
+                                      FilterChip(
                                         label: const Text('Todos'),
-                                        selected: _selectedCategoryId == null,
-                                        onSelected: (selected) {
+                                        selected:
+                                            _selectedCategoryKey == null &&
+                                                _selectedProductType == null,
+                                        onSelected: (_) {
                                           setState(() {
-                                            _selectedCategoryId = null;
+                                            _selectedCategoryKey = null;
+                                            _selectedCategoryMatchers =
+                                                const <String>{};
+                                            _selectedProductType = null;
                                           });
                                         },
                                       ),
-                                    ),
-                                    ...ProductCategory.values.map((category) {
-                                      final isSelected = _selectedCategoryId == category.name;
-                                      return Padding(
-                                        padding: const EdgeInsets.only(right: 8),
-                                        child: FilterChip(
-                                          label: Text(category.displayName),
-                                          selected: isSelected,
-                                          onSelected: (selected) {
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: DropdownButtonFormField<
+                                            ProductType?>(
+                                          value: _selectedProductType,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Tipo',
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem<ProductType?>(
+                                              value: null,
+                                              child: Text('Todos los tipos'),
+                                            ),
+                                            DropdownMenuItem<ProductType?>(
+                                              value: ProductType.product,
+                                              child: Text('Productos'),
+                                            ),
+                                            DropdownMenuItem<ProductType?>(
+                                              value: ProductType.service,
+                                              child: Text('Servicios'),
+                                            ),
+                                          ],
+                                          onChanged: (value) {
                                             setState(() {
-                                              _selectedCategoryId = selected ? category.name : null;
+                                              _selectedProductType = value;
                                             });
                                           },
                                         ),
-                                      );
-                                    }),
-                                  ],
-                                ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: DropdownButtonFormField<String?>(
+                                          value: _selectedCategoryKey,
+                                          decoration: InputDecoration(
+                                            labelText: 'Categorías',
+                                            border: const OutlineInputBorder(),
+                                            suffixIcon: _isLoadingCategories
+                                                ? const Padding(
+                                                    padding: EdgeInsets.all(12),
+                                                    child: SizedBox(
+                                                      width: 16,
+                                                      height: 16,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                    ),
+                                                  )
+                                                : null,
+                                          ),
+                                          isExpanded: true,
+                                          items: [
+                                            const DropdownMenuItem<String?>(
+                                              value: null,
+                                              child:
+                                                  Text('Todas las categorías'),
+                                            ),
+                                            ...categoryOptions.map(
+                                              (option) =>
+                                                  DropdownMenuItem<String?>(
+                                                value: option.key,
+                                                child: Text(option.label),
+                                              ),
+                                            ),
+                                          ],
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _selectedCategoryKey = value;
+                                              _selectedCategoryMatchers =
+                                                  value != null
+                                                      ? (optionsByKey[value]
+                                                              ?.matchers ??
+                                                          const <String>{})
+                                                      : const <String>{};
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
                               const SizedBox(height: 12),
                               // Products grid
@@ -209,11 +467,17 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                 child: Consumer<InventoryService>(
                                   builder: (context, inventoryService, child) {
                                     final products = inventoryService.products;
-                                    final filteredProducts = _getFilteredProducts(products);
+                                    final filteredProducts =
+                                        _getFilteredProducts(
+                                      products,
+                                      categoryMatchers:
+                                          _selectedCategoryMatchers,
+                                    );
                                     if (products.isEmpty) {
                                       return const Center(
                                         child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
                                             Icon(
                                               Icons.inventory_2_outlined,
@@ -223,7 +487,9 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                             SizedBox(height: 16),
                                             Text(
                                               'No hay productos disponibles',
-                                              style: TextStyle(fontSize: 18, color: Colors.grey),
+                                              style: TextStyle(
+                                                  fontSize: 18,
+                                                  color: Colors.grey),
                                             ),
                                           ],
                                         ),
@@ -232,7 +498,8 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                     if (filteredProducts.isEmpty) {
                                       return Center(
                                         child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
                                             Icon(
                                               Icons.search_off,
@@ -242,15 +509,20 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                             const SizedBox(height: 16),
                                             Text(
                                               'No se encontraron productos',
-                                              style: theme.textTheme.headlineSmall?.copyWith(
-                                                color: theme.colorScheme.onSurfaceVariant,
+                                              style: theme
+                                                  .textTheme.headlineSmall
+                                                  ?.copyWith(
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant,
                                               ),
                                             ),
                                             const SizedBox(height: 8),
                                             Text(
                                               'Intenta cambiar los filtros de búsqueda',
-                                              style: theme.textTheme.bodyLarge?.copyWith(
-                                                color: theme.colorScheme.onSurfaceVariant,
+                                              style: theme.textTheme.bodyLarge
+                                                  ?.copyWith(
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant,
                                               ),
                                             ),
                                           ],
@@ -259,7 +531,8 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                     }
                                     return GridView.builder(
                                       padding: const EdgeInsets.all(8),
-                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                      gridDelegate:
+                                          const SliverGridDelegateWithFixedCrossAxisCount(
                                         crossAxisCount: 4,
                                         childAspectRatio: 0.75,
                                         crossAxisSpacing: 8,
@@ -314,52 +587,130 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                   });
                                 },
                               ),
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                height: 40,
-                                child: ListView(
-                                  scrollDirection: Axis.horizontal,
-                                  children: [
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 8),
-                                      child: FilterChip(
+                              const SizedBox(height: 12),
+                              Consumer<InventoryService>(
+                                builder: (context, inventoryService, child) {
+                                  final categoryOptions = _getCategoryOptions(
+                                      inventoryService.products);
+                                  final optionsByKey = {
+                                    for (final option in categoryOptions)
+                                      option.key: option,
+                                  };
+                                  return Row(
+                                    children: [
+                                      FilterChip(
                                         label: const Text('Todos'),
-                                        selected: _selectedCategoryId == null,
-                                        onSelected: (selected) {
+                                        selected:
+                                            _selectedCategoryKey == null &&
+                                                _selectedProductType == null,
+                                        onSelected: (_) {
                                           setState(() {
-                                            _selectedCategoryId = null;
+                                            _selectedCategoryKey = null;
+                                            _selectedCategoryMatchers =
+                                                const <String>{};
+                                            _selectedProductType = null;
                                           });
                                         },
                                       ),
-                                    ),
-                                    ...ProductCategory.values.map((category) {
-                                      final isSelected = _selectedCategoryId == category.name;
-                                      return Padding(
-                                        padding: const EdgeInsets.only(right: 8),
-                                        child: FilterChip(
-                                          label: Text(category.displayName),
-                                          selected: isSelected,
-                                          onSelected: (selected) {
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: DropdownButtonFormField<
+                                            ProductType?>(
+                                          value: _selectedProductType,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Tipo',
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem<ProductType?>(
+                                              value: null,
+                                              child: Text('Todos los tipos'),
+                                            ),
+                                            DropdownMenuItem<ProductType?>(
+                                              value: ProductType.product,
+                                              child: Text('Productos'),
+                                            ),
+                                            DropdownMenuItem<ProductType?>(
+                                              value: ProductType.service,
+                                              child: Text('Servicios'),
+                                            ),
+                                          ],
+                                          onChanged: (value) {
                                             setState(() {
-                                              _selectedCategoryId = selected ? category.name : null;
+                                              _selectedProductType = value;
                                             });
                                           },
                                         ),
-                                      );
-                                    }),
-                                  ],
-                                ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: DropdownButtonFormField<String?>(
+                                          value: _selectedCategoryKey,
+                                          decoration: InputDecoration(
+                                            labelText: 'Categorías',
+                                            border: const OutlineInputBorder(),
+                                            suffixIcon: _isLoadingCategories
+                                                ? const Padding(
+                                                    padding: EdgeInsets.all(12),
+                                                    child: SizedBox(
+                                                      width: 16,
+                                                      height: 16,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                    ),
+                                                  )
+                                                : null,
+                                          ),
+                                          isExpanded: true,
+                                          items: [
+                                            const DropdownMenuItem<String?>(
+                                              value: null,
+                                              child:
+                                                  Text('Todas las categorías'),
+                                            ),
+                                            ...categoryOptions.map(
+                                              (option) =>
+                                                  DropdownMenuItem<String?>(
+                                                value: option.key,
+                                                child: Text(option.label),
+                                              ),
+                                            ),
+                                          ],
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _selectedCategoryKey = value;
+                                              _selectedCategoryMatchers =
+                                                  value != null
+                                                      ? (optionsByKey[value]
+                                                              ?.matchers ??
+                                                          const <String>{})
+                                                      : const <String>{};
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 12),
                               Expanded(
                                 child: Consumer<InventoryService>(
                                   builder: (context, inventoryService, child) {
                                     final products = inventoryService.products;
-                                    final filteredProducts = _getFilteredProducts(products);
+                                    final filteredProducts =
+                                        _getFilteredProducts(
+                                      products,
+                                      categoryMatchers:
+                                          _selectedCategoryMatchers,
+                                    );
                                     if (products.isEmpty) {
                                       return const Center(
                                         child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
                                             Icon(
                                               Icons.inventory_2_outlined,
@@ -369,7 +720,9 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                             SizedBox(height: 16),
                                             Text(
                                               'No hay productos disponibles',
-                                              style: TextStyle(fontSize: 18, color: Colors.grey),
+                                              style: TextStyle(
+                                                  fontSize: 18,
+                                                  color: Colors.grey),
                                             ),
                                           ],
                                         ),
@@ -378,7 +731,8 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                     if (filteredProducts.isEmpty) {
                                       return Center(
                                         child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
                                             Icon(
                                               Icons.search_off,
@@ -388,15 +742,20 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                             const SizedBox(height: 16),
                                             Text(
                                               'No se encontraron productos',
-                                              style: theme.textTheme.headlineSmall?.copyWith(
-                                                color: theme.colorScheme.onSurfaceVariant,
+                                              style: theme
+                                                  .textTheme.headlineSmall
+                                                  ?.copyWith(
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant,
                                               ),
                                             ),
                                             const SizedBox(height: 8),
                                             Text(
                                               'Intenta cambiar los filtros de búsqueda',
-                                              style: theme.textTheme.bodyLarge?.copyWith(
-                                                color: theme.colorScheme.onSurfaceVariant,
+                                              style: theme.textTheme.bodyLarge
+                                                  ?.copyWith(
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant,
                                               ),
                                             ),
                                           ],
@@ -405,7 +764,8 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                     }
                                     return GridView.builder(
                                       padding: const EdgeInsets.all(8),
-                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                      gridDelegate:
+                                          const SliverGridDelegateWithFixedCrossAxisCount(
                                         crossAxisCount: 3,
                                         childAspectRatio: 0.75,
                                         crossAxisSpacing: 8,
@@ -441,6 +801,25 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   }
 }
 
+class _CategoryOption {
+  _CategoryOption({
+    required this.key,
+    required this.label,
+    Iterable<String> matchers = const <String>[],
+  }) : matchers = Set.unmodifiable(
+          {
+            key,
+            ...matchers
+                .map((matcher) => matcher.trim())
+                .where((value) => value.isNotEmpty),
+          },
+        );
+
+  final String key;
+  final String label;
+  final Set<String> matchers;
+}
+
 class _CashierPanel extends StatefulWidget {
   const _CashierPanel();
 
@@ -453,8 +832,9 @@ class _CashierPanelState extends State<_CashierPanel> {
   List<Customer> _customers = [];
   List<Customer> _filteredCustomers = [];
   bool _isLoadingCustomers = true;
-  final TextEditingController _customerSearchController = TextEditingController();
-  
+  final TextEditingController _customerSearchController =
+      TextEditingController();
+
   // Payment flow state
   bool _showPaymentView = false;
   bool _showReceiptView = false;
@@ -489,7 +869,8 @@ class _CashierPanelState extends State<_CashierPanel> {
 
   Future<void> _loadCustomers() async {
     try {
-      final customerService = Provider.of<CustomerService>(context, listen: false);
+      final customerService =
+          Provider.of<CustomerService>(context, listen: false);
       final crmCustomers = await customerService.getCustomers();
       final customers = crmCustomers.map((crmCustomer) {
         final fallbackId = crmCustomer.id?.toString() ??
@@ -536,7 +917,8 @@ class _CashierPanelState extends State<_CashierPanel> {
         _filteredCustomers = _customers.where((customer) {
           final nameMatch = customer.name.toLowerCase().contains(query);
           final rutMatch = (customer.rut ?? '').toLowerCase().contains(query);
-          final emailMatch = (customer.email ?? '').toLowerCase().contains(query);
+          final emailMatch =
+              (customer.email ?? '').toLowerCase().contains(query);
           return nameMatch || rutMatch || emailMatch;
         }).toList();
       }
@@ -554,7 +936,7 @@ class _CashierPanelState extends State<_CashierPanel> {
       });
     }
   }
-  
+
   void _cancelPayment() {
     setState(() {
       _showPaymentView = false;
@@ -565,7 +947,7 @@ class _CashierPanelState extends State<_CashierPanel> {
       _amountController.clear();
     });
   }
-  
+
   void _finishTransaction() {
     setState(() {
       _showPaymentView = false;
@@ -576,7 +958,7 @@ class _CashierPanelState extends State<_CashierPanel> {
       _amountController.clear();
     });
   }
-  
+
   Future<void> _processPayment() async {
     if (_selectedPaymentMethod == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -667,289 +1049,322 @@ class _CashierPanelState extends State<_CashierPanel> {
       },
     );
   }
-  
-  Widget _buildCartView(ThemeData theme, POSService posService, String currentQuery) {
+
+  Widget _buildCartView(
+      ThemeData theme, POSService posService, String currentQuery) {
     return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Resumen de Caja',
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              if (posService.cartItems.isNotEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Productos (${posService.cartTotalItems})',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 12),
-                        ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: posService.cartItems.length,
-                          separatorBuilder: (_, __) => Divider(color: theme.colorScheme.outline.withOpacity(0.1)),
-                          itemBuilder: (context, index) {
-                            final item = posService.cartItems[index];
-                            return Column(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Resumen de Caja',
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          if (posService.cartItems.isNotEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Productos (${posService.cartTotalItems})',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: posService.cartItems.length,
+                      separatorBuilder: (_, __) => Divider(
+                          color: theme.colorScheme.outline.withOpacity(0.1)),
+                      itemBuilder: (context, index) {
+                        final item = posService.cartItems[index];
+                        return Column(
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            item.product.name,
-                                            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            'SKU: ${item.product.sku}',
-                                            style: theme.textTheme.bodySmall,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '\$${item.unitPrice.toStringAsFixed(0)} c/u',
-                                            style: theme.textTheme.bodySmall?.copyWith(
-                                              color: theme.colorScheme.primary,
-                                            ),
-                                          ),
-                                        ],
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.product.name,
+                                        style: theme.textTheme.titleSmall
+                                            ?.copyWith(
+                                                fontWeight: FontWeight.w600),
                                       ),
-                                    ),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          '\$${item.subtotal.toStringAsFixed(0)}',
-                                          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'SKU: ${item.product.sku}',
+                                        style: theme.textTheme.bodySmall,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '\$${item.unitPrice.toStringAsFixed(0)} c/u',
+                                        style:
+                                            theme.textTheme.bodySmall?.copyWith(
+                                          color: theme.colorScheme.primary,
                                         ),
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            IconButton(
-                                              icon: const Icon(Icons.remove_circle_outline, size: 20),
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(),
-                                              onPressed: () {
-                                                if (item.quantity > 1) {
-                                                  posService.updateCartItemQuantity(item.id, item.quantity - 1);
-                                                } else {
-                                                  posService.removeFromCart(item.id);
-                                                }
-                                              },
-                                            ),
-                                            Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                                              child: Text(
-                                                '${item.quantity}',
-                                                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
-                                              ),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.add_circle_outline, size: 20),
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(),
-                                              onPressed: () {
-                                                if (item.quantity < item.product.stockQuantity) {
-                                                  posService.updateCartItemQuantity(item.id, item.quantity + 1);
-                                                } else {
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                    SnackBar(
-                                                      content: Text('Stock máximo: ${item.product.stockQuantity}'),
-                                                      duration: const Duration(seconds: 1),
-                                                    ),
-                                                  );
-                                                }
-                                              },
-                                            ),
-                                            const SizedBox(width: 4),
-                                            IconButton(
-                                              icon: Icon(Icons.delete_outline, size: 20, color: theme.colorScheme.error),
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(),
-                                              onPressed: () {
-                                                posService.removeFromCart(item.id);
-                                              },
-                                            ),
-                                          ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '\$${item.subtotal.toStringAsFixed(0)}',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(
+                                              Icons.remove_circle_outline,
+                                              size: 20),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () {
+                                            if (item.quantity > 1) {
+                                              posService.updateCartItemQuantity(
+                                                  item.id, item.quantity - 1);
+                                            } else {
+                                              posService
+                                                  .removeFromCart(item.id);
+                                            }
+                                          },
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8),
+                                          child: Text(
+                                            '${item.quantity}',
+                                            style: theme.textTheme.bodyMedium
+                                                ?.copyWith(
+                                                    fontWeight:
+                                                        FontWeight.bold),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                              Icons.add_circle_outline,
+                                              size: 20),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () {
+                                            if (item.quantity <
+                                                item.product.stockQuantity) {
+                                              posService.updateCartItemQuantity(
+                                                  item.id, item.quantity + 1);
+                                            } else {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                      'Stock máximo: ${item.product.stockQuantity}'),
+                                                  duration: const Duration(
+                                                      seconds: 1),
+                                                ),
+                                              );
+                                            }
+                                          },
+                                        ),
+                                        const SizedBox(width: 4),
+                                        IconButton(
+                                          icon: Icon(Icons.delete_outline,
+                                              size: 20,
+                                              color: theme.colorScheme.error),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () {
+                                            posService.removeFromCart(item.id);
+                                          },
                                         ),
                                       ],
                                     ),
                                   ],
                                 ),
                               ],
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (posService.cartItems.isNotEmpty)
-                const SizedBox(height: 16)
-              else
-                Card(
-                  color: theme.colorScheme.surface,
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Row(
-                      children: [
-                        Icon(Icons.shopping_cart_outlined, color: theme.colorScheme.outline),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'El carrito está vacío. Selecciona productos para comenzar.',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (posService.cartItems.isNotEmpty) const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Subtotal:', style: theme.textTheme.bodyLarge),
-                          Text('\$${posService.cartNetAmount.toStringAsFixed(0)}'),
-                        ],
-                      ),
-                      if (posService.cartDiscountAmount > 0)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Descuento:', style: theme.textTheme.bodyLarge),
-                            Text(
-                              '-\$${posService.cartDiscountAmount.toStringAsFixed(0)}',
-                              style: TextStyle(color: theme.colorScheme.error),
                             ),
                           ],
-                        ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('IVA (19%):', style: theme.textTheme.bodyLarge),
-                          Text('\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
-                        ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (posService.cartItems.isNotEmpty)
+            const SizedBox(height: 16)
+          else
+            Card(
+              color: theme.colorScheme.surface,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Row(
+                  children: [
+                    Icon(Icons.shopping_cart_outlined,
+                        color: theme.colorScheme.outline),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'El carrito está vacío. Selecciona productos para comenzar.',
+                        style: theme.textTheme.bodyMedium,
                       ),
-                      const Divider(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'TOTAL:',
-                            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            '\$${posService.cartTotal.toStringAsFixed(0)}',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                        ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (posService.cartItems.isNotEmpty) const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Subtotal:', style: theme.textTheme.bodyLarge),
+                      Text('\$${posService.cartNetAmount.toStringAsFixed(0)}'),
+                    ],
+                  ),
+                  if (posService.cartDiscountAmount > 0)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Descuento:', style: theme.textTheme.bodyLarge),
+                        Text(
+                          '-\$${posService.cartDiscountAmount.toStringAsFixed(0)}',
+                          style: TextStyle(color: theme.colorScheme.error),
+                        ),
+                      ],
+                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('IVA (19%):', style: theme.textTheme.bodyLarge),
+                      Text('\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
+                    ],
+                  ),
+                  const Divider(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'TOTAL:',
+                        style: theme.textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '\$${posService.cartTotal.toStringAsFixed(0)}',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
                       ),
                     ],
                   ),
-                ),
+                ],
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Cliente',
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _customerSearchController,
-                decoration: const InputDecoration(
-                  labelText: 'Buscar cliente por nombre, RUT o email',
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (_isLoadingCustomers)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: LinearProgressIndicator(),
-                )
-              else ...[
-                if (_filteredCustomers.isEmpty && currentQuery.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      'No se encontraron clientes para "$currentQuery"',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ),
-                DropdownButtonFormField<Customer>(
-                  value: _selectedCustomer,
-                  decoration: const InputDecoration(
-                    labelText: 'Seleccionar Cliente (Opcional)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
-                  ),
-                  isExpanded: true,
-                  items: [
-                    const DropdownMenuItem<Customer>(
-                      value: null,
-                      child: Text('Cliente Genérico'),
-                    ),
-                    ..._filteredCustomers.map((customer) {
-                      return DropdownMenuItem<Customer>(
-                        value: customer,
-                        child: Text('${customer.name} - ${(customer.rut ?? customer.email ?? 'Sin RUT')}'),
-                      );
-                    }).toList(),
-                    if (_selectedCustomer != null &&
-                        !_filteredCustomers.any((c) => c.id == _selectedCustomer!.id))
-                      DropdownMenuItem<Customer>(
-                        value: _selectedCustomer,
-                        child: Text('${_selectedCustomer!.name} - ${( _selectedCustomer!.rut ?? _selectedCustomer!.email ?? 'Sin RUT')}'),
-                      ),
-                  ],
-                  onChanged: (customer) {
-                    setState(() {
-                      _selectedCustomer = customer;
-                    });
-                    context.read<POSService>().setCustomer(customer);
-                  },
-                ),
-              ],
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: posService.hasItemsInCart ? _proceedToPayment : null,
-                  icon: const Icon(Icons.payment),
-                  label: const Text('Proceder al Pago'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        );
+          const SizedBox(height: 24),
+          Text(
+            'Cliente',
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _customerSearchController,
+            decoration: const InputDecoration(
+              labelText: 'Buscar cliente por nombre, RUT o email',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_isLoadingCustomers)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: LinearProgressIndicator(),
+            )
+          else ...[
+            if (_filteredCustomers.isEmpty && currentQuery.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'No se encontraron clientes para "$currentQuery"',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            DropdownButtonFormField<Customer>(
+              value: _selectedCustomer,
+              decoration: const InputDecoration(
+                labelText: 'Seleccionar Cliente (Opcional)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person),
+              ),
+              isExpanded: true,
+              items: [
+                const DropdownMenuItem<Customer>(
+                  value: null,
+                  child: Text('Cliente Genérico'),
+                ),
+                ..._filteredCustomers.map((customer) {
+                  return DropdownMenuItem<Customer>(
+                    value: customer,
+                    child: Text(
+                        '${customer.name} - ${(customer.rut ?? customer.email ?? 'Sin RUT')}'),
+                  );
+                }),
+                if (_selectedCustomer != null &&
+                    !_filteredCustomers
+                        .any((c) => c.id == _selectedCustomer!.id))
+                  DropdownMenuItem<Customer>(
+                    value: _selectedCustomer,
+                    child: Text(
+                        '${_selectedCustomer!.name} - ${(_selectedCustomer!.rut ?? _selectedCustomer!.email ?? 'Sin RUT')}'),
+                  ),
+              ],
+              onChanged: (customer) {
+                setState(() {
+                  _selectedCustomer = customer;
+                });
+                context.read<POSService>().setCustomer(customer);
+              },
+            ),
+          ],
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: posService.hasItemsInCart ? _proceedToPayment : null,
+              icon: const Icon(Icons.payment),
+              label: const Text('Proceder al Pago'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
-  
+
   Widget _buildPaymentView(ThemeData theme, POSService posService) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -965,7 +1380,8 @@ class _CashierPanelState extends State<_CashierPanel> {
               Expanded(
                 child: Text(
                   'Procesar Pago',
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -980,7 +1396,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                 children: [
                   Text(
                     'Resumen',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -1003,7 +1420,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                     children: [
                       Text(
                         'TOTAL:',
-                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        style: theme.textTheme.titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       Text(
                         '\$${posService.cartTotal.toStringAsFixed(0)}',
@@ -1022,7 +1440,8 @@ class _CashierPanelState extends State<_CashierPanel> {
           // Payment Method
           Text(
             'Método de Pago',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -1038,7 +1457,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                     _selectedPaymentMethod = method;
                     if (method != PaymentMethod.cash) {
                       _amountReceived = posService.cartTotal;
-                      _amountController.text = posService.cartTotal.toStringAsFixed(0);
+                      _amountController.text =
+                          posService.cartTotal.toStringAsFixed(0);
                     }
                   });
                 },
@@ -1054,7 +1474,8 @@ class _CashierPanelState extends State<_CashierPanel> {
           if (_selectedPaymentMethod == PaymentMethod.cash) ...[
             Text(
               'Monto Recibido',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -1123,7 +1544,7 @@ class _CashierPanelState extends State<_CashierPanel> {
       ),
     );
   }
-  
+
   IconData _getPaymentIcon(PaymentType type) {
     switch (type) {
       case PaymentType.cash:
@@ -1136,7 +1557,7 @@ class _CashierPanelState extends State<_CashierPanel> {
         return Icons.account_balance;
     }
   }
-  
+
   Widget _buildReceiptView(ThemeData theme, POSTransaction transaction) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1195,7 +1616,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                     ),
                   ),
                   const Divider(height: 24),
-                  _buildReceiptRow('Recibo:', transaction.receiptNumber ?? transaction.id, theme),
+                  _buildReceiptRow('Recibo:',
+                      transaction.receiptNumber ?? transaction.id, theme),
                   _buildReceiptRow(
                     'Fecha:',
                     '${transaction.createdAt.day.toString().padLeft(2, '0')}/${transaction.createdAt.month.toString().padLeft(2, '0')}/${transaction.createdAt.year} ${transaction.createdAt.hour.toString().padLeft(2, '0')}:${transaction.createdAt.minute.toString().padLeft(2, '0')}',
@@ -1236,8 +1658,10 @@ class _CashierPanelState extends State<_CashierPanel> {
                         ),
                       )),
                   const Divider(height: 24),
-                  _buildReceiptRow('Subtotal:', '\$${transaction.subtotal.toStringAsFixed(0)}', theme),
-                  _buildReceiptRow('IVA (19%):', '\$${transaction.taxAmount.toStringAsFixed(0)}', theme),
+                  _buildReceiptRow('Subtotal:',
+                      '\$${transaction.subtotal.toStringAsFixed(0)}', theme),
+                  _buildReceiptRow('IVA (19%):',
+                      '\$${transaction.taxAmount.toStringAsFixed(0)}', theme),
                   const Divider(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1298,7 +1722,7 @@ class _CashierPanelState extends State<_CashierPanel> {
       ),
     );
   }
-  
+
   Widget _buildReceiptRow(String label, String value, ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),

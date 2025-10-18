@@ -24,7 +24,6 @@ import 'modules/settings/services/appearance_service.dart';
 import 'modules/bikeshop/services/bikeshop_service.dart';
 import 'shared/routes/app_router.dart';
 import 'shared/services/error_reporting_service.dart';
-import 'shared/widgets/global_error_overlay.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -150,16 +149,8 @@ class VinabikeApp extends StatelessWidget {
             routerConfig: AppRouter.createRouter(authService),
             debugShowCheckedModeBanner: false,
             builder: (context, child) {
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  child ?? const SizedBox.shrink(),
-                  IgnorePointer(
-                    ignoring: false,
-                    child: GlobalErrorOverlay(notifier: ErrorReportingService.notifier),
-                  ),
-                ],
-              );
+              // Global error overlay disabled - errors will show in debug console
+              return child ?? const SizedBox.shrink();
             },
           );
         },

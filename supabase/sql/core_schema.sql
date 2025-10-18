@@ -753,7 +753,8 @@ create index if not exists idx_sales_invoices_customer_id
 
 alter table public.sales_invoices
   add column if not exists paid_amount numeric(12,2) not null default 0,
-  add column if not exists balance numeric(12,2) not null default 0;
+  add column if not exists balance numeric(12,2) not null default 0,
+  add column if not exists discount_amount numeric(12,2) not null default 0;
 
 do $$
 begin
@@ -1032,12 +1033,8 @@ begin
          updated_at = now()
    where id = p_invoice_id;
 
-  -- Update mechanic_jobs if this invoice is linked to a job
-  update public.mechanic_jobs
-     set is_invoiced = true,
-         is_paid = (v_new_status = 'paid'),
-         updated_at = now()
-   where invoice_id = p_invoice_id;
+  -- SYNC: Update mechanic_jobs if this invoice is linked to a job
+  perform public.sync_invoice_status_to_job(p_invoice_id);
 end;
 $$ language plpgsql;
 
@@ -2091,6 +2088,9 @@ begin
     end if;
     
     perform public.recalculate_sales_invoice_payments(NEW.id);
+    -- SYNC: Update linked pega with invoice data
+    perform public.sync_invoice_items_to_job(NEW.id);
+    perform public.sync_invoice_status_to_job(NEW.id);
     return NEW;
 
   elsif TG_OP = 'UPDATE' then
@@ -2147,6 +2147,9 @@ begin
     end if;
     
     perform public.recalculate_sales_invoice_payments(NEW.id);
+    -- SYNC: Update linked pega with invoice changes
+    perform public.sync_invoice_items_to_job(NEW.id);
+    perform public.sync_invoice_status_to_job(NEW.id);
     return NEW;
 
   elsif TG_OP = 'DELETE' then
@@ -5048,6 +5051,7 @@ create table if not exists mechanic_job_labor (
   technician_id uuid references customers(id) on delete set null, -- Will be employee_id when HR exists
   technician_name text not null,
   description text,
+  service_product_id uuid references products(id) on delete set null,
   hours_worked numeric(5,2) not null default 0,
   hourly_rate numeric(12,2) not null default 0,
   total_cost numeric(12,2) not null default 0,
@@ -5069,6 +5073,9 @@ begin
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'description') then
     alter table mechanic_job_labor add column description text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'service_product_id') then
+    alter table mechanic_job_labor add column service_product_id uuid references products(id) on delete set null;
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'hours_worked') then
     alter table mechanic_job_labor add column hours_worked numeric(5,2) not null default 0;
@@ -5092,6 +5099,7 @@ end $$;
 
 create index if not exists idx_mechanic_job_labor_job_id on mechanic_job_labor(job_id);
 create index if not exists idx_mechanic_job_labor_technician_id on mechanic_job_labor(technician_id) where technician_id is not null;
+create index if not exists idx_mechanic_job_labor_service_product on mechanic_job_labor(service_product_id) where service_product_id is not null;
 
 -- Table: mechanic_job_timeline
 -- Audit trail / history of status changes and events
@@ -5273,6 +5281,9 @@ begin
     return null;
   end if;
   
+  -- Ensure job totals are current before creating invoice
+  perform public.recalculate_mechanic_job_costs(p_job_id);
+
   -- If invoice already exists, don't create another
   if v_job.invoice_id is not null then
     raise notice 'Job % already has invoice %', p_job_id, v_job.invoice_id;
@@ -5320,22 +5331,43 @@ begin
     );
   end loop;
   
-  -- Add labor costs as a service line item (if labor_cost > 0)
-  if v_job.labor_cost > 0 then
+  -- Add labor entries individually to preserve service products
+  for v_labor_record in
+    select
+      l.service_product_id,
+      l.description,
+      l.hours_worked,
+      l.hourly_rate,
+      l.total_cost,
+      coalesce(p.name, l.description, 'Mano de obra') as resolved_name
+    from public.mechanic_job_labor l
+    left join public.products p on p.id = l.service_product_id
+    where l.job_id = p_job_id
+    order by l.created_at
+  loop
     v_item_counter := v_item_counter + 1;
-    v_subtotal := v_subtotal + v_job.labor_cost;
-    
+
     v_items := v_items || jsonb_build_object(
       'id', gen_random_uuid()::text,
-      'product_id', '',
-      'product_name', 'Mano de obra / Labor',
-      'quantity', 1,
-      'unit_price', v_job.labor_cost,
+      'product_id', coalesce(v_labor_record.service_product_id::text, ''),
+      'product_name', v_labor_record.resolved_name,
+      'quantity', coalesce(nullif(v_labor_record.hours_worked, 0), 1),
+      'unit_price', v_labor_record.hourly_rate,
       'discount', 0,
-      'line_total', v_job.labor_cost,
+      'line_total', coalesce(
+        v_labor_record.total_cost,
+        v_labor_record.hours_worked * v_labor_record.hourly_rate,
+        0
+      ),
       'cost', 0
     );
-  end if;
+
+    v_subtotal := v_subtotal + coalesce(
+      v_labor_record.total_cost,
+      v_labor_record.hours_worked * v_labor_record.hourly_rate,
+      0
+    );
+  end loop;
   
   -- Calculate IVA (19% for Chile)
   v_iva := round(v_subtotal * 0.19, 2);
@@ -5392,6 +5424,399 @@ begin
     v_invoice_id, v_job.job_number, v_customer.name, v_total;
   
   return v_invoice_id;
+end;
+$$;
+
+-- ============================================================================
+-- CRITICAL: BI-DIRECTIONAL PEGA ↔ INVOICE SYNC
+-- ============================================================================
+
+-- Function: Sync invoice items back to mechanic_job_items
+-- Called when invoice items are modified to keep pega in sync
+create or replace function public.sync_invoice_items_to_job(p_invoice_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_job_id uuid;
+  v_invoice record;
+  v_item jsonb;
+  v_subtotal numeric(12,2) := 0;
+  v_labor_cost numeric(12,2) := 0;
+  v_parts_cost numeric(12,2) := 0;
+  v_product_id uuid;
+  v_product_type text;
+  v_product_name text;
+  v_quantity numeric(12,2);
+  v_unit_price numeric(12,2);
+  v_line_total numeric(12,2);
+begin
+  -- Prevent circular sync: if we're already deep in triggers, skip
+  if pg_trigger_depth() > 2 then
+    raise notice 'sync_invoice_items_to_job: trigger depth too deep (%), skipping to prevent circular sync', pg_trigger_depth();
+    return;
+  end if;
+
+  -- Find the job linked to this invoice
+  select id into v_job_id
+  from mechanic_jobs
+  where invoice_id = p_invoice_id;
+  
+  if v_job_id is null then
+    raise notice 'No job linked to invoice %', p_invoice_id;
+    return;
+  end if;
+  
+  -- Get invoice details
+  select * into v_invoice
+  from sales_invoices
+  where id = p_invoice_id;
+  
+  if not found then
+    raise notice 'Invoice % not found', p_invoice_id;
+    return;
+  end if;
+  
+  -- Set a flag to prevent reverse sync
+  perform set_config('app.syncing_invoice_to_job', 'true', true);
+  
+  -- Delete existing job items (we'll recreate them from invoice)
+  delete from mechanic_job_items where job_id = v_job_id;
+  delete from mechanic_job_labor where job_id = v_job_id;
+  
+  -- Process each invoice item
+  for v_item in select * from jsonb_array_elements(v_invoice.items)
+  loop
+    v_product_id := nullif(v_item->>'product_id', '')::uuid;
+    v_quantity := coalesce((v_item->>'quantity')::numeric, 1);
+    v_unit_price := coalesce((v_item->>'unit_price')::numeric, 0);
+    v_line_total := coalesce((v_item->>'line_total')::numeric, v_quantity * v_unit_price, 0);
+    v_product_name := v_item->>'product_name';
+
+    -- Check if it's labor (no product_id) or a part
+    if v_product_id is null then
+      -- It's labor
+      v_labor_cost := v_labor_cost + v_line_total;
+
+      insert into mechanic_job_labor (
+        job_id,
+        technician_name,
+        description,
+        hours_worked,
+        hourly_rate,
+        total_cost,
+        service_product_id,
+        work_date,
+        created_at,
+        updated_at
+      ) values (
+        v_job_id,
+        'Factura',
+        v_product_name,
+        case when v_quantity is null or v_quantity = 0 then 1 else v_quantity end,
+        v_unit_price,
+        v_line_total,
+        null,
+        now(),
+        now(),
+        now()
+      );
+    else
+      -- Determine product type
+      v_product_type := null;
+      v_product_name := null;
+      select product_type, name
+      into v_product_type, v_product_name
+      from products
+      where id = v_product_id;
+      if not found then
+        v_product_type := null;
+        v_product_name := null;
+      end if;
+
+      if v_product_type = 'service' then
+        -- Service products are treated as labor
+        v_labor_cost := v_labor_cost + v_line_total;
+
+        insert into mechanic_job_labor (
+          job_id,
+          technician_name,
+          description,
+          hours_worked,
+          hourly_rate,
+          total_cost,
+          service_product_id,
+          work_date,
+          created_at,
+          updated_at
+        ) values (
+          v_job_id,
+          'Factura',
+          coalesce(v_product_name, v_item->>'product_name'),
+          case when v_quantity is null or v_quantity = 0 then 1 else v_quantity end,
+          v_unit_price,
+          v_line_total,
+          v_product_id,
+          now(),
+          now(),
+          now()
+        );
+      else
+        -- It's a part/product
+        v_parts_cost := v_parts_cost + v_line_total;
+      
+        -- Insert into job items
+        insert into mechanic_job_items (
+          job_id,
+          product_id,
+          product_name,
+          quantity,
+          unit_price,
+          notes,
+          created_at,
+          updated_at
+        ) values (
+          v_job_id,
+          v_product_id,
+          v_item->>'product_name',
+          v_quantity,
+          v_unit_price,
+          'Synced from invoice',
+          now(),
+          now()
+        );
+      end if;
+    end if;
+  end loop;
+  
+  v_subtotal := v_parts_cost + v_labor_cost;
+  
+  -- Update job costs
+  update mechanic_jobs
+  set 
+    labor_cost = v_labor_cost,
+    parts_cost = v_parts_cost,
+    final_cost = v_subtotal,
+    estimated_cost = v_subtotal,
+    total_cost = v_invoice.total,
+    tax_amount = v_invoice.iva_amount,
+    updated_at = now()
+  where id = v_job_id;
+  
+  -- Clear the sync flag
+  perform set_config('app.syncing_invoice_to_job', '', true);
+  
+  raise notice 'Synced invoice % items to job (parts: $%, labor: $%)', 
+    p_invoice_id, v_parts_cost, v_labor_cost;
+end;
+$$;
+
+-- Function: Sync invoice status/payment changes to mechanic_job
+-- Called when invoice status or payment changes
+create or replace function public.sync_invoice_status_to_job(p_invoice_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_job_id uuid;
+  v_invoice record;
+  v_is_paid boolean;
+begin
+  -- Find the job linked to this invoice
+  select id into v_job_id
+  from mechanic_jobs
+  where invoice_id = p_invoice_id;
+  
+  if v_job_id is null then
+    raise notice 'No job linked to invoice %', p_invoice_id;
+    return;
+  end if;
+  
+  -- Get invoice details
+  select * into v_invoice
+  from sales_invoices
+  where id = p_invoice_id;
+  
+  if not found then
+    raise notice 'Invoice % not found', p_invoice_id;
+    return;
+  end if;
+  
+  -- Determine if paid
+  v_is_paid := (lower(v_invoice.status) = 'paid');
+  
+  -- Update job status
+  update mechanic_jobs
+  set 
+    is_invoiced = true,
+    is_paid = v_is_paid,
+    updated_at = now()
+  where id = v_job_id;
+  
+  raise notice 'Synced invoice % status (%) to job (is_paid: %)', 
+    p_invoice_id, v_invoice.status, v_is_paid;
+end;
+$$;
+
+-- Function: Handle invoice deletion - clear job reference
+create or replace function public.handle_invoice_deleted_for_job()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Clear invoice_id from any linked jobs
+  update mechanic_jobs
+  set 
+    invoice_id = null,
+    is_invoiced = false,
+    is_paid = false,
+    updated_at = now()
+  where invoice_id = OLD.id;
+  
+  raise notice 'Cleared invoice reference from jobs for deleted invoice %', OLD.id;
+  return OLD;
+end;
+$$;
+
+-- Trigger: Clear job reference when invoice is deleted
+drop trigger if exists trg_invoice_deleted_clear_job on sales_invoices;
+create trigger trg_invoice_deleted_clear_job
+  before delete on sales_invoices
+  for each row execute procedure public.handle_invoice_deleted_for_job();
+
+-- ============================================================
+-- REVERSE SYNC: Job → Invoice
+-- ============================================================
+
+-- Function: Sync job items back to invoice
+-- Called when mechanic_job_items or mechanic_job_labor change
+create or replace function public.sync_job_to_invoice(p_job_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice_id uuid;
+  v_job record;
+  v_items jsonb := '[]'::jsonb;
+  v_item record;
+  v_labor record;
+  v_parts_cost numeric(12,2) := 0;
+  v_labor_cost numeric(12,2) := 0;
+  v_subtotal numeric(12,2) := 0;
+  v_discount numeric(12,2) := 0;
+  v_iva_amount numeric(12,2) := 0;
+  v_total numeric(12,2) := 0;
+  v_syncing_flag text;
+begin
+  -- Check if we're currently syncing invoice → job (prevent circular sync)
+  v_syncing_flag := current_setting('app.syncing_invoice_to_job', true);
+  if v_syncing_flag = 'true' then
+    raise notice 'sync_job_to_invoice: skipping due to invoice→job sync in progress';
+    return;
+  end if;
+
+  -- Prevent circular sync: if we're already deep in triggers, skip
+  if pg_trigger_depth() > 2 then
+    raise notice 'sync_job_to_invoice: trigger depth too deep (%), skipping', pg_trigger_depth();
+    return;
+  end if;
+
+  -- Get the job and its linked invoice
+  select * into v_job
+  from mechanic_jobs
+  where id = p_job_id;
+  
+  if not found then
+    raise notice 'Job % not found', p_job_id;
+    return;
+  end if;
+  
+  v_invoice_id := v_job.invoice_id;
+  
+  if v_invoice_id is null then
+    raise notice 'Job % has no linked invoice', p_job_id;
+    return;
+  end if;
+  
+  -- FRESH CALCULATION: Sum current parts and labor from database (not stale job record)
+  select coalesce(sum(total_price), 0)
+  into v_parts_cost
+  from mechanic_job_items
+  where job_id = p_job_id;
+  
+  select coalesce(sum(total_cost), 0)
+  into v_labor_cost
+  from mechanic_job_labor
+  where job_id = p_job_id;
+  
+  select coalesce(discount_amount, 0)
+  into v_discount
+  from mechanic_jobs
+  where id = p_job_id;
+  
+  -- Build invoice items array from job items
+  for v_item in 
+    select * from mechanic_job_items where job_id = p_job_id
+  loop
+    v_items := v_items || jsonb_build_object(
+      'product_id', v_item.product_id::text,
+      'product_name', v_item.product_name,
+      'quantity', v_item.quantity,
+      'unit_price', v_item.unit_price,
+      'line_total', coalesce(v_item.total_price, v_item.quantity * v_item.unit_price, 0)
+    );
+  end loop;
+  
+  -- Add labor items, preserving linked service products
+  for v_labor in
+    select 
+      l.service_product_id,
+      l.description,
+      l.hours_worked,
+      l.hourly_rate,
+      l.total_cost,
+      coalesce(p.name, l.description, 'Mano de obra') as service_name
+    from mechanic_job_labor l
+    left join products p on p.id = l.service_product_id
+    where l.job_id = p_job_id
+  loop
+    v_items := v_items || jsonb_build_object(
+      'product_id', coalesce(v_labor.service_product_id::text, ''),
+      'product_name', v_labor.service_name,
+      'quantity', coalesce(nullif(v_labor.hours_worked, 0), 1),
+      'unit_price', v_labor.hourly_rate,
+      'line_total', coalesce(v_labor.total_cost, v_labor.hours_worked * v_labor.hourly_rate, 0)
+    );
+  end loop;
+  
+  -- Calculate totals with FRESH data (not using stale v_job record)
+  v_subtotal := v_parts_cost + v_labor_cost - v_discount;
+  v_iva_amount := round(v_subtotal * 0.19, 0);
+  v_total := v_subtotal + v_iva_amount;
+  
+  -- Update the invoice with fresh calculations
+  update sales_invoices
+  set
+    items = v_items,
+    subtotal = v_subtotal,
+    iva_amount = v_iva_amount,
+    total = v_total,
+    discount_amount = v_discount,
+    updated_at = now()
+  where id = v_invoice_id;
+  
+  -- Let the payment recalculation function handle balance and status
+  perform public.recalculate_sales_invoice_payments(v_invoice_id);
+  
+  raise notice 'Synced job % to invoice % (% items, subtotal: $%, total: $%)', p_job_id, v_invoice_id, jsonb_array_length(v_items), v_subtotal, v_total;
 end;
 $$;
 
@@ -6009,6 +6434,8 @@ begin
     -- Recalculate job costs
     perform public.recalculate_mechanic_job_costs(NEW.job_id);
     
+    -- Note: Sync to invoice is handled by statement-level trigger
+    
     -- Log event
     perform public.log_mechanic_job_timeline(
       NEW.job_id,
@@ -6023,11 +6450,17 @@ begin
   elsif TG_OP = 'UPDATE' then
     -- Recalculate job costs
     perform public.recalculate_mechanic_job_costs(NEW.job_id);
+    
+    -- Note: Sync to invoice is handled by statement-level trigger
+    
     return NEW;
 
   elsif TG_OP = 'DELETE' then
     -- Recalculate job costs
     perform public.recalculate_mechanic_job_costs(OLD.job_id);
+    
+    -- Note: Sync to invoice is handled by statement-level trigger
+    
     return OLD;
   end if;
 
@@ -6041,6 +6474,70 @@ create trigger trg_mechanic_job_items_change
   after insert or update or delete on mechanic_job_items
   for each row execute procedure public.handle_mechanic_job_items_change();
 
+-- Statement-level triggers to sync job to invoice AFTER all row operations complete
+drop trigger if exists trg_mechanic_job_items_sync_invoice_insert on mechanic_job_items cascade;
+drop trigger if exists trg_mechanic_job_items_sync_invoice_update on mechanic_job_items cascade;
+drop trigger if exists trg_mechanic_job_items_sync_invoice_delete on mechanic_job_items cascade;
+
+create or replace function public.sync_job_items_to_invoice_statement()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_job_id uuid;
+  v_invoice_id uuid;
+  v_syncing_flag text;
+begin
+  -- Check if we're currently syncing invoice → job (prevent circular sync)
+  v_syncing_flag := current_setting('app.syncing_invoice_to_job', true);
+  if v_syncing_flag = 'true' then
+    raise notice 'sync_job_items_to_invoice_statement: skipping due to invoice→job sync in progress';
+    return null;
+  end if;
+
+  -- SKIP DELETE operations - let the app handle manual sync after batch delete+insert
+  -- This prevents syncing with zero items in the middle of a job update
+  if TG_OP = 'DELETE' then
+    raise notice 'sync_job_items_to_invoice_statement: skipping DELETE (manual sync required)';
+    return null;
+  end if;
+
+  -- Handle INSERT and UPDATE - sync immediately since we're adding/changing items
+  for v_job_id in select distinct job_id from new_table
+  loop
+    -- Recalculate costs first to update job record with new totals
+    perform public.recalculate_mechanic_job_costs(v_job_id);
+    
+    -- Find the linked invoice
+    select invoice_id into v_invoice_id from mechanic_jobs where id = v_job_id;
+    
+    if v_invoice_id is not null then
+      -- Sync this job to its invoice (will recalculate fresh totals from DB)
+      perform public.sync_job_to_invoice(v_job_id);
+    end if;
+  end loop;
+  
+  return null;
+end;
+$$;
+
+create trigger trg_mechanic_job_items_sync_invoice_insert
+  after insert on mechanic_job_items
+  referencing new table as new_table
+  for each statement execute procedure public.sync_job_items_to_invoice_statement();
+
+create trigger trg_mechanic_job_items_sync_invoice_update
+  after update on mechanic_job_items
+  referencing new table as new_table
+  for each statement execute procedure public.sync_job_items_to_invoice_statement();
+
+create trigger trg_mechanic_job_items_sync_invoice_delete
+  after delete on mechanic_job_items
+  referencing old table as old_table
+  for each statement execute procedure public.sync_job_items_to_invoice_statement();
+
 -- Trigger function: Handle mechanic job labor changes
 create or replace function public.handle_mechanic_job_labor_change()
 returns trigger
@@ -6052,6 +6549,8 @@ begin
   if TG_OP = 'INSERT' then
     -- Recalculate job costs
     perform public.recalculate_mechanic_job_costs(NEW.job_id);
+    
+    -- Note: Sync to invoice is handled by statement-level trigger
     
     -- Log event
     perform public.log_mechanic_job_timeline(
@@ -6067,11 +6566,17 @@ begin
   elsif TG_OP = 'UPDATE' then
     -- Recalculate job costs
     perform public.recalculate_mechanic_job_costs(NEW.job_id);
+    
+    -- Note: Sync to invoice is handled by statement-level trigger
+    
     return NEW;
 
   elsif TG_OP = 'DELETE' then
     -- Recalculate job costs
     perform public.recalculate_mechanic_job_costs(OLD.job_id);
+    
+    -- Note: Sync to invoice is handled by statement-level trigger
+    
     return OLD;
   end if;
 
@@ -6084,6 +6589,70 @@ drop trigger if exists trg_mechanic_job_labor_change on mechanic_job_labor casca
 create trigger trg_mechanic_job_labor_change
   after insert or update or delete on mechanic_job_labor
   for each row execute procedure public.handle_mechanic_job_labor_change();
+
+-- Statement-level triggers to sync job to invoice AFTER all labor operations complete
+drop trigger if exists trg_mechanic_job_labor_sync_invoice_insert on mechanic_job_labor cascade;
+drop trigger if exists trg_mechanic_job_labor_sync_invoice_update on mechanic_job_labor cascade;
+drop trigger if exists trg_mechanic_job_labor_sync_invoice_delete on mechanic_job_labor cascade;
+
+create or replace function public.sync_job_labor_to_invoice_statement()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_job_id uuid;
+  v_invoice_id uuid;
+  v_syncing_flag text;
+begin
+  -- Check if we're currently syncing invoice → job (prevent circular sync)
+  v_syncing_flag := current_setting('app.syncing_invoice_to_job', true);
+  if v_syncing_flag = 'true' then
+    raise notice 'sync_job_labor_to_invoice_statement: skipping due to invoice→job sync in progress';
+    return null;
+  end if;
+
+  -- SKIP DELETE operations - let the app handle manual sync after batch delete+insert
+  -- This prevents syncing with zero items in the middle of a job update
+  if TG_OP = 'DELETE' then
+    raise notice 'sync_job_labor_to_invoice_statement: skipping DELETE (manual sync required)';
+    return null;
+  end if;
+
+  -- Handle INSERT and UPDATE - sync immediately since we're adding/changing items
+  for v_job_id in select distinct job_id from new_table
+  loop
+    -- Recalculate costs first to update job record with new totals
+    perform public.recalculate_mechanic_job_costs(v_job_id);
+    
+    -- Find the linked invoice
+    select invoice_id into v_invoice_id from mechanic_jobs where id = v_job_id;
+    
+    if v_invoice_id is not null then
+      -- Sync this job to its invoice (will recalculate fresh totals from DB)
+      perform public.sync_job_to_invoice(v_job_id);
+    end if;
+  end loop;
+  
+  return null;
+end;
+$$;
+
+create trigger trg_mechanic_job_labor_sync_invoice_insert
+  after insert on mechanic_job_labor
+  referencing new table as new_table
+  for each statement execute procedure public.sync_job_labor_to_invoice_statement();
+
+create trigger trg_mechanic_job_labor_sync_invoice_update
+  after update on mechanic_job_labor
+  referencing new table as new_table
+  for each statement execute procedure public.sync_job_labor_to_invoice_statement();
+
+create trigger trg_mechanic_job_labor_sync_invoice_delete
+  after delete on mechanic_job_labor
+  referencing old table as old_table
+  for each statement execute procedure public.sync_job_labor_to_invoice_statement();
 
 -- Trigger: Auto-update updated_at timestamp
 create or replace function public.set_updated_at()

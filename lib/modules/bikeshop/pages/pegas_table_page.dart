@@ -111,6 +111,13 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
     _needsRefresh = true;
   }
 
+  Future<void> _openInvoice(String invoiceId) async {
+    _markNeedsRefresh();
+    await context.push('/sales/invoices/$invoiceId');
+    if (!mounted) return;
+    await _loadData();
+  }
+
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
@@ -403,19 +410,28 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
                   ),
                 ],
               ),
-              const Spacer(),
-              _buildQuickStatCard('Activos', activeCount, Icons.pending_actions, Colors.amber),
-              const SizedBox(width: 12),
-              _buildQuickStatCard('Listos', readyCount, Icons.check_circle, Colors.green),
-              const SizedBox(width: 12),
-              _buildQuickStatCard('Vencidos', overdueCount, Icons.warning, Colors.red),
-              const SizedBox(width: 24),
-              ElevatedButton.icon(
-                onPressed: () => _showQuickCreateDialog(),
-                icon: const Icon(Icons.add),
-                label: const Text('Nueva Pega'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+              const SizedBox(width: 16),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildQuickStatCard('Activos', activeCount, Icons.pending_actions, Colors.amber),
+                      const SizedBox(width: 12),
+                      _buildQuickStatCard('Listos', readyCount, Icons.check_circle, Colors.green),
+                      const SizedBox(width: 12),
+                      _buildQuickStatCard('Vencidos', overdueCount, Icons.warning, Colors.red),
+                      const SizedBox(width: 24),
+                      ElevatedButton.icon(
+                        onPressed: () => _showQuickCreateDialog(),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Nueva Pega'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -827,57 +843,60 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
             onTap: customer?.id != null ? () => context.push('/bikeshop/clients/${customer!.id}') : null,
             borderRadius: BorderRadius.circular(8),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(
                 children: [
                   CircleAvatar(
-                    radius: 20,
+                    radius: 16,
                     backgroundColor: Colors.blue[100],
                     child: Text(
                       customer?.name[0].toUpperCase() ?? '?',
                       style: TextStyle(
                         color: Colors.blue[900],
-                        fontSize: 14,
+                        fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(
                           children: [
                             Expanded(
                               child: Text(
                                 customer?.name ?? 'Desconocido',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            Icon(Icons.open_in_new, size: 14, color: Colors.blue[400]),
+                            Icon(Icons.open_in_new, size: 12, color: Colors.blue[400]),
                           ],
                         ),
                         if (customer?.phone != null)
                           Row(
                             children: [
-                              Icon(Icons.phone, size: 12, color: Colors.grey[600]),
-                              const SizedBox(width: 4),
-                              Text(
-                                customer!.phone!,
-                                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                              Icon(Icons.phone, size: 10, color: Colors.grey[600]),
+                              const SizedBox(width: 2),
+                              Expanded(
+                                child: Text(
+                                  customer!.phone!,
+                                  style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              const SizedBox(width: 8),
                               InkWell(
                                 onTap: () => _callCustomer(customer.phone!),
-                                child: Icon(Icons.phone_in_talk, size: 16, color: Colors.green[600]),
+                                child: Icon(Icons.phone_in_talk, size: 14, color: Colors.green[600]),
                               ),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 4),
                               InkWell(
                                 onTap: () => _whatsappCustomer(customer.phone!),
-                                child: Icon(Icons.message, size: 16, color: Colors.green[700]),
+                                child: Icon(Icons.message, size: 14, color: Colors.green[700]),
                               ),
                             ],
                           ),
@@ -1019,39 +1038,21 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
         
         return DataCell(
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: timeColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: timeColor.withOpacity(0.3)),
+              borderRadius: BorderRadius.circular(4),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      timeIcon,
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      statusText,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: timeColor,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
+                Text(timeIcon, style: const TextStyle(fontSize: 12)),
+                const SizedBox(width: 4),
                 Text(
                   '$daysElapsed días',
                   style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
                     color: timeColor,
                   ),
                 ),
@@ -1347,9 +1348,9 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
     final total = invoice?.total ?? job.totalCost;
 
     return InkWell(
-      onTap: () {
+      onTap: () async {
         if (job.invoiceId != null) {
-          context.push('/sales/invoices/${job.invoiceId}');
+          await _openInvoice(job.invoiceId!);
         }
       },
       child: Container(
@@ -1445,9 +1446,9 @@ class _PegasTablePageState extends State<PegasTablePage> with WidgetsBindingObse
               size: 18,
               color: job.invoiceId != null ? Colors.green[600] : Colors.orange[600],
             ),
-            onPressed: () {
+            onPressed: () async {
               if (job.invoiceId != null) {
-                context.push('/sales/invoices/${job.invoiceId}');
+                await _openInvoice(job.invoiceId!);
               } else {
                 _createInvoiceForJob(job);
               }

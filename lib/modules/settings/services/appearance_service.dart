@@ -103,10 +103,14 @@ class AppearanceService extends ChangeNotifier {
       );
 
       if (imageUrl != null) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_companyLogoKey, imageUrl);
+        // Add cache-busting timestamp to force browser to reload
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final cacheBustedUrl = '$imageUrl?v=$timestamp';
         
-        _companyLogoUrl = imageUrl;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_companyLogoKey, cacheBustedUrl);
+        
+        _companyLogoUrl = cacheBustedUrl;
         notifyListeners();
       } else {
         throw Exception('Failed to upload image');

@@ -22,7 +22,7 @@ class POSService extends ChangeNotifier {
   final List<POSCartItem> _cartItems = [];
   Customer? _selectedCustomer;
   bool _isProcessingSale = false;
-  
+
   POSService({
     required InventoryService inventoryService,
     required SalesService salesService,
@@ -54,37 +54,48 @@ class POSService extends ChangeNotifier {
   bool get hasItemsInCart => _cartItems.isNotEmpty;
 
   // Cart calculations
-  double get cartSubtotal => _cartItems.fold(0.0, (sum, item) => sum + item.subtotal);
-  double get cartDiscountAmount => _cartItems.fold(0.0, (sum, item) => sum + item.discountAmount);
+  double get cartSubtotal =>
+      _cartItems.fold(0.0, (sum, item) => sum + item.subtotal);
+  double get cartDiscountAmount =>
+      _cartItems.fold(0.0, (sum, item) => sum + item.discountAmount);
   double get cartNetAmount => cartSubtotal - cartDiscountAmount;
   double get cartTaxAmount => cartNetAmount * 0.19; // 19% IVA
   double get cartTotal => cartNetAmount + cartTaxAmount;
-  double get cartTotalCost => _cartItems.fold(0.0, (sum, item) => sum + item.totalCost);
-  int get cartTotalItems => _cartItems.fold(0, (sum, item) => sum + item.quantity);
+  double get cartTotalCost =>
+      _cartItems.fold(0.0, (sum, item) => sum + item.totalCost);
+  int get cartTotalItems =>
+      _cartItems.fold(0, (sum, item) => sum + item.quantity);
 
   // Cart operations
-  Future<bool> addToCart(Product product, {int quantity = 1, double? customPrice}) async {
+  Future<bool> addToCart(Product product,
+      {int quantity = 1, double? customPrice}) async {
     if (quantity <= 0) return false;
-    
+
     // Check stock availability
-    if (product.stockQuantity < quantity) {
-      if (kDebugMode) print('POSService: Insufficient stock for ${product.name}');
+    final requiresStock =
+        product.productType == ProductType.product && product.trackStock;
+    if (requiresStock && product.stockQuantity < quantity) {
+      if (kDebugMode)
+        print('POSService: Insufficient stock for ${product.name}');
       return false;
     }
 
-    final existingItemIndex = _cartItems.indexWhere((item) => item.product.id == product.id);
-    
+    final existingItemIndex =
+        _cartItems.indexWhere((item) => item.product.id == product.id);
+
     if (existingItemIndex != -1) {
       // Update existing item
       final existingItem = _cartItems[existingItemIndex];
       final newQuantity = existingItem.quantity + quantity;
-      
-      if (product.stockQuantity < newQuantity) {
-        if (kDebugMode) print('POSService: Insufficient stock for total quantity');
+
+      if (requiresStock && product.stockQuantity < newQuantity) {
+        if (kDebugMode)
+          print('POSService: Insufficient stock for total quantity');
         return false;
       }
-      
-      _cartItems[existingItemIndex] = existingItem.copyWith(quantity: newQuantity);
+
+      _cartItems[existingItemIndex] =
+          existingItem.copyWith(quantity: newQuantity);
     } else {
       // Add new item
       final cartItem = POSCartItem(
@@ -95,7 +106,7 @@ class POSService extends ChangeNotifier {
       );
       _cartItems.add(cartItem);
     }
-    
+
     notifyListeners();
     return true;
   }
@@ -118,13 +129,16 @@ class POSService extends ChangeNotifier {
     final itemIndex = _cartItems.indexWhere((item) => item.id == itemId);
     if (itemIndex != -1) {
       final item = _cartItems[itemIndex];
-      
+
       // Check stock availability
-      if (item.product.stockQuantity < newQuantity) {
-        if (kDebugMode) print('POSService: Insufficient stock for quantity $newQuantity');
+      final requiresStock = item.product.productType == ProductType.product &&
+          item.product.trackStock;
+      if (requiresStock && item.product.stockQuantity < newQuantity) {
+        if (kDebugMode)
+          print('POSService: Insufficient stock for quantity $newQuantity');
         return false;
       }
-      
+
       _cartItems[itemIndex] = item.copyWith(quantity: newQuantity);
       notifyListeners();
       return true;
@@ -137,7 +151,8 @@ class POSService extends ChangeNotifier {
 
     final itemIndex = _cartItems.indexWhere((item) => item.id == itemId);
     if (itemIndex != -1) {
-      _cartItems[itemIndex] = _cartItems[itemIndex].copyWith(discount: discountPercentage);
+      _cartItems[itemIndex] =
+          _cartItems[itemIndex].copyWith(discount: discountPercentage);
       notifyListeners();
       return true;
     }
@@ -160,14 +175,14 @@ class POSService extends ChangeNotifier {
     try {
       // Try barcode first
       Product? product = await _inventoryService.getProductByBarcode(code);
-      
+
       // If not found by barcode, try SKU
       product ??= await _inventoryService.getProductBySku(code);
-      
+
       if (product != null) {
         return await addToCart(product);
       }
-      
+
       if (kDebugMode) print('POSService: Product not found for code: $code');
       return false;
     } catch (e) {
@@ -177,7 +192,8 @@ class POSService extends ChangeNotifier {
   }
 
   // Checkout process
-  Future<POSTransaction?> checkout(List<POSPayment> payments, {String? notes}) async {
+  Future<POSTransaction?> checkout(List<POSPayment> payments,
+      {String? notes}) async {
     if (_cartItems.isEmpty) return null;
     if (_isProcessingSale) return null;
     if (payments.isEmpty) {
@@ -192,11 +208,13 @@ class POSService extends ChangeNotifier {
     try {
       // CRITICAL: Ensure payment methods are loaded from database
       if (_paymentMethodService.paymentMethods.isEmpty) {
-        if (kDebugMode) print('POSService: Loading payment methods before checkout...');
+        if (kDebugMode)
+          print('POSService: Loading payment methods before checkout...');
         await _paymentMethodService.loadPaymentMethods(forceRefresh: true);
       }
 
-      final totalPaid = payments.fold<double>(0, (sum, payment) => sum + payment.amount);
+      final totalPaid =
+          payments.fold<double>(0, (sum, payment) => sum + payment.amount);
       if (totalPaid < cartTotal) {
         throw Exception('Monto insuficiente para completar la venta.');
       }
@@ -220,12 +238,16 @@ class POSService extends ChangeNotifier {
         customerId: _selectedCustomer?.id,
         invoiceNumber: invoiceNumber,
         customerName: _selectedCustomer?.name ?? 'Cliente Mostrador',
-        customerRut: _selectedCustomer?.rut?.isNotEmpty == true ? _selectedCustomer!.rut : null,
+        customerRut: _selectedCustomer?.rut?.isNotEmpty == true
+            ? _selectedCustomer!.rut
+            : null,
         date: timestamp,
         dueDate: timestamp,
         reference: notes,
         // POS sales are immediately confirmed (not just sent) to trigger accounting
-        status: payments.isNotEmpty ? sales_models.InvoiceStatus.confirmed : sales_models.InvoiceStatus.draft,
+        status: payments.isNotEmpty
+            ? sales_models.InvoiceStatus.confirmed
+            : sales_models.InvoiceStatus.draft,
         subtotal: cartNetAmount,
         ivaAmount: cartTaxAmount,
         total: cartTotal,
@@ -234,7 +256,8 @@ class POSService extends ChangeNotifier {
 
       final savedInvoice = await _salesService.saveInvoice(invoice);
       if (savedInvoice.id == null) {
-        throw Exception('No se pudo obtener el identificador de la factura generada.');
+        throw Exception(
+            'No se pudo obtener el identificador de la factura generada.');
       }
       final invoiceId = savedInvoice.id!;
 
@@ -244,7 +267,8 @@ class POSService extends ChangeNotifier {
           break;
         }
 
-        final appliedAmount = remaining < payment.amount ? remaining : payment.amount;
+        final appliedAmount =
+            remaining < payment.amount ? remaining : payment.amount;
         if (appliedAmount <= 0) {
           continue;
         }
@@ -253,29 +277,41 @@ class POSService extends ChangeNotifier {
         pm.PaymentMethod? dbPaymentMethod;
         switch (payment.method.type) {
           case PaymentType.cash:
-            dbPaymentMethod = _paymentMethodService.getPaymentMethodByCode('cash');
-            if (kDebugMode) print('POSService: Cash payment method: $dbPaymentMethod');
+            dbPaymentMethod =
+                _paymentMethodService.getPaymentMethodByCode('cash');
+            if (kDebugMode)
+              print('POSService: Cash payment method: $dbPaymentMethod');
             break;
           case PaymentType.card:
-            dbPaymentMethod = _paymentMethodService.getPaymentMethodByCode('card');
-            if (kDebugMode) print('POSService: Card payment method: $dbPaymentMethod');
+            dbPaymentMethod =
+                _paymentMethodService.getPaymentMethodByCode('card');
+            if (kDebugMode)
+              print('POSService: Card payment method: $dbPaymentMethod');
             break;
           case PaymentType.transfer:
-            dbPaymentMethod = _paymentMethodService.getPaymentMethodByCode('transfer');
-            if (kDebugMode) print('POSService: Transfer payment method: $dbPaymentMethod');
+            dbPaymentMethod =
+                _paymentMethodService.getPaymentMethodByCode('transfer');
+            if (kDebugMode)
+              print('POSService: Transfer payment method: $dbPaymentMethod');
             break;
           case PaymentType.voucher:
-            dbPaymentMethod = _paymentMethodService.getPaymentMethodByCode('cash'); // fallback
-            if (kDebugMode) print('POSService: Voucher (cash fallback) payment method: $dbPaymentMethod');
+            dbPaymentMethod = _paymentMethodService
+                .getPaymentMethodByCode('cash'); // fallback
+            if (kDebugMode)
+              print(
+                  'POSService: Voucher (cash fallback) payment method: $dbPaymentMethod');
             break;
         }
 
         if (dbPaymentMethod == null) {
           if (kDebugMode) {
-            print('POSService: Payment method not found for ${payment.method.type}');
-            print('POSService: Available payment methods: ${_paymentMethodService.paymentMethods.map((pm) => '${pm.code} (${pm.name})').join(', ')}');
+            print(
+                'POSService: Payment method not found for ${payment.method.type}');
+            print(
+                'POSService: Available payment methods: ${_paymentMethodService.paymentMethods.map((pm) => '${pm.code} (${pm.name})').join(', ')}');
           }
-          throw Exception('Método de pago "${payment.method.name}" no encontrado en la base de datos. Por favor, configure los métodos de pago en Configuración.');
+          throw Exception(
+              'Método de pago "${payment.method.name}" no encontrado en la base de datos. Por favor, configure los métodos de pago en Configuración.');
         }
 
         final salesPayment = sales_models.Payment(
@@ -333,21 +369,22 @@ class POSService extends ChangeNotifier {
 
   // Receipt operations
   Future<bool> printReceipt(POSTransaction transaction) async {
-    if (kDebugMode) print('POSService: Printing receipt for transaction ${transaction.id}');
-    
+    if (kDebugMode)
+      print('POSService: Printing receipt for transaction ${transaction.id}');
+
     // TODO: Implement actual receipt printing
     // This could integrate with thermal printers, PDF generation, etc.
-    
+
     return true;
   }
 
   // Cash drawer operations
   Future<bool> openCashDrawer() async {
     if (kDebugMode) print('POSService: Opening cash drawer');
-    
+
     // TODO: Implement cash drawer trigger
     // This could send a signal to hardware cash drawer
-    
+
     return true;
   }
 
@@ -368,7 +405,9 @@ class POSService extends ChangeNotifier {
 
   // Get available payment methods
   List<PaymentMethod> getAvailablePaymentMethods() {
-    return PaymentMethod.defaultMethods.where((method) => method.isActive).toList();
+    return PaymentMethod.defaultMethods
+        .where((method) => method.isActive)
+        .toList();
   }
 
   String _buildInvoiceNumber(DateTime timestamp) {

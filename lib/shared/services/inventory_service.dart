@@ -25,7 +25,8 @@ class InventoryService extends ChangeNotifier {
 
   Future<void> refresh() => _loadProducts(force: true);
 
-  Future<Product?> getProductById(String id, {bool forceRefresh = false}) async {
+  Future<Product?> getProductById(String id,
+      {bool forceRefresh = false}) async {
     if (!_hasLoaded || forceRefresh) {
       await _loadProducts(force: forceRefresh);
     }
@@ -37,13 +38,14 @@ class InventoryService extends ChangeNotifier {
       try {
         final data = await _db!.selectById('products', id);
         if (data == null) return null;
-  final product = _productFromMap(data);
+        final product = _productFromMap(data);
         _upsertLocalProduct(product);
         notifyListeners();
         return product;
       } catch (e) {
         if (kDebugMode) {
-          debugPrint('InventoryService: Error fetching product by id $id -> $e');
+          debugPrint(
+              'InventoryService: Error fetching product by id $id -> $e');
         }
         return null;
       }
@@ -53,20 +55,21 @@ class InventoryService extends ChangeNotifier {
   Future<Product?> getProductBySku(String sku) async {
     await getProducts();
     try {
-      return _products.firstWhere((product) =>
-          product.sku.toLowerCase() == sku.toLowerCase());
+      return _products.firstWhere(
+          (product) => product.sku.toLowerCase() == sku.toLowerCase());
     } catch (_) {
       if (_db == null) return null;
       try {
         final records = await _db!.select('products', where: 'sku=$sku');
         if (records.isEmpty) return null;
-  final product = _productFromMap(records.first);
+        final product = _productFromMap(records.first);
         _upsertLocalProduct(product);
         notifyListeners();
         return product;
       } catch (e) {
         if (kDebugMode) {
-          debugPrint('InventoryService: Error fetching product by SKU $sku -> $e');
+          debugPrint(
+              'InventoryService: Error fetching product by SKU $sku -> $e');
         }
         return null;
       }
@@ -96,8 +99,8 @@ class InventoryService extends ChangeNotifier {
         product.barcode,
         product.categoryName,
       ];
-      return candidates.any((value) =>
-          value != null && value.toLowerCase().contains(lowered));
+      return candidates.any(
+          (value) => value != null && value.toLowerCase().contains(lowered));
     }).toList();
   }
 
@@ -234,11 +237,8 @@ class InventoryService extends ChangeNotifier {
 
     try {
       final rawProducts = await _db!.select('products');
-    final products = rawProducts
-      .map(_productFromMap)
-          .toList()
-        ..sort((a, b) =>
-            a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      final products = rawProducts.map(_productFromMap).toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
       _products
         ..clear()
@@ -263,7 +263,8 @@ class InventoryService extends ChangeNotifier {
     final index = _products.indexWhere((existing) => existing.id == product.id);
     if (index == -1) {
       _products.add(product);
-      _products.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      _products
+          .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     } else {
       _products[index] = product;
     }
@@ -272,16 +273,15 @@ class InventoryService extends ChangeNotifier {
   Product _productFromMap(Map<String, dynamic> json) {
     final price = (json['price'] as num?)?.toDouble() ?? 0.0;
     final cost = (json['cost'] as num?)?.toDouble() ?? 0.0;
-    final stockQuantity = json['inventory_qty'] as int? ??
-        json['stock_quantity'] as int? ??
-        0;
-    final minStock = json['min_stock_level'] as int? ??
-        json['min_stock'] as int? ??
-        0;
-    final maxStock = json['max_stock_level'] as int? ??
-        json['max_stock'] as int? ??
-        0;
+    final stockQuantity =
+        json['inventory_qty'] as int? ?? json['stock_quantity'] as int? ?? 0;
+    final minStock =
+        json['min_stock_level'] as int? ?? json['min_stock'] as int? ?? 0;
+    final maxStock =
+        json['max_stock_level'] as int? ?? json['max_stock'] as int? ?? 0;
     final categoryValue = json['category'] as String? ?? 'other';
+
+    final productTypeValue = (json['product_type'] as String?)?.toLowerCase();
 
     return Product(
       id: json['id']?.toString() ?? '',
@@ -314,6 +314,10 @@ class InventoryService extends ChangeNotifier {
       weight: (json['weight'] as num?)?.toDouble() ?? 0.0,
       trackStock: json['track_stock'] as bool? ?? true,
       isActive: json['is_active'] as bool? ?? true,
+      productType: ProductType.values.firstWhere(
+        (t) => t.name == productTypeValue,
+        orElse: () => ProductType.product,
+      ),
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
     );

@@ -29,14 +29,14 @@ class MechanicJobFormPage extends StatefulWidget {
 
 class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   final _formKey = GlobalKey<FormState>();
-  
+
   // Form controllers
   final _clientRequestController = TextEditingController();
   final _diagnosisController = TextEditingController();
   final _technicianNotesController = TextEditingController();
   final _discountController = TextEditingController(text: '0');
   final _estimatedDurationController = TextEditingController();
-  
+
   // Form state
   Customer? _selectedCustomer;
   Bike? _selectedBike;
@@ -45,31 +45,33 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   DateTime? _selectedDeadline;
   bool _requiresApproval = false;
   bool _isWarrantyJob = false;
-  
+
   // Parts and labor
   final List<_JobPartItem> _partItems = [];
   final List<_JobLaborItem> _laborItems = [];
-  
+
   // Data
   List<Customer> _customers = [];
   List<Bike> _bikes = [];
   List<Product> _products = [];
-  
+  List<Product> _stockProducts = [];
+  List<Product> _serviceProducts = [];
+
   // Loading states
   bool _isLoading = false;
   bool _isSaving = false;
   bool _isLoadingCustomers = true;
   bool _isLoadingProducts = true;
-  
+
   // Edit mode
   MechanicJob? _existingJob;
-  
+
   @override
   void initState() {
     super.initState();
     _loadInitialData();
   }
-  
+
   @override
   void dispose() {
     _clientRequestController.dispose();
@@ -79,35 +81,44 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     _estimatedDurationController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _loadInitialData() async {
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
-      final customerService = Provider.of<CustomerService>(context, listen: false);
-      final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
-      final inventoryService = Provider.of<InventoryService>(context, listen: false);
-      
+      final customerService =
+          Provider.of<CustomerService>(context, listen: false);
+      final inventoryService =
+          Provider.of<InventoryService>(context, listen: false);
+
       // Load customers
       final customers = await customerService.getCustomers();
-      
+
       // Load products
       final products = await inventoryService.getProducts();
-      
+      final stockProducts = products
+          .where((product) => product.productType == ProductType.product)
+          .toList();
+      final serviceProducts = products
+          .where((product) => product.productType == ProductType.service)
+          .toList();
+
       setState(() {
         _customers = customers.cast<Customer>();
         _products = products;
+        _stockProducts = stockProducts;
+        _serviceProducts = serviceProducts;
         _isLoadingCustomers = false;
         _isLoadingProducts = false;
       });
-      
+
       // If editing, load existing job
       if (widget.jobId != null) {
         await _loadExistingJob();
       }
-      
+
       // If customer ID provided, pre-select customer
       if (widget.customerId != null && widget.jobId == null) {
         final customer = _customers.firstWhere(
@@ -116,7 +127,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         );
         await _selectCustomer(customer);
       }
-      
+
       setState(() {
         _isLoading = false;
       });
@@ -131,11 +142,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       }
     }
   }
-  
+
   Future<void> _loadExistingJob() async {
     try {
-      final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
-      
+      final bikeshopService =
+          Provider.of<BikeshopService>(context, listen: false);
+
       final job = await bikeshopService.getJobById(widget.jobId!);
       if (job == null) {
         if (mounted) {
@@ -146,18 +158,18 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
         return;
       }
-      
+
       // Load customer and bikes
       final customer = _customers.firstWhere((c) => c.id == job.customerId);
       await _selectCustomer(customer);
-      
+
       // Select bike
       final bike = _bikes.firstWhere((b) => b.id == job.bikeId);
-      
+
       // Load parts and labor
       final parts = await bikeshopService.getJobItems(job.id!);
       final labor = await bikeshopService.getJobLabor(job.id!);
-      
+
       setState(() {
         _existingJob = job;
         _selectedCustomer = customer;
@@ -167,13 +179,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         _selectedDeadline = job.deadline;
         _requiresApproval = job.requiresApproval;
         _isWarrantyJob = job.isWarrantyJob;
-        
+
         _clientRequestController.text = job.clientRequest ?? '';
         _diagnosisController.text = job.diagnosis ?? '';
         _technicianNotesController.text = job.notes ?? '';
         _discountController.text = job.discountAmount.toString();
         _estimatedDurationController.text = '';
-        
+
         // Convert parts to form items
         _partItems.clear();
         for (final part in parts) {
@@ -181,12 +193,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             (p) => p.id == part.productId,
             orElse: () => Product(
               id: part.productId ?? '',
-              name: part.productName ?? 'Producto eliminado',
+              name: part.productName,
               sku: 'N/A',
               price: part.unitPrice,
               cost: 0,
               stockQuantity: 0,
               category: ProductCategory.other,
+              productType: ProductType.product,
               createdAt: DateTime.now(),
               updatedAt: DateTime.now(),
             ),
@@ -197,12 +210,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             unitPrice: part.unitPrice,
           ));
         }
-        
+
         // Convert labor to form items
         _laborItems.clear();
         for (final l in labor) {
+          Product? serviceProduct;
+          if (l.serviceProductId != null) {
+            try {
+              serviceProduct = _serviceProducts
+                  .firstWhere((p) => p.id == l.serviceProductId);
+            } catch (_) {
+              serviceProduct = null;
+            }
+          }
           _laborItems.add(_JobLaborItem(
-            description: l.description ?? '',
+            serviceProduct: serviceProduct,
+            description: l.description ?? serviceProduct?.name ?? '',
             hours: l.hoursWorked,
             hourlyRate: l.hourlyRate,
             date: l.workDate,
@@ -217,25 +240,26 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       }
     }
   }
-  
+
   Future<void> _selectCustomer(Customer customer) async {
-    final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
-    
+    final bikeshopService =
+        Provider.of<BikeshopService>(context, listen: false);
+
     // Load customer bikes
     final bikes = await bikeshopService.getBikes(customerId: customer.id);
-    
+
     setState(() {
       _selectedCustomer = customer;
       _bikes = bikes;
       _selectedBike = null; // Reset bike selection
     });
   }
-  
+
   void _addPartItem() {
     showDialog(
       context: context,
       builder: (context) => _ProductSelectorDialog(
-        products: _products,
+        products: _stockProducts,
         onProductSelected: (product, quantity, price) {
           setState(() {
             _partItems.add(_JobPartItem(
@@ -248,15 +272,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ),
     );
   }
-  
+
   void _addLaborItem() {
     showDialog(
       context: context,
       builder: (context) => _LaborEntryDialog(
-        onLaborAdded: (description, hours, rate, date) {
+        serviceProducts: _serviceProducts,
+        onLaborAdded: (serviceProduct, description, hours, rate, date) {
           setState(() {
+            final trimmedDescription = description.trim();
             _laborItems.add(_JobLaborItem(
-              description: description,
+              serviceProduct: serviceProduct,
+              description: trimmedDescription.isNotEmpty
+                  ? trimmedDescription
+                  : serviceProduct?.name ?? '',
               hours: hours,
               hourlyRate: rate,
               date: date,
@@ -266,69 +295,78 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ),
     );
   }
-  
+
   double get _partsCost {
-    return _partItems.fold(0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
+    return _partItems.fold(
+        0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
   }
-  
+
   double get _laborCost {
-    return _laborItems.fold(0.0, (sum, item) => sum + (item.hours * item.hourlyRate));
+    return _laborItems.fold(0.0, (sum, item) => sum + item.total);
   }
-  
+
   double get _subtotal {
     return _partsCost + _laborCost;
   }
-  
+
   double get _discountAmount {
     return double.tryParse(_discountController.text) ?? 0.0;
   }
-  
+
   double get _taxAmount {
     return (_subtotal - _discountAmount) * 0.19; // 19% IVA
   }
-  
+
   double get _total {
     return _subtotal - _discountAmount + _taxAmount;
   }
-  
+
   Future<void> _saveJob() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    
+
     if (_selectedCustomer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Debe seleccionar un cliente')),
       );
       return;
     }
-    
+
     if (_selectedBike == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Debe seleccionar una bicicleta')),
       );
       return;
     }
-    
+
     setState(() {
       _isSaving = true;
     });
-    
+
     try {
-      final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
-      
+      final bikeshopService =
+          Provider.of<BikeshopService>(context, listen: false);
+
       // Create MechanicJob object
       final job = MechanicJob(
         id: widget.jobId,
-        jobNumber: _existingJob?.jobNumber ?? '', // Will be auto-generated if empty
+        jobNumber:
+            _existingJob?.jobNumber ?? '', // Will be auto-generated if empty
         customerId: _selectedCustomer!.id!,
         bikeId: _selectedBike!.id!,
         priority: _selectedPriority,
         status: _selectedStatus,
         arrivalDate: DateTime.now(),
-        clientRequest: _clientRequestController.text.trim().isEmpty ? null : _clientRequestController.text.trim(),
-        diagnosis: _diagnosisController.text.trim().isEmpty ? null : _diagnosisController.text.trim(),
-        notes: _technicianNotesController.text.trim().isEmpty ? null : _technicianNotesController.text.trim(),
+        clientRequest: _clientRequestController.text.trim().isEmpty
+            ? null
+            : _clientRequestController.text.trim(),
+        diagnosis: _diagnosisController.text.trim().isEmpty
+            ? null
+            : _diagnosisController.text.trim(),
+        notes: _technicianNotesController.text.trim().isEmpty
+            ? null
+            : _technicianNotesController.text.trim(),
         deadline: _selectedDeadline,
         requiresApproval: _requiresApproval,
         isWarrantyJob: _isWarrantyJob,
@@ -339,10 +377,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         laborCost: 0,
         taxAmount: 0,
         totalCost: 0,
+        // CRITICAL: Preserve invoice_id and invoice flags when updating!
+        invoiceId: _existingJob?.invoiceId,
+        isInvoiced: _existingJob?.isInvoiced ?? false,
+        isPaid: _existingJob?.isPaid ?? false,
       );
-      
+
       String jobId;
-      
+
       if (widget.jobId != null) {
         // Update existing job
         await bikeshopService.updateJob(job);
@@ -352,7 +394,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final createdJob = await bikeshopService.createJob(job);
         jobId = createdJob.id!;
       }
-      
+
       // Save parts
       // First, delete existing parts if editing
       if (widget.jobId != null) {
@@ -361,19 +403,23 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           await bikeshopService.deleteJobItem(part.id!);
         }
       }
-      
+
       // Add new parts
       for (final item in _partItems) {
+        final quantity = item.quantity.toDouble();
+        final unitPrice = item.unitPrice;
         final jobItem = MechanicJobItem(
           jobId: jobId,
-          productId: item.product.id!,
+          productId: item.product.id,
           productName: item.product.name,
-          quantity: item.quantity.toDouble(),
-          unitPrice: item.unitPrice,
+          productSku: item.product.sku,
+          quantity: quantity,
+          unitPrice: unitPrice,
+          totalPrice: quantity * unitPrice,
         );
         await bikeshopService.createJobItem(jobItem);
       }
-      
+
       // Save labor
       // First, delete existing labor if editing
       if (widget.jobId != null) {
@@ -382,18 +428,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           await bikeshopService.deleteJobLabor(labor.id!);
         }
       }
-      
+
       // Add new labor
       for (final item in _laborItems) {
+        final hoursWorked = item.hours.toDouble();
+        final hourlyRate = item.hourlyRate;
+        final description = item.description.isNotEmpty
+            ? item.description
+            : item.serviceProduct?.name;
         final jobLabor = MechanicJobLabor(
           jobId: jobId,
           technicianName: 'Mecánico', // TODO: Get from current user
-          description: item.description,
-          hoursWorked: item.hours.toDouble(),
-          hourlyRate: item.hourlyRate,
+          description: description,
+          hoursWorked: hoursWorked,
+          hourlyRate: hourlyRate,
+          totalCost: item.total,
           workDate: item.date,
+          serviceProductId: item.serviceProduct?.id,
         );
         await bikeshopService.createJobLabor(jobLabor);
+      }
+
+      // AFTER all items are updated, sync to invoice if it exists
+      if (_existingJob?.invoiceId != null) {
+        await bikeshopService.syncJobToInvoice(jobId);
       }
 
       // Create invoice AFTER items are added (awesome feature!)
@@ -401,11 +459,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       if (widget.jobId == null) {
         await bikeshopService.createInvoiceFromJob(jobId);
       }
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.jobId != null ? 'Pega actualizada correctamente' : 'Pega creada correctamente'),
+            content: Text(widget.jobId != null
+                ? 'Pega actualizada correctamente'
+                : 'Pega creada correctamente'),
             backgroundColor: Colors.green,
           ),
         );
@@ -423,7 +483,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       });
     }
   }
-  
+
   Future<void> _confirmDeleteBike(Bike bike) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -446,26 +506,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         ],
       ),
     );
-    
+
     if (confirmed == true) {
       try {
-        final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
+        final bikeshopService =
+            Provider.of<BikeshopService>(context, listen: false);
         await bikeshopService.deleteBike(bike.id!);
-        
+
         // Reload bikes
-        final bikes = await bikeshopService.getBikes(customerId: _selectedCustomer!.id);
-        
+        final bikes =
+            await bikeshopService.getBikes(customerId: _selectedCustomer!.id);
+
         setState(() {
           _bikes = bikes;
           if (_selectedBike?.id == bike.id) {
-            _selectedBike = null; // Clear selection if deleted bike was selected
+            _selectedBike =
+                null; // Clear selection if deleted bike was selected
           }
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Bicicleta "${bike.displayName}" eliminada correctamente'),
+              content: Text(
+                  'Bicicleta "${bike.displayName}" eliminada correctamente'),
               backgroundColor: Colors.green,
             ),
           );
@@ -482,7 +546,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       }
     }
   }
-  
+
   void _showBikeManagementDialog() {
     showDialog(
       context: context,
@@ -499,7 +563,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 child: ListTile(
                   leading: const Icon(Icons.pedal_bike),
                   title: Text(bike.displayName),
-                  subtitle: bike.serialNumber != null 
+                  subtitle: bike.serialNumber != null
                       ? Text('S/N: ${bike.serialNumber}')
                       : null,
                   trailing: Row(
@@ -509,23 +573,26 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                         icon: const Icon(Icons.edit),
                         onPressed: () async {
                           Navigator.pop(context); // Close management dialog
-                          
-                          final result = await showDialog<Bike?>(
+
+                          await showDialog<Bike?>(
                             context: context,
                             builder: (context) => BikeFormDialog(
                               customerId: _selectedCustomer!.id!,
                               bike: bike,
                             ),
                           );
-                          
-                          // Refresh bike list if edited (result != null) or deleted (result == null but dialog was closed after action)
-                          // We check if dialog returned (result is not false) to refresh
-                          final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
-                          final bikes = await bikeshopService.getBikes(customerId: _selectedCustomer!.id);
+
+                          // Refresh bike list after edit or delete
+                          final bikeshopService = Provider.of<BikeshopService>(
+                              context,
+                              listen: false);
+                          final bikes = await bikeshopService.getBikes(
+                              customerId: _selectedCustomer!.id);
                           setState(() {
                             _bikes = bikes;
                             // Clear selection if deleted bike was selected
-                            if (_selectedBike?.id == bike.id && !bikes.any((b) => b.id == bike.id)) {
+                            if (_selectedBike?.id == bike.id &&
+                                !bikes.any((b) => b.id == bike.id)) {
                               _selectedBike = null;
                             }
                           });
@@ -556,7 +623,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ),
     );
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return MainLayout(
@@ -591,7 +658,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ),
     );
   }
-  
+
   Widget _buildCustomerBikeSection() {
     return Card(
       child: Padding(
@@ -629,7 +696,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                               _selectCustomer(customer);
                             }
                           },
-                    validator: (value) => value == null ? 'Seleccione un cliente' : null,
+                    validator: (value) =>
+                        value == null ? 'Seleccione un cliente' : null,
                   ),
                 ),
                 if (_selectedCustomer != null) ...[
@@ -642,11 +710,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           customerId: _selectedCustomer!.id!,
                         ),
                       );
-                      
+
                       // Reload bikes for this customer (handles both creation and any unexpected deletion)
-                      final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
-                      final bikes = await bikeshopService.getBikes(customerId: _selectedCustomer!.id);
-                      
+                      final bikeshopService =
+                          Provider.of<BikeshopService>(context, listen: false);
+                      final bikes = await bikeshopService.getBikes(
+                          customerId: _selectedCustomer!.id);
+
                       setState(() {
                         _bikes = bikes;
                         // Auto-select the newly created bike if it exists
@@ -657,11 +727,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           );
                         }
                       });
-                      
+
                       if (mounted && newBike != null) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Bicicleta "${newBike.displayName}" creada exitosamente'),
+                            content: Text(
+                                'Bicicleta "${newBike.displayName}" creada exitosamente'),
                             backgroundColor: Colors.green,
                           ),
                         );
@@ -672,7 +743,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
-                    onPressed: _bikes.isEmpty ? null : () => _showBikeManagementDialog(),
+                    onPressed: _bikes.isEmpty
+                        ? null
+                        : () => _showBikeManagementDialog(),
                     icon: const Icon(Icons.settings),
                     label: const Text('Gestionar Bicis'),
                   ),
@@ -690,7 +763,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               items: _bikes.map((bike) {
                 return DropdownMenuItem(
                   value: bike,
-                  child: Text('${bike.displayName} ${bike.serialNumber != null ? '(S/N: ${bike.serialNumber})' : ''}'),
+                  child: Text(
+                      '${bike.displayName} ${bike.serialNumber != null ? '(S/N: ${bike.serialNumber})' : ''}'),
                 );
               }).toList(),
               onChanged: widget.jobId != null
@@ -700,7 +774,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                         _selectedBike = bike;
                       });
                     },
-              validator: (value) => value == null ? 'Seleccione una bicicleta' : null,
+              validator: (value) =>
+                  value == null ? 'Seleccione una bicicleta' : null,
             ),
             if (_selectedBike != null && _selectedBike!.isUnderWarranty) ...[
               Container(
@@ -729,7 +804,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ),
     );
   }
-  
+
   Widget _buildJobDetailsSection() {
     return Card(
       child: Padding(
@@ -803,7 +878,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     onTap: () async {
                       final date = await showDatePicker(
                         context: context,
-                        initialDate: _selectedDeadline ?? DateTime.now().add(const Duration(days: 7)),
+                        initialDate: _selectedDeadline ??
+                            DateTime.now().add(const Duration(days: 7)),
                         firstDate: DateTime.now(),
                         lastDate: DateTime.now().add(const Duration(days: 365)),
                       );
@@ -821,7 +897,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       ),
                       child: Text(
                         _selectedDeadline != null
-                            ? DateFormat('dd/MM/yyyy').format(_selectedDeadline!)
+                            ? DateFormat('dd/MM/yyyy')
+                                .format(_selectedDeadline!)
                             : 'Seleccionar fecha',
                       ),
                     ),
@@ -838,7 +915,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     ),
                     keyboardType: TextInputType.number,
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d+\.?\d{0,2}')),
                     ],
                   ),
                 ),
@@ -911,7 +989,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ),
     );
   }
-  
+
   Widget _buildPartsSection() {
     return Card(
       child: Padding(
@@ -942,7 +1020,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   padding: const EdgeInsets.all(32),
                   child: Column(
                     children: [
-                      Icon(Icons.build_circle_outlined, size: 64, color: Colors.grey[400]),
+                      Icon(Icons.build_circle_outlined,
+                          size: 64, color: Colors.grey[400]),
                       const SizedBox(height: 16),
                       Text(
                         'No hay repuestos agregados',
@@ -965,26 +1044,56 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 children: [
                   TableRow(
                     decoration: BoxDecoration(color: Colors.grey[200]),
-                    children: const [
+                    children: [
                       Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('Producto', style: TextStyle(fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'Producto',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ),
                       Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('Cant.', style: TextStyle(fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'Cant.',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ),
                       Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('Precio Unit.', style: TextStyle(fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'Precio Unit.',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ),
                       Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'Total',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ),
                       Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('', style: TextStyle(fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          '',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -998,10 +1107,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(item.product.name, style: const TextStyle(fontWeight: FontWeight.w500)),
+                              Text(item.product.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w500)),
                               Text(
                                 'SKU: ${item.product.sku} | Stock: ${item.product.stockQuantity}',
-                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey[600]),
                               ),
                             ],
                           ),
@@ -1012,12 +1124,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                         ),
                         Padding(
                           padding: const EdgeInsets.all(12),
-                          child: Text(NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.unitPrice)),
+                          child: Text(NumberFormat.currency(
+                                  symbol: '\$', decimalDigits: 0)
+                              .format(item.unitPrice)),
                         ),
                         Padding(
                           padding: const EdgeInsets.all(12),
                           child: Text(
-                            NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.quantity * item.unitPrice),
+                            NumberFormat.currency(
+                                    symbol: '\$', decimalDigits: 0)
+                                .format(item.quantity * item.unitPrice),
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -1043,7 +1159,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ),
     );
   }
-  
+
   Widget _buildLaborSection() {
     return Card(
       child: Padding(
@@ -1074,7 +1190,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   padding: const EdgeInsets.all(32),
                   child: Column(
                     children: [
-                      Icon(Icons.work_outline, size: 64, color: Colors.grey[400]),
+                      Icon(Icons.work_outline,
+                          size: 64, color: Colors.grey[400]),
                       const SizedBox(height: 16),
                       Text(
                         'No hay mano de obra registrada',
@@ -1098,30 +1215,66 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 children: [
                   TableRow(
                     decoration: BoxDecoration(color: Colors.grey[200]),
-                    children: const [
+                    children: [
                       Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('Descripción', style: TextStyle(fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'Descripción',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ),
                       Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('Fecha', style: TextStyle(fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'Fecha',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ),
                       Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('Horas', style: TextStyle(fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'Horas',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ),
                       Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('Tarifa/Hora', style: TextStyle(fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'Tarifa/Hora',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ),
                       Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'Total',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ),
                       Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('', style: TextStyle(fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          '',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1132,11 +1285,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.all(12),
-                          child: Text(item.description),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.displayName,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600),
+                              ),
+                              if (item.hasCustomDescription)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    item.description,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                         Padding(
                           padding: const EdgeInsets.all(12),
-                          child: Text(DateFormat('dd/MM/yyyy').format(item.date)),
+                          child:
+                              Text(DateFormat('dd/MM/yyyy').format(item.date)),
                         ),
                         Padding(
                           padding: const EdgeInsets.all(12),
@@ -1144,12 +1316,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                         ),
                         Padding(
                           padding: const EdgeInsets.all(12),
-                          child: Text(NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.hourlyRate)),
+                          child: Text(NumberFormat.currency(
+                                  symbol: '\$', decimalDigits: 0)
+                              .format(item.hourlyRate)),
                         ),
                         Padding(
                           padding: const EdgeInsets.all(12),
                           child: Text(
-                            NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.hours * item.hourlyRate),
+                            NumberFormat.currency(
+                                    symbol: '\$', decimalDigits: 0)
+                                .format(item.total),
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -1175,7 +1351,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ),
     );
   }
-  
+
   Widget _buildCostSummary() {
     return Card(
       color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
@@ -1206,7 +1382,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Descuento:', style: TextStyle(fontSize: 16)),
+                          const Text('Descuento:',
+                              style: TextStyle(fontSize: 16)),
                           SizedBox(
                             width: 150,
                             child: TextFormField(
@@ -1214,11 +1391,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                               decoration: const InputDecoration(
                                 prefixText: '\$ ',
                                 border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
                               ),
                               keyboardType: TextInputType.number,
                               inputFormatters: [
-                                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d+\.?\d{0,2}')),
                               ],
                               onChanged: (_) => setState(() {}),
                             ),
@@ -1239,8 +1418,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ),
     );
   }
-  
-  Widget _buildCostRow(String label, double amount, bool bold, {double fontSize = 16}) {
+
+  Widget _buildCostRow(String label, double amount, bool bold,
+      {double fontSize = 16}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -1262,7 +1442,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ],
     );
   }
-  
+
   Widget _buildInvoiceSection() {
     return Card(
       color: Colors.green[50],
@@ -1308,7 +1488,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   ElevatedButton.icon(
                     onPressed: () {
                       if (_existingJob?.invoiceId != null) {
-                        context.push('/sales/invoices/${_existingJob!.invoiceId}');
+                        context
+                            .push('/sales/invoices/${_existingJob!.invoiceId}');
                       }
                     },
                     icon: const Icon(Icons.open_in_new),
@@ -1325,7 +1506,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ),
     );
   }
-  
+
   Widget _buildActionButtons() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
@@ -1361,7 +1542,7 @@ class _JobPartItem {
   final Product product;
   final int quantity;
   final double unitPrice;
-  
+
   _JobPartItem({
     required this.product,
     required this.quantity,
@@ -1370,29 +1551,40 @@ class _JobPartItem {
 }
 
 class _JobLaborItem {
+  final Product? serviceProduct;
   final String description;
   final double hours;
   final double hourlyRate;
   final DateTime date;
-  
+
   _JobLaborItem({
+    this.serviceProduct,
     required this.description,
     required this.hours,
     required this.hourlyRate,
     required this.date,
   });
+
+  String get displayName => serviceProduct?.name ?? description;
+
+  bool get hasCustomDescription =>
+      serviceProduct != null &&
+      description.isNotEmpty &&
+      description != serviceProduct!.name;
+
+  double get total => hours * hourlyRate;
 }
 
 // Product selector dialog
 class _ProductSelectorDialog extends StatefulWidget {
   final List<Product> products;
   final Function(Product product, int quantity, double price) onProductSelected;
-  
+
   const _ProductSelectorDialog({
     required this.products,
     required this.onProductSelected,
   });
-  
+
   @override
   State<_ProductSelectorDialog> createState() => _ProductSelectorDialogState();
 }
@@ -1403,14 +1595,14 @@ class _ProductSelectorDialogState extends State<_ProductSelectorDialog> {
   final _priceController = TextEditingController();
   final _searchController = TextEditingController();
   List<Product> _filteredProducts = [];
-  
+
   @override
   void initState() {
     super.initState();
     _filteredProducts = widget.products;
     _searchController.addListener(_filterProducts);
   }
-  
+
   @override
   void dispose() {
     _quantityController.dispose();
@@ -1418,18 +1610,18 @@ class _ProductSelectorDialogState extends State<_ProductSelectorDialog> {
     _searchController.dispose();
     super.dispose();
   }
-  
+
   void _filterProducts() {
     final query = _searchController.text.toLowerCase();
     setState(() {
       _filteredProducts = widget.products.where((p) {
         return p.name.toLowerCase().contains(query) ||
-               p.sku.toLowerCase().contains(query) ||
-               (p.brand?.toLowerCase().contains(query) ?? false);
+            p.sku.toLowerCase().contains(query) ||
+            (p.brand?.toLowerCase().contains(query) ?? false);
       }).toList();
     });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -1457,7 +1649,8 @@ class _ProductSelectorDialogState extends State<_ProductSelectorDialog> {
               items: _filteredProducts.map((product) {
                 return DropdownMenuItem(
                   value: product,
-                  child: Text('${product.name} (${product.sku}) - Stock: ${product.stockQuantity}'),
+                  child: Text(
+                      '${product.name} (${product.sku}) - Stock: ${product.stockQuantity}'),
                 );
               }).toList(),
               onChanged: (product) {
@@ -1492,7 +1685,8 @@ class _ProductSelectorDialogState extends State<_ProductSelectorDialog> {
                     ),
                     keyboardType: TextInputType.number,
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d+\.?\d{0,2}')),
                     ],
                   ),
                 ),
@@ -1508,7 +1702,9 @@ class _ProductSelectorDialogState extends State<_ProductSelectorDialog> {
         ),
         ElevatedButton(
           onPressed: () {
-            if (_selectedProduct != null && _quantityController.text.isNotEmpty && _priceController.text.isNotEmpty) {
+            if (_selectedProduct != null &&
+                _quantityController.text.isNotEmpty &&
+                _priceController.text.isNotEmpty) {
               widget.onProductSelected(
                 _selectedProduct!,
                 int.parse(_quantityController.text),
@@ -1526,39 +1722,153 @@ class _ProductSelectorDialogState extends State<_ProductSelectorDialog> {
 
 // Labor entry dialog
 class _LaborEntryDialog extends StatefulWidget {
-  final Function(String description, double hours, double rate, DateTime date) onLaborAdded;
-  
+  final List<Product> serviceProducts;
+  final void Function(
+    Product? serviceProduct,
+    String description,
+    double hours,
+    double rate,
+    DateTime date,
+  ) onLaborAdded;
+
   const _LaborEntryDialog({
+    required this.serviceProducts,
     required this.onLaborAdded,
   });
-  
+
   @override
   State<_LaborEntryDialog> createState() => _LaborEntryDialogState();
 }
 
 class _LaborEntryDialogState extends State<_LaborEntryDialog> {
-  final _descriptionController = TextEditingController();
-  final _hoursController = TextEditingController();
-  final _rateController = TextEditingController(text: '15000'); // Default rate
-  DateTime _selectedDate = DateTime.now();
-  
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _hoursController;
+  late final TextEditingController _rateController;
+  final TextEditingController _searchController = TextEditingController();
+
+  late DateTime _selectedDate;
+  late List<Product> _filteredServices;
+  Product? _selectedService;
+  String? _validationMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedService = null;
+
+    _descriptionController = TextEditingController();
+    _hoursController = TextEditingController(text: '1');
+    _rateController = TextEditingController(text: '15000');
+    _selectedDate = DateTime.now();
+
+    _filteredServices = List<Product>.from(widget.serviceProducts);
+    _searchController.addListener(_applyFilter);
+  }
+
   @override
   void dispose() {
     _descriptionController.dispose();
     _hoursController.dispose();
     _rateController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
-  
+
+  void _applyFilter() {
+    final query = _searchController.text.trim().toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredServices = List<Product>.from(widget.serviceProducts);
+      } else {
+        _filteredServices = widget.serviceProducts.where((service) {
+          final nameMatch = service.name.toLowerCase().contains(query);
+          final skuMatch = service.sku.toLowerCase().contains(query);
+          return nameMatch || skuMatch;
+        }).toList();
+      }
+    });
+  }
+
+  void _selectService(Product service) {
+    setState(() {
+      _selectedService = service;
+      final currentDescription = _descriptionController.text.trim();
+      if (currentDescription.isEmpty || currentDescription == service.name) {
+        _descriptionController.text = service.name;
+      }
+      _rateController.text = service.price.toStringAsFixed(0);
+      _validationMessage = null;
+    });
+  }
+
+  void _setValidationMessage(String? message) {
+    setState(() {
+      _validationMessage = message;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return AlertDialog(
       title: const Text('Agregar Mano de Obra'),
       content: SizedBox(
-        width: 400,
+        width: 420,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (widget.serviceProducts.isNotEmpty) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Seleccionar servicio',
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _searchController,
+                decoration: const InputDecoration(
+                  labelText: 'Buscar servicio',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 180,
+                child: _filteredServices.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No se encontraron servicios',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      )
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _filteredServices.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final service = _filteredServices[index];
+                          final isSelected = _selectedService?.id == service.id;
+                          return ListTile(
+                            leading: const Icon(Icons.design_services_outlined),
+                            title: Text(service.name),
+                            subtitle: Text(service.sku),
+                            trailing: isSelected
+                                ? Icon(Icons.check_circle,
+                                    color: theme.colorScheme.primary)
+                                : null,
+                            selected: isSelected,
+                            onTap: () => _selectService(service),
+                          );
+                        },
+                      ),
+              ),
+              const SizedBox(height: 16),
+            ],
             TextFormField(
               controller: _descriptionController,
               decoration: const InputDecoration(
@@ -1603,7 +1913,8 @@ class _LaborEntryDialogState extends State<_LaborEntryDialog> {
                     ),
                     keyboardType: TextInputType.number,
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d+\.?\d{0,2}')),
                     ],
                   ),
                 ),
@@ -1618,12 +1929,24 @@ class _LaborEntryDialogState extends State<_LaborEntryDialog> {
                     ),
                     keyboardType: TextInputType.number,
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d+\.?\d{0,2}')),
                     ],
                   ),
                 ),
               ],
             ),
+            if (_validationMessage != null) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _validationMessage!,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.error),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -1634,17 +1957,39 @@ class _LaborEntryDialogState extends State<_LaborEntryDialog> {
         ),
         ElevatedButton(
           onPressed: () {
-            if (_descriptionController.text.isNotEmpty &&
-                _hoursController.text.isNotEmpty &&
-                _rateController.text.isNotEmpty) {
-              widget.onLaborAdded(
-                _descriptionController.text,
-                double.parse(_hoursController.text),
-                double.parse(_rateController.text),
-                _selectedDate,
-              );
-              Navigator.of(context).pop();
+            _setValidationMessage(null);
+            final parsedHours =
+                double.tryParse(_hoursController.text.replaceAll(',', '.'));
+            final parsedRate =
+                double.tryParse(_rateController.text.replaceAll(',', '.'));
+            final trimmedDescription = _descriptionController.text.trim();
+
+            if (parsedHours == null || parsedHours <= 0) {
+              _setValidationMessage('Ingrese un número de horas válido.');
+              return;
             }
+            if (parsedRate == null || parsedRate < 0) {
+              _setValidationMessage('Ingrese una tarifa válida.');
+              return;
+            }
+            if (trimmedDescription.isEmpty && _selectedService == null) {
+              _setValidationMessage(
+                  'Seleccione un servicio o ingrese una descripción.');
+              return;
+            }
+
+            final description = trimmedDescription.isNotEmpty
+                ? trimmedDescription
+                : _selectedService?.name ?? '';
+
+            widget.onLaborAdded(
+              _selectedService,
+              description,
+              parsedHours,
+              parsedRate,
+              _selectedDate,
+            );
+            Navigator.of(context).pop();
           },
           child: const Text('Agregar'),
         ),

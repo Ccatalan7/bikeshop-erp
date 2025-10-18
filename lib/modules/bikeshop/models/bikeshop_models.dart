@@ -458,11 +458,13 @@ class MechanicJob {
       notes: json['notes'] as String?,
       assignedTo: json['assigned_to']?.toString(),
       assignedTechnicianName: json['assigned_technician_name'] as String?,
-      estimatedCost: double.tryParse(json['estimated_cost']?.toString() ?? '0') ?? 0,
+      estimatedCost:
+          double.tryParse(json['estimated_cost']?.toString() ?? '0') ?? 0,
       finalCost: double.tryParse(json['final_cost']?.toString() ?? '0') ?? 0,
       partsCost: double.tryParse(json['parts_cost']?.toString() ?? '0') ?? 0,
       laborCost: double.tryParse(json['labor_cost']?.toString() ?? '0') ?? 0,
-      discountAmount: double.tryParse(json['discount_amount']?.toString() ?? '0') ?? 0,
+      discountAmount:
+          double.tryParse(json['discount_amount']?.toString() ?? '0') ?? 0,
       taxAmount: double.tryParse(json['tax_amount']?.toString() ?? '0') ?? 0,
       totalCost: double.tryParse(json['total_cost']?.toString() ?? '0') ?? 0,
       invoiceId: json['invoice_id']?.toString(),
@@ -484,7 +486,9 @@ class MechanicJob {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
-      if (jobNumber.isNotEmpty) 'job_number': jobNumber, // Only include if not empty (let DB generate it)
+      if (jobNumber.isNotEmpty)
+        'job_number':
+            jobNumber, // Only include if not empty (let DB generate it)
       'customer_id': customerId,
       'bike_id': bikeId,
       'service_package_id': servicePackageId,
@@ -578,7 +582,8 @@ class MechanicJob {
       workPerformed: workPerformed ?? this.workPerformed,
       notes: notes ?? this.notes,
       assignedTo: assignedTo ?? this.assignedTo,
-      assignedTechnicianName: assignedTechnicianName ?? this.assignedTechnicianName,
+      assignedTechnicianName:
+          assignedTechnicianName ?? this.assignedTechnicianName,
       estimatedCost: estimatedCost ?? this.estimatedCost,
       finalCost: finalCost ?? this.finalCost,
       partsCost: partsCost ?? this.partsCost,
@@ -690,6 +695,7 @@ class MechanicJobLabor {
   final double totalCost;
   final DateTime workDate;
   final DateTime createdAt;
+  final String? serviceProductId;
 
   MechanicJobLabor({
     this.id,
@@ -702,6 +708,7 @@ class MechanicJobLabor {
     this.totalCost = 0,
     DateTime? workDate,
     DateTime? createdAt,
+    this.serviceProductId,
   })  : workDate = workDate ?? DateTime.now(),
         createdAt = createdAt ?? DateTime.now();
 
@@ -712,11 +719,13 @@ class MechanicJobLabor {
       technicianId: json['technician_id']?.toString(),
       technicianName: json['technician_name']?.toString() ?? '',
       description: json['description'] as String?,
-      hoursWorked: double.tryParse(json['hours_worked']?.toString() ?? '0') ?? 0,
+      hoursWorked:
+          double.tryParse(json['hours_worked']?.toString() ?? '0') ?? 0,
       hourlyRate: double.tryParse(json['hourly_rate']?.toString() ?? '0') ?? 0,
       totalCost: double.tryParse(json['total_cost']?.toString() ?? '0') ?? 0,
       workDate: _parseDate(json['work_date']),
       createdAt: _parseDate(json['created_at']),
+      serviceProductId: json['service_product_id']?.toString(),
     );
   }
 
@@ -730,6 +739,7 @@ class MechanicJobLabor {
       'hours_worked': hoursWorked,
       'hourly_rate': hourlyRate,
       'total_cost': totalCost,
+      'service_product_id': serviceProductId,
       'work_date': workDate.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
     };
@@ -787,7 +797,12 @@ enum TimelineEventType {
   }
 
   String get dbValue {
-    return toString().split('.').last.toLowerCase().replaceAll(RegExp(r'([A-Z])'), '_\$1').substring(1);
+    return toString()
+        .split('.')
+        .last
+        .toLowerCase()
+        .replaceAll(RegExp(r'([A-Z])'), '_\$1')
+        .substring(1);
   }
 
   static TimelineEventType fromDbValue(String? value) {
@@ -887,9 +902,11 @@ class ServicePackage {
       id: json['id']?.toString(),
       name: json['name']?.toString() ?? '',
       description: json['description'] as String?,
-      estimatedDurationHours:
-          double.tryParse(json['estimated_duration_hours']?.toString() ?? '1') ?? 1,
-      baseLaborCost: double.tryParse(json['base_labor_cost']?.toString() ?? '0') ?? 0,
+      estimatedDurationHours: double.tryParse(
+              json['estimated_duration_hours']?.toString() ?? '1') ??
+          1,
+      baseLaborCost:
+          double.tryParse(json['base_labor_cost']?.toString() ?? '0') ?? 0,
       items: json['items'] != null
           ? List<Map<String, dynamic>>.from(json['items'] as List)
           : [],

@@ -209,16 +209,17 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         imageUrls: uploadedUrls,
       );
 
+      Bike savedBike;
       if (widget.bike == null) {
         // Create new bike
-        await bikeshopService.createBike(bike);
+        savedBike = await bikeshopService.createBike(bike);
       } else {
         // Update existing bike
-        await bikeshopService.updateBike(bike);
+        savedBike = await bikeshopService.updateBike(bike);
       }
 
       if (mounted) {
-        Navigator.of(context).pop(true); // Return true to indicate success
+        Navigator.of(context).pop(savedBike); // Return the saved bike
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(widget.bike == null ? 'Bicicleta creada exitosamente' : 'Bicicleta actualizada exitosamente'),

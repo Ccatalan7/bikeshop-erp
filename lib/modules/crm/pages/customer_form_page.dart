@@ -180,8 +180,9 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
   }
 
   String? _validateRut(String? value) {
+    // RUT is now optional - only validate if provided
     if (value == null || value.isEmpty) {
-      return 'El RUT es requerido';
+      return null; // No error if empty
     }
     if (!ChileanUtils.isValidRut(value)) {
       return 'RUT inválido';
@@ -309,7 +310,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                   TextFormField(
                     controller: _rutController,
                     decoration: const InputDecoration(
-                      labelText: 'RUT',
+                      labelText: 'RUT (opcional)',
                       prefixIcon: Icon(Icons.badge),
                       hintText: '12.345.678-9',
                     ),

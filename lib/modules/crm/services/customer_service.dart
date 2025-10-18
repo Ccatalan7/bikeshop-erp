@@ -53,22 +53,26 @@ class CustomerService extends ChangeNotifier {
   
   Future<Customer> createCustomer(Customer customer) async {
     try {
-      // Validate RUT
-      if (!ChileanUtils.isValidRut(customer.rut)) {
-        throw Exception('RUT inválido');
+      Customer customerToSave = customer;
+      
+      // Validate RUT only if provided (not null and not empty)
+      if (customer.rut != null && customer.rut.trim().isNotEmpty) {
+        if (!ChileanUtils.isValidRut(customer.rut)) {
+          throw Exception('RUT inválido');
+        }
+        
+        // Check if RUT already exists
+        final existingCustomers = await _db.select('customers', where: 'rut=${customer.rut}');
+        if (existingCustomers.isNotEmpty) {
+          throw Exception('Ya existe un cliente con este RUT');
+        }
+        
+        // Format RUT for storage
+        final formattedRut = ChileanUtils.formatRut(customer.rut);
+        customerToSave = customer.copyWith(rut: formattedRut);
       }
       
-      // Check if RUT already exists
-      final existingCustomers = await _db.select('customers', where: 'rut=${customer.rut}');
-      if (existingCustomers.isNotEmpty) {
-        throw Exception('Ya existe un cliente con este RUT');
-      }
-      
-      // Format RUT for storage
-      final formattedRut = ChileanUtils.formatRut(customer.rut);
-      final customerWithFormattedRut = customer.copyWith(rut: formattedRut);
-      
-      final data = await _db.insert('customers', customerWithFormattedRut.toJson());
+      final data = await _db.insert('customers', customerToSave.toJson());
       
       // Create initial loyalty record
       final customerId = data['id']?.toString();
@@ -86,33 +90,37 @@ class CustomerService extends ChangeNotifier {
   
   Future<Customer> updateCustomer(Customer customer) async {
     try {
-      // Validate RUT
-      if (!ChileanUtils.isValidRut(customer.rut)) {
-        throw Exception('RUT inválido');
-      }
+      Customer customerToSave = customer.copyWith(updatedAt: DateTime.now());
       
-      // Check if RUT already exists (excluding current customer)
-      final existingCustomers = await _db.select('customers', where: 'rut=${customer.rut}');
-      final duplicates = existingCustomers.where((c) {
-        final existingId = c['id']?.toString();
-        return existingId != null && existingId != customer.id;
-      }).toList();
-      if (duplicates.isNotEmpty) {
-        throw Exception('Ya existe otro cliente con este RUT');
+      // Validate RUT only if provided (not null and not empty)
+      if (customer.rut != null && customer.rut.trim().isNotEmpty) {
+        if (!ChileanUtils.isValidRut(customer.rut)) {
+          throw Exception('RUT inválido');
+        }
+        
+        // Check if RUT already exists (excluding current customer)
+        final existingCustomers = await _db.select('customers', where: 'rut=${customer.rut}');
+        final duplicates = existingCustomers.where((c) {
+          final existingId = c['id']?.toString();
+          return existingId != null && existingId != customer.id;
+        }).toList();
+        if (duplicates.isNotEmpty) {
+          throw Exception('Ya existe otro cliente con este RUT');
+        }
+        
+        // Format RUT for storage
+        final formattedRut = ChileanUtils.formatRut(customer.rut);
+        customerToSave = customer.copyWith(
+          rut: formattedRut,
+          updatedAt: DateTime.now(),
+        );
       }
-      
-      // Format RUT for storage
-      final formattedRut = ChileanUtils.formatRut(customer.rut);
-      final customerWithFormattedRut = customer.copyWith(
-        rut: formattedRut,
-        updatedAt: DateTime.now(),
-      );
       
       if (customer.id == null) {
         throw Exception('ID de cliente inválido');
       }
 
-      final data = await _db.update('customers', customer.id!, customerWithFormattedRut.toJson());
+      final data = await _db.update('customers', customer.id!, customerToSave.toJson());
       notifyListeners();
       return Customer.fromJson(data);
     } catch (e) {

@@ -19,7 +19,9 @@ class ProductTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isOutOfStock = product.stockQuantity <= 0;
+    final isService = product.productType == ProductType.service;
+    final requiresStock = product.trackStock && !isService;
+    final isOutOfStock = requiresStock && product.stockQuantity <= 0;
 
     return Card(
       elevation: 2,
@@ -48,13 +50,17 @@ class ProductTile extends StatelessWidget {
                             placeholder: (context, url) => const Center(
                               child: CircularProgressIndicator(),
                             ),
-                            errorWidget: (context, url, error) => const Icon(
-                              Icons.pedal_bike,
+                            errorWidget: (context, url, error) => Icon(
+                              isService
+                                  ? Icons.design_services
+                                  : Icons.pedal_bike,
                               size: 40,
                             ),
                           )
-                        : const Icon(
-                            Icons.pedal_bike,
+                        : Icon(
+                            isService
+                                ? Icons.design_services
+                                : Icons.pedal_bike,
                             size: 40,
                           ),
                   ),
@@ -78,7 +84,7 @@ class ProductTile extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    
+
                     // SKU
                     Text(
                       product.sku,
@@ -86,9 +92,9 @@ class ProductTile extends StatelessWidget {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    
+
                     const Spacer(),
-                    
+
                     // Price and stock row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -98,13 +104,13 @@ class ProductTile extends StatelessWidget {
                           '\$${product.price.toStringAsFixed(0)}',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: isOutOfStock 
-                                ? theme.disabledColor 
+                            color: isOutOfStock
+                                ? theme.disabledColor
                                 : theme.colorScheme.primary,
                           ),
                         ),
-                        
-                        // Stock indicator
+
+                        // Stock/service indicator
                         if (showStock)
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -112,23 +118,29 @@ class ProductTile extends StatelessWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: isOutOfStock
-                                  ? theme.colorScheme.error
-                                  : product.stockQuantity <= 5
-                                      ? theme.colorScheme.tertiary
-                                      : theme.colorScheme.secondary,
+                              color: isService
+                                  ? theme.colorScheme.primaryContainer
+                                  : isOutOfStock
+                                      ? theme.colorScheme.error
+                                      : product.stockQuantity <= 5
+                                          ? theme.colorScheme.tertiary
+                                          : theme.colorScheme.secondary,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              isOutOfStock 
-                                  ? 'Sin stock'
-                                  : '${product.stockQuantity}',
+                              isService
+                                  ? 'Servicio'
+                                  : isOutOfStock
+                                      ? 'Sin stock'
+                                      : '${product.stockQuantity}',
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: isOutOfStock
-                                    ? theme.colorScheme.onError
-                                    : product.stockQuantity <= 5
-                                        ? theme.colorScheme.onTertiary
-                                        : theme.colorScheme.onSecondary,
+                                color: isService
+                                    ? theme.colorScheme.onPrimaryContainer
+                                    : isOutOfStock
+                                        ? theme.colorScheme.onError
+                                        : product.stockQuantity <= 5
+                                            ? theme.colorScheme.onTertiary
+                                            : theme.colorScheme.onSecondary,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),

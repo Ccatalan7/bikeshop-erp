@@ -64,11 +64,98 @@ class _CustomerListPageState extends State<CustomerListPage> {
         _filteredCustomers = _customers
             .where((customer) =>
                 customer.name.toLowerCase().contains(searchTerm.toLowerCase()) ||
-                customer.rut.toLowerCase().contains(searchTerm.toLowerCase()) ||
+                (customer.rut.isNotEmpty && customer.rut.toLowerCase().contains(searchTerm.toLowerCase())) ||
                 (customer.email?.toLowerCase().contains(searchTerm.toLowerCase()) ?? false))
             .toList();
       }
     });
+  }
+
+  Future<void> _confirmDelete(Customer customer) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar Eliminación'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('¿Estás seguro de que deseas eliminar a este cliente?'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    customer.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text('RUT: ${customer.rut.isEmpty ? "Sin RUT" : customer.rut}'),
+                  if (customer.email != null)
+                    Text('Email: ${customer.email}'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              '⚠️ Esta acción no se puede deshacer.',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        // Ensure customer.id is not null before deleting
+        if (customer.id == null || customer.id!.isEmpty) {
+          throw Exception('ID de cliente inválido');
+        }
+        
+        await _customerService.deleteCustomer(customer.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Cliente "${customer.name}" eliminado exitosamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        _loadCustomers();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al eliminar cliente: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -279,13 +366,14 @@ class _CustomerListPageState extends State<CustomerListPage> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      'RUT: ${customer.rut}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
+                    if (customer.rut.isNotEmpty)
+                      Text(
+                        'RUT: ${customer.rut}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
                       ),
-                    ),
                     if (customer.email != null) ...[
                       const SizedBox(height: 2),
                       Text(
@@ -330,24 +418,53 @@ class _CustomerListPageState extends State<CustomerListPage> {
                 ),
               ),
               
-              // Actions
-              Column(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () {
-                      context.push('/crm/customers/${customer.id}/edit').then((_) {
-                        _loadCustomers();
-                      });
-                    },
+              // Actions - 3-dot menu
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                tooltip: 'Opciones',
+                onSelected: (value) async {
+                  if (value == 'edit') {
+                    context.push('/crm/customers/${customer.id}/edit').then((_) {
+                      _loadCustomers();
+                    });
+                  } else if (value == 'delete') {
+                    _confirmDelete(customer);
+                  } else if (value == 'view') {
+                    context.push('/bikeshop/clients/${customer.id}').then((_) {
+                      _loadCustomers();
+                    });
+                  }
+                },
+                itemBuilder: (BuildContext context) => [
+                  const PopupMenuItem<String>(
+                    value: 'view',
+                    child: Row(
+                      children: [
+                        Icon(Icons.visibility, size: 20),
+                        SizedBox(width: 12),
+                        Text('Ver Detalles'),
+                      ],
+                    ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_forward_ios),
-                    onPressed: () {
-                      context.push('/crm/customers/${customer.id}').then((_) {
-                        _loadCustomers();
-                      });
-                    },
+                  const PopupMenuItem<String>(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, size: 20),
+                        SizedBox(width: 12),
+                        Text('Editar'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 20, color: Colors.red),
+                        SizedBox(width: 12),
+                        Text('Eliminar', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
                   ),
                 ],
               ),

@@ -430,23 +430,37 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 18),
-                  onPressed: () async {
-                    final result = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => BikeFormDialog(
-                        customerId: widget.customerId,
-                        bike: bike,
-                      ),
-                    );
-                    
-                    if (result == true) {
-                      // Reload data after editing bike
-                      _loadData();
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert, color: Colors.grey[600], size: 20),
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      _editBike(bike);
+                    } else if (value == 'delete') {
+                      _confirmDeleteBike(bike);
                     }
                   },
-                  tooltip: 'Editar bicicleta',
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit, size: 20),
+                          SizedBox(width: 8),
+                          Text('Editar'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete, size: 20, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Eliminar', style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -954,6 +968,89 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
         return 'Bicicleta entregada';
       default:
         return 'Evento';
+    }
+  }
+
+  // ============================================================
+  // BIKE MANAGEMENT
+  // ============================================================
+
+  void _editBike(Bike bike) async {
+    final result = await showDialog<Bike?>(
+      context: context,
+      builder: (context) => BikeFormDialog(
+        customerId: widget.customerId,
+        bike: bike,
+      ),
+    );
+    
+    if (result != null) {
+      // Reload data after editing bike
+      _loadData();
+    }
+  }
+
+  Future<void> _confirmDeleteBike(Bike bike) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar eliminación'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('¿Está seguro de eliminar esta bicicleta?'),
+            const SizedBox(height: 16),
+            Text(
+              bike.displayName,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            if (bike.serialNumber != null && bike.serialNumber!.isNotEmpty)
+              Text('N° Serie: ${bike.serialNumber}'),
+            if (bike.bikeType != null)
+              Text('Tipo: ${bike.bikeType!.displayName}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && bike.id != null) {
+      try {
+        final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
+        await bikeshopService.deleteBike(bike.id!);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Bicicleta eliminada exitosamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          
+          // Refresh the bike list automatically
+          _loadData();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error eliminando bicicleta: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 }

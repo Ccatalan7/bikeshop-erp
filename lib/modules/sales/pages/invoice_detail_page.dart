@@ -90,6 +90,13 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
   }
 
+  Future<void> _openEditInvoice(Invoice invoice) async {
+    await context.push<bool>('/sales/invoices/${invoice.id}/edit');
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    await _loadInvoice();
+  }
+
   Future<void> _markAsSent() async {
     try {
       final salesService = context.read<SalesService>();
@@ -488,9 +495,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               ),
             ),
           OutlinedButton.icon(
-            onPressed: () {
-              context.push('/sales/invoices/${invoice.id}/edit');
-            },
+            onPressed: () => _openEditInvoice(invoice),
             icon: const Icon(Icons.edit_outlined),
             label: const Text('Editar'),
           ),
