@@ -42,6 +42,8 @@ import '../../modules/pos/models/pos_transaction.dart';
 import '../../modules/settings/pages/settings_page.dart';
 import '../../modules/settings/pages/factory_reset_page.dart';
 import '../../modules/settings/pages/appearance_settings_page.dart';
+import '../../modules/hr/pages/employee_list_page.dart';
+import '../../modules/hr/pages/attendances_page.dart';
 
 // Helper function to create pages without transitions
 Page<dynamic> _buildPageWithNoTransition(
@@ -562,6 +564,28 @@ class AppRouter {
             state,
             const MainLayout(
               child: AppearanceSettingsPage(),
+            ),
+          ),
+        ),
+
+        // HR routes
+        GoRoute(
+          path: '/hr/employees',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              child: EmployeeListPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/hr/attendances',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              child: AttendancesPage(),
             ),
           ),
         ),

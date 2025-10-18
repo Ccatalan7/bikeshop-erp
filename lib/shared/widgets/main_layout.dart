@@ -168,6 +168,21 @@ const List<MenuSubItem> _posMenuItems = [
 
 const String _posSectionKey = 'pos';
 
+const List<MenuSubItem> _hrMenuItems = [
+  MenuSubItem(
+    icon: Icons.people_outlined,
+    title: 'Empleados',
+    route: '/hr/employees',
+  ),
+  MenuSubItem(
+    icon: Icons.access_time_outlined,
+    title: 'Asistencias',
+    route: '/hr/attendances',
+  ),
+];
+
+const String _hrSectionKey = 'hr';
+
 class MainLayout extends StatelessWidget {
   final Widget? child;
   final Widget? body;
@@ -397,6 +412,9 @@ class _AppSidebarState extends State<AppSidebar> {
     if (_matchesLocation(location, _posMenuItems)) {
       return _posSectionKey;
     }
+    if (_matchesLocation(location, _hrMenuItems)) {
+      return _hrSectionKey;
+    }
     return null;
   }
 
@@ -558,6 +576,16 @@ class _AppSidebarState extends State<AppSidebar> {
                   isExpanded: _expandedSection == _posSectionKey,
                   onExpansionChanged: (expand) => _handleExpansionChange(_posSectionKey, expand),
                 ),
+
+                ExpandableMenuItem(
+                  icon: Icons.badge_outlined,
+                  activeIcon: Icons.badge,
+                  title: 'RR.HH.',
+                  currentLocation: currentLocation,
+                  subItems: _hrMenuItems,
+                  isExpanded: _expandedSection == _hrSectionKey,
+                  onExpansionChanged: (expand) => _handleExpansionChange(_hrSectionKey, expand),
+                ),
                 
                 const SizedBox(height: 8),
                 _buildSectionDivider(context),
@@ -569,16 +597,6 @@ class _AppSidebarState extends State<AppSidebar> {
                   activeIcon: Icons.build,
                   title: 'Mantención',
                   route: '/maintenance',
-                  currentLocation: currentLocation,
-                  enabled: false,
-                ),
-                
-                _buildSidebarItem(
-                  context,
-                  icon: Icons.badge_outlined,
-                  activeIcon: Icons.badge,
-                  title: 'RR.HH.',
-                  route: '/hr',
                   currentLocation: currentLocation,
                   enabled: false,
                 ),
@@ -872,6 +890,14 @@ class AppDrawer extends StatelessWidget {
             subItems: _posMenuItems,
             currentLocation: currentLocation,
           ),
+
+          _buildDrawerExpandableItem(
+            context,
+            icon: Icons.badge,
+            title: 'RR.HH.',
+            subItems: _hrMenuItems,
+            currentLocation: currentLocation,
+          ),
           
           const Divider(),
           
@@ -883,15 +909,6 @@ class AppDrawer extends StatelessWidget {
             icon: Icons.build,
             title: 'Mantención',
             route: '/maintenance',
-            currentLocation: currentLocation,
-            enabled: false,
-          ),
-          
-          _buildDrawerItem(
-            context,
-            icon: Icons.badge,
-            title: 'RR.HH.',
-            route: '/hr',
             currentLocation: currentLocation,
             enabled: false,
           ),

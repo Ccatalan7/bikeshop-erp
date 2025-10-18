@@ -6725,4 +6725,488 @@ create trigger trg_mechanic_job_labor_updated_at
   before update on mechanic_job_labor
   for each row execute procedure public.set_updated_at();
 
+-- ============================================================================
+-- HR & ATTENDANCES MODULE
+-- ============================================================================
+-- Complete HR foundation with employees, departments, contracts, schedules,
+-- and Odoo-style attendance tracking with check-in/check-out functionality
+-- ============================================================================
+
+-- Departments table (organizes employees by area)
+create table if not exists departments (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  code text,
+  manager_id uuid,
+  description text,
+  active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+-- Migration: Add missing columns to departments table
+do $$
+begin
+  -- Add code column if it doesn't exist
+  if not exists (
+    select 1 from information_schema.columns 
+    where table_name = 'departments' and column_name = 'code'
+  ) then
+    alter table departments add column code text;
+  end if;
+  
+  -- Add manager_id column if it doesn't exist
+  if not exists (
+    select 1 from information_schema.columns 
+    where table_name = 'departments' and column_name = 'manager_id'
+  ) then
+    alter table departments add column manager_id uuid;
+  end if;
+  
+  -- Add description column if it doesn't exist
+  if not exists (
+    select 1 from information_schema.columns 
+    where table_name = 'departments' and column_name = 'description'
+  ) then
+    alter table departments add column description text;
+  end if;
+  
+  -- Add active column if it doesn't exist
+  if not exists (
+    select 1 from information_schema.columns 
+    where table_name = 'departments' and column_name = 'active'
+  ) then
+    alter table departments add column active boolean not null default true;
+  end if;
+  
+  -- Add unique constraint on code if it doesn't exist
+  if not exists (
+    select 1 from information_schema.table_constraints 
+    where constraint_name = 'departments_code_key' and table_name = 'departments'
+  ) then
+    alter table departments add constraint departments_code_key unique (code);
+  end if;
+end $$;
+
+create index if not exists idx_departments_code on departments(code);
+create index if not exists idx_departments_manager on departments(manager_id);
+
+-- Employees table (core HR entity)
+create table if not exists employees (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id), -- Link to Supabase auth for login
+  employee_number text unique not null,
+  first_name text not null,
+  last_name text not null,
+  email text unique,
+  phone text,
+  rut text unique, -- Chilean ID number
+  birth_date date,
+  hire_date date not null default current_date,
+  termination_date date,
+  department_id uuid references departments(id),
+  job_title text not null,
+  employment_type text check (employment_type in ('full_time', 'part_time', 'contractor', 'intern')) not null default 'full_time',
+  status text check (status in ('active', 'inactive', 'on_leave', 'terminated')) not null default 'active',
+  photo_url text,
+  address text,
+  city text,
+  emergency_contact_name text,
+  emergency_contact_phone text,
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+-- Migration: Add missing columns to employees table
+do $$
+begin
+  -- Add all potentially missing columns
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'user_id') then
+    alter table employees add column user_id uuid references auth.users(id);
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'employee_number') then
+    alter table employees add column employee_number text;
+    -- Add unique constraint separately
+    alter table employees add constraint employees_employee_number_key unique (employee_number);
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'email') then
+    alter table employees add column email text unique;
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'phone') then
+    alter table employees add column phone text;
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'rut') then
+    alter table employees add column rut text unique;
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'birth_date') then
+    alter table employees add column birth_date date;
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'hire_date') then
+    alter table employees add column hire_date date not null default current_date;
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'termination_date') then
+    alter table employees add column termination_date date;
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'department_id') then
+    alter table employees add column department_id uuid references departments(id);
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'job_title') then
+    alter table employees add column job_title text not null default 'Sin cargo';
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'employment_type') then
+    alter table employees add column employment_type text check (employment_type in ('full_time', 'part_time', 'contractor', 'intern')) not null default 'full_time';
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'status') then
+    alter table employees add column status text check (status in ('active', 'inactive', 'on_leave', 'terminated')) not null default 'active';
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'photo_url') then
+    alter table employees add column photo_url text;
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'address') then
+    alter table employees add column address text;
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'city') then
+    alter table employees add column city text;
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'emergency_contact_name') then
+    alter table employees add column emergency_contact_name text;
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'emergency_contact_phone') then
+    alter table employees add column emergency_contact_phone text;
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'notes') then
+    alter table employees add column notes text;
+  end if;
+end $$;
+
+create index if not exists idx_employees_user_id on employees(user_id);
+create index if not exists idx_employees_department on employees(department_id);
+create index if not exists idx_employees_status on employees(status);
+create index if not exists idx_employees_employee_number on employees(employee_number);
+create index if not exists idx_employees_rut on employees(rut);
+create index if not exists idx_employees_name on employees using gin (
+  to_tsvector('spanish', coalesce(first_name, '') || ' ' || coalesce(last_name, ''))
+);
+
+-- Now add the foreign key from departments to employees for manager
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.table_constraints 
+    where constraint_name = 'departments_manager_id_fkey_employees'
+  ) then
+    alter table departments 
+      drop constraint if exists departments_manager_id_fkey,
+      add constraint departments_manager_id_fkey_employees 
+        foreign key (manager_id) references employees(id);
+  end if;
+end $$;
+
+-- Work schedules table (defines expected working hours)
+create table if not exists work_schedules (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text,
+  monday_start time,
+  monday_end time,
+  tuesday_start time,
+  tuesday_end time,
+  wednesday_start time,
+  wednesday_end time,
+  thursday_start time,
+  thursday_end time,
+  friday_start time,
+  friday_end time,
+  saturday_start time,
+  saturday_end time,
+  sunday_start time,
+  sunday_end time,
+  weekly_hours numeric(5,2) not null default 45.00, -- Standard Chilean work week
+  timezone text not null default 'America/Santiago',
+  active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_work_schedules_active on work_schedules(active);
+
+-- Contracts table (employment contracts with salary info)
+create table if not exists employee_contracts (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references employees(id) on delete cascade,
+  contract_type text check (contract_type in ('indefinite', 'fixed_term', 'project_based', 'seasonal')) not null default 'indefinite',
+  start_date date not null,
+  end_date date,
+  salary_amount numeric(12,2) not null,
+  salary_currency text not null default 'CLP',
+  salary_period text check (salary_period in ('monthly', 'biweekly', 'weekly', 'hourly')) not null default 'monthly',
+  work_schedule_id uuid references work_schedules(id),
+  weekly_hours numeric(5,2),
+  position_title text not null,
+  department_id uuid references departments(id),
+  status text check (status in ('draft', 'active', 'expired', 'terminated')) not null default 'draft',
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_contracts_employee on employee_contracts(employee_id);
+create index if not exists idx_contracts_status on employee_contracts(status);
+create index if not exists idx_contracts_dates on employee_contracts(start_date, end_date);
+
+-- Attendances table (Odoo-style check-in/check-out tracking)
+create table if not exists attendances (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references employees(id) on delete cascade,
+  check_in timestamp with time zone not null,
+  check_out timestamp with time zone,
+  worked_hours numeric(10,2), -- Calculated automatically on check-out
+  overtime_hours numeric(10,2) default 0, -- Hours beyond scheduled
+  break_minutes integer default 0, -- Lunch/coffee breaks
+  location_check_in text, -- Optional: "Office", "Remote", "Client Site"
+  location_check_out text,
+  notes text,
+  status text check (status in ('ongoing', 'completed', 'approved', 'rejected')) not null default 'ongoing',
+  approved_by uuid references employees(id),
+  approved_at timestamp with time zone,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_attendances_employee on attendances(employee_id);
+create index if not exists idx_attendances_dates on attendances(check_in, check_out);
+create index if not exists idx_attendances_status on attendances(status);
+create index if not exists idx_attendances_employee_date on attendances(employee_id, check_in);
+
+-- Function: Calculate worked hours when checking out
+create or replace function public.calculate_attendance_hours()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_hours numeric(10,2);
+  v_scheduled_hours numeric(5,2);
+  v_overtime numeric(10,2);
+begin
+  -- Only calculate if check_out is set and check_in exists
+  if NEW.check_out is not null and NEW.check_in is not null then
+    -- Calculate total worked hours
+    v_hours := extract(epoch from (NEW.check_out - NEW.check_in)) / 3600.0;
+    v_hours := round(v_hours - (coalesce(NEW.break_minutes, 0) / 60.0), 2);
+    
+    NEW.worked_hours := v_hours;
+    
+    -- Calculate overtime (compare with scheduled hours from contract)
+    select 
+      case 
+        when c.weekly_hours is not null then c.weekly_hours / 5.0 -- Assuming 5-day work week
+        when ws.weekly_hours is not null then ws.weekly_hours / 5.0
+        else 9.0 -- Default 9 hours/day
+      end
+    into v_scheduled_hours
+    from employees e
+    left join employee_contracts c on c.employee_id = e.id and c.status = 'active'
+    left join work_schedules ws on ws.id = c.work_schedule_id
+    where e.id = NEW.employee_id
+    limit 1;
+    
+    v_scheduled_hours := coalesce(v_scheduled_hours, 9.0);
+    v_overtime := greatest(0, v_hours - v_scheduled_hours);
+    NEW.overtime_hours := v_overtime;
+    
+    -- Auto-complete status
+    if NEW.status = 'ongoing' then
+      NEW.status := 'completed';
+    end if;
+  end if;
+  
+  return NEW;
+end;
+$$;
+
+-- Trigger: Auto-calculate hours on check-out
+drop trigger if exists trg_calculate_attendance_hours on attendances cascade;
+create trigger trg_calculate_attendance_hours
+  before insert or update on attendances
+  for each row execute procedure public.calculate_attendance_hours();
+
+-- Function: Prevent duplicate ongoing attendances for same employee
+create or replace function public.prevent_duplicate_checkin()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ongoing_count integer;
+begin
+  -- Only check on INSERT or when status becomes 'ongoing'
+  if (TG_OP = 'INSERT' or (TG_OP = 'UPDATE' and NEW.status = 'ongoing')) 
+     and NEW.status = 'ongoing' and NEW.check_out is null then
+    
+    select count(*) into v_ongoing_count
+    from attendances
+    where employee_id = NEW.employee_id
+      and status = 'ongoing'
+      and check_out is null
+      and id != coalesce(NEW.id, '00000000-0000-0000-0000-000000000000'::uuid);
+    
+    if v_ongoing_count > 0 then
+      raise exception 'Employee % already has an ongoing attendance session', NEW.employee_id;
+    end if;
+  end if;
+  
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_prevent_duplicate_checkin on attendances cascade;
+create trigger trg_prevent_duplicate_checkin
+  before insert or update on attendances
+  for each row execute procedure public.prevent_duplicate_checkin();
+
+-- Function: Get current checked-in employees
+create or replace function public.get_checked_in_employees()
+returns table (
+  employee_id uuid,
+  employee_name text,
+  check_in timestamp with time zone,
+  hours_worked numeric
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select 
+    a.employee_id,
+    e.first_name || ' ' || e.last_name as employee_name,
+    a.check_in,
+    round(extract(epoch from (now() - a.check_in)) / 3600.0, 2) as hours_worked
+  from attendances a
+  join employees e on e.id = a.employee_id
+  where a.status = 'ongoing'
+    and a.check_out is null
+  order by a.check_in;
+end;
+$$;
+
+-- Function: Get attendance summary for period
+create or replace function public.get_attendance_summary(
+  p_employee_id uuid,
+  p_start_date date,
+  p_end_date date
+)
+returns table (
+  total_days integer,
+  total_hours numeric,
+  total_overtime numeric,
+  average_hours numeric,
+  late_arrivals integer,
+  early_departures integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select 
+    count(distinct date(a.check_in))::integer as total_days,
+    coalesce(sum(a.worked_hours), 0) as total_hours,
+    coalesce(sum(a.overtime_hours), 0) as total_overtime,
+    coalesce(avg(a.worked_hours), 0) as average_hours,
+    count(*) filter (where extract(hour from a.check_in) > 9)::integer as late_arrivals,
+    count(*) filter (where extract(hour from a.check_out) < 18)::integer as early_departures
+  from attendances a
+  where a.employee_id = p_employee_id
+    and a.status in ('completed', 'approved')
+    and date(a.check_in) between p_start_date and p_end_date;
+end;
+$$;
+
+-- Updated_at triggers for HR tables
+drop trigger if exists trg_departments_updated_at on departments cascade;
+create trigger trg_departments_updated_at
+  before update on departments
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_employees_updated_at on employees cascade;
+create trigger trg_employees_updated_at
+  before update on employees
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_work_schedules_updated_at on work_schedules cascade;
+create trigger trg_work_schedules_updated_at
+  before update on work_schedules
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_employee_contracts_updated_at on employee_contracts cascade;
+create trigger trg_employee_contracts_updated_at
+  before update on employee_contracts
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_attendances_updated_at on attendances cascade;
+create trigger trg_attendances_updated_at
+  before update on attendances
+  for each row execute procedure public.set_updated_at();
+
+-- Seed default work schedule (Chilean standard: Monday-Friday 9am-6pm)
+insert into work_schedules (name, description, monday_start, monday_end, tuesday_start, tuesday_end, wednesday_start, wednesday_end, thursday_start, thursday_end, friday_start, friday_end, weekly_hours)
+values ('Estándar (9:00 - 18:00)', 'Horario estándar chileno: Lunes a Viernes, 9:00 a 18:00', '09:00', '18:00', '09:00', '18:00', '09:00', '18:00', '09:00', '18:00', '09:00', '18:00', 45.00)
+on conflict do nothing;
+
+-- Seed default departments (only if table is empty)
+do $$
+declare
+  v_has_company_id boolean;
+  v_count integer;
+begin
+  -- Check if departments already exist
+  select count(*) into v_count from departments;
+  
+  if v_count = 0 then
+    -- Check if company_id column exists
+    select exists(
+      select 1 from information_schema.columns 
+      where table_name = 'departments' and column_name = 'company_id'
+    ) into v_has_company_id;
+    
+    if v_has_company_id then
+      -- Skip seeding if company_id is required but no company exists
+      raise notice 'departments table has company_id column - skipping seed data. Create a company first.';
+    else
+      -- No company_id column, insert seed data
+      insert into departments (name, code, description)
+      values 
+        ('Administración', 'ADMIN', 'Departamento administrativo y gerencia'),
+        ('Ventas', 'SALES', 'Equipo de ventas y atención al cliente'),
+        ('Taller', 'WORKSHOP', 'Mecánicos y técnicos del taller'),
+        ('Contabilidad', 'ACCOUNTING', 'Contabilidad y finanzas')
+      on conflict (code) do nothing;
+    end if;
+  end if;
+end $$;
+
 notify pgrst, 'reload schema';
