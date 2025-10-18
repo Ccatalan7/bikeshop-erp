@@ -5392,6 +5392,18 @@ begin
     );
   end loop;
   
+  -- Skip invoice creation when there are no billable items
+  if v_item_counter = 0 then
+    update public.mechanic_jobs
+    set invoice_id = null,
+        is_invoiced = false,
+        updated_at = now()
+    where id = p_job_id;
+
+    raise notice 'Skipping invoice for job %: no parts or labor captured', v_job.job_number;
+    return null;
+  end if;
+
   -- Calculate IVA (19% for Chile)
   v_iva := round(v_subtotal * 0.19, 2);
   v_total := v_subtotal + v_iva;

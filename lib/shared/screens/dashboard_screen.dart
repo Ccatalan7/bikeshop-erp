@@ -87,7 +87,7 @@ class DashboardScreen extends StatelessWidget {
                   'Gestión de clientes y CRM',
                   Icons.people,
                   Colors.orange,
-                  () => context.go('/crm/customers'),
+                  () => context.go('/clientes'),
                 ),
                 _buildModuleCard(
                   context,
@@ -127,7 +127,7 @@ class DashboardScreen extends StatelessWidget {
                   'Gestión de bicicletas y reparaciones',
                   Icons.build,
                   Colors.purple,
-                  () => context.go('/bikeshop/jobs'),
+                  () => context.go('/taller/pegas'),
                 ),
               ],
             ),

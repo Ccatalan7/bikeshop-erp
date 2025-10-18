@@ -163,7 +163,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                   text: 'Nuevo Trabajo',
                   icon: Icons.add_circle,
                   onPressed: () {
-                    context.push('/bikeshop/jobs/new').then((_) => _loadData());
+                    context.push('/taller/pegas/new').then((_) => _loadData());
                   },
                 ),
               ],
@@ -347,7 +347,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
       elevation: 2,
       child: InkWell(
         onTap: () {
-          context.push('/bikeshop/clients/${customer.id}').then((_) => _loadData());
+          context.push('/clientes/${customer.id}').then((_) => _loadData());
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(

@@ -130,7 +130,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     icon: Icons.edit,
                     type: ButtonType.outline,
                     onPressed: () {
-                      context.push('/crm/customers/${widget.customerId}/edit').then((_) {
+                      context.push('/clientes/${widget.customerId}/editar').then((_) {
                         _loadCustomerData();
                       });
                     },

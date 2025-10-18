@@ -181,7 +181,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
                   text: 'Nuevo Cliente',
                   icon: Icons.person_add,
                   onPressed: () {
-                    context.push('/crm/customers/new').then((_) {
+                    context.push('/clientes/nuevo').then((_) {
                       _loadCustomers();
                     });
                   },
@@ -282,7 +282,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
               AppButton(
                 text: 'Agregar Primer Cliente',
                 onPressed: () {
-                  context.push('/crm/customers/new').then((_) {
+                  context.push('/clientes/nuevo').then((_) {
                     _loadCustomers();
                   });
                 },
@@ -311,8 +311,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
         onTap: () {
-          // Navigate to bikeshop client logbook (comprehensive customer view)
-          context.push('/bikeshop/clients/${customer.id}').then((_) {
+          context.push('/clientes/${customer.id}').then((_) {
             _loadCustomers();
           });
         },
@@ -424,13 +423,13 @@ class _CustomerListPageState extends State<CustomerListPage> {
                 tooltip: 'Opciones',
                 onSelected: (value) async {
                   if (value == 'edit') {
-                    context.push('/crm/customers/${customer.id}/edit').then((_) {
+                    context.push('/clientes/${customer.id}/editar').then((_) {
                       _loadCustomers();
                     });
                   } else if (value == 'delete') {
                     _confirmDelete(customer);
                   } else if (value == 'view') {
-                    context.push('/bikeshop/clients/${customer.id}').then((_) {
+                    context.push('/clientes/${customer.id}').then((_) {
                       _loadCustomers();
                     });
                   }

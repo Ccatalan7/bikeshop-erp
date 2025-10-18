@@ -14,8 +14,7 @@ import '../../modules/accounting/pages/income_statement_page.dart';
 import '../../modules/accounting/pages/balance_sheet_page.dart';
 import '../../modules/crm/pages/customer_list_page.dart';
 import '../../modules/crm/pages/customer_form_page.dart';
-import '../../modules/crm/pages/customer_detail_page.dart';
-import '../../modules/bikeshop/pages/clients_list_page.dart';
+import '../../modules/crm/pages/customer_bike_directory_page.dart';
 import '../../modules/bikeshop/pages/client_logbook_page.dart';
 import '../../modules/bikeshop/pages/pegas_table_page.dart';
 import '../../modules/bikeshop/pages/mechanic_job_form_page.dart';
@@ -82,496 +81,490 @@ class AppRouter {
         return null;
       },
       routes: [
-      // Authentication
-      GoRoute(
-        path: '/login',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const LoginScreen(),
-        ),
-      ),
-      
-      // Dashboard
-      GoRoute(
-        path: '/dashboard',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const DashboardScreen(),
-        ),
-      ),
-      
-      // Accounting Module
-      GoRoute(
-        path: '/accounting/accounts',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const AccountListPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/accounting/accounts/new',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const AccountFormPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/accounting/accounts/:id/edit',
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
+        // Authentication
+        GoRoute(
+          path: '/login',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,
-            AccountFormPage(accountId: id),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/accounting/journal-entries',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const JournalEntryListPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/accounting/journal-entries/new',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const JournalEntryFormPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/accounting/journal-entries/:id/edit',
-        pageBuilder: (context, state) {
-          final entryId = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            JournalEntryFormPage(entryId: entryId),
-          );
-        },
-      ),
-      
-      // Financial Reports
-      GoRoute(
-        path: '/accounting/reports',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const FinancialReportsHubPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/accounting/reports/income-statement',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const IncomeStatementPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/accounting/reports/balance-sheet',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const BalanceSheetPage(),
-        ),
-      ),
-      
-      // CRM Module
-      GoRoute(
-        path: '/crm/customers',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const CustomerListPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/crm/customers/new',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const CustomerFormPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/crm/customers/:id/edit',
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            CustomerFormPage(customerId: id),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/crm/customers/:id',
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            CustomerDetailPage(customerId: id),
-          );
-        },
-      ),
-      
-      // Bikeshop Module
-      GoRoute(
-        path: '/bikeshop/clients',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const BikeshopClientsListPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/bikeshop/clients/:id',
-        pageBuilder: (context, state) {
-          final customerId = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            ClientLogbookPage(customerId: customerId),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/bikeshop/jobs',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const PegasTablePage(),
-        ),
-      ),
-      GoRoute(
-        path: '/bikeshop/jobs/new',
-        pageBuilder: (context, state) {
-          final customerId = state.uri.queryParameters['customer_id'];
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            MechanicJobFormPage(customerId: customerId),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/bikeshop/jobs/:id',
-        pageBuilder: (context, state) {
-          final jobId = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            MechanicJobFormPage(jobId: jobId), // Using form page in edit mode
-          );
-        },
-      ),
-      
-      // Inventory Module
-      GoRoute(
-        path: '/inventory/products',
-        pageBuilder: (context, state) {
-          final categoryId = state.uri.queryParameters['category'];
-          final supplierId = state.uri.queryParameters['supplier'];
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            ProductListPage(
-              initialCategoryId: categoryId,
-              initialSupplierId: supplierId,
-            ),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/inventory/products/new',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const ProductFormPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/inventory/products/:id/edit',
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            ProductFormPage(productId: id),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/inventory/categories',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const CategoryListPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/inventory/categories/new',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const CategoryFormPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/inventory/categories/:id/edit',
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            CategoryFormPage(categoryId: id),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/inventory/movements',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const StockMovementListPage(),
-        ),
-      ),
-      
-      // Sales Module
-      GoRoute(
-        path: '/sales/invoices',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const InvoiceListPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/sales/invoices/new',
-        pageBuilder: (context, state) {
-          final jobId = state.uri.queryParameters['job_id'];
-          final customerId = state.uri.queryParameters['customer_id'];
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            InvoiceFormPage(
-              preselectedJobId: jobId,
-              preselectedCustomerId: customerId,
-            ),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/sales/invoices/:id',
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id']!;
-          final extra = state.extra;
-          final openPayment = extra is Map && extra['openPayment'] == true;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            InvoiceDetailPage(invoiceId: id, openPaymentOnLoad: openPayment),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/sales/invoices/:id/payment',
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            InvoicePaymentPage(invoiceId: id),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/sales/invoices/:id/edit',
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            InvoiceFormPage(invoiceId: id),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/sales/payments',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const PaymentsPage(),
-        ),
-      ),
-      
-      // Purchases Module
-      GoRoute(
-        path: '/purchases/suppliers',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const SupplierListPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/purchases/suppliers/new',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const SupplierFormPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/purchases/suppliers/:id/edit',
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            SupplierFormPage(supplierId: id),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/purchases',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const PurchaseInvoiceListPage(),
-        ),
-      ),
-      GoRoute(
-        path: '/purchases/new',
-        pageBuilder: (context, state) {
-          final prepaymentParam = state.uri.queryParameters['prepayment'];
-          final isPrepayment = prepaymentParam == 'true';
-          print('🔍 DEBUG: prepayment param = "$prepaymentParam", isPrepayment = $isPrepayment');
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            PurchaseInvoiceFormPage(isPrepayment: isPrepayment),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/purchases/:id/detail',
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            PurchaseInvoiceDetailPage(invoiceId: id),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/purchases/:id/edit',
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            PurchaseInvoiceFormPage(invoiceId: id),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/purchases/payments',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const MainLayout(
-            child: PurchasePaymentsListPage(),
+            const LoginScreen(),
           ),
         ),
-      ),
-      
-      // POS Module
-      GoRoute(
-        path: '/pos',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const MainLayout(
-            child: POSDashboardPage(),
-          ),
-        ),
-      ),
-      GoRoute(
-        path: '/pos/cart',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const MainLayout(
-            child: POSCartPage(),
-          ),
-        ),
-      ),
-      GoRoute(
-        path: '/pos/payment',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const MainLayout(
-            child: POSPaymentPage(),
-          ),
-        ),
-      ),
-      GoRoute(
-        path: '/pos/receipt',
-        pageBuilder: (context, state) {
-          final transaction = state.extra as POSTransaction;
-          return _buildPageWithNoTransition(
-            context,
-            state,
-            MainLayout(
-              child: POSReceiptPage(transaction: transaction),
-            ),
-          );
-        },
-      ),
 
-      // Settings routes
-      GoRoute(
-        path: '/settings',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const MainLayout(
-            child: SettingsPage(),
+        // Dashboard
+        GoRoute(
+          path: '/dashboard',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const DashboardScreen(),
           ),
         ),
-      ),
-      GoRoute(
-        path: '/settings/factory-reset',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const MainLayout(
-            child: FactoryResetPage(),
+
+        // Accounting Module
+        GoRoute(
+          path: '/accounting/accounts',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const AccountListPage(),
           ),
         ),
-      ),
-      GoRoute(
-        path: '/settings/appearance',
-        pageBuilder: (context, state) => _buildPageWithNoTransition(
-          context,
-          state,
-          const MainLayout(
-            child: AppearanceSettingsPage(),
+        GoRoute(
+          path: '/accounting/accounts/new',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const AccountFormPage(),
           ),
         ),
-      ),
+        GoRoute(
+          path: '/accounting/accounts/:id/edit',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              AccountFormPage(accountId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/accounting/journal-entries',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const JournalEntryListPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/accounting/journal-entries/new',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const JournalEntryFormPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/accounting/journal-entries/:id/edit',
+          pageBuilder: (context, state) {
+            final entryId = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              JournalEntryFormPage(entryId: entryId),
+            );
+          },
+        ),
+
+        // Financial Reports
+        GoRoute(
+          path: '/accounting/reports',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const FinancialReportsHubPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/accounting/reports/income-statement',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const IncomeStatementPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/accounting/reports/balance-sheet',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const BalanceSheetPage(),
+          ),
+        ),
+
+        // Clientes Hub
+        GoRoute(
+          path: '/clientes',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const CustomerListPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/clientes/nuevo',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const CustomerFormPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/clientes/:id/editar',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              CustomerFormPage(customerId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/clientes/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            final initialTab = state.uri.queryParameters['tab'];
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              ClientLogbookPage(
+                customerId: id,
+                initialTab: initialTab,
+              ),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/clientes/bicicletas',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const CustomerBikeDirectoryPage(),
+          ),
+        ),
+
+        // Taller Module
+        GoRoute(
+          path: '/taller/pegas',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PegasTablePage(),
+          ),
+        ),
+        GoRoute(
+          path: '/taller/pegas/nueva',
+          pageBuilder: (context, state) {
+            final customerId = state.uri.queryParameters['customer_id'];
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              MechanicJobFormPage(customerId: customerId),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/taller/pegas/:id',
+          pageBuilder: (context, state) {
+            final jobId = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              MechanicJobFormPage(jobId: jobId),
+            );
+          },
+        ),
+
+        // Inventory Module
+        GoRoute(
+          path: '/inventory/products',
+          pageBuilder: (context, state) {
+            final categoryId = state.uri.queryParameters['category'];
+            final supplierId = state.uri.queryParameters['supplier'];
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              ProductListPage(
+                initialCategoryId: categoryId,
+                initialSupplierId: supplierId,
+              ),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/inventory/products/new',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const ProductFormPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/inventory/products/:id/edit',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              ProductFormPage(productId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/inventory/categories',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const CategoryListPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/inventory/categories/new',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const CategoryFormPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/inventory/categories/:id/edit',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              CategoryFormPage(categoryId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/inventory/movements',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const StockMovementListPage(),
+          ),
+        ),
+
+        // Sales Module
+        GoRoute(
+          path: '/sales/invoices',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const InvoiceListPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/sales/invoices/new',
+          pageBuilder: (context, state) {
+            final jobId = state.uri.queryParameters['job_id'];
+            final customerId = state.uri.queryParameters['customer_id'];
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              InvoiceFormPage(
+                preselectedJobId: jobId,
+                preselectedCustomerId: customerId,
+              ),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/sales/invoices/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            final extra = state.extra;
+            final openPayment = extra is Map && extra['openPayment'] == true;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              InvoiceDetailPage(invoiceId: id, openPaymentOnLoad: openPayment),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/sales/invoices/:id/payment',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              InvoicePaymentPage(invoiceId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/sales/invoices/:id/edit',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              InvoiceFormPage(invoiceId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/sales/payments',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PaymentsPage(),
+          ),
+        ),
+
+        // Purchases Module
+        GoRoute(
+          path: '/purchases/suppliers',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const SupplierListPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/purchases/suppliers/new',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const SupplierFormPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/purchases/suppliers/:id/edit',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              SupplierFormPage(supplierId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/purchases',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PurchaseInvoiceListPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/purchases/new',
+          pageBuilder: (context, state) {
+            final prepaymentParam = state.uri.queryParameters['prepayment'];
+            final isPrepayment = prepaymentParam == 'true';
+            print(
+                '🔍 DEBUG: prepayment param = "$prepaymentParam", isPrepayment = $isPrepayment');
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PurchaseInvoiceFormPage(isPrepayment: isPrepayment),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/purchases/:id/detail',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PurchaseInvoiceDetailPage(invoiceId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/purchases/:id/edit',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PurchaseInvoiceFormPage(invoiceId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/purchases/payments',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              child: PurchasePaymentsListPage(),
+            ),
+          ),
+        ),
+
+        // POS Module
+        GoRoute(
+          path: '/pos',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              child: POSDashboardPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/pos/cart',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              child: POSCartPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/pos/payment',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              child: POSPaymentPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/pos/receipt',
+          pageBuilder: (context, state) {
+            final transaction = state.extra as POSTransaction;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              MainLayout(
+                child: POSReceiptPage(transaction: transaction),
+              ),
+            );
+          },
+        ),
+
+        // Settings routes
+        GoRoute(
+          path: '/settings',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              child: SettingsPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/factory-reset',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              child: FactoryResetPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/appearance',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              child: AppearanceSettingsPage(),
+            ),
+          ),
+        ),
       ],
     );
 

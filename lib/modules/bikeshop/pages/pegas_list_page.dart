@@ -196,7 +196,7 @@ class _PegasListPageState extends State<PegasListPage> {
                   text: 'Nueva Pega',
                   icon: Icons.add_circle,
                   onPressed: () {
-                    context.push('/bikeshop/jobs/new').then((_) => _loadData());
+                    context.push('/taller/pegas/new').then((_) => _loadData());
                   },
                 ),
               ],
@@ -427,7 +427,7 @@ class _PegasListPageState extends State<PegasListPage> {
               AppButton(
                 text: 'Crear Primer Trabajo',
                 onPressed: () {
-                  context.push('/bikeshop/jobs/new').then((_) => _loadData());
+                  context.push('/taller/pegas/new').then((_) => _loadData());
                 },
               ),
             ],
@@ -455,7 +455,7 @@ class _PegasListPageState extends State<PegasListPage> {
       elevation: 2,
       child: InkWell(
         onTap: () {
-          context.push('/bikeshop/jobs/${job.id}').then((_) => _loadData());
+          context.push('/taller/pegas/${job.id}').then((_) => _loadData());
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(

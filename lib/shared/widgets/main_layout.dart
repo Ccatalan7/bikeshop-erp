@@ -43,35 +43,45 @@ const List<MenuSubItem> _accountingMenuItems = [
 
 const String _accountingSectionKey = 'accounting';
 
-const List<MenuSubItem> _crmMenuItems = [
+const List<MenuSubItem> _customersMenuItems = [
   MenuSubItem(
     icon: Icons.people_outline,
-    title: 'Clientes',
-    route: '/crm/customers',
+    title: 'Lista de clientes',
+    route: '/clientes',
   ),
   MenuSubItem(
     icon: Icons.person_add_alt,
     title: 'Nuevo cliente',
-    route: '/crm/customers/new',
+    route: '/clientes/nuevo',
+  ),
+  MenuSubItem(
+    icon: Icons.pedal_bike,
+    title: 'Bicicletas registradas',
+    route: '/clientes/bicicletas',
   ),
 ];
 
-const String _crmSectionKey = 'crm';
+const String _customersSectionKey = 'customers';
 
-const List<MenuSubItem> _bikeshopMenuItems = [
-  MenuSubItem(
-    icon: Icons.people_outline,
-    title: 'Clientes',
-    route: '/bikeshop/clients',
-  ),
+const List<MenuSubItem> _workshopMenuItems = [
   MenuSubItem(
     icon: Icons.build_outlined,
     title: 'Pegas',
-    route: '/bikeshop/jobs',
+    route: '/taller/pegas',
+  ),
+  MenuSubItem(
+    icon: Icons.add_circle_outline,
+    title: 'Nueva pega',
+    route: '/taller/pegas/nueva',
+  ),
+  MenuSubItem(
+    icon: Icons.calendar_today_outlined,
+    title: 'Calendario',
+    route: '/taller/calendario',
   ),
 ];
 
-const String _bikeshopSectionKey = 'bikeshop';
+const String _workshopSectionKey = 'workshop';
 
 const List<MenuSubItem> _inventoryMenuItems = [
   MenuSubItem(
@@ -369,11 +379,11 @@ class _AppSidebarState extends State<AppSidebar> {
     if (_matchesLocation(location, _accountingMenuItems)) {
       return _accountingSectionKey;
     }
-    if (_matchesLocation(location, _crmMenuItems)) {
-      return _crmSectionKey;
+    if (_matchesLocation(location, _customersMenuItems)) {
+      return _customersSectionKey;
     }
-    if (_matchesLocation(location, _bikeshopMenuItems)) {
-      return _bikeshopSectionKey;
+    if (_matchesLocation(location, _workshopMenuItems)) {
+      return _workshopSectionKey;
     }
     if (_matchesLocation(location, _inventoryMenuItems)) {
       return _inventorySectionKey;
@@ -494,9 +504,9 @@ class _AppSidebarState extends State<AppSidebar> {
                   activeIcon: Icons.people,
                   title: 'Clientes',
                   currentLocation: currentLocation,
-                  subItems: _crmMenuItems,
-                  isExpanded: _expandedSection == _crmSectionKey,
-                  onExpansionChanged: (expand) => _handleExpansionChange(_crmSectionKey, expand),
+                  subItems: _customersMenuItems,
+                  isExpanded: _expandedSection == _customersSectionKey,
+                  onExpansionChanged: (expand) => _handleExpansionChange(_customersSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -504,9 +514,9 @@ class _AppSidebarState extends State<AppSidebar> {
                   activeIcon: Icons.two_wheeler,
                   title: 'Taller',
                   currentLocation: currentLocation,
-                  subItems: _bikeshopMenuItems,
-                  isExpanded: _expandedSection == _bikeshopSectionKey,
-                  onExpansionChanged: (expand) => _handleExpansionChange(_bikeshopSectionKey, expand),
+                  subItems: _workshopMenuItems,
+                  isExpanded: _expandedSection == _workshopSectionKey,
+                  onExpansionChanged: (expand) => _handleExpansionChange(_workshopSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -819,7 +829,7 @@ class AppDrawer extends StatelessWidget {
             context,
             icon: Icons.people,
             title: 'Clientes',
-            subItems: _crmMenuItems,
+            subItems: _customersMenuItems,
             currentLocation: currentLocation,
           ),
 
@@ -827,7 +837,7 @@ class AppDrawer extends StatelessWidget {
             context,
             icon: Icons.two_wheeler,
             title: 'Taller',
-            subItems: _bikeshopMenuItems,
+            subItems: _workshopMenuItems,
             currentLocation: currentLocation,
           ),
 
