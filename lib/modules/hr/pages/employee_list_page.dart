@@ -613,7 +613,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       child: Container(
-        width: 700,
+        width: 720, // Increased slightly to prevent overflow
         constraints: const BoxConstraints(maxHeight: 700),
         child: Column(
           children: [
@@ -669,7 +669,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                   value?.isEmpty ?? true ? 'Campo requerido' : null,
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: TextFormField(
                               controller: _lastNameController,
@@ -697,7 +697,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                   value?.isEmpty ?? true ? 'Campo requerido' : null,
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: TextFormField(
                               controller: _rutController,
@@ -722,7 +722,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                               keyboardType: TextInputType.emailAddress,
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: TextFormField(
                               controller: _phoneController,

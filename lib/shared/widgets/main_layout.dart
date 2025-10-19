@@ -179,6 +179,11 @@ const List<MenuSubItem> _hrMenuItems = [
     title: 'Asistencias',
     route: '/hr/attendances',
   ),
+  MenuSubItem(
+    icon: Icons.touch_app_outlined,
+    title: 'Modo Kiosko',
+    route: '/hr/kiosk',
+  ),
 ];
 
 const String _hrSectionKey = 'hr';

@@ -605,6 +605,41 @@ class HRService extends ChangeNotifier {
     }
   }
 
+  // Create a manual attendance entry (for corrections/historical data)
+  Future<Attendance> createManualAttendance(
+    String employeeId,
+    DateTime checkIn, {
+    DateTime? checkOut,
+    String? location,
+    int breakMinutes = 0,
+    String? notes,
+  }) async {
+    try {
+      final attendance = Attendance(
+        employeeId: employeeId,
+        checkIn: checkIn,
+        checkOut: checkOut,
+        locationCheckIn: location ?? 'Oficina',
+        locationCheckOut: location ?? 'Oficina',
+        breakMinutes: breakMinutes,
+        notes: notes,
+        status: checkOut != null ? AttendanceStatus.completed : AttendanceStatus.ongoing,
+      );
+
+      final response = await _client
+          .from('attendances')
+          .insert(attendance.toMap())
+          .select()
+          .single();
+      
+      notifyListeners();
+      return Attendance.fromMap(response);
+    } catch (e) {
+      debugPrint('Error creating manual attendance: $e');
+      rethrow;
+    }
+  }
+
   // ============================================================================
   // UTILITY FUNCTIONS
   // ============================================================================

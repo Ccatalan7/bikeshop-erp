@@ -6895,6 +6895,26 @@ begin
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'notes') then
     alter table employees add column notes text;
   end if;
+  
+  -- Add created_at and updated_at columns if they don't exist
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'created_at') then
+    alter table employees add column created_at timestamp with time zone not null default now();
+  end if;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'updated_at') then
+    alter table employees add column updated_at timestamp with time zone not null default now();
+  end if;
+  
+  -- Fix company_id column if it exists - make it nullable
+  if exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'company_id') then
+    begin
+      -- Try to make company_id nullable
+      alter table employees alter column company_id drop not null;
+      raise notice 'Made company_id nullable in employees table';
+    exception when others then
+      raise notice 'Could not modify company_id: %', sqlerrm;
+    end;
+  end if;
 end $$;
 
 create index if not exists idx_employees_user_id on employees(user_id);
@@ -7206,6 +7226,210 @@ begin
         ('Contabilidad', 'ACCOUNTING', 'Contabilidad y finanzas')
       on conflict (code) do nothing;
     end if;
+  end if;
+end $$;
+
+-- ============================================================================
+-- HR MODULE: ROW LEVEL SECURITY POLICIES
+-- ============================================================================
+
+-- Enable RLS on HR tables
+alter table employees enable row level security;
+alter table departments enable row level security;
+alter table attendances enable row level security;
+
+-- Employees table policies
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'employees'
+      and policyname = 'Authenticated employees read'
+  ) then
+    create policy "Authenticated employees read"
+      on employees
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'employees'
+      and policyname = 'Authenticated employees insert'
+  ) then
+    create policy "Authenticated employees insert"
+      on employees
+      for insert
+      to authenticated
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'employees'
+      and policyname = 'Authenticated employees update'
+  ) then
+    create policy "Authenticated employees update"
+      on employees
+      for update
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'employees'
+      and policyname = 'Authenticated employees delete'
+  ) then
+    create policy "Authenticated employees delete"
+      on employees
+      for delete
+      to authenticated
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+-- Departments table policies
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'departments'
+      and policyname = 'Authenticated departments read'
+  ) then
+    create policy "Authenticated departments read"
+      on departments
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'departments'
+      and policyname = 'Authenticated departments insert'
+  ) then
+    create policy "Authenticated departments insert"
+      on departments
+      for insert
+      to authenticated
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'departments'
+      and policyname = 'Authenticated departments update'
+  ) then
+    create policy "Authenticated departments update"
+      on departments
+      for update
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'departments'
+      and policyname = 'Authenticated departments delete'
+  ) then
+    create policy "Authenticated departments delete"
+      on departments
+      for delete
+      to authenticated
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+-- Attendances table policies
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'attendances'
+      and policyname = 'Authenticated attendances read'
+  ) then
+    create policy "Authenticated attendances read"
+      on attendances
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'attendances'
+      and policyname = 'Authenticated attendances insert'
+  ) then
+    create policy "Authenticated attendances insert"
+      on attendances
+      for insert
+      to authenticated
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'attendances'
+      and policyname = 'Authenticated attendances update'
+  ) then
+    create policy "Authenticated attendances update"
+      on attendances
+      for update
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'attendances'
+      and policyname = 'Authenticated attendances delete'
+  ) then
+    create policy "Authenticated attendances delete"
+      on attendances
+      for delete
+      to authenticated
+      using (auth.role() = 'authenticated');
   end if;
 end $$;
 
