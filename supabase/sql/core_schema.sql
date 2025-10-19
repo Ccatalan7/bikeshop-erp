@@ -7106,8 +7106,12 @@ create trigger trg_prevent_duplicate_checkin
   for each row execute procedure public.prevent_duplicate_checkin();
 
 -- Function: Get current checked-in employees
+-- Drop and recreate to change return type signature
+drop function if exists public.get_checked_in_employees();
+
 create or replace function public.get_checked_in_employees()
 returns table (
+  attendance_id uuid,
   employee_id uuid,
   employee_name text,
   check_in timestamp with time zone,
@@ -7120,6 +7124,7 @@ as $$
 begin
   return query
   select 
+    a.id as attendance_id,
     a.employee_id,
     e.first_name || ' ' || e.last_name as employee_name,
     a.check_in,

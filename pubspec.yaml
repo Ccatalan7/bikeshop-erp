@@ -11,6 +11,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   
   # Navigation
   go_router: ^14.2.0
@@ -34,7 +36,7 @@ dependencies:
   file_picker: ^8.1.6
   
   # Localization
-  intl: ^0.19.0
+  intl: ^0.20.0
   
   # UI Components
   cupertino_icons: ^1.0.6

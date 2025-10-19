@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:app_links/app_links.dart';
@@ -157,6 +158,17 @@ class VinabikeApp extends StatelessWidget {
             themeMode: ThemeMode.system,
             routerConfig: AppRouter.createRouter(authService),
             debugShowCheckedModeBanner: false,
+            // Add localization support
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [
+              Locale('es', ''), // Spanish (default for Chile)
+              Locale('en', ''), // English
+            ],
+            locale: const Locale('es', ''), // Default locale
             builder: (context, child) {
               // Global error overlay disabled - errors will show in debug console
               return child ?? const SizedBox.shrink();

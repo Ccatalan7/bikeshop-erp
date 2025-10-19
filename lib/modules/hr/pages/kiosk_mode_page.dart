@@ -133,10 +133,15 @@ class _KioskModePageState extends State<KioskModePage> {
   }
 
   Future<void> _showSuccessDialog(Employee employee, bool checkedIn) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+    
     await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -148,16 +153,17 @@ class _KioskModePageState extends State<KioskModePage> {
             const SizedBox(height: 24),
             Text(
               checkedIn ? 'Entrada registrada' : 'Salida registrada',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
+                color: textColor,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
             Text(
               employee.fullName,
-              style: const TextStyle(fontSize: 20),
+              style: TextStyle(fontSize: 20, color: textColor),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
@@ -165,7 +171,7 @@ class _KioskModePageState extends State<KioskModePage> {
               DateFormat('HH:mm - dd/MM/yyyy').format(DateTime.now()),
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey[600],
+                color: subtitleColor,
               ),
             ),
           ],
@@ -201,8 +207,12 @@ class _KioskModePageState extends State<KioskModePage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.grey[100]!;
+    final cardBgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+    
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: bgColor,
       appBar: AppBar(
         title: const Text('Registro de Asistencia'),
         centerTitle: true,
@@ -224,16 +234,18 @@ class _KioskModePageState extends State<KioskModePage> {
           // Search bar
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.white,
+            color: cardBgColor,
             child: TextField(
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
               decoration: InputDecoration(
                 hintText: 'Buscar empleado...',
-                prefixIcon: const Icon(Icons.search),
+                hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
+                prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey[600]),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
                 filled: true,
-                fillColor: Colors.grey[50],
+                fillColor: isDark ? const Color(0xFF3C3C3C) : Colors.grey[50],
               ),
               onChanged: (value) => setState(() => _searchQuery = value),
             ),
@@ -316,12 +328,18 @@ class _EmployeeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+    
     return Card(
       elevation: 4,
+      color: cardBgColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: isCheckedIn ? Colors.green : Colors.grey[300]!,
+          color: isCheckedIn ? Colors.green : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
           width: 2,
         ),
       ),
@@ -377,9 +395,10 @@ class _EmployeeCard extends StatelessWidget {
               // Name
               Text(
                 employee.fullName,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color: textColor,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
@@ -391,7 +410,7 @@ class _EmployeeCard extends StatelessWidget {
                 employee.jobTitle,
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.grey[600],
+                  color: subtitleColor,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -426,10 +445,15 @@ class _ConfirmationDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+    
     return AlertDialog(
+      backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
       title: Text(
         isCheckingOut ? 'Registrar Salida' : 'Registrar Entrada',
-        style: const TextStyle(fontSize: 24),
+        style: TextStyle(fontSize: 24, color: textColor),
         textAlign: TextAlign.center,
       ),
       content: Column(
@@ -443,9 +467,10 @@ class _ConfirmationDialog extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             employee.fullName,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
+              color: textColor,
             ),
             textAlign: TextAlign.center,
           ),
@@ -454,14 +479,14 @@ class _ConfirmationDialog extends StatelessWidget {
             employee.jobTitle,
             style: TextStyle(
               fontSize: 16,
-              color: Colors.grey[600],
+              color: subtitleColor,
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
           Text(
             DateFormat('HH:mm - dd/MM/yyyy').format(DateTime.now()),
-            style: const TextStyle(fontSize: 16),
+            style: TextStyle(fontSize: 16, color: textColor),
           ),
         ],
       ),
