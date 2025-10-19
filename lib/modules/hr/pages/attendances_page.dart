@@ -683,38 +683,36 @@ class _AttendancesPageState extends State<AttendancesPage> {
             borderColor = Colors.grey.shade500;
           }
 
+          // Build compact time range display like Odoo
+          String timeRangeText = '$checkIn-$checkOut';
+          
+          // Check if text would be too long (more than ~15 characters)
+          bool needsTruncation = timeRangeText.length > 15;
+          String displayText = needsTruncation 
+              ? '${timeRangeText.substring(0, 12)}...' 
+              : timeRangeText;
+
           return GestureDetector(
             onTap: () => _showAttendanceDetailDialog(attendance),
             child: Tooltip(
               message: 'Entrada: $checkIn\nSalida: $checkOut\n${attendance.isOngoing ? "En curso" : "Tiempo trabajado: ${displayTime}h"}',
               child: Container(
                 margin: const EdgeInsets.only(bottom: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 decoration: BoxDecoration(
                   color: blockColor,
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(color: borderColor, width: 1.5),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      attendance.isOngoing ? displayTime : '${displayTime}h',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: Colors.grey[900],
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '($checkIn)',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  displayText,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
+                    color: Colors.grey[900],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
