@@ -127,7 +127,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
               ),
               const SizedBox(height: 32),
               ElevatedButton(
-                onPressed: () => context.go('/productos'),
+                onPressed: () => context.go('/tienda/productos'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor: PublicStoreTheme.primaryBlue,
@@ -201,7 +201,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
                     if (banner.ctaLink != null && banner.ctaLink!.isNotEmpty) {
                       context.go(banner.ctaLink!);
                     } else {
-                      context.go('/productos');
+                      context.go('/tienda/productos');
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -262,7 +262,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
           
           Center(
             child: OutlinedButton(
-              onPressed: () => context.go('/productos'),
+              onPressed: () => context.go('/tienda/productos'),
               child: const Text('VER TODOS LOS PRODUCTOS'),
             ),
           ),
@@ -273,7 +273,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
   Widget _buildProductCard(Product product) {
     return InkWell(
-      onTap: () => context.go('/producto/${product.id}'),
+      onTap: () => context.go('/tienda/producto/${product.id}'),
       child: Card(
         elevation: 2,
         child: Column(
@@ -388,7 +388,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: categories.map((category) {
                   return InkWell(
-                    onTap: () => context.go('/productos'),
+                    onTap: () => context.go('/tienda/productos'),
                     child: Column(
                       children: [
                         Container(

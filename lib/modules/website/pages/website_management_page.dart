@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
 import 'banners_management_page.dart';
@@ -92,12 +94,45 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                     ),
                   ),
                   const SizedBox(width: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      // Navigate to public store preview
+                      context.go('/tienda');
+                    },
+                    icon: const Icon(Icons.visibility),
+                    label: const Text('Vista Previa'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      // Open in new browser tab (for web)
+                      final uri = Uri.parse('${Uri.base.origin}/tienda');
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Usa Vista Previa para ver la tienda'),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('Abrir en Nueva Pestaña'),
+                  ),
+                  const SizedBox(width: 12),
                   OutlinedButton.icon(
                     onPressed: () {
-                      // TODO: Open store website in browser
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Próximamente: Vista previa del sitio'),
+                          content: Text('Usa Vista Previa para ver el sitio en acción'),
                         ),
                       );
                     },

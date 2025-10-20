@@ -50,6 +50,11 @@ import '../../modules/website/pages/website_management_page.dart';
 // Public Store Pages
 import '../../public_store/pages/public_home_page.dart';
 import '../../public_store/pages/product_catalog_page.dart';
+import '../../public_store/pages/product_detail_page.dart';
+import '../../public_store/pages/cart_page.dart';
+import '../../public_store/pages/checkout_page.dart';
+import '../../public_store/pages/order_confirmation_page.dart';
+import '../../public_store/pages/contact_page.dart';
 import '../../public_store/widgets/public_store_layout.dart';
 
 // Helper wrapper for public store pages
@@ -61,56 +66,6 @@ class PublicStoreWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PublicStoreLayout(child: child);
-  }
-}
-
-// Placeholder pages (to be built)
-class ProductDetailPage extends StatelessWidget {
-  final String productId;
-
-  const ProductDetailPage({super.key, required this.productId});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('Product Detail - Coming Soon'));
-  }
-}
-
-class CartPage extends StatelessWidget {
-  const CartPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('Cart - Coming Soon'));
-  }
-}
-
-class CheckoutPage extends StatelessWidget {
-  const CheckoutPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('Checkout - Coming Soon'));
-  }
-}
-
-class OrderConfirmationPage extends StatelessWidget {
-  final String orderId;
-
-  const OrderConfirmationPage({super.key, required this.orderId});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('Order Confirmation - Coming Soon'));
-  }
-}
-
-class ContactPage extends StatelessWidget {
-  const ContactPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('Contact - Coming Soon'));
   }
 }
 
@@ -130,25 +85,19 @@ class AppRouter {
   static GoRouter? _router;
 
   static GoRouter createRouter(AuthService authService) {
-    // Public routes that don't require authentication
+    // Public store routes (customer-facing, no auth required)
     final publicRoutes = [
-      '/',
-      '/productos',
-      '/producto',
-      '/carrito',
-      '/checkout',
-      '/pedido',
-      '/servicios',
-      '/contacto',
-      '/nosotros',
-      '/terminos',
-      '/privacidad',
-      '/faq',
-      '/seguimiento',
+      '/tienda',
+      '/tienda/productos',
+      '/tienda/producto',
+      '/tienda/carrito',
+      '/tienda/checkout',
+      '/tienda/pedido',
+      '/tienda/contacto',
     ];
 
     _router ??= GoRouter(
-      initialLocation: '/',
+      initialLocation: '/login', // Start at login, will redirect to dashboard if authenticated
       refreshListenable: authService,
       redirect: (context, state) {
         if (authService.isInitializing) {
@@ -159,16 +108,17 @@ class AppRouter {
         final loggingIn = state.matchedLocation == '/login';
         final isPublicRoute = publicRoutes.any((route) => state.matchedLocation.startsWith(route));
 
-        // Allow access to public routes without authentication
+        // Allow access to public store routes without authentication
         if (isPublicRoute) {
           return null;
         }
 
-        // Admin routes require authentication
+        // Admin/ERP routes require authentication
         if (!isLoggedIn && !loggingIn) {
           return '/login';
         }
 
+        // Redirect logged-in users from login to dashboard
         if (isLoggedIn && loggingIn) {
           return '/dashboard';
         }
@@ -177,12 +127,13 @@ class AppRouter {
       },
       routes: [
         // ========================================
-        // PUBLIC STORE ROUTES (No Auth Required)
+        // PUBLIC STORE ROUTES (Customer-facing, No Auth Required)
+        // Accessible at /tienda/* for customers
         // ========================================
         
-        // Public Home
+        // Public Store Home
         GoRoute(
-          path: '/',
+          path: '/tienda',
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,
@@ -192,7 +143,7 @@ class AppRouter {
 
         // Product Catalog
         GoRoute(
-          path: '/productos',
+          path: '/tienda/productos',
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,
@@ -202,7 +153,7 @@ class AppRouter {
 
         // Product Detail
         GoRoute(
-          path: '/producto/:id',
+          path: '/tienda/producto/:id',
           pageBuilder: (context, state) {
             final productId = state.pathParameters['id']!;
             return _buildPageWithNoTransition(
@@ -215,7 +166,7 @@ class AppRouter {
 
         // Shopping Cart
         GoRoute(
-          path: '/carrito',
+          path: '/tienda/carrito',
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,
@@ -225,7 +176,7 @@ class AppRouter {
 
         // Checkout
         GoRoute(
-          path: '/checkout',
+          path: '/tienda/checkout',
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,
@@ -235,7 +186,7 @@ class AppRouter {
 
         // Order Confirmation
         GoRoute(
-          path: '/pedido/:id',
+          path: '/tienda/pedido/:id',
           pageBuilder: (context, state) {
             final orderId = state.pathParameters['id']!;
             return _buildPageWithNoTransition(
@@ -246,9 +197,9 @@ class AppRouter {
           },
         ),
 
-        // Contact/Info Pages
+        // Contact Page
         GoRoute(
-          path: '/contacto',
+          path: '/tienda/contacto',
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,

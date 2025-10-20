@@ -384,7 +384,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
     final inCart = cart.hasProduct(product.id);
 
     return InkWell(
-      onTap: () => context.go('/producto/${product.id}'),
+      onTap: () => context.go('/tienda/producto/${product.id}'),
       child: Card(
         elevation: 2,
         child: Column(

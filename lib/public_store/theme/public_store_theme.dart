@@ -20,8 +20,11 @@ class PublicStoreTheme {
   
   // Accent Colors
   static const Color success = Color(0xFF10B981); // Green for success
+  static const Color successGreen = Color(0xFF10B981); // Alias for compatibility
   static const Color warning = Color(0xFFF59E0B); // Orange for warnings
+  static const Color warningYellow = Color(0xFFF59E0B); // Alias for compatibility
   static const Color error = Color(0xFFEF4444); // Red for errors
+  static const Color errorRed = Color(0xFFEF4444); // Alias for compatibility
   static const Color info = Color(0xFF3B82F6); // Blue for info
   
   // UI Elements

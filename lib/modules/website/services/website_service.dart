@@ -366,6 +366,42 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  /// Create a new online order from the public store
+  Future<String> createOrder(Map<String, dynamic> orderData, List<Map<String, dynamic>> orderItems) async {
+    try {
+      // Insert order and get the generated ID
+      final orderResponse = await _supabase
+          .from('online_orders')
+          .insert(orderData)
+          .select()
+          .single();
+
+      final orderId = orderResponse['id'] as String;
+
+      // Insert order items
+      final itemsToInsert = orderItems.map((item) {
+        return {
+          ...item,
+          'order_id': orderId,
+        };
+      }).toList();
+
+      await _supabase
+          .from('online_order_items')
+          .insert(itemsToInsert);
+
+      // Reload orders
+      await loadOrders();
+
+      return orderId;
+    } catch (e) {
+      _error = 'Error al crear pedido: $e';
+      debugPrint(_error);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<void> updateOrderStatus(String orderId, String status) async {
     try {
       await _supabase

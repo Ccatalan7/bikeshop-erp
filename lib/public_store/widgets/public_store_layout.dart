@@ -20,10 +20,14 @@ class PublicStoreLayout extends StatelessWidget {
               _buildHeader(context),
               Expanded(
                 child: SingleChildScrollView(
-                  child: child,
+                  child: Column(
+                    children: [
+                      child,
+                      _buildFooter(context),
+                    ],
+                  ),
                 ),
               ),
-              _buildFooter(context),
             ],
           ),
           // Floating WhatsApp Button
@@ -100,7 +104,7 @@ class PublicStoreLayout extends StatelessWidget {
               children: [
                 // Logo
                 InkWell(
-                  onTap: () => context.go('/'),
+                  onTap: () => context.go('/tienda'),
                   child: Row(
                     children: [
                       // Use your logo here
@@ -122,13 +126,11 @@ class PublicStoreLayout extends StatelessWidget {
                 Expanded(
                   child: Row(
                     children: [
-                      _buildNavLink(context, 'Inicio', '/'),
+                      _buildNavLink(context, 'Inicio', '/tienda'),
                       const SizedBox(width: 24),
-                      _buildNavLink(context, 'Productos', '/productos'),
+                      _buildNavLink(context, 'Productos', '/tienda/productos'),
                       const SizedBox(width: 24),
-                      _buildNavLink(context, 'Servicios', '/servicios'),
-                      const SizedBox(width: 24),
-                      _buildNavLink(context, 'Contacto', '/contacto'),
+                      _buildNavLink(context, 'Contacto', '/tienda/contacto'),
                     ],
                   ),
                 ),
@@ -141,7 +143,7 @@ class PublicStoreLayout extends StatelessWidget {
                       icon: const Icon(Icons.search),
                       onPressed: () {
                         // Open search dialog
-                        context.go('/productos');
+                        context.go('/tienda/productos');
                       },
                       tooltip: 'Buscar',
                     ),
@@ -154,7 +156,7 @@ class PublicStoreLayout extends StatelessWidget {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.shopping_cart_outlined),
-                          onPressed: () => context.go('/carrito'),
+                          onPressed: () => context.go('/tienda/carrito'),
                           tooltip: 'Carrito',
                         ),
                         if (cart.itemCount > 0)
@@ -224,7 +226,7 @@ class PublicStoreLayout extends StatelessWidget {
     return Container(
       width: double.infinity,
       color: PublicStoreTheme.textPrimary,
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
       child: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 1200),
@@ -302,10 +304,10 @@ class PublicStoreLayout extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildFooterLink(context, 'Inicio', '/'),
-                        _buildFooterLink(context, 'Productos', '/productos'),
-                        _buildFooterLink(context, 'Servicios', '/servicios'),
-                        _buildFooterLink(context, 'Contacto', '/contacto'),
+                        _buildFooterLink(context, 'Inicio', '/tienda'),
+                        _buildFooterLink(context, 'Productos', '/tienda/productos'),
+                        _buildFooterLink(context, 'Servicios', '/tienda/servicios'),
+                        _buildFooterLink(context, 'Contacto', '/tienda/contacto'),
                       ],
                     ),
                   ),
@@ -323,10 +325,10 @@ class PublicStoreLayout extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildFooterLink(context, 'Sobre Nosotros', '/nosotros'),
-                        _buildFooterLink(context, 'Términos y Condiciones', '/terminos'),
-                        _buildFooterLink(context, 'Política de Privacidad', '/privacidad'),
-                        _buildFooterLink(context, 'Preguntas Frecuentes', '/faq'),
+                        _buildFooterLink(context, 'Sobre Nosotros', '/tienda/nosotros'),
+                        _buildFooterLink(context, 'Términos y Condiciones', '/tienda/terminos'),
+                        _buildFooterLink(context, 'Política de Privacidad', '/tienda/privacidad'),
+                        _buildFooterLink(context, 'Preguntas Frecuentes', '/tienda/faq'),
                       ],
                     ),
                   ),
