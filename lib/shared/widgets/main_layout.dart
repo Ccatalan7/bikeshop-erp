@@ -440,7 +440,14 @@ class _AppSidebarState extends State<AppSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    final currentLocation = GoRouterState.of(context).uri.path;
+    // Safely get current location, fallback to empty string if not in GoRouter context
+    String currentLocation = '';
+    try {
+      currentLocation = GoRouterState.of(context).uri.path;
+    } catch (e) {
+      // Not in GoRouter context (e.g., opened via Navigator.push)
+      currentLocation = '';
+    }
     final theme = Theme.of(context);
 
     return Container(
@@ -786,7 +793,14 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentLocation = GoRouterState.of(context).uri.path;
+    // Safely get current location
+    String currentLocation = '';
+    try {
+      currentLocation = GoRouterState.of(context).uri.path;
+    } catch (e) {
+      // Not in GoRouter context
+      currentLocation = '';
+    }
     
     return Drawer(
       child: ListView(

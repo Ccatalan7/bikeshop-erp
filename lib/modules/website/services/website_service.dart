@@ -12,6 +12,7 @@ class WebsiteService extends ChangeNotifier {
   List<WebsiteContent> _contents = [];
   Map<String, String> _settings = {};
   List<OnlineOrder> _orders = [];
+  List<Map<String, dynamic>> _blocks = []; // Odoo-style editor blocks
 
   bool _isLoading = false;
   bool _isInitializing = false;
@@ -22,6 +23,7 @@ class WebsiteService extends ChangeNotifier {
   List<WebsiteContent> get contents => _contents;
   Map<String, String> get settings => _settings;
   List<OnlineOrder> get orders => _orders;
+  List<Map<String, dynamic>> get blocks => _blocks;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -100,6 +102,81 @@ class WebsiteService extends ChangeNotifier {
       await loadBanners();
     } catch (e) {
       _error = 'Error al reordenar banners: $e';
+      debugPrint(_error);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // ============================================================================
+  // WEBSITE BLOCKS (Odoo-style Visual Editor)
+  // ============================================================================
+
+  Future<void> loadBlocks() async {
+    _isLoading = true;
+    _error = null;
+    if (!_isInitializing) notifyListeners();
+
+    try {
+      final response = await _supabase
+          .from('website_blocks')
+          .select()
+          .order('order_index');
+
+      _blocks = List<Map<String, dynamic>>.from(response as List);
+      _error = null;
+    } catch (e) {
+      _error = 'Error al cargar bloques: $e';
+      debugPrint(_error);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> saveBlocks(List<Map<String, dynamic>> blocks) async {
+    try {
+      // Delete all existing blocks
+      await _supabase.from('website_blocks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // Insert new blocks
+      if (blocks.isNotEmpty) {
+        final blocksToInsert = blocks.asMap().entries.map((entry) {
+          final index = entry.key;
+          final block = entry.value;
+          
+          return {
+            'id': block['id'],
+            'block_type': block['type'],
+            'block_data': block['data'],
+            'is_visible': block['isVisible'] ?? true,
+            'order_index': index,
+            'updated_at': DateTime.now().toIso8601String(),
+          };
+        }).toList();
+
+        await _supabase.from('website_blocks').insert(blocksToInsert);
+      }
+
+      await loadBlocks();
+    } catch (e) {
+      _error = 'Error al guardar bloques: $e';
+      debugPrint(_error);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> deleteBlock(String id) async {
+    try {
+      await _supabase
+          .from('website_blocks')
+          .delete()
+          .eq('id', id);
+
+      await loadBlocks();
+    } catch (e) {
+      _error = 'Error al eliminar bloque: $e';
       debugPrint(_error);
       notifyListeners();
       rethrow;
@@ -625,6 +702,7 @@ class WebsiteService extends ChangeNotifier {
         loadContents(),
         loadSettings(),
         loadOrders(),
+        loadBlocks(), // Load Odoo-style blocks
       ]);
     } finally {
       _isInitializing = false;

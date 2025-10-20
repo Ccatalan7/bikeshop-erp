@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/public_store_theme.dart';
 import '../providers/cart_provider.dart';
 import 'floating_whatsapp_button.dart';
+import '../../modules/website/pages/odoo_style_editor_page.dart';
 
 class PublicStoreLayout extends StatelessWidget {
   final Widget child;
@@ -12,6 +14,9 @@ class PublicStoreLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final supabase = Supabase.instance.client;
+    final isLoggedIn = supabase.auth.currentUser != null;
+    
     return Scaffold(
       body: Stack(
         children: [
@@ -36,6 +41,30 @@ class PublicStoreLayout extends StatelessWidget {
             right: 24,
             child: FloatingWhatsAppButton(),
           ),
+          
+          // Floating "Edit Website" Button (only for logged in users)
+          if (isLoggedIn)
+            Positioned(
+              bottom: 24,
+              right: 104, // 24px (base) + 56px (WhatsApp button) + 24px (spacing)
+              child: FloatingActionButton.extended(
+                onPressed: () {
+                  // Navigate directly to the editor
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const OdooStyleEditorPage(),
+                    ),
+                  );
+                },
+                backgroundColor: Colors.blue,
+                icon: const Icon(Icons.edit, color: Colors.white),
+                label: const Text(
+                  'Editar Sitio',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                tooltip: 'Abrir editor visual',
+              ),
+            ),
         ],
       ),
     );

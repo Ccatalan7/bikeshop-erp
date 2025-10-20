@@ -18,6 +18,7 @@ class PublicHomePage extends StatefulWidget {
 class _PublicHomePageState extends State<PublicHomePage> {
   List<WebsiteBanner> _banners = [];
   List<Product> _featuredProducts = [];
+  List<Map<String, dynamic>> _blocks = []; // Odoo-style blocks
   bool _isLoading = true;
 
   @override
@@ -33,7 +34,11 @@ class _PublicHomePageState extends State<PublicHomePage> {
       final websiteService = context.read<WebsiteService>();
       final inventoryService = context.read<InventoryService>();
 
-      // Load active banners
+      // Load website blocks (Odoo-style editor)
+      await websiteService.loadBlocks();
+      _blocks = websiteService.blocks.where((b) => b['is_visible'] ?? true).toList();
+
+      // Load active banners (fallback for legacy)
       await websiteService.loadBanners();
       _banners = websiteService.banners.where((b) => b.active).toList();
 
@@ -63,6 +68,16 @@ class _PublicHomePageState extends State<PublicHomePage> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // If blocks exist, render from blocks (Odoo editor)
+    if (_blocks.isNotEmpty) {
+      return SingleChildScrollView(
+        child: Column(
+          children: _blocks.map((blockData) => _buildBlockFromData(blockData)).toList(),
+        ),
+      );
+    }
+
+    // Otherwise, use legacy hardcoded layout
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -88,6 +103,34 @@ class _PublicHomePageState extends State<PublicHomePage> {
         ],
       ),
     );
+  }
+
+  Widget _buildBlockFromData(Map<String, dynamic> blockData) {
+    final blockType = blockData['block_type'] ?? '';
+    final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
+
+    switch (blockType) {
+      case 'hero':
+        return _buildHeroBlock(data);
+      case 'products':
+        return _buildProductsBlock(data);
+      case 'services':
+        return _buildServicesBlock(data);
+      case 'about':
+        return _buildAboutBlock(data);
+      case 'testimonials':
+        return _buildTestimonialsBlock(data);
+      case 'features':
+        return _buildFeaturesBlock(data);
+      case 'cta':
+        return _buildCtaBlock(data);
+      case 'gallery':
+        return _buildGalleryBlock(data);
+      case 'contact':
+        return _buildContactBlock(data);
+      default:
+        return const SizedBox.shrink();
+    }
   }
 
   Widget _buildHeroSection() {
@@ -493,5 +536,240 @@ class _PublicHomePageState extends State<PublicHomePage> {
         ),
       ),
     );
+  }
+
+  // ============================================================================
+  // BLOCK RENDERERS (Odoo-style Editor Blocks)
+  // ============================================================================
+
+  Widget _buildHeroBlock(Map<String, dynamic> data) {
+    final title = data['title'] ?? 'Bienvenido';
+    final subtitle = data['subtitle'] ?? '';
+    final ctaText = data['ctaText'] ?? 'Ver más';
+    final imageUrl = data['imageUrl'];
+    final showOverlay = data['showOverlay'] ?? true;
+    final overlayOpacity = (data['overlayOpacity'] ?? 0.5).toDouble();
+
+    return Container(
+      height: 500,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        image: imageUrl != null && imageUrl.toString().isNotEmpty
+            ? DecorationImage(
+                image: NetworkImage(imageUrl.toString()),
+                fit: BoxFit.cover,
+              )
+            : null,
+        gradient: imageUrl == null || imageUrl.toString().isEmpty
+            ? LinearGradient(
+                colors: [
+                  PublicStoreTheme.primaryBlue,
+                  PublicStoreTheme.primaryBlue.withOpacity(0.8),
+                ],
+              )
+            : null,
+      ),
+      child: Container(
+        decoration: showOverlay
+            ? BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(overlayOpacity * 0.8),
+                    Colors.black.withOpacity(overlayOpacity),
+                  ],
+                ),
+              )
+            : null,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Colors.white70,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              const SizedBox(height: 32),
+              ElevatedButton(
+                onPressed: () => context.go('/tienda/productos'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: PublicStoreTheme.primaryBlue,
+                  padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
+                ),
+                child: Text(ctaText),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductsBlock(Map<String, dynamic> data) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 64),
+      child: _buildFeaturedProductsSection(),
+    );
+  }
+
+  Widget _buildServicesBlock(Map<String, dynamic> data) {
+    final title = data['title'] ?? 'Nuestros Servicios';
+    final services = data['services'] as List? ?? [];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+      child: Column(
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.displaySmall,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 48),
+          Wrap(
+            spacing: 24,
+            runSpacing: 24,
+            alignment: WrapAlignment.center,
+            children: services.map((service) {
+              return SizedBox(
+                width: 300,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        Icon(
+                          _getIconData(service['icon'] ?? 'star'),
+                          size: 48,
+                          color: PublicStoreTheme.primaryBlue,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          service['title'] ?? '',
+                          style: Theme.of(context).textTheme.titleLarge,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          service['description'] ?? '',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAboutBlock(Map<String, dynamic> data) {
+    final title = data['title'] ?? 'Sobre Nosotros';
+    final content = data['content'] ?? '';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+      child: Column(
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.displaySmall,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            content,
+            style: Theme.of(context).textTheme.bodyLarge,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTestimonialsBlock(Map<String, dynamic> data) {
+    // Placeholder for testimonials
+    return const SizedBox(height: 64);
+  }
+
+  Widget _buildFeaturesBlock(Map<String, dynamic> data) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 64),
+      child: _buildWhyChooseUsSection(),
+    );
+  }
+
+  Widget _buildCtaBlock(Map<String, dynamic> data) {
+    final title = data['title'] ?? 'Visita nuestra tienda';
+    final buttonText = data['buttonText'] ?? 'Ver productos';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 64),
+      color: PublicStoreTheme.primaryBlue,
+      child: Center(
+        child: Column(
+          children: [
+            Text(
+              title,
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                color: Colors.white,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: () => context.go('/tienda/productos'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: PublicStoreTheme.primaryBlue,
+                padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
+              ),
+              child: Text(buttonText),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGalleryBlock(Map<String, dynamic> data) {
+    // Placeholder for gallery
+    return const SizedBox(height: 64);
+  }
+
+  Widget _buildContactBlock(Map<String, dynamic> data) {
+    // Placeholder for contact
+    return const SizedBox(height: 64);
+  }
+
+  IconData _getIconData(String iconName) {
+    switch (iconName) {
+      case 'directions_bike': return Icons.directions_bike;
+      case 'build': return Icons.build;
+      case 'shopping_bag': return Icons.shopping_bag;
+      case 'star': return Icons.star;
+      case 'favorite': return Icons.favorite;
+      case 'support_agent': return Icons.support_agent;
+      default: return Icons.star;
+    }
   }
 }

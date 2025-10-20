@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-// import 'package:provider/provider.dart';
+import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
 import '../../../shared/widgets/main_layout.dart';
+import '../services/website_service.dart';
 // import '../services/website_service.dart';
 
 /// 🎨 ODOO-STYLE VISUAL EDITOR - PHASE 3
@@ -109,12 +110,67 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   @override
   void initState() {
     super.initState();
-    _initializeBlocks();
+    _loadFromDatabase();
     _startAutoSave();
-    _saveToHistory();
   }
   
-  void _initializeBlocks() {
+  Future<void> _loadFromDatabase() async {
+    try {
+      final websiteService = context.read<WebsiteService>();
+      await websiteService.loadBlocks();
+      
+      final loadedBlocks = websiteService.blocks;
+      
+      if (loadedBlocks.isEmpty) {
+        // No blocks in database, use defaults
+        _initializeDefaultBlocks();
+      } else {
+        // Convert database blocks to WebsiteBlock objects
+        _blocks = loadedBlocks.map((blockData) {
+          return WebsiteBlock(
+            id: blockData['id'] ?? '',
+            type: _parseBlockType(blockData['block_type'] ?? 'hero'),
+            data: Map<String, dynamic>.from(blockData['block_data'] ?? {}),
+            isVisible: blockData['is_visible'] ?? true,
+          );
+        }).toList();
+        
+        if (_blocks.isNotEmpty) {
+          _selectedBlockId = _blocks.first.id;
+        }
+      }
+      
+      if (mounted) {
+        setState(() {});
+        _saveToHistory();
+      }
+    } catch (e) {
+      debugPrint('[OdooEditor] Error loading blocks: $e');
+      // Fallback to defaults on error
+      _initializeDefaultBlocks();
+      if (mounted) {
+        setState(() {});
+        _saveToHistory();
+      }
+    }
+  }
+  
+  BlockType _parseBlockType(String typeString) {
+    switch (typeString) {
+      case 'hero': return BlockType.hero;
+      case 'products': return BlockType.products;
+      case 'services': return BlockType.services;
+      case 'about': return BlockType.about;
+      case 'testimonials': return BlockType.testimonials;
+      case 'features': return BlockType.features;
+      case 'cta': return BlockType.cta;
+      case 'gallery': return BlockType.gallery;
+      case 'contact': return BlockType.contact;
+      default: return BlockType.hero;
+    }
+  }
+  
+  void _initializeDefaultBlocks() {
     _blocks = [
       WebsiteBlock(
         id: 'hero_1',
@@ -162,7 +218,9 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       ),
     ];
     
-    _selectedBlockId = _blocks.first.id;
+    if (_blocks.isNotEmpty) {
+      _selectedBlockId = _blocks.first.id;
+    }
   }
   
   void _markAsChanged() {
@@ -174,7 +232,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   
   void _startAutoSave() {
     _autoSaveTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (_autoSaveEnabled && _hasChanges && !_isSaving) {
+      if (_autoSaveEnabled && _hasChanges && !_isSaving && mounted) {
         _saveChanges(showNotification: false);
       }
     });
@@ -215,18 +273,32 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   }
   
   Future<void> _saveChanges({bool showNotification = true}) async {
+    if (!mounted) return;
+    
     setState(() => _isSaving = true);
     
     try {
-      // final websiteService = context.read<WebsiteService>();
+      final websiteService = context.read<WebsiteService>();
       
-      // TODO: Save blocks to database
-      await Future.delayed(const Duration(seconds: 1)); // Simulate save
+      // Convert WebsiteBlock objects to database format
+      final blocksData = _blocks.map((block) {
+        return {
+          'id': block.id,
+          'type': block.type.name, // Convert enum to string
+          'data': block.data,
+          'isVisible': block.isVisible,
+        };
+      }).toList();
       
-      setState(() {
-        _hasChanges = false;
-        _isSaving = false;
-      });
+      // Save to database
+      await websiteService.saveBlocks(blocksData);
+      
+      if (mounted) {
+        setState(() {
+          _hasChanges = false;
+          _isSaving = false;
+        });
+      }
       
       if (mounted && showNotification) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -244,7 +316,9 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         );
       }
     } catch (e) {
-      setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -600,7 +674,13 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           if (_hasChanges) {
             _showUnsavedChangesDialog();
           } else {
-            context.go('/website');
+            // If we can pop (opened via Navigator.push), go back
+            // Otherwise use GoRouter to navigate to /website
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              context.go('/website');
+            }
           }
         },
       ),
@@ -629,11 +709,26 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         ),
         const SizedBox(width: 8),
         
-        // Preview
-        TextButton.icon(
-          onPressed: () => context.go('/tienda'),
+        // Preview - More prominent button
+        ElevatedButton.icon(
+          onPressed: () async {
+            // If opened via Navigator.push (from preview), close editor first
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+              // Wait a moment for the pop to complete
+              await Future.delayed(const Duration(milliseconds: 100));
+            }
+            // Then navigate to tienda (this works whether we popped or not)
+            if (mounted) {
+              context.go('/tienda');
+            }
+          },
           icon: const Icon(Icons.visibility),
           label: const Text('Vista Previa'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green.shade600,
+            foregroundColor: Colors.white,
+          ),
         ),
         const SizedBox(width: 8),
         
@@ -677,57 +772,97 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   
   Widget _buildPreviewToolbar(ThemeData theme) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(bottom: BorderSide(color: theme.dividerColor)),
+        color: const Color(0xFF37474F), // Dark blue-grey for better contrast
+        border: Border(bottom: BorderSide(color: Colors.grey.shade700)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.touch_app, size: 20),
-          const SizedBox(width: 8),
+          const Icon(Icons.touch_app, size: 20, color: Colors.white),
+          const SizedBox(width: 12),
           Text(
             '👆 Haz clic en los bloques para editarlos',
-            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
           const Spacer(),
           
           // Device selector
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(
-                value: 'mobile',
-                icon: Icon(Icons.smartphone, size: 16),
-                label: Text('Móvil'),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black26,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'mobile',
+                  icon: Icon(Icons.smartphone, size: 16),
+                  label: Text('Móvil'),
+                ),
+                ButtonSegment(
+                  value: 'tablet',
+                  icon: Icon(Icons.tablet, size: 16),
+                  label: Text('Tablet'),
+                ),
+                ButtonSegment(
+                  value: 'desktop',
+                  icon: Icon(Icons.computer, size: 16),
+                  label: Text('Desktop'),
+                ),
+              ],
+              selected: {_previewMode},
+              onSelectionChanged: (Set<String> newSelection) {
+                setState(() => _previewMode = newSelection.first);
+              },
+              style: ButtonStyle(
+                backgroundColor: MaterialStateProperty.resolveWith((states) {
+                  if (states.contains(MaterialState.selected)) {
+                    return Colors.blue;
+                  }
+                  return Colors.transparent;
+                }),
+                foregroundColor: MaterialStateProperty.all(Colors.white),
               ),
-              ButtonSegment(
-                value: 'tablet',
-                icon: Icon(Icons.tablet, size: 16),
-                label: Text('Tablet'),
-              ),
-              ButtonSegment(
-                value: 'desktop',
-                icon: Icon(Icons.computer, size: 16),
-                label: Text('Desktop'),
-              ),
-            ],
-            selected: {_previewMode},
-            onSelectionChanged: (Set<String> newSelection) {
-              setState(() => _previewMode = newSelection.first);
-            },
+            ),
           ),
           
-          const SizedBox(width: 16),
+          const SizedBox(width: 20),
           
           // Zoom controls
-          IconButton(
-            icon: const Icon(Icons.zoom_out, size: 20),
-            onPressed: () => setState(() => _previewZoom = (_previewZoom - 0.1).clamp(0.5, 2.0)),
-          ),
-          Text('${(_previewZoom * 100).toInt()}%'),
-          IconButton(
-            icon: const Icon(Icons.zoom_in, size: 20),
-            onPressed: () => setState(() => _previewZoom = (_previewZoom + 0.1).clamp(0.5, 2.0)),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black26,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.zoom_out, size: 20, color: Colors.white),
+                  onPressed: () => setState(() => _previewZoom = (_previewZoom - 0.1).clamp(0.5, 2.0)),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${(_previewZoom * 100).toInt()}%',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(width: 12),
+                IconButton(
+                  icon: const Icon(Icons.zoom_in, size: 20, color: Colors.white),
+                  onPressed: () => setState(() => _previewZoom = (_previewZoom + 0.1).clamp(0.5, 2.0)),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1167,7 +1302,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: isActive ? theme.colorScheme.primaryContainer : null,
+            color: isActive ? theme.colorScheme.primaryContainer.withOpacity(0.3) : null,
             border: Border(
               bottom: BorderSide(
                 color: isActive ? theme.colorScheme.primary : Colors.transparent,
@@ -1780,27 +1915,37 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   void _showUnsavedChangesDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('⚠️ Cambios sin Guardar'),
         content: const Text('Tienes cambios sin guardar. ¿Quieres guardarlos antes de salir?'),
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              context.go('/website');
+              Navigator.pop(dialogContext); // Close dialog
+              // Navigate back appropriately
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context); // Go back in Navigator stack
+              } else {
+                context.go('/website'); // Use GoRouter
+              }
             },
             child: const Text('Descartar'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext); // Close dialog
               await _saveChanges();
               if (mounted) {
-                context.go('/website');
+                // Navigate back appropriately
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context); // Go back in Navigator stack
+                } else {
+                  context.go('/website'); // Use GoRouter
+                }
               }
             },
             child: const Text('Guardar y Salir'),

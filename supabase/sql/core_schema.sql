@@ -7503,6 +7503,20 @@ create table if not exists website_content (
   updated_at timestamp with time zone not null default now()
 );
 
+-- Website blocks (Odoo-style visual editor blocks)
+create table if not exists website_blocks (
+  id uuid primary key default gen_random_uuid(),
+  block_type text not null, -- 'hero', 'products', 'services', 'about', 'testimonials', 'features', 'cta', 'gallery', 'contact'
+  block_data jsonb not null default '{}'::jsonb, -- All block properties (title, subtitle, images, etc.)
+  is_visible boolean default true,
+  order_index integer default 0,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_website_blocks_visible on website_blocks(is_visible, order_index);
+create index if not exists idx_website_blocks_type on website_blocks(block_type);
+
 -- Website settings (store configuration)
 create table if not exists website_settings (
   id uuid primary key default gen_random_uuid(),
@@ -7690,6 +7704,41 @@ begin
   ) then
     create policy "Authenticated can manage content"
       on website_content
+      for all
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+-- Website blocks: Public can read visible blocks, authenticated can manage
+alter table website_blocks enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'website_blocks'
+      and policyname = 'Public can read visible blocks'
+  ) then
+    create policy "Public can read visible blocks"
+      on website_blocks
+      for select
+      using (is_visible = true);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'website_blocks'
+      and policyname = 'Authenticated can manage blocks'
+  ) then
+    create policy "Authenticated can manage blocks"
+      on website_blocks
       for all
       to authenticated
       using (auth.role() = 'authenticated')
