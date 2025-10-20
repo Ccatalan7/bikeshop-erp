@@ -24,6 +24,7 @@ import 'modules/sales/services/sales_service.dart';
 import 'modules/settings/services/appearance_service.dart';
 import 'modules/bikeshop/services/bikeshop_service.dart';
 import 'modules/hr/services/hr_service.dart';
+import 'modules/website/services/website_service.dart';
 import 'shared/routes/app_router.dart';
 import 'shared/services/error_reporting_service.dart';
 
@@ -109,6 +110,7 @@ class VinabikeApp extends StatelessWidget {
           Provider.of<DatabaseService>(context, listen: false),
         )),
         ChangeNotifierProvider(create: (_) => HRService()),
+        ChangeNotifierProvider(create: (_) => WebsiteService()),
         ChangeNotifierProxyProvider2<DatabaseService, AccountingService, SalesService>(
           create: (context) => SalesService(
             context.read<DatabaseService>(),

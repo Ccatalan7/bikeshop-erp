@@ -123,6 +123,14 @@ class DashboardScreen extends StatelessWidget {
                 ),
                 _buildModuleCard(
                   context,
+                  'Sitio Web',
+                  'Gestión de tienda online',
+                  Icons.language,
+                  const Color(0xFF4CAF50), // Green for web/online
+                  () => context.go('/website'),
+                ),
+                _buildModuleCard(
+                  context,
                   'Taller',
                   'Gestión de bicicletas y reparaciones',
                   Icons.build,

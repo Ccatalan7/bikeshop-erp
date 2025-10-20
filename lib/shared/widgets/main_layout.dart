@@ -368,15 +368,21 @@ class _AppSidebarState extends State<AppSidebar> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final currentLocation = GoRouterState.of(context).uri.path;
-    if (currentLocation != _lastLocation) {
-      _lastLocation = currentLocation;
-      final matchingSection = _resolveSectionForPath(currentLocation);
-      if (matchingSection != _expandedSection) {
-        setState(() {
-          _expandedSection = matchingSection;
-        });
+    try {
+      final routerState = GoRouterState.of(context);
+      final currentLocation = routerState.uri.path;
+      if (currentLocation != _lastLocation) {
+        _lastLocation = currentLocation;
+        final matchingSection = _resolveSectionForPath(currentLocation);
+        if (matchingSection != _expandedSection) {
+          setState(() {
+            _expandedSection = matchingSection;
+          });
+        }
       }
+    } catch (e) {
+      // GoRouterState not available in this context, skip menu highlighting
+      // This can happen when MainLayout is used inside a sub-page without direct route
     }
   }
 

@@ -7438,4 +7438,584 @@ begin
   end if;
 end $$;
 
+-- ============================================================================
+-- E-COMMERCE / WEBSITE MODULE TABLES
+-- ============================================================================
+-- This section implements the website builder and online store functionality.
+-- Features:
+-- - Homepage content management (banners, featured products, promotional text)
+-- - Product visibility control for online store
+-- - Customer orders from website (sync with sales invoices)
+-- - Website settings and configuration
+-- - Google Merchant Center feed support
+
+-- Website banners (hero images, promotional banners)
+create table if not exists website_banners (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  subtitle text,
+  image_url text,
+  link text,
+  cta_text text, -- Call-to-action button text
+  cta_link text, -- Call-to-action button link
+  active boolean default true,
+  order_index integer default 0,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_website_banners_active on website_banners(active, order_index);
+
+-- Featured products (handpicked products to display on homepage)
+-- Migration: Ensure table exists with correct structure
+do $$
+begin
+  -- Create table if it doesn't exist
+  if not exists (
+    select from pg_tables
+    where schemaname = 'public' and tablename = 'featured_products'
+  ) then
+    create table featured_products (
+      id uuid primary key default gen_random_uuid(),
+      product_id uuid references products(id) on delete cascade,
+      active boolean default true,
+      order_index integer default 0,
+      created_at timestamp with time zone not null default now()
+    );
+    raise notice 'Created featured_products table';
+  else
+    raise notice 'featured_products table already exists';
+  end if;
+exception
+  when others then
+    raise notice 'Error creating featured_products: %', sqlerrm;
+end $$;
+
+-- Ensure indexes exist
+create index if not exists idx_featured_products_product on featured_products(product_id);
+create index if not exists idx_featured_products_active on featured_products(active, order_index);
+
+-- Website content (rich text content blocks for homepage, about page, etc.)
+create table if not exists website_content (
+  id text primary key, -- e.g., 'homepage_promo', 'about_us', 'terms_conditions'
+  title text not null,
+  content text, -- HTML or markdown content
+  updated_at timestamp with time zone not null default now()
+);
+
+-- Website settings (store configuration)
+create table if not exists website_settings (
+  id uuid primary key default gen_random_uuid(),
+  key text unique not null,
+  value text,
+  description text,
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_website_settings_key on website_settings(key);
+
+-- Online orders (customer orders from website, separate from POS orders)
+create table if not exists online_orders (
+  id uuid primary key default gen_random_uuid(),
+  order_number text unique not null,
+  customer_id uuid references customers(id) on delete set null,
+  customer_email text not null,
+  customer_name text not null,
+  customer_phone text,
+  customer_address text,
+  
+  -- Order details
+  subtotal numeric(12,2) not null default 0,
+  tax_amount numeric(12,2) not null default 0,
+  shipping_cost numeric(12,2) not null default 0,
+  discount_amount numeric(12,2) not null default 0,
+  total numeric(12,2) not null default 0,
+  
+  -- Order status
+  status text not null default 'pending' check (status in ('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled')),
+  payment_status text not null default 'pending' check (payment_status in ('pending', 'paid', 'failed', 'refunded')),
+  
+  -- Payment details
+  payment_method text,
+  payment_reference text, -- Stripe/MercadoPago transaction ID
+  paid_at timestamp with time zone,
+  
+  -- Tracking
+  tracking_number text,
+  shipped_at timestamp with time zone,
+  delivered_at timestamp with time zone,
+  
+  -- ERP integration
+  sales_invoice_id uuid references sales_invoices(id) on delete set null,
+  
+  -- Notes
+  customer_notes text,
+  internal_notes text,
+  
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_online_orders_customer on online_orders(customer_id);
+create index if not exists idx_online_orders_status on online_orders(status);
+create index if not exists idx_online_orders_payment_status on online_orders(payment_status);
+create index if not exists idx_online_orders_invoice on online_orders(sales_invoice_id);
+create index if not exists idx_online_orders_number on online_orders(order_number);
+create index if not exists idx_online_orders_created on online_orders(created_at desc);
+
+-- Online order items
+create table if not exists online_order_items (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid references online_orders(id) on delete cascade,
+  product_id uuid references products(id) on delete set null,
+  product_name text not null, -- Store name for historical record
+  product_sku text,
+  quantity integer not null,
+  unit_price numeric(12,2) not null,
+  subtotal numeric(12,2) not null,
+  created_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_online_order_items_order on online_order_items(order_id);
+create index if not exists idx_online_order_items_product on online_order_items(product_id);
+
+-- Product visibility for online store (control which products appear on website)
+alter table public.products
+  add column if not exists show_on_website boolean default true,
+  add column if not exists website_description text, -- SEO-friendly description
+  add column if not exists website_featured boolean default false;
+
+create index if not exists idx_products_website on products(show_on_website) where show_on_website = true;
+create index if not exists idx_products_featured on products(website_featured) where website_featured = true;
+
+-- ============================================================================
+-- ROW LEVEL SECURITY FOR WEBSITE TABLES
+-- ============================================================================
+
+-- Website banners: Public can read active banners, authenticated can manage
+alter table website_banners enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'website_banners'
+      and policyname = 'Public can read active banners'
+  ) then
+    create policy "Public can read active banners"
+      on website_banners
+      for select
+      using (active = true);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'website_banners'
+      and policyname = 'Authenticated can manage banners'
+  ) then
+    create policy "Authenticated can manage banners"
+      on website_banners
+      for all
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+-- Featured products: Public can read active, authenticated can manage
+alter table featured_products enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'featured_products'
+      and policyname = 'Public can read active featured'
+  ) then
+    create policy "Public can read active featured"
+      on featured_products
+      for select
+      using (active = true);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'featured_products'
+      and policyname = 'Authenticated can manage featured'
+  ) then
+    create policy "Authenticated can manage featured"
+      on featured_products
+      for all
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+-- Website content: Public can read, authenticated can manage
+alter table website_content enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'website_content'
+      and policyname = 'Public can read content'
+  ) then
+    create policy "Public can read content"
+      on website_content
+      for select
+      using (true);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'website_content'
+      and policyname = 'Authenticated can manage content'
+  ) then
+    create policy "Authenticated can manage content"
+      on website_content
+      for all
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+-- Website settings: Authenticated can read and manage
+alter table website_settings enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'website_settings'
+      and policyname = 'Authenticated can manage settings'
+  ) then
+    create policy "Authenticated can manage settings"
+      on website_settings
+      for all
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+-- Online orders: Customers can read their own orders, authenticated can manage all
+alter table online_orders enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'online_orders'
+      and policyname = 'Public can create orders'
+  ) then
+    create policy "Public can create orders"
+      on online_orders
+      for insert
+      with check (true); -- Anyone can place an order
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'online_orders'
+      and policyname = 'Customers can read own orders'
+  ) then
+    create policy "Customers can read own orders"
+      on online_orders
+      for select
+      using (customer_email = current_setting('request.jwt.claims', true)::json->>'email');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'online_orders'
+      and policyname = 'Authenticated can manage all orders'
+  ) then
+    create policy "Authenticated can manage all orders"
+      on online_orders
+      for all
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+-- Online order items: Follow parent order permissions
+alter table online_order_items enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'online_order_items'
+      and policyname = 'Public can create order items'
+  ) then
+    create policy "Public can create order items"
+      on online_order_items
+      for insert
+      with check (true);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'online_order_items'
+      and policyname = 'Customers can read own order items'
+  ) then
+    create policy "Customers can read own order items"
+      on online_order_items
+      for select
+      using (
+        exists (
+          select 1 from online_orders
+          where online_orders.id = online_order_items.order_id
+            and online_orders.customer_email = current_setting('request.jwt.claims', true)::json->>'email'
+        )
+      );
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'online_order_items'
+      and policyname = 'Authenticated can manage all order items'
+  ) then
+    create policy "Authenticated can manage all order items"
+      on online_order_items
+      for all
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+-- ============================================================================
+-- FUNCTIONS FOR ONLINE ORDER PROCESSING
+-- ============================================================================
+
+-- Function to automatically create sales invoice from online order
+create or replace function public.process_online_order(p_order_id uuid)
+returns uuid -- Returns sales_invoice_id
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order record;
+  v_invoice_id uuid;
+  v_item record;
+begin
+  -- Get order details
+  select * into v_order
+  from online_orders
+  where id = p_order_id;
+  
+  if not found then
+    raise exception 'Order not found: %', p_order_id;
+  end if;
+  
+  -- Check if invoice already exists
+  if v_order.sales_invoice_id is not null then
+    return v_order.sales_invoice_id;
+  end if;
+  
+  -- Create sales invoice
+  insert into sales_invoices (
+    customer_id,
+    date,
+    due_date,
+    status,
+    subtotal,
+    tax_rate,
+    tax_amount,
+    discount_amount,
+    total,
+    notes,
+    source
+  ) values (
+    v_order.customer_id,
+    now(),
+    now() + interval '30 days',
+    case when v_order.payment_status = 'paid' then 'pagado' else 'enviado' end,
+    v_order.subtotal,
+    19.0, -- Chilean IVA
+    v_order.tax_amount,
+    v_order.discount_amount,
+    v_order.total,
+    'Pedido online #' || v_order.order_number,
+    'website'
+  )
+  returning id into v_invoice_id;
+  
+  -- Create invoice items from order items
+  for v_item in
+    select * from online_order_items
+    where order_id = p_order_id
+  loop
+    insert into sales_invoice_items (
+      invoice_id,
+      product_id,
+      quantity,
+      unit_price,
+      subtotal,
+      tax_rate,
+      tax_amount,
+      total
+    ) values (
+      v_invoice_id,
+      v_item.product_id,
+      v_item.quantity,
+      v_item.unit_price,
+      v_item.subtotal,
+      19.0,
+      v_item.subtotal * 0.19,
+      v_item.subtotal * 1.19
+    );
+  end loop;
+  
+  -- Link invoice to order
+  update online_orders
+  set sales_invoice_id = v_invoice_id,
+      updated_at = now()
+  where id = p_order_id;
+  
+  -- If order is paid, create payment record
+  if v_order.payment_status = 'paid' and v_order.paid_at is not null then
+    declare
+      v_payment_method_id uuid;
+    begin
+      -- Get default payment method (could be 'card' or 'transfer')
+      select id into v_payment_method_id
+      from payment_methods
+      where code = 'card'
+      limit 1;
+      
+      if v_payment_method_id is not null then
+        insert into sales_payments (
+          invoice_id,
+          payment_method_id,
+          amount,
+          payment_date,
+          reference,
+          notes
+        ) values (
+          v_invoice_id,
+          v_payment_method_id,
+          v_order.total,
+          v_order.paid_at,
+          v_order.payment_reference,
+          'Pago online automático'
+        );
+      end if;
+    end;
+  end if;
+  
+  return v_invoice_id;
+end;
+$$;
+
+-- Function to generate order number
+create or replace function public.generate_online_order_number()
+returns text
+language plpgsql
+as $$
+declare
+  v_year text;
+  v_count integer;
+  v_number text;
+begin
+  v_year := to_char(now(), 'YY');
+  
+  select count(*) + 1 into v_count
+  from online_orders
+  where extract(year from created_at) = extract(year from now());
+  
+  v_number := 'WEB-' || v_year || '-' || lpad(v_count::text, 5, '0');
+  
+  return v_number;
+end;
+$$;
+
+-- Trigger to auto-generate order number
+create or replace function public.auto_generate_order_number()
+returns trigger as $$
+begin
+  if NEW.order_number is null or NEW.order_number = '' then
+    NEW.order_number := public.generate_online_order_number();
+  end if;
+  return NEW;
+end;
+$$ language plpgsql;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger
+    where tgname = 'trg_auto_generate_order_number'
+  ) then
+    create trigger trg_auto_generate_order_number
+      before insert on online_orders
+      for each row execute procedure auto_generate_order_number();
+  end if;
+end $$;
+
+-- Seed default website settings
+insert into website_settings (key, value, description) values
+  ('store_name', 'Vinabike', 'Nombre de la tienda'),
+  ('store_tagline', 'Bicicletas y Accesorios en Chile', 'Eslogan de la tienda'),
+  ('store_email', 'contacto@vinabike.cl', 'Email de contacto'),
+  ('store_phone', '+56 9 XXXX XXXX', 'Teléfono de contacto'),
+  ('store_address', 'Santiago, Chile', 'Dirección de la tienda'),
+  ('shipping_cost', '5000', 'Costo de envío por defecto (CLP)'),
+  ('free_shipping_threshold', '50000', 'Monto mínimo para envío gratis (CLP)'),
+  ('google_analytics_id', '', 'Google Analytics tracking ID'),
+  ('facebook_pixel_id', '', 'Facebook Pixel ID'),
+  ('meta_description', 'Tienda online de bicicletas y accesorios en Chile', 'Meta descripción para SEO'),
+  ('meta_keywords', 'bicicletas, bikes, chile, ciclismo, accesorios', 'Palabras clave para SEO')
+on conflict (key) do nothing;
+
+-- Seed default homepage content
+insert into website_content (id, title, content) values
+  ('homepage_hero', 'Título Principal', '<h1>Bienvenido a Vinabike</h1><p>Las mejores bicicletas de Chile</p>'),
+  ('homepage_promo', 'Promoción Destacada', '<p>¡Aprovecha nuestras ofertas especiales!</p>'),
+  ('about_us', 'Sobre Nosotros', '<p>Somos una empresa dedicada a ofrecer las mejores bicicletas y accesorios en Chile.</p>'),
+  ('terms_conditions', 'Términos y Condiciones', '<p>Términos y condiciones de uso del sitio web.</p>'),
+  ('privacy_policy', 'Política de Privacidad', '<p>Política de privacidad y manejo de datos.</p>'),
+  ('shipping_info', 'Información de Envío', '<p>Enviamos a todo Chile. Costo de envío: $5.000. Envío gratis en compras sobre $50.000.</p>')
+on conflict (id) do nothing;
+
 notify pgrst, 'reload schema';

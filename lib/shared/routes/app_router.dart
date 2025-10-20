@@ -45,6 +45,7 @@ import '../../modules/settings/pages/appearance_settings_page.dart';
 import '../../modules/hr/pages/employee_list_page.dart';
 import '../../modules/hr/pages/attendances_page.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
+import '../../modules/website/pages/website_management_page.dart';
 
 // Helper function to create pages without transitions
 Page<dynamic> _buildPageWithNoTransition(
@@ -592,6 +593,16 @@ class AppRouter {
             context,
             state,
             const KioskModePage(), // Full screen, no MainLayout
+          ),
+        ),
+
+        // Website Module
+        GoRoute(
+          path: '/website',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const WebsiteManagementPage(),
           ),
         ),
       ],
