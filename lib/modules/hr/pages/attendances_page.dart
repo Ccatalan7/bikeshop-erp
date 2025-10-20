@@ -482,10 +482,51 @@ class _AttendancesPageState extends State<AttendancesPage> {
     );
   }
 
+  // Get dynamic cell width based on current view
+  double _getCellWidth() {
+    switch (_currentView) {
+      case TimeView.day:
+        return 200.0; // Wide cells for day view (showing detailed info)
+      case TimeView.week:
+        return 140.0; // Medium cells for week view
+      case TimeView.month:
+        return 100.0; // Medium cells for month view
+      case TimeView.quarter:
+        return 80.0; // Compact cells for quarter (shows truncated times)
+      case TimeView.year:
+        return 120.0; // Wide enough for full time details with seconds
+    }
+  }
+
+  // Get dynamic cell height based on current view
+  double _getCellHeight() {
+    switch (_currentView) {
+      case TimeView.day:
+        return 100.0; // Taller for day view
+      case TimeView.week:
+        return 80.0; // Standard height
+      case TimeView.month:
+        return 70.0; // Medium height for month view
+      case TimeView.quarter:
+        return 60.0; // Compact for quarter
+      case TimeView.year:
+        return 150.0; // Very tall to accommodate many stacked shifts with full details
+    }
+  }
+
   List<DateTime> _getDaysInRange(DateTimeRange range) {
     final List<DateTime> days = [];
-    DateTime current = range.start;
     
+    // For year view, return first day of each month (12 columns)
+    if (_currentView == TimeView.year) {
+      for (int month = 1; month <= 12; month++) {
+        days.add(DateTime(_selectedDate.year, month, 1));
+      }
+      return days;
+    }
+    
+    // For other views, return all days in range
+    DateTime current = range.start;
     while (current.isBefore(range.end)) {
       days.add(current);
       current = current.add(const Duration(days: 1));
@@ -495,20 +536,26 @@ class _AttendancesPageState extends State<AttendancesPage> {
   }
 
   Widget _buildGridHeader(List<DateTime> days) {
+    final cellHeight = _getCellHeight();
+    
     return Row(
       children: [
         Container(
           width: 200,
-          height: 60,
+          height: cellHeight,
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             border: Border.all(color: Colors.grey[300]!),
           ),
-          child: const Text(
-            'Días',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          child: Text(
+            _getGridHeaderLabel(),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
         ),
         ...days.map((day) => _buildDayHeader(day)),
@@ -516,29 +563,64 @@ class _AttendancesPageState extends State<AttendancesPage> {
     );
   }
 
+  String _getGridHeaderLabel() {
+    switch (_currentView) {
+      case TimeView.day:
+        return 'Empleados';
+      case TimeView.week:
+        return 'Días';
+      case TimeView.month:
+        return 'Días';
+      case TimeView.quarter:
+        return 'Días';
+      case TimeView.year:
+        return 'Días'; // Still shows "Días" in Spanish Odoo
+    }
+  }
+
   Widget _buildDayHeader(DateTime day) {
+    final cellWidth = _getCellWidth();
+    final cellHeight = _getCellHeight();
+    
     final isToday = DateTime.now().year == day.year &&
         DateTime.now().month == day.month &&
         DateTime.now().day == day.day;
 
-    return Container(
-      width: 120,
-      height: 60,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: isToday ? Theme.of(context).primaryColor.withOpacity(0.1) : Theme.of(context).colorScheme.surface,
-        border: Border.all(color: isToday ? Theme.of(context).primaryColor : Colors.grey[300]!),
-      ),
-      child: Column(
+    // Different header content based on view
+    Widget headerContent;
+    if (_currentView == TimeView.year) {
+      // For year view, show month names (abril, mayo, junio...)
+      headerContent = Text(
+        DateFormat('MMMM').format(day), // Full month name
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+        textAlign: TextAlign.center,
+      );
+    } else if (_currentView == TimeView.quarter || _currentView == TimeView.month) {
+      // For quarter/month view, show compact day number
+      headerContent = Text(
+        DateFormat('d').format(day),
+        style: TextStyle(
+          fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+          fontSize: 12,
+          color: isToday ? Theme.of(context).primaryColor : Theme.of(context).colorScheme.onSurface,
+        ),
+        textAlign: TextAlign.center,
+      );
+    } else {
+      // For day/week view, show day name + number
+      headerContent = Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
             DateFormat('EEE').format(day),
             style: TextStyle(
               fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-              fontSize: 12,
-              color: isToday ? Theme.of(context).primaryColor : Colors.grey[700],
+              fontSize: 11,
+              color: isToday ? Theme.of(context).primaryColor : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
             ),
           ),
           const SizedBox(height: 4),
@@ -546,18 +628,31 @@ class _AttendancesPageState extends State<AttendancesPage> {
             DateFormat('d').format(day),
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: isToday ? Theme.of(context).primaryColor : Colors.black87,
+              fontSize: 14,
+              color: isToday ? Theme.of(context).primaryColor : Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ],
+      );
+    }
+
+    return Container(
+      width: cellWidth,
+      height: cellHeight,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isToday ? Theme.of(context).primaryColor.withOpacity(0.1) : Theme.of(context).colorScheme.surface,
+        border: Border.all(color: isToday ? Theme.of(context).primaryColor : Colors.grey[300]!),
       ),
+      child: headerContent,
     );
   }
 
   Widget _buildEmployeeRow(Employee employee, List<DateTime> days, int employeeIndex) {
     final color = _getEmployeeColor(employeeIndex);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cellHeight = _getCellHeight();
     
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -565,7 +660,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
         children: [
           Container(
             width: 200,
-            height: 80,
+            height: cellHeight,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[50],
@@ -619,100 +714,160 @@ class _AttendancesPageState extends State<AttendancesPage> {
   }
 
   Widget _buildAttendanceCell(Employee employee, DateTime day, Color color) {
+    final cellWidth = _getCellWidth();
+    final cellHeight = _getCellHeight();
+    
     final attendances = _attendancesByEmployee[employee.id] ?? [];
     
-    final dayAttendances = attendances.where((att) {
-      return att.checkIn.year == day.year &&
-          att.checkIn.month == day.month &&
-          att.checkIn.day == day.day;
-    }).toList();
+    List<Attendance> dayAttendances;
+    
+    // For year view, get all attendances in the month (day represents first day of month)
+    if (_currentView == TimeView.year) {
+      dayAttendances = attendances.where((att) {
+        return att.checkIn.year == day.year &&
+            att.checkIn.month == day.month;
+      }).toList();
+    } else {
+      // For other views, get attendances for the specific day
+      dayAttendances = attendances.where((att) {
+        return att.checkIn.year == day.year &&
+            att.checkIn.month == day.month &&
+            att.checkIn.day == day.day;
+      }).toList();
+    }
 
     return Container(
-      width: 120,
-      height: 80,
+      width: cellWidth,
+      height: cellHeight,
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         border: Border.all(color: Colors.grey[300]!),
       ),
       child: dayAttendances.isEmpty
           ? const SizedBox.shrink()
-          : _buildAttendanceBlocks(dayAttendances, color),
+          : _currentView == TimeView.year
+              ? SingleChildScrollView(
+                  child: _buildAttendanceBlocks(dayAttendances, color),
+                )
+              : _buildAttendanceBlocks(dayAttendances, color),
     );
   }
 
   Widget _buildAttendanceBlocks(List<Attendance> attendances, Color baseColor) {
     return Padding(
-      padding: const EdgeInsets.all(4),
+      padding: EdgeInsets.all(_currentView == TimeView.year ? 2 : 4),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: attendances.map((attendance) {
-          // Calculate elapsed time for ongoing attendances
-          String displayTime;
+          // Calculate worked duration (this goes OUTSIDE parentheses)
+          String workedDuration;
           if (attendance.isOngoing) {
             final duration = DateTime.now().difference(attendance.checkIn);
             final hours = duration.inHours;
             final minutes = duration.inMinutes % 60;
-            displayTime = '$hours:${minutes.toString().padLeft(2, '0')}';
+            workedDuration = '$hours:${minutes.toString().padLeft(2, '0')}';
+          } else if (attendance.workedHours != null) {
+            final totalMinutes = (attendance.workedHours! * 60).round();
+            final hours = totalMinutes ~/ 60;
+            final minutes = totalMinutes % 60;
+            workedDuration = '$hours:${minutes.toString().padLeft(2, '0')}';
           } else {
-            displayTime = attendance.workedHours?.toStringAsFixed(1) ?? '--';
+            workedDuration = '--:--';
           }
           
+          // Time range (this goes INSIDE parentheses)
           final checkIn = DateFormat('HH:mm').format(attendance.checkIn);
+          final checkInWithSeconds = DateFormat('HH:mm:ss').format(attendance.checkIn);
           final checkOut = attendance.checkOut != null
               ? DateFormat('HH:mm').format(attendance.checkOut!)
+              : '...';
+          final checkOutWithSeconds = attendance.checkOut != null
+              ? DateFormat('HH:mm:ss').format(attendance.checkOut!)
               : '...';
           
           // Color coding based on status
           Color blockColor;
           Color borderColor;
+          Color textColor;
+          
           if (attendance.isOngoing) {
-            // Green for ongoing (En curso)
             blockColor = Colors.green.shade100;
             borderColor = Colors.green.shade700;
+            textColor = Colors.green.shade900;
           } else if (attendance.status == AttendanceStatus.approved) {
-            // Light green for approved
             blockColor = Colors.green.shade50;
             borderColor = Colors.green.shade300;
+            textColor = Colors.green.shade800;
           } else if (attendance.status == AttendanceStatus.rejected) {
-            // Red for rejected
             blockColor = Colors.red.shade100;
             borderColor = Colors.red.shade700;
+            textColor = Colors.red.shade900;
           } else {
-            // Gray for pending approval
             blockColor = Colors.grey.shade200;
             borderColor = Colors.grey.shade500;
+            textColor = Colors.grey.shade900;
           }
 
-          // Build compact time range display like Odoo
-          String timeRangeText = '$checkIn-$checkOut';
+          // Adapt display based on view mode
+          String displayText;
+          double fontSize;
+          EdgeInsets padding;
           
-          // Check if text would be too long (more than ~15 characters)
-          bool needsTruncation = timeRangeText.length > 15;
-          String displayText = needsTruncation 
-              ? '${timeRangeText.substring(0, 12)}...' 
-              : timeRangeText;
+          if (_currentView == TimeView.quarter) {
+            // Quarter view: "11:08 (...)" - duration + truncated times
+            displayText = '$workedDuration (...)';
+            fontSize = 9;
+            padding = const EdgeInsets.symmetric(horizontal: 3, vertical: 2);
+          } else if (_currentView == TimeView.month) {
+            // Month view: try to fit, truncate if needed
+            // Try: "11:08 (14:00-23:08)" or "11:08 (...)" if too long
+            final fullText = '$workedDuration ($checkIn-$checkOut)';
+            displayText = fullText.length > 20 ? '$workedDuration (...)' : fullText;
+            fontSize = 9;
+            padding = const EdgeInsets.symmetric(horizontal: 4, vertical: 3);
+          } else if (_currentView == TimeView.week) {
+            // Week view: "11:08 (14:00-23:08)" - duration + HH:mm times
+            displayText = '$workedDuration ($checkIn-$checkOut)';
+            fontSize = 10;
+            padding = const EdgeInsets.symmetric(horizontal: 6, vertical: 4);
+          } else if (_currentView == TimeView.year) {
+            // Year view: "07:42 (11:00:00-19:42:14)" - duration + full times with SECONDS
+            displayText = '$workedDuration ($checkInWithSeconds-$checkOutWithSeconds)';
+            fontSize = 8;
+            padding = const EdgeInsets.symmetric(horizontal: 2, vertical: 2);
+          } else {
+            // Day view: "11:08 (14:00-23:08)" - duration + times
+            displayText = '$workedDuration ($checkIn-$checkOut)';
+            fontSize = 11;
+            padding = const EdgeInsets.symmetric(horizontal: 6, vertical: 4);
+          }
 
           return GestureDetector(
             onTap: () => _showAttendanceDetailDialog(attendance),
             child: Tooltip(
-              message: 'Entrada: $checkIn\nSalida: $checkOut\n${attendance.isOngoing ? "En curso" : "Tiempo trabajado: ${displayTime}h"}',
+              message: 'Duración: $workedDuration\nEntrada: $checkIn\nSalida: $checkOut',
               child: Container(
-                margin: const EdgeInsets.only(bottom: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                margin: EdgeInsets.only(bottom: _currentView == TimeView.year ? 1 : 3),
+                padding: padding,
                 decoration: BoxDecoration(
                   color: blockColor,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: borderColor, width: 1.5),
+                  borderRadius: BorderRadius.circular(3),
+                  border: Border.all(
+                    color: borderColor,
+                    width: 1,
+                  ),
                 ),
                 child: Text(
                   displayText,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    fontSize: 11,
-                    color: Colors.grey[900],
+                    fontSize: fontSize,
+                    color: textColor,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.left,
                 ),
               ),
             ),
