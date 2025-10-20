@@ -47,6 +47,73 @@ import '../../modules/hr/pages/attendances_page.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
 import '../../modules/website/pages/website_management_page.dart';
 
+// Public Store Pages
+import '../../public_store/pages/public_home_page.dart';
+import '../../public_store/pages/product_catalog_page.dart';
+import '../../public_store/widgets/public_store_layout.dart';
+
+// Helper wrapper for public store pages
+class PublicStoreWrapper extends StatelessWidget {
+  final Widget child;
+
+  const PublicStoreWrapper({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return PublicStoreLayout(child: child);
+  }
+}
+
+// Placeholder pages (to be built)
+class ProductDetailPage extends StatelessWidget {
+  final String productId;
+
+  const ProductDetailPage({super.key, required this.productId});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: Text('Product Detail - Coming Soon'));
+  }
+}
+
+class CartPage extends StatelessWidget {
+  const CartPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: Text('Cart - Coming Soon'));
+  }
+}
+
+class CheckoutPage extends StatelessWidget {
+  const CheckoutPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: Text('Checkout - Coming Soon'));
+  }
+}
+
+class OrderConfirmationPage extends StatelessWidget {
+  final String orderId;
+
+  const OrderConfirmationPage({super.key, required this.orderId});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: Text('Order Confirmation - Coming Soon'));
+  }
+}
+
+class ContactPage extends StatelessWidget {
+  const ContactPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: Text('Contact - Coming Soon'));
+  }
+}
+
 // Helper function to create pages without transitions
 Page<dynamic> _buildPageWithNoTransition(
   BuildContext context,
@@ -63,8 +130,25 @@ class AppRouter {
   static GoRouter? _router;
 
   static GoRouter createRouter(AuthService authService) {
+    // Public routes that don't require authentication
+    final publicRoutes = [
+      '/',
+      '/productos',
+      '/producto',
+      '/carrito',
+      '/checkout',
+      '/pedido',
+      '/servicios',
+      '/contacto',
+      '/nosotros',
+      '/terminos',
+      '/privacidad',
+      '/faq',
+      '/seguimiento',
+    ];
+
     _router ??= GoRouter(
-      initialLocation: '/dashboard',
+      initialLocation: '/',
       refreshListenable: authService,
       redirect: (context, state) {
         if (authService.isInitializing) {
@@ -73,7 +157,14 @@ class AppRouter {
 
         final isLoggedIn = authService.isAuthenticated;
         final loggingIn = state.matchedLocation == '/login';
+        final isPublicRoute = publicRoutes.any((route) => state.matchedLocation.startsWith(route));
 
+        // Allow access to public routes without authentication
+        if (isPublicRoute) {
+          return null;
+        }
+
+        // Admin routes require authentication
         if (!isLoggedIn && !loggingIn) {
           return '/login';
         }
@@ -85,6 +176,90 @@ class AppRouter {
         return null;
       },
       routes: [
+        // ========================================
+        // PUBLIC STORE ROUTES (No Auth Required)
+        // ========================================
+        
+        // Public Home
+        GoRoute(
+          path: '/',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: PublicHomePage()),
+          ),
+        ),
+
+        // Product Catalog
+        GoRoute(
+          path: '/productos',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: ProductCatalogPage()),
+          ),
+        ),
+
+        // Product Detail
+        GoRoute(
+          path: '/producto/:id',
+          pageBuilder: (context, state) {
+            final productId = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(child: ProductDetailPage(productId: productId)),
+            );
+          },
+        ),
+
+        // Shopping Cart
+        GoRoute(
+          path: '/carrito',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CartPage()),
+          ),
+        ),
+
+        // Checkout
+        GoRoute(
+          path: '/checkout',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CheckoutPage()),
+          ),
+        ),
+
+        // Order Confirmation
+        GoRoute(
+          path: '/pedido/:id',
+          pageBuilder: (context, state) {
+            final orderId = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(child: OrderConfirmationPage(orderId: orderId)),
+            );
+          },
+        ),
+
+        // Contact/Info Pages
+        GoRoute(
+          path: '/contacto',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: ContactPage()),
+          ),
+        ),
+
+        // ========================================
+        // ADMIN/ERP ROUTES (Auth Required)
+        // ========================================
+        
         // Authentication
         GoRoute(
           path: '/login',

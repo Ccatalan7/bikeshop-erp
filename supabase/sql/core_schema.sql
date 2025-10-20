@@ -7837,7 +7837,10 @@ as $$
 declare
   v_order record;
   v_invoice_id uuid;
-  v_item record;
+  v_invoice_number text;
+  v_items jsonb;
+  v_next_number integer;
+  v_year text;
 begin
   -- Get order details
   select * into v_order
@@ -7853,96 +7856,74 @@ begin
     return v_order.sales_invoice_id;
   end if;
   
+  -- Generate invoice number in format: INV-25-00001
+  v_year := to_char(now(), 'YY');
+  
+  select coalesce(max(cast(substring(invoice_number from '\d+$') as integer)), 0) + 1
+  into v_next_number
+  from sales_invoices
+  where invoice_number ~ ('^INV-' || v_year || '-\d+$');
+  
+  v_invoice_number := 'INV-' || v_year || '-' || lpad(v_next_number::text, 5, '0');
+  
+  -- Build items JSONB array from order items
+  select jsonb_agg(
+    jsonb_build_object(
+      'product_id', oi.product_id,
+      'product_name', oi.product_name,
+      'product_sku', oi.product_sku,
+      'quantity', oi.quantity,
+      'price', oi.unit_price,
+      'subtotal', oi.subtotal
+    )
+  ) into v_items
+  from online_order_items oi
+  where oi.order_id = p_order_id;
+  
+  -- Default to empty array if no items
+  if v_items is null then
+    v_items := '[]'::jsonb;
+  end if;
+  
   -- Create sales invoice
   insert into sales_invoices (
+    invoice_number,
     customer_id,
+    customer_name,
     date,
     due_date,
     status,
     subtotal,
-    tax_rate,
-    tax_amount,
+    iva_amount,
     discount_amount,
     total,
-    notes,
-    source
+    paid_amount,
+    balance,
+    items,
+    reference
   ) values (
+    v_invoice_number,
     v_order.customer_id,
+    v_order.customer_name,
     now(),
     now() + interval '30 days',
     case when v_order.payment_status = 'paid' then 'pagado' else 'enviado' end,
     v_order.subtotal,
-    19.0, -- Chilean IVA
     v_order.tax_amount,
-    v_order.discount_amount,
+    coalesce(v_order.discount_amount, 0),
     v_order.total,
-    'Pedido online #' || v_order.order_number,
-    'website'
+    case when v_order.payment_status = 'paid' then v_order.total else 0 end,
+    case when v_order.payment_status = 'paid' then 0 else v_order.total end,
+    v_items,
+    'Pedido online #' || v_order.order_number
   )
   returning id into v_invoice_id;
-  
-  -- Create invoice items from order items
-  for v_item in
-    select * from online_order_items
-    where order_id = p_order_id
-  loop
-    insert into sales_invoice_items (
-      invoice_id,
-      product_id,
-      quantity,
-      unit_price,
-      subtotal,
-      tax_rate,
-      tax_amount,
-      total
-    ) values (
-      v_invoice_id,
-      v_item.product_id,
-      v_item.quantity,
-      v_item.unit_price,
-      v_item.subtotal,
-      19.0,
-      v_item.subtotal * 0.19,
-      v_item.subtotal * 1.19
-    );
-  end loop;
   
   -- Link invoice to order
   update online_orders
   set sales_invoice_id = v_invoice_id,
       updated_at = now()
   where id = p_order_id;
-  
-  -- If order is paid, create payment record
-  if v_order.payment_status = 'paid' and v_order.paid_at is not null then
-    declare
-      v_payment_method_id uuid;
-    begin
-      -- Get default payment method (could be 'card' or 'transfer')
-      select id into v_payment_method_id
-      from payment_methods
-      where code = 'card'
-      limit 1;
-      
-      if v_payment_method_id is not null then
-        insert into sales_payments (
-          invoice_id,
-          payment_method_id,
-          amount,
-          payment_date,
-          reference,
-          notes
-        ) values (
-          v_invoice_id,
-          v_payment_method_id,
-          v_order.total,
-          v_order.paid_at,
-          v_order.payment_reference,
-          'Pago online automático'
-        );
-      end if;
-    end;
-  end if;
   
   return v_invoice_id;
 end;

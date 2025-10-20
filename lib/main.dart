@@ -25,6 +25,7 @@ import 'modules/settings/services/appearance_service.dart';
 import 'modules/bikeshop/services/bikeshop_service.dart';
 import 'modules/hr/services/hr_service.dart';
 import 'modules/website/services/website_service.dart';
+import 'public_store/providers/cart_provider.dart';
 import 'shared/routes/app_router.dart';
 import 'shared/services/error_reporting_service.dart';
 
@@ -111,6 +112,7 @@ class VinabikeApp extends StatelessWidget {
         )),
         ChangeNotifierProvider(create: (_) => HRService()),
         ChangeNotifierProvider(create: (_) => WebsiteService()),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProxyProvider2<DatabaseService, AccountingService, SalesService>(
           create: (context) => SalesService(
             context.read<DatabaseService>(),
@@ -154,10 +156,10 @@ class VinabikeApp extends StatelessWidget {
           final authService = context.read<AuthService>();
 
           return MaterialApp.router(
-            title: 'Vinabike ERP',
+            title: 'Vinabike',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: ThemeMode.system,
+            themeMode: ThemeMode.light, // Force light mode for public store
             routerConfig: AppRouter.createRouter(authService),
             debugShowCheckedModeBanner: false,
             // Add localization support

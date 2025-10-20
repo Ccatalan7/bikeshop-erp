@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
@@ -33,22 +32,21 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       return true;
     }).toList();
 
-    return MainLayout(
-      child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          title: const Text('Pedidos Online'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () => websiteService.loadOrders(),
-              tooltip: 'Actualizar',
-            ),
-          ],
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
         ),
+        title: const Text('Pedidos Online'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => websiteService.loadOrders(),
+            tooltip: 'Actualizar',
+          ),
+        ],
+      ),
         body: Column(
           children: [
             // Filters
@@ -132,7 +130,6 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
             ),
           ],
         ),
-      ),
     );
   }
 
