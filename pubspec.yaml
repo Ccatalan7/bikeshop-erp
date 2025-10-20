@@ -40,6 +40,7 @@ dependencies:
   
   # UI Components
   cupertino_icons: ^1.0.6
+  flutter_colorpicker: ^1.1.0
   
   # Utilities
   uuid: ^4.4.0

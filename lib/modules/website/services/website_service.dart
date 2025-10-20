@@ -511,6 +511,108 @@ class WebsiteService extends ChangeNotifier {
   }
 
   // ============================================================================
+  // VISUAL EDITOR METHODS
+  // ============================================================================
+
+  /// Update hero section content
+  Future<void> updateHeroSection({
+    required String title,
+    required String subtitle,
+    String? imageUrl,
+  }) async {
+    try {
+      // Save to settings table
+      await _supabase.from('website_settings').upsert([
+        {
+          'key': 'hero_title',
+          'value': title,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        {
+          'key': 'hero_subtitle',
+          'value': subtitle,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        if (imageUrl != null)
+          {
+            'key': 'hero_image_url',
+            'value': imageUrl,
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+      ]);
+
+      await loadSettings();
+    } catch (e) {
+      _error = 'Error al actualizar sección hero: $e';
+      debugPrint(_error);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Update theme colors
+  Future<void> updateThemeColors({
+    required int primaryColor,
+    required int accentColor,
+  }) async {
+    try {
+      await _supabase.from('website_settings').upsert([
+        {
+          'key': 'theme_primary_color',
+          'value': primaryColor.toString(),
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        {
+          'key': 'theme_accent_color',
+          'value': accentColor.toString(),
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+      ]);
+
+      await loadSettings();
+    } catch (e) {
+      _error = 'Error al actualizar colores: $e';
+      debugPrint(_error);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Update contact information
+  Future<void> updateContactInfo({
+    required String phone,
+    required String email,
+    required String address,
+  }) async {
+    try {
+      await _supabase.from('website_settings').upsert([
+        {
+          'key': 'contact_phone',
+          'value': phone,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        {
+          'key': 'contact_email',
+          'value': email,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        {
+          'key': 'contact_address',
+          'value': address,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+      ]);
+
+      await loadSettings();
+    } catch (e) {
+      _error = 'Error al actualizar información de contacto: $e';
+      debugPrint(_error);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // ============================================================================
   // INITIALIZATION
   // ============================================================================
 
