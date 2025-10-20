@@ -9,7 +9,7 @@ import 'featured_products_page.dart';
 import 'content_management_page.dart';
 import 'website_settings_page.dart';
 import 'online_orders_page.dart';
-import 'visual_editor_page_advanced.dart';
+import 'odoo_style_editor_page.dart';
 
 /// Main hub for website content management
 class WebsiteManagementPage extends StatefulWidget {
@@ -230,7 +230,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const AdvancedVisualEditorPage(),
+                            builder: (_) => const OdooStyleEditorPage(),
                           ),
                         );
                       },
