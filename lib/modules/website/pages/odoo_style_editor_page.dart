@@ -3,8 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 import 'dart:async';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/services/image_service.dart';
+import '../../../shared/constants/storage_constants.dart';
 import '../services/website_service.dart';
 // import '../services/website_service.dart';
 
@@ -171,9 +174,10 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   }
   
   void _initializeDefaultBlocks() {
+    const uuid = Uuid();
     _blocks = [
       WebsiteBlock(
-        id: 'hero_1',
+        id: uuid.v4(),
         type: BlockType.hero,
         data: {
           'title': 'SERVICIOS Y PRODUCTOS DE BICICLETA',
@@ -186,7 +190,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         },
       ),
       WebsiteBlock(
-        id: 'products_1',
+        id: uuid.v4(),
         type: BlockType.products,
         data: {
           'title': 'Productos Destacados',
@@ -195,7 +199,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         },
       ),
       WebsiteBlock(
-        id: 'services_1',
+        id: uuid.v4(),
         type: BlockType.services,
         data: {
           'title': 'Nuestros Servicios',
@@ -207,7 +211,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         },
       ),
       WebsiteBlock(
-        id: 'about_1',
+        id: uuid.v4(),
         type: BlockType.about,
         data: {
           'title': 'Sobre Nosotros',
@@ -355,7 +359,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   }
   
   WebsiteBlock _createBlockTemplate(BlockType type) {
-    final id = '${type.name}_${DateTime.now().millisecondsSinceEpoch}';
+    const uuid = Uuid();
+    final id = uuid.v4(); // Generate proper UUID
     
     switch (type) {
       case BlockType.hero:
@@ -577,6 +582,16 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   }
   
   Future<void> _pickImage() async {
+    if (_selectedBlockId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ No hay ningún bloque seleccionado'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
@@ -587,16 +602,70 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       );
       
       if (image != null) {
-        // TODO: Upload to Supabase Storage
+        // Show uploading message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('📷 Imagen seleccionada. Implementar subida a Supabase.'),
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                SizedBox(width: 12),
+                Text('📤 Subiendo imagen...'),
+              ],
+            ),
+            duration: Duration(seconds: 30),
           ),
         );
+        
+        // Read image bytes
+        final bytes = await image.readAsBytes();
+        
+        // Upload to Supabase Storage
+        final imageUrl = await ImageService.uploadBytes(
+          bytes: bytes,
+          fileName: image.name,
+          bucket: StorageConfig.defaultBucket,
+          folder: 'website/banners',
+        );
+        
+        if (imageUrl != null) {
+          // Update the selected block with new image URL
+          final blockIndex = _blocks.indexWhere((b) => b.id == _selectedBlockId);
+          if (blockIndex != -1) {
+            setState(() {
+              _blocks[blockIndex].data['image'] = imageUrl;
+              _hasChanges = true;
+            });
+            
+            // Auto-save if enabled
+            if (_autoSaveEnabled) {
+              await _saveChanges(showNotification: false);
+            }
+            
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ Imagen subida exitosamente'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } else {
+          throw Exception('No se pudo obtener la URL de la imagen');
+        }
       }
     } catch (e) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('❌ Error al subir imagen: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
       );
     }
   }
