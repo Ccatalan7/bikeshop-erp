@@ -37,10 +37,8 @@ class WebsiteService extends ChangeNotifier {
     if (!_isInitializing) notifyListeners();
 
     try {
-      final response = await _supabase
-          .from('website_banners')
-          .select()
-          .order('order_index');
+      final response =
+          await _supabase.from('website_banners').select().order('order_index');
 
       _banners = (response as List)
           .map((json) => WebsiteBanner.fromJson(json))
@@ -61,9 +59,7 @@ class WebsiteService extends ChangeNotifier {
       final data = banner.toJson();
       data['updated_at'] = DateTime.now().toIso8601String();
 
-      await _supabase
-          .from('website_banners')
-          .upsert(data);
+      await _supabase.from('website_banners').upsert(data);
 
       await loadBanners();
     } catch (e) {
@@ -76,10 +72,7 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> deleteBanner(String id) async {
     try {
-      await _supabase
-          .from('website_banners')
-          .delete()
-          .eq('id', id);
+      await _supabase.from('website_banners').delete().eq('id', id);
 
       await loadBanners();
     } catch (e) {
@@ -95,8 +88,7 @@ class WebsiteService extends ChangeNotifier {
       for (int i = 0; i < reorderedBanners.length; i++) {
         await _supabase
             .from('website_banners')
-            .update({'order_index': i})
-            .eq('id', reorderedBanners[i].id);
+            .update({'order_index': i}).eq('id', reorderedBanners[i].id);
       }
 
       await loadBanners();
@@ -121,9 +113,14 @@ class WebsiteService extends ChangeNotifier {
       final response = await _supabase
           .from('website_blocks')
           .select()
-          .order('order_index');
+          .order('order_index', ascending: true);
 
-      _blocks = List<Map<String, dynamic>>.from(response as List);
+      final data = List<Map<String, dynamic>>.from(response as List);
+      data.sort(
+        (a, b) => (a['order_index'] ?? 0).compareTo(b['order_index'] ?? 0),
+      );
+
+      _blocks = data;
       _error = null;
     } catch (e) {
       _error = 'Error al cargar bloques: $e';
@@ -137,14 +134,17 @@ class WebsiteService extends ChangeNotifier {
   Future<void> saveBlocks(List<Map<String, dynamic>> blocks) async {
     try {
       // Delete all existing blocks
-      await _supabase.from('website_blocks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await _supabase
+          .from('website_blocks')
+          .delete()
+          .neq('id', '00000000-0000-0000-0000-000000000000');
 
       // Insert new blocks
       if (blocks.isNotEmpty) {
         final blocksToInsert = blocks.asMap().entries.map((entry) {
           final index = entry.key;
           final block = entry.value;
-          
+
           return {
             'id': block['id'],
             'block_type': block['type'],
@@ -169,10 +169,7 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> deleteBlock(String id) async {
     try {
-      await _supabase
-          .from('website_blocks')
-          .delete()
-          .eq('id', id);
+      await _supabase.from('website_blocks').delete().eq('id', id);
 
       await loadBlocks();
     } catch (e) {
@@ -239,10 +236,7 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> removeFeaturedProduct(String id) async {
     try {
-      await _supabase
-          .from('featured_products')
-          .delete()
-          .eq('id', id);
+      await _supabase.from('featured_products').delete().eq('id', id);
 
       await loadFeaturedProducts();
     } catch (e) {
@@ -258,8 +252,7 @@ class WebsiteService extends ChangeNotifier {
       for (int i = 0; i < reordered.length; i++) {
         await _supabase
             .from('featured_products')
-            .update({'order_index': i})
-            .eq('id', reordered[i].id);
+            .update({'order_index': i}).eq('id', reordered[i].id);
       }
 
       await loadFeaturedProducts();
@@ -281,9 +274,7 @@ class WebsiteService extends ChangeNotifier {
     if (!_isInitializing) notifyListeners();
 
     try {
-      final response = await _supabase
-          .from('website_content')
-          .select();
+      final response = await _supabase.from('website_content').select();
 
       _contents = (response as List)
           .map((json) => WebsiteContent.fromJson(json))
@@ -304,9 +295,7 @@ class WebsiteService extends ChangeNotifier {
       final data = content.toJson();
       data['updated_at'] = DateTime.now().toIso8601String();
 
-      await _supabase
-          .from('website_content')
-          .upsert(data);
+      await _supabase.from('website_content').upsert(data);
 
       await loadContents();
     } catch (e) {
@@ -335,9 +324,7 @@ class WebsiteService extends ChangeNotifier {
     if (!_isInitializing) notifyListeners();
 
     try {
-      final response = await _supabase
-          .from('website_settings')
-          .select();
+      final response = await _supabase.from('website_settings').select();
 
       _settings = {};
       for (final row in response as List) {
@@ -390,9 +377,8 @@ class WebsiteService extends ChangeNotifier {
           .select()
           .order('created_at', ascending: false);
 
-      _orders = (response as List)
-          .map((json) => OnlineOrder.fromJson(json))
-          .toList();
+      _orders =
+          (response as List).map((json) => OnlineOrder.fromJson(json)).toList();
 
       // Load items for each order
       for (int i = 0; i < _orders.length; i++) {
@@ -428,11 +414,8 @@ class WebsiteService extends ChangeNotifier {
 
   Future<OnlineOrder?> getOrderById(String id) async {
     try {
-      final response = await _supabase
-          .from('online_orders')
-          .select()
-          .eq('id', id)
-          .single();
+      final response =
+          await _supabase.from('online_orders').select().eq('id', id).single();
 
       final order = OnlineOrder.fromJson(response);
       final items = await _loadOrderItems(order.id);
@@ -444,7 +427,8 @@ class WebsiteService extends ChangeNotifier {
   }
 
   /// Create a new online order from the public store
-  Future<String> createOrder(Map<String, dynamic> orderData, List<Map<String, dynamic>> orderItems) async {
+  Future<String> createOrder(Map<String, dynamic> orderData,
+      List<Map<String, dynamic>> orderItems) async {
     try {
       // Insert order and get the generated ID
       final orderResponse = await _supabase
@@ -463,9 +447,7 @@ class WebsiteService extends ChangeNotifier {
         };
       }).toList();
 
-      await _supabase
-          .from('online_order_items')
-          .insert(itemsToInsert);
+      await _supabase.from('online_order_items').insert(itemsToInsert);
 
       // Reload orders
       await loadOrders();
@@ -481,13 +463,10 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> updateOrderStatus(String orderId, String status) async {
     try {
-      await _supabase
-          .from('online_orders')
-          .update({
-            'status': status,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', orderId);
+      await _supabase.from('online_orders').update({
+        'status': status,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', orderId);
 
       await loadOrders();
     } catch (e) {
@@ -500,13 +479,10 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> updatePaymentStatus(String orderId, String paymentStatus) async {
     try {
-      await _supabase
-          .from('online_orders')
-          .update({
-            'payment_status': paymentStatus,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', orderId);
+      await _supabase.from('online_orders').update({
+        'payment_status': paymentStatus,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', orderId);
 
       await loadOrders();
     } catch (e) {
@@ -555,10 +531,7 @@ class WebsiteService extends ChangeNotifier {
         updates['website_featured'] = websiteFeatured;
       }
 
-      await _supabase
-          .from('products')
-          .update(updates)
-          .eq('id', productId);
+      await _supabase.from('products').update(updates).eq('id', productId);
 
       notifyListeners();
     } catch (e) {
@@ -578,9 +551,7 @@ class WebsiteService extends ChangeNotifier {
           .gt('stock_quantity', 0)
           .order('name');
 
-      return (response as List)
-          .map((json) => Product.fromJson(json))
-          .toList();
+      return (response as List).map((json) => Product.fromJson(json)).toList();
     } catch (e) {
       debugPrint('Error loading website products: $e');
       return [];

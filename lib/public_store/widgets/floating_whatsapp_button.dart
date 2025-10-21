@@ -3,12 +3,21 @@ import 'package:url_launcher/url_launcher.dart';
 import '../theme/public_store_theme.dart';
 
 class FloatingWhatsAppButton extends StatelessWidget {
-  const FloatingWhatsAppButton({super.key});
+  final String phoneNumber;
+  final String message;
+  final Color backgroundColor;
+
+  const FloatingWhatsAppButton({
+    super.key,
+    required this.phoneNumber,
+    this.message = 'Hola! Me gustaría consultar sobre sus productos.',
+    this.backgroundColor = PublicStoreTheme.accentGreen,
+  });
 
   Future<void> _openWhatsApp() async {
-    final phone = '56912345678'; // Replace with your actual WhatsApp number
-    final message = Uri.encodeComponent('Hola! Me gustaría consultar sobre sus productos.');
-    final url = Uri.parse('https://wa.me/$phone?text=$message');
+    if (phoneNumber.isEmpty) return;
+    final encodedMessage = Uri.encodeComponent(message);
+    final url = Uri.parse('https://wa.me/$phoneNumber?text=$encodedMessage');
 
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -25,7 +34,7 @@ class FloatingWhatsAppButton extends StatelessWidget {
           width: 60,
           height: 60,
           decoration: BoxDecoration(
-            color: PublicStoreTheme.accentGreen,
+            color: backgroundColor,
             shape: BoxShape.circle,
             boxShadow: PublicStoreTheme.floatingShadow,
           ),

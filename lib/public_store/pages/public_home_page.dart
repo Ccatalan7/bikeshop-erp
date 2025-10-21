@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../theme/public_store_theme.dart';
-import '../../shared/services/inventory_service.dart';
-import '../../modules/website/services/website_service.dart';
+import 'package:provider/provider.dart';
+
 import '../../modules/website/models/website_models.dart';
+import '../../modules/website/services/website_service.dart';
 import '../../shared/models/product.dart';
+import '../../shared/services/inventory_service.dart';
 import '../../shared/utils/chilean_utils.dart';
+import '../theme/public_store_theme.dart';
 
 class PublicHomePage extends StatefulWidget {
   const PublicHomePage({super.key});
@@ -16,10 +17,9 @@ class PublicHomePage extends StatefulWidget {
 }
 
 class _PublicHomePageState extends State<PublicHomePage> {
+  bool _isLoading = true;
   List<WebsiteBanner> _banners = [];
   List<Product> _featuredProducts = [];
-  List<Map<String, dynamic>> _blocks = []; // Odoo-style blocks
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -34,27 +34,27 @@ class _PublicHomePageState extends State<PublicHomePage> {
       final websiteService = context.read<WebsiteService>();
       final inventoryService = context.read<InventoryService>();
 
-      // Load website blocks (Odoo-style editor)
+      if (websiteService.settings.isEmpty) {
+        await websiteService.loadSettings();
+      }
+
       await websiteService.loadBlocks();
-      _blocks = websiteService.blocks.where((b) => b['is_visible'] ?? true).toList();
 
-      // Load active banners (fallback for legacy)
       await websiteService.loadBanners();
-      _banners = websiteService.banners.where((b) => b.active).toList();
+      _banners =
+          websiteService.banners.where((banner) => banner.active).toList();
 
-      // Load featured products
       await websiteService.loadFeaturedProducts();
       final featuredProductIds = websiteService.featuredProducts;
-      
       final allProducts = await inventoryService.getProducts();
-      
+
       _featuredProducts = allProducts
-          .where((p) => featuredProductIds.any((fp) => fp.productId == p.id))
+          .where((product) =>
+              featuredProductIds.any((fp) => fp.productId == product.id))
           .take(8)
           .toList();
-
-    } catch (e) {
-      debugPrint('[PublicHomePage] Error loading data: $e');
+    } catch (error) {
+      debugPrint('[PublicHomePage] Error loading data: $error');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -64,66 +64,78 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final websiteService = context.watch<WebsiteService>();
+    final primaryColor = _resolveColor(
+      websiteService.getSetting('theme_primary_color', ''),
+      PublicStoreTheme.primaryBlue,
+    );
+    final accentColor = _resolveColor(
+      websiteService.getSetting('theme_accent_color', ''),
+      PublicStoreTheme.accentGreen,
+    );
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // If blocks exist, render from blocks (Odoo editor)
-    if (_blocks.isNotEmpty) {
+    final visibleBlocks = List<Map<String, dynamic>>.from(
+      websiteService.blocks.where((block) => block['is_visible'] ?? true),
+    )..sort(
+        (a, b) => (a['order_index'] ?? 0).compareTo(b['order_index'] ?? 0),
+      );
+
+    if (visibleBlocks.isNotEmpty) {
       return SingleChildScrollView(
         child: Column(
-          children: _blocks.map((blockData) => _buildBlockFromData(blockData)).toList(),
+          children: [
+            for (final block in visibleBlocks) ...[
+              _buildBlockFromData(block, primaryColor, accentColor),
+              const SizedBox(height: 48),
+            ],
+          ],
         ),
       );
     }
 
-    // Otherwise, use legacy hardcoded layout
     return SingleChildScrollView(
       child: Column(
         children: [
-          // Hero Section
-          _buildHeroSection(),
-
+          _buildHeroSection(primaryColor, accentColor),
           const SizedBox(height: 64),
-
-          // Featured Products Section
-          _buildFeaturedProductsSection(),
-
+          _buildFeaturedProductsSection(primaryColor, accentColor),
           const SizedBox(height: 64),
-
-          // Categories Section
-          _buildCategoriesSection(),
-
+          _buildCategoriesSection(primaryColor),
           const SizedBox(height: 64),
-
-          // Why Choose Us Section
-          _buildWhyChooseUsSection(),
-
+          _buildWhyChooseUsSection(primaryColor),
           const SizedBox(height: 64),
         ],
       ),
     );
   }
 
-  Widget _buildBlockFromData(Map<String, dynamic> blockData) {
+  Widget _buildBlockFromData(
+    Map<String, dynamic> blockData,
+    Color primaryColor,
+    Color accentColor,
+  ) {
     final blockType = blockData['block_type'] ?? '';
     final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
 
     switch (blockType) {
       case 'hero':
-        return _buildHeroBlock(data);
+        return _buildHeroBlock(data, primaryColor, accentColor);
       case 'products':
-        return _buildProductsBlock(data);
+        return _buildProductsBlock(data, primaryColor, accentColor);
       case 'services':
-        return _buildServicesBlock(data);
+        return _buildServicesBlock(data, primaryColor);
       case 'about':
         return _buildAboutBlock(data);
       case 'testimonials':
         return _buildTestimonialsBlock(data);
       case 'features':
-        return _buildFeaturesBlock(data);
+        return _buildFeaturesBlock(data, primaryColor, accentColor);
       case 'cta':
-        return _buildCtaBlock(data);
+        return _buildCtaBlock(data, primaryColor, accentColor);
       case 'gallery':
         return _buildGalleryBlock(data);
       case 'contact':
@@ -133,17 +145,16 @@ class _PublicHomePageState extends State<PublicHomePage> {
     }
   }
 
-  Widget _buildHeroSection() {
+  Widget _buildHeroSection(Color primaryColor, Color accentColor) {
     if (_banners.isEmpty) {
-      // Default hero if no banners
       return Container(
-        height: 500,
+        height: 480,
         width: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              PublicStoreTheme.primaryBlue,
-              PublicStoreTheme.primaryBlue.withOpacity(0.8),
+              primaryColor,
+              accentColor.withOpacity(0.85),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -156,25 +167,26 @@ class _PublicHomePageState extends State<PublicHomePage> {
               Text(
                 'SERVICIOS Y PRODUCTOS DE BICICLETA',
                 style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                  color: Colors.white,
-                ),
+                      color: Colors.white,
+                    ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               Text(
                 'Todo lo que necesitas para tu bicicleta en Viña del Mar',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white70,
-                ),
+                      color: Colors.white70,
+                    ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: () => context.go('/tienda/productos'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: PublicStoreTheme.primaryBlue,
-                  padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
                 ),
                 child: const Text('VER PRODUCTOS'),
               ),
@@ -184,12 +196,11 @@ class _PublicHomePageState extends State<PublicHomePage> {
       );
     }
 
-    // Use first active banner
     final banner = _banners.first;
     final hasImage = banner.imageUrl != null && banner.imageUrl!.isNotEmpty;
 
     return Container(
-      height: 500,
+      height: 480,
       width: double.infinity,
       decoration: BoxDecoration(
         image: hasImage
@@ -201,8 +212,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
         gradient: !hasImage
             ? LinearGradient(
                 colors: [
-                  PublicStoreTheme.primaryBlue,
-                  PublicStoreTheme.primaryBlue.withOpacity(0.8),
+                  primaryColor,
+                  accentColor.withOpacity(0.85),
                 ],
               )
             : null,
@@ -213,8 +224,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Colors.black.withOpacity(0.4),
-              Colors.black.withOpacity(0.6),
+              Colors.black.withOpacity(0.35),
+              Colors.black.withOpacity(0.65),
             ],
           ),
         ),
@@ -224,7 +235,9 @@ class _PublicHomePageState extends State<PublicHomePage> {
             children: [
               Text(
                 banner.title,
-                style: Theme.of(context).textTheme.displayLarge,
+                style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                      color: Colors.white,
+                    ),
                 textAlign: TextAlign.center,
               ),
               if (banner.subtitle != null && banner.subtitle!.isNotEmpty) ...[
@@ -232,8 +245,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
                 Text(
                   banner.subtitle!,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white70,
-                  ),
+                        color: Colors.white70,
+                      ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -241,16 +254,19 @@ class _PublicHomePageState extends State<PublicHomePage> {
                 const SizedBox(height: 32),
                 ElevatedButton(
                   onPressed: () {
-                    if (banner.ctaLink != null && banner.ctaLink!.isNotEmpty) {
-                      context.go(banner.ctaLink!);
-                    } else {
-                      context.go('/tienda/productos');
-                    }
+                    final link =
+                        banner.ctaLink != null && banner.ctaLink!.isNotEmpty
+                            ? banner.ctaLink!
+                            : '/tienda/productos';
+                    context.go(link);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: PublicStoreTheme.primaryBlue,
-                    padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
+                    backgroundColor: accentColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 48,
+                      vertical: 20,
+                    ),
                   ),
                   child: Text(banner.ctaText!.toUpperCase()),
                 ),
@@ -262,7 +278,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
     );
   }
 
-  Widget _buildFeaturedProductsSection() {
+  Widget _buildFeaturedProductsSection(Color primaryColor, Color accentColor) {
     if (_featuredProducts.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -281,11 +297,10 @@ class _PublicHomePageState extends State<PublicHomePage> {
           Text(
             'Descubre nuestras mejores ofertas',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: PublicStoreTheme.textSecondary,
-            ),
+                  color: PublicStoreTheme.textSecondary,
+                ),
           ),
           const SizedBox(height: 32),
-          
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -297,15 +312,23 @@ class _PublicHomePageState extends State<PublicHomePage> {
             ),
             itemCount: _featuredProducts.length,
             itemBuilder: (context, index) {
-              return _buildProductCard(_featuredProducts[index]);
+              return _buildProductCard(
+                _featuredProducts[index],
+                primaryColor,
+                accentColor,
+              );
             },
           ),
-          
           const SizedBox(height: 32),
-          
           Center(
             child: OutlinedButton(
               onPressed: () => context.go('/tienda/productos'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: primaryColor,
+                side: BorderSide(color: primaryColor, width: 1.5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
+              ),
               child: const Text('VER TODOS LOS PRODUCTOS'),
             ),
           ),
@@ -314,15 +337,19 @@ class _PublicHomePageState extends State<PublicHomePage> {
     );
   }
 
-  Widget _buildProductCard(Product product) {
+  Widget _buildProductCard(
+    Product product,
+    Color primaryColor,
+    Color accentColor,
+  ) {
     return InkWell(
       onTap: () => context.go('/tienda/producto/${product.id}'),
       child: Card(
         elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Product Image
             AspectRatio(
               aspectRatio: 1,
               child: Container(
@@ -360,8 +387,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
                       ),
               ),
             ),
-            
-            // Product Info
             Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -377,24 +402,35 @@ class _PublicHomePageState extends State<PublicHomePage> {
                   Text(
                     ChileanUtils.formatCurrency(product.price),
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: PublicStoreTheme.primaryBlue,
-                      fontWeight: FontWeight.bold,
-                    ),
+                          color: primaryColor,
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   if (product.stockQuantity > 0)
                     Text(
                       'Stock disponible',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: PublicStoreTheme.success,
-                      ),
+                            color: PublicStoreTheme.success,
+                          ),
                     )
                   else
                     Text(
                       'Sin stock',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: PublicStoreTheme.error,
-                      ),
+                            color: PublicStoreTheme.error,
+                          ),
                     ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () =>
+                        context.go('/tienda/producto/${product.id}'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 42),
+                    ),
+                    child: const Text('VER DETALLE'),
+                  ),
                 ],
               ),
             ),
@@ -404,7 +440,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
     );
   }
 
-  Widget _buildCategoriesSection() {
+  Widget _buildCategoriesSection(Color primaryColor) {
     final categories = [
       {'name': 'Bicicletas', 'icon': Icons.pedal_bike},
       {'name': 'Accesorios', 'icon': Icons.settings},
@@ -426,9 +462,10 @@ class _PublicHomePageState extends State<PublicHomePage> {
                 style: Theme.of(context).textTheme.displaySmall,
               ),
               const SizedBox(height: 48),
-              
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              Wrap(
+                spacing: 24,
+                runSpacing: 24,
+                alignment: WrapAlignment.center,
                 children: categories.map((category) {
                   return InkWell(
                     onTap: () => context.go('/tienda/productos'),
@@ -445,7 +482,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
                           child: Icon(
                             category['icon'] as IconData,
                             size: 48,
-                            color: PublicStoreTheme.primaryBlue,
+                            color: primaryColor,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -465,7 +502,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
     );
   }
 
-  Widget _buildWhyChooseUsSection() {
+  Widget _buildWhyChooseUsSection(Color primaryColor) {
     return Container(
       constraints: const BoxConstraints(maxWidth: 1200),
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -476,31 +513,28 @@ class _PublicHomePageState extends State<PublicHomePage> {
             style: Theme.of(context).textTheme.displaySmall,
           ),
           const SizedBox(height: 48),
-          
-          Row(
+          Wrap(
+            spacing: 24,
+            runSpacing: 24,
+            alignment: WrapAlignment.center,
             children: [
-              Expanded(
-                child: _buildFeatureCard(
-                  Icons.local_shipping_outlined,
-                  'Envío Rápido',
-                  'Envíos a todo Chile en 24-48 horas',
-                ),
+              _buildFeatureCard(
+                Icons.local_shipping_outlined,
+                'Envío Rápido',
+                'Envíos a todo Chile en 24-48 horas',
+                primaryColor,
               ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: _buildFeatureCard(
-                  Icons.verified_user_outlined,
-                  'Productos Originales',
-                  'Garantía de autenticidad en todos nuestros productos',
-                ),
+              _buildFeatureCard(
+                Icons.verified_user_outlined,
+                'Productos Originales',
+                'Garantía de autenticidad en todos nuestros productos',
+                primaryColor,
               ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: _buildFeatureCard(
-                  Icons.support_agent_outlined,
-                  'Atención Personalizada',
-                  'Asesoramiento experto para encontrar lo que necesitas',
-                ),
+              _buildFeatureCard(
+                Icons.support_agent_outlined,
+                'Atención Personalizada',
+                'Asesoramiento experto para encontrar lo que necesitas',
+                primaryColor,
               ),
             ],
           ),
@@ -509,62 +543,73 @@ class _PublicHomePageState extends State<PublicHomePage> {
     );
   }
 
-  Widget _buildFeatureCard(IconData icon, String title, String description) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              size: 48,
-              color: PublicStoreTheme.primaryBlue,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-          ],
+  Widget _buildFeatureCard(
+    IconData icon,
+    String title,
+    String description,
+    Color primaryColor,
+  ) {
+    return SizedBox(
+      width: 320,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Icon(icon, size: 48, color: primaryColor),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                description,
+                style: Theme.of(context).textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ============================================================================
-  // BLOCK RENDERERS (Odoo-style Editor Blocks)
-  // ============================================================================
-
-  Widget _buildHeroBlock(Map<String, dynamic> data) {
-    final title = data['title'] ?? 'Bienvenido';
-    final subtitle = data['subtitle'] ?? '';
-    final ctaText = data['ctaText'] ?? 'Ver más';
+  Widget _buildHeroBlock(
+    Map<String, dynamic> data,
+    Color primaryColor,
+    Color accentColor,
+  ) {
+    final title = (data['title'] ?? 'Bienvenido') as String;
+    final subtitle = (data['subtitle'] ?? '') as String;
+    final ctaText =
+        (data['ctaText'] ?? data['buttonText'] ?? 'Ver más').toString();
+    final ctaLink =
+        (data['ctaLink'] ?? data['buttonLink'] ?? '/tienda/productos')
+            .toString();
     final imageUrl = data['imageUrl'];
-    final showOverlay = data['showOverlay'] ?? true;
-    final overlayOpacity = (data['overlayOpacity'] ?? 0.5).toDouble();
+    final showOverlay = (data['showOverlay'] ?? true) as bool;
+    final overlayOpacity =
+        ((data['overlayOpacity'] ?? 0.5) as num).clamp(0.0, 1.0).toDouble();
+
+    final hasImage = imageUrl != null && imageUrl.toString().isNotEmpty;
 
     return Container(
-      height: 500,
+      height: 480,
       width: double.infinity,
       decoration: BoxDecoration(
-        image: imageUrl != null && imageUrl.toString().isNotEmpty
+        image: hasImage
             ? DecorationImage(
                 image: NetworkImage(imageUrl.toString()),
                 fit: BoxFit.cover,
               )
             : null,
-        gradient: imageUrl == null || imageUrl.toString().isEmpty
+        gradient: !hasImage
             ? LinearGradient(
                 colors: [
-                  PublicStoreTheme.primaryBlue,
-                  PublicStoreTheme.primaryBlue.withOpacity(0.8),
+                  primaryColor,
+                  accentColor.withOpacity(0.85),
                 ],
               )
             : null,
@@ -576,7 +621,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(overlayOpacity * 0.8),
+                    Colors.black.withOpacity(overlayOpacity * 0.75),
                     Colors.black.withOpacity(overlayOpacity),
                   ],
                 ),
@@ -589,8 +634,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
               Text(
                 title,
                 style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                  color: Colors.white,
-                ),
+                      color: Colors.white,
+                    ),
                 textAlign: TextAlign.center,
               ),
               if (subtitle.isNotEmpty) ...[
@@ -598,18 +643,20 @@ class _PublicHomePageState extends State<PublicHomePage> {
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white70,
-                  ),
+                        color: Colors.white70,
+                      ),
                   textAlign: TextAlign.center,
                 ),
               ],
               const SizedBox(height: 32),
               ElevatedButton(
-                onPressed: () => context.go('/tienda/productos'),
+                onPressed: () => context
+                    .go(ctaLink.isNotEmpty ? ctaLink : '/tienda/productos'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: PublicStoreTheme.primaryBlue,
-                  padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
                 ),
                 child: Text(ctaText),
               ),
@@ -620,16 +667,24 @@ class _PublicHomePageState extends State<PublicHomePage> {
     );
   }
 
-  Widget _buildProductsBlock(Map<String, dynamic> data) {
+  Widget _buildProductsBlock(
+    Map<String, dynamic> data,
+    Color primaryColor,
+    Color accentColor,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 64),
-      child: _buildFeaturedProductsSection(),
+      child: _buildFeaturedProductsSection(primaryColor, accentColor),
     );
   }
 
-  Widget _buildServicesBlock(Map<String, dynamic> data) {
+  Widget _buildServicesBlock(Map<String, dynamic> data, Color primaryColor) {
     final title = data['title'] ?? 'Nuestros Servicios';
     final services = data['services'] as List? ?? [];
+
+    if (services.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
@@ -646,6 +701,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
             runSpacing: 24,
             alignment: WrapAlignment.center,
             children: services.map((service) {
+              final serviceData = service as Map<String, dynamic>;
               return SizedBox(
                 width: 300,
                 child: Card(
@@ -654,19 +710,19 @@ class _PublicHomePageState extends State<PublicHomePage> {
                     child: Column(
                       children: [
                         Icon(
-                          _getIconData(service['icon'] ?? 'star'),
+                          _getIconData(serviceData['icon'] ?? 'star'),
                           size: 48,
-                          color: PublicStoreTheme.primaryBlue,
+                          color: primaryColor,
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          service['title'] ?? '',
+                          serviceData['title'] ?? '',
                           style: Theme.of(context).textTheme.titleLarge,
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          service['description'] ?? '',
+                          serviceData['description'] ?? '',
                           style: Theme.of(context).textTheme.bodyMedium,
                           textAlign: TextAlign.center,
                         ),
@@ -685,6 +741,10 @@ class _PublicHomePageState extends State<PublicHomePage> {
   Widget _buildAboutBlock(Map<String, dynamic> data) {
     final title = data['title'] ?? 'Sobre Nosotros';
     final content = data['content'] ?? '';
+
+    if (content.toString().isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
@@ -707,41 +767,56 @@ class _PublicHomePageState extends State<PublicHomePage> {
   }
 
   Widget _buildTestimonialsBlock(Map<String, dynamic> data) {
-    // Placeholder for testimonials
     return const SizedBox(height: 64);
   }
 
-  Widget _buildFeaturesBlock(Map<String, dynamic> data) {
+  Widget _buildFeaturesBlock(
+    Map<String, dynamic> data,
+    Color primaryColor,
+    Color accentColor,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 64),
-      child: _buildWhyChooseUsSection(),
+      child: _buildWhyChooseUsSection(primaryColor),
     );
   }
 
-  Widget _buildCtaBlock(Map<String, dynamic> data) {
+  Widget _buildCtaBlock(
+    Map<String, dynamic> data,
+    Color primaryColor,
+    Color accentColor,
+  ) {
     final title = data['title'] ?? 'Visita nuestra tienda';
-    final buttonText = data['buttonText'] ?? 'Ver productos';
+    final buttonText =
+        (data['buttonText'] ?? data['ctaText'] ?? 'Ver productos').toString();
+    final buttonLink =
+        (data['buttonLink'] ?? data['ctaLink'] ?? '/tienda/productos')
+            .toString();
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 64),
-      color: PublicStoreTheme.primaryBlue,
+      width: double.infinity,
+      color: primaryColor,
       child: Center(
         child: Column(
           children: [
             Text(
               title,
               style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: Colors.white,
-              ),
+                    color: Colors.white,
+                  ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
             ElevatedButton(
-              onPressed: () => context.go('/tienda/productos'),
+              onPressed: () => context.go(
+                buttonLink.isNotEmpty ? buttonLink : '/tienda/productos',
+              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: PublicStoreTheme.primaryBlue,
-                padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
+                backgroundColor: accentColor,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
               ),
               child: Text(buttonText),
             ),
@@ -752,24 +827,61 @@ class _PublicHomePageState extends State<PublicHomePage> {
   }
 
   Widget _buildGalleryBlock(Map<String, dynamic> data) {
-    // Placeholder for gallery
     return const SizedBox(height: 64);
   }
 
   Widget _buildContactBlock(Map<String, dynamic> data) {
-    // Placeholder for contact
     return const SizedBox(height: 64);
   }
 
   IconData _getIconData(String iconName) {
     switch (iconName) {
-      case 'directions_bike': return Icons.directions_bike;
-      case 'build': return Icons.build;
-      case 'shopping_bag': return Icons.shopping_bag;
-      case 'star': return Icons.star;
-      case 'favorite': return Icons.favorite;
-      case 'support_agent': return Icons.support_agent;
-      default: return Icons.star;
+      case 'directions_bike':
+        return Icons.directions_bike;
+      case 'build':
+        return Icons.build;
+      case 'shopping_bag':
+        return Icons.shopping_bag;
+      case 'star':
+        return Icons.star;
+      case 'favorite':
+        return Icons.favorite;
+      case 'support_agent':
+        return Icons.support_agent;
+      default:
+        return Icons.star;
     }
+  }
+
+  Color _resolveColor(String raw, Color fallback) {
+    final value = raw.trim();
+    if (value.isEmpty) return fallback;
+
+    Color? parsed;
+    int? intValue;
+
+    String cleaned = value.toLowerCase();
+    if (cleaned.startsWith('color(')) {
+      final inside = cleaned.replaceAll(RegExp(r'color\(|\)'), '');
+      intValue = int.tryParse(inside);
+    }
+
+    intValue ??= int.tryParse(cleaned);
+    if (intValue == null && cleaned.startsWith('0x')) {
+      intValue = int.tryParse(cleaned);
+    }
+    if (intValue == null) {
+      cleaned = cleaned.replaceAll('#', '');
+      intValue = int.tryParse(cleaned, radix: 16);
+      if (intValue != null && cleaned.length <= 6) {
+        intValue = 0xFF000000 | intValue;
+      }
+    }
+
+    if (intValue != null) {
+      parsed = Color(intValue);
+    }
+
+    return parsed ?? fallback;
   }
 }
