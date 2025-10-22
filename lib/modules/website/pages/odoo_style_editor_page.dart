@@ -8,7 +8,11 @@ import 'dart:async';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/constants/storage_constants.dart';
+import '../../../shared/services/inventory_service.dart';
+import '../../../shared/models/product.dart';
 import '../services/website_service.dart';
+import '../widgets/website_block_renderer.dart';
+import '../models/website_models.dart';
 // import '../services/website_service.dart';
 
 /// 🎨 ODOO-STYLE VISUAL EDITOR - PHASE 3
@@ -26,6 +30,7 @@ import '../services/website_service.dart';
 // Block types that can be added
 enum BlockType {
   hero,
+  carousel,
   products,
   services,
   about,
@@ -152,7 +157,13 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   Future<void> _loadFromDatabase() async {
     try {
       final websiteService = context.read<WebsiteService>();
-      await websiteService.loadBlocks();
+      final inventoryService = context.read<InventoryService>();
+
+      await Future.wait([
+        websiteService.loadBlocks(),
+        websiteService.loadFeaturedProducts(),
+        inventoryService.getProducts(),
+      ]);
 
       final loadedBlocks = List<Map<String, dynamic>>.from(
         websiteService.blocks,
@@ -196,6 +207,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     switch (typeString) {
       case 'hero':
         return BlockType.hero;
+      case 'carousel':
+        return BlockType.carousel;
       case 'products':
         return BlockType.products;
       case 'services':
@@ -467,6 +480,29 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
             'overlayOpacity': 0.5,
           },
         );
+      case BlockType.carousel:
+        return WebsiteBlock(
+          id: id,
+          type: type,
+          data: {
+            'autoPlay': true,
+            'intervalSeconds': 5,
+            'animation': 'slide',
+            'showIndicators': true,
+            'showArrows': true,
+            'slides': [
+              {
+                'title': 'Destaca tus ofertas',
+                'subtitle': 'Promociones semanales para ciclistas',
+                'ctaText': 'Ver catálogo',
+                'ctaLink': '/tienda/productos',
+                'imageUrl': null,
+                'showOverlay': true,
+                'overlayOpacity': 0.55,
+              },
+            ],
+          },
+        );
       case BlockType.products:
         return WebsiteBlock(
           id: id,
@@ -617,10 +653,20 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     });
   }
 
+  void _moveBlockToTop(int index) {
+    _moveBlock(index, 0);
+  }
+
+  void _moveBlockToBottom(int index) {
+    _moveBlock(index, _blocks.length - 1);
+  }
+
   String _getBlockTypeName(BlockType type) {
     switch (type) {
       case BlockType.hero:
         return 'Hero / Banner';
+      case BlockType.carousel:
+        return 'Carrusel Banner';
       case BlockType.products:
         return 'Productos';
       case BlockType.services:
@@ -644,6 +690,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     switch (type) {
       case BlockType.hero:
         return Icons.view_carousel;
+      case BlockType.carousel:
+        return Icons.slideshow;
       case BlockType.products:
         return Icons.shopping_bag;
       case BlockType.services:
@@ -703,6 +751,83 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     );
   }
 
+  Future<String?> _pickAndUploadImage({String folder = 'website/banners'}) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (image == null) {
+        return null;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('📤 Subiendo imagen...'),
+            ],
+          ),
+          duration: Duration(seconds: 30),
+        ),
+      );
+
+      final bytes = await image.readAsBytes();
+      final imageUrl = await ImageService.uploadBytes(
+        bytes: bytes,
+        fileName: image.name,
+        bucket: StorageConfig.defaultBucket,
+        folder: folder,
+      );
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      if (imageUrl == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ No se pudo obtener la URL de la imagen'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return null;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Imagen subida exitosamente'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      return imageUrl;
+    } catch (e) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error al subir imagen: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+      return null;
+    }
+  }
+
   Future<void> _pickImage() async {
     if (_selectedBlockId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -714,83 +839,23 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       return;
     }
 
-    try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        imageQuality: 85,
-      );
+    final imageUrl = await _pickAndUploadImage(folder: 'website/banners');
+    if (imageUrl == null) {
+      return;
+    }
 
-      if (image != null) {
-        // Show uploading message
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
-                ),
-                SizedBox(width: 12),
-                Text('📤 Subiendo imagen...'),
-              ],
-            ),
-            duration: Duration(seconds: 30),
-          ),
-        );
+    final blockIndex = _blocks.indexWhere((b) => b.id == _selectedBlockId);
+    if (blockIndex == -1) {
+      return;
+    }
 
-        // Read image bytes
-        final bytes = await image.readAsBytes();
+    setState(() {
+      _blocks[blockIndex].data['imageUrl'] = imageUrl;
+      _hasChanges = true;
+    });
 
-        // Upload to Supabase Storage
-        final imageUrl = await ImageService.uploadBytes(
-          bytes: bytes,
-          fileName: image.name,
-          bucket: StorageConfig.defaultBucket,
-          folder: 'website/banners',
-        );
-
-        if (imageUrl != null) {
-          // Update the selected block with new image URL
-          final blockIndex =
-              _blocks.indexWhere((b) => b.id == _selectedBlockId);
-          if (blockIndex != -1) {
-            setState(() {
-              _blocks[blockIndex].data['imageUrl'] = imageUrl;
-              _hasChanges = true;
-            });
-
-            // Auto-save if enabled
-            if (_autoSaveEnabled) {
-              await _saveChanges(showNotification: false);
-            }
-
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ Imagen subida exitosamente'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
-        } else {
-          throw Exception('No se pudo obtener la URL de la imagen');
-        }
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Error al subir imagen: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-        ),
-      );
+    if (_autoSaveEnabled) {
+      await _saveChanges(showNotification: false);
     }
   }
 
@@ -1197,6 +1262,15 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              // Move to top
+                              if (index > 0)
+                                IconButton(
+                                  icon: const Icon(Icons.vertical_align_top,
+                                      color: Colors.white, size: 16),
+                                  onPressed: () => _moveBlockToTop(index),
+                                  tooltip: 'Mover al principio',
+                                ),
+
                               // Move up
                               if (index > 0)
                                 IconButton(
@@ -1213,6 +1287,15 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                                       color: Colors.white, size: 16),
                                   onPressed: () => _moveBlock(index, index + 1),
                                   tooltip: 'Mover abajo',
+                                ),
+
+                              // Move to bottom
+                              if (index < _blocks.length - 1)
+                                IconButton(
+                                  icon: const Icon(Icons.vertical_align_bottom,
+                                      color: Colors.white, size: 16),
+                                  onPressed: () => _moveBlockToBottom(index),
+                                  tooltip: 'Mover al final',
                                 ),
 
                               // Duplicate
@@ -1276,316 +1359,57 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   }
 
   Widget _buildBlockPreview(WebsiteBlock block) {
-    switch (block.type) {
-      case BlockType.hero:
-        return _buildHeroPreview(block);
-      case BlockType.products:
-        return _buildProductsPreview(block);
-      case BlockType.services:
-        return _buildServicesPreview(block);
-      case BlockType.about:
-        return _buildAboutPreview(block);
-      default:
-        return Container(
-          padding: const EdgeInsets.all(64),
-          child: Center(
-            child: Text(
-              _getBlockTypeName(block.type),
-              style: TextStyle(fontSize: 24, color: _textColor),
-            ),
-          ),
-        );
-    }
+    final blockType = block.type.name;
+    final data = Map<String, dynamic>.from(block.data);
+    final websiteService = context.read<WebsiteService>();
+    final inventoryService = context.read<InventoryService>();
+
+    final previewFeaturedProducts = block.type == BlockType.products
+        ? _resolveEditorFeaturedProducts(
+            websiteService.featuredProducts,
+            inventoryService.products,
+          )
+        : null;
+
+    return WebsiteBlockRenderer.build(
+      context: context,
+      blockType: blockType,
+      data: data,
+      primaryColor: _primaryColor,
+      accentColor: _accentColor,
+      featuredProducts: previewFeaturedProducts,
+      previewMode: true,
+      headingFont: _headingFont,
+      bodyFont: _bodyFont,
+      headingSize: _headingSize,
+      bodySize: _bodySize,
+      onNavigate: (_) {},
+    );
   }
 
-  Widget _buildHeroPreview(WebsiteBlock block) {
-    final data = block.data;
-
-    String? imageUrl;
-    final rawImage = data['imageUrl'];
-    if (rawImage is String) {
-      final trimmed = rawImage.trim();
-      imageUrl = trimmed.isEmpty ? null : trimmed;
-    } else if (rawImage != null) {
-      final converted = rawImage.toString().trim();
-      imageUrl = converted.isEmpty ? null : converted;
+  List<Product>? _resolveEditorFeaturedProducts(
+    List<FeaturedProduct> entries,
+    List<Product> products,
+  ) {
+    if (entries.isEmpty || products.isEmpty) {
+      return null;
     }
 
-    DecorationImage? backgroundImage;
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      backgroundImage = DecorationImage(
-        image: NetworkImage(imageUrl),
-        fit: BoxFit.cover,
-      );
-    }
-    final hasImage = backgroundImage != null;
+    final productMap = {for (final product in products) product.id: product};
+    final sortedEntries = entries
+        .where((entry) => entry.active)
+        .toList()
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
 
-    final showOverlay = (data['showOverlay'] ?? true) == true;
-
-    final rawTitle = (data['title'] ?? '').toString().trim();
-    final title = rawTitle.isEmpty ? 'Título' : rawTitle;
-    final subtitle = (data['subtitle'] ?? '').toString().trim();
-    final hasSubtitle = subtitle.isNotEmpty;
-    final ctaText = (data['ctaText'] ?? '').toString().trim();
-    final hasCta = ctaText.isNotEmpty;
-
-    double overlayOpacity = 0.5;
-    final overlayValue = data['overlayOpacity'];
-    if (overlayValue is num) {
-      final value = overlayValue.toDouble();
-      overlayOpacity = value < 0
-          ? 0
-          : value > 1
-              ? 1
-              : value;
-    } else if (overlayValue is String) {
-      final parsed = double.tryParse(overlayValue);
-      if (parsed != null) {
-        overlayOpacity = parsed < 0
-            ? 0
-            : parsed > 1
-                ? 1
-                : parsed;
+    final resolvedProducts = <Product>[];
+    for (final entry in sortedEntries) {
+      final product = productMap[entry.productId];
+      if (product != null && product.isActive) {
+        resolvedProducts.add(product);
       }
     }
 
-    return Container(
-      height: 400,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        image: backgroundImage,
-        gradient: hasImage
-            ? null
-            : LinearGradient(
-                colors: [
-                  _primaryColor,
-                  _accentColor.withOpacity(0.85),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (showOverlay)
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(overlayOpacity * 0.6),
-                    Colors.black.withOpacity(overlayOpacity),
-                  ],
-                ),
-              ),
-            ),
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: _headingSize,
-                    fontFamily: _headingFont,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                if (hasSubtitle) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: _bodySize * 1.5,
-                      fontFamily: _bodyFont,
-                      color: Colors.white70,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-                if (hasCta) ...[
-                  const SizedBox(height: 32),
-                  ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _accentColor,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 32, vertical: 16),
-                    ),
-                    child: Text(
-                      ctaText.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductsPreview(WebsiteBlock block) {
-    return Container(
-      padding: EdgeInsets.all(_sectionSpacing),
-      child: Column(
-        children: [
-          Text(
-            block.data['title'] ?? 'Productos',
-            style: TextStyle(
-              fontSize: _headingSize * 0.75,
-              fontFamily: _headingFont,
-              fontWeight: FontWeight.bold,
-              color: _textColor,
-            ),
-          ),
-          const SizedBox(height: 32),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: block.data['itemsPerRow'] ?? 3,
-            mainAxisSpacing: 16,
-            crossAxisSpacing: 16,
-            children: List.generate(3, (index) {
-              return Card(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.shopping_bag, size: 48, color: _primaryColor),
-                    const SizedBox(height: 8),
-                    Text('Producto ${index + 1}'),
-                    Text('\$99.99', style: TextStyle(color: _accentColor)),
-                  ],
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildServicesPreview(WebsiteBlock block) {
-    final services = block.data['services'] as List? ?? [];
-    return Container(
-      padding: EdgeInsets.all(_sectionSpacing),
-      child: Column(
-        children: [
-          Text(
-            block.data['title'] ?? 'Servicios',
-            style: TextStyle(
-              fontSize: _headingSize * 0.75,
-              fontFamily: _headingFont,
-              fontWeight: FontWeight.bold,
-              color: _textColor,
-            ),
-          ),
-          const SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: services.isEmpty
-                ? List.generate(
-                    3,
-                    (i) => _buildServiceCard(
-                          'Servicio ${i + 1}',
-                          Icons.star,
-                        ),
-                  )
-                : services
-                    .map(
-                      (s) => _buildServiceCard(
-                        s['title'] ?? 'Servicio',
-                        _getIconFromString(s['icon']),
-                      ),
-                    )
-                    .toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildServiceCard(String title, IconData icon) {
-    return Card(
-      elevation: 2,
-      child: Container(
-        width: 120,
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Icon(icon, size: 48, color: _primaryColor),
-            const SizedBox(height: 8),
-            Text(title, textAlign: TextAlign.center),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAboutPreview(WebsiteBlock block) {
-    return Container(
-      padding: EdgeInsets.all(_sectionSpacing),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  block.data['title'] ?? 'Sobre Nosotros',
-                  style: TextStyle(
-                    fontSize: _headingSize * 0.75,
-                    fontFamily: _headingFont,
-                    fontWeight: FontWeight.bold,
-                    color: _textColor,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  block.data['content'] ?? 'Contenido...',
-                  style: TextStyle(
-                    fontSize: _bodySize,
-                    fontFamily: _bodyFont,
-                    color: _textColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 32),
-          Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              color: _primaryColor.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.image, size: 64, color: _primaryColor),
-          ),
-        ],
-      ),
-    );
-  }
-
-  IconData _getIconFromString(String? iconName) {
-    switch (iconName) {
-      case 'directions_bike':
-        return Icons.directions_bike;
-      case 'build':
-        return Icons.build;
-      case 'shopping_bag':
-        return Icons.shopping_bag;
-      default:
-        return Icons.star;
-    }
+    return resolvedProducts.isEmpty ? null : resolvedProducts;
   }
 
   // ============================================================================
@@ -1717,6 +1541,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     switch (type) {
       case BlockType.hero:
         return 'Banner principal con imagen y CTA';
+      case BlockType.carousel:
+        return 'Carrusel de imágenes con CTA';
       case BlockType.products:
         return 'Catálogo de productos';
       case BlockType.services:
@@ -1803,6 +1629,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     switch (block.type) {
       case BlockType.hero:
         return _buildHeroEditControls(block, theme);
+      case BlockType.carousel:
+        return _buildCarouselEditControls(block, theme);
       case BlockType.products:
         return _buildProductsEditControls(block, theme);
       case BlockType.services:
@@ -1885,6 +1713,352 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         label: const Text('Cambiar Imagen de Fondo'),
       ),
     ];
+  }
+
+  List<Widget> _buildCarouselEditControls(WebsiteBlock block, ThemeData theme) {
+    final slides = _getCarouselSlides(block);
+
+    double intervalSeconds = 5;
+    final rawInterval = block.data['intervalSeconds'];
+    if (rawInterval is num) {
+      intervalSeconds = rawInterval.toDouble();
+    } else if (rawInterval is String) {
+      intervalSeconds = double.tryParse(rawInterval) ?? 5;
+    }
+    intervalSeconds = intervalSeconds.clamp(1, 20);
+
+    final animation = (block.data['animation'] ?? 'slide').toString();
+    final autoPlay = (block.data['autoPlay'] ?? true) == true;
+    final showIndicators = (block.data['showIndicators'] ?? true) == true;
+    final showArrows = (block.data['showArrows'] ?? true) == true;
+
+    return [
+      SwitchListTile(
+        title: const Text('Reproducción automática'),
+        value: autoPlay,
+        onChanged: (value) {
+          setState(() {
+            block.data['autoPlay'] = value;
+          });
+          _markAsChanged();
+        },
+      ),
+      const SizedBox(height: 8),
+      Text('Tiempo entre imágenes: ${intervalSeconds.round()} s'),
+      Slider(
+        value: intervalSeconds,
+        min: 2,
+        max: 15,
+        divisions: 13,
+        label: '${intervalSeconds.round()} s',
+        onChanged: (value) {
+          setState(() {
+            block.data['intervalSeconds'] = value.round();
+          });
+          _markAsChanged();
+        },
+      ),
+      const SizedBox(height: 16),
+      DropdownButtonFormField<String>(
+        decoration: const InputDecoration(
+          labelText: 'Animación',
+          border: OutlineInputBorder(),
+        ),
+        value: animation,
+        items: const [
+          DropdownMenuItem(value: 'slide', child: Text('Deslizar')),
+          DropdownMenuItem(value: 'fade', child: Text('Desvanecer')),
+          DropdownMenuItem(value: 'zoom', child: Text('Zoom')),
+        ],
+        onChanged: (value) {
+          if (value == null) return;
+          setState(() {
+            block.data['animation'] = value;
+          });
+          _markAsChanged();
+        },
+      ),
+      const SizedBox(height: 16),
+      SwitchListTile(
+        title: const Text('Mostrar indicadores'),
+        value: showIndicators,
+        onChanged: (value) {
+          setState(() {
+            block.data['showIndicators'] = value;
+          });
+          _markAsChanged();
+        },
+      ),
+      SwitchListTile(
+        title: const Text('Mostrar flechas'),
+        value: showArrows,
+        onChanged: (value) {
+          setState(() {
+            block.data['showArrows'] = value;
+          });
+          _markAsChanged();
+        },
+      ),
+      const Divider(height: 32),
+      if (slides.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Aún no hay diapositivas. Agrega una para comenzar.',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      ...slides.asMap().entries.map((entry) {
+        final index = entry.key;
+        return _buildCarouselSlideCard(block, slides, index, theme);
+      }).toList(),
+      if (slides.isNotEmpty) const SizedBox(height: 16),
+      OutlinedButton.icon(
+        onPressed: () {
+          setState(() {
+            slides.add({
+              'title': 'Nueva diapositiva',
+              'subtitle': 'Describe tu promoción',
+              'ctaText': 'Ver más',
+              'ctaLink': '/tienda/productos',
+              'imageUrl': null,
+              'showOverlay': true,
+              'overlayOpacity': 0.55,
+            });
+            block.data['slides'] = slides;
+          });
+          _markAsChanged();
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('Añadir diapositiva'),
+      ),
+    ];
+  }
+
+  Widget _buildCarouselSlideCard(
+    WebsiteBlock block,
+    List<Map<String, dynamic>> slides,
+    int index,
+    ThemeData theme,
+  ) {
+    final slide = slides[index];
+    final imageUrl = (slide['imageUrl'] ?? '').toString();
+    final hasImage = imageUrl.isNotEmpty;
+    final showOverlay = (slide['showOverlay'] ?? true) == true;
+
+    double overlayOpacity = 0.55;
+    final rawOverlay = slide['overlayOpacity'];
+    if (rawOverlay is num) {
+      overlayOpacity = rawOverlay.toDouble();
+    } else if (rawOverlay is String) {
+      overlayOpacity = double.tryParse(rawOverlay) ?? 0.55;
+    }
+    overlayOpacity = overlayOpacity.clamp(0.0, 1.0);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Diapositiva ${index + 1}',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                IconButton(
+                  tooltip: 'Mover arriba',
+                  icon: const Icon(Icons.arrow_upward),
+                  onPressed: index == 0
+                      ? null
+                      : () {
+                          setState(() {
+                            final item = slides.removeAt(index);
+                            slides.insert(index - 1, item);
+                            block.data['slides'] = slides;
+                          });
+                          _markAsChanged();
+                        },
+                ),
+                IconButton(
+                  tooltip: 'Mover abajo',
+                  icon: const Icon(Icons.arrow_downward),
+                  onPressed: index >= slides.length - 1
+                      ? null
+                      : () {
+                          setState(() {
+                            final item = slides.removeAt(index);
+                            slides.insert(index + 1, item);
+                            block.data['slides'] = slides;
+                          });
+                          _markAsChanged();
+                        },
+                ),
+                IconButton(
+                  tooltip: 'Eliminar',
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () {
+                    setState(() {
+                      slides.removeAt(index);
+                      block.data['slides'] = slides;
+                    });
+                    _markAsChanged();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: hasImage
+                    ? Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: theme.colorScheme.surfaceVariant,
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.broken_image, size: 40),
+                          );
+                        },
+                      )
+                    : Container(
+                        color: theme.colorScheme.surfaceVariant,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.image, size: 48),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => _pickCarouselImage(block, index),
+                icon: const Icon(Icons.image_outlined),
+                label: const Text('Cambiar imagen'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildTextField(
+              label: 'Título',
+              value: slide['title']?.toString() ?? '',
+              onChanged: (value) {
+                setState(() {
+                  slides[index]['title'] = value;
+                  block.data['slides'] = slides;
+                });
+                _markAsChanged();
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildTextField(
+              label: 'Subtítulo',
+              value: slide['subtitle']?.toString() ?? '',
+              maxLines: 2,
+              onChanged: (value) {
+                setState(() {
+                  slides[index]['subtitle'] = value;
+                  block.data['slides'] = slides;
+                });
+                _markAsChanged();
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildTextField(
+              label: 'Texto del botón',
+              value: slide['ctaText']?.toString() ?? '',
+              onChanged: (value) {
+                setState(() {
+                  slides[index]['ctaText'] = value;
+                  block.data['slides'] = slides;
+                });
+                _markAsChanged();
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildTextField(
+              label: 'Enlace del botón',
+              value: slide['ctaLink']?.toString() ?? '/tienda/productos',
+              onChanged: (value) {
+                setState(() {
+                  slides[index]['ctaLink'] = value;
+                  block.data['slides'] = slides;
+                });
+                _markAsChanged();
+              },
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Mostrar overlay'),
+              value: showOverlay,
+              onChanged: (value) {
+                setState(() {
+                  slides[index]['showOverlay'] = value;
+                  block.data['slides'] = slides;
+                });
+                _markAsChanged();
+              },
+            ),
+            if (showOverlay) ...[
+              Text('Opacidad del overlay: ${overlayOpacity.toStringAsFixed(1)}'),
+              Slider(
+                value: overlayOpacity,
+                min: 0,
+                max: 1,
+                divisions: 10,
+                onChanged: (value) {
+                  setState(() {
+                    slides[index]['overlayOpacity'] = value;
+                    block.data['slides'] = slides;
+                  });
+                  _markAsChanged();
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _getCarouselSlides(WebsiteBlock block) {
+    final rawSlides = block.data['slides'];
+    if (rawSlides is List) {
+      return rawSlides
+          .whereType<Map>()
+          .map((slide) => Map<String, dynamic>.from(slide))
+          .toList();
+    }
+    return [];
+  }
+
+  Future<void> _pickCarouselImage(WebsiteBlock block, int index) async {
+    final imageUrl = await _pickAndUploadImage(folder: 'website/carousel');
+    if (imageUrl == null) {
+      return;
+    }
+
+    final slides = _getCarouselSlides(block);
+    if (index < 0 || index >= slides.length) {
+      return;
+    }
+
+    setState(() {
+      slides[index]['imageUrl'] = imageUrl;
+      block.data['slides'] = slides;
+      _hasChanges = true;
+    });
+
+    if (_autoSaveEnabled) {
+      await _saveChanges(showNotification: false);
+    }
   }
 
   List<Widget> _buildProductsEditControls(WebsiteBlock block, ThemeData theme) {

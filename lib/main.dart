@@ -154,13 +154,18 @@ class VinabikeApp extends StatelessWidget {
           PurchaseService.setAccountingService(accountingService);
           
           final authService = context.read<AuthService>();
+          final isPublicStoreHost = _detectPublicStoreHost();
 
           return MaterialApp.router(
             title: 'Vinabike',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: ThemeMode.light, // Force light mode for public store
-            routerConfig: AppRouter.createRouter(authService),
+            routerConfig: AppRouter.createRouter(
+              authService,
+              forcePublicStoreHost: isPublicStoreHost,
+              initialLocationOverride: isPublicStoreHost ? '/tienda' : null,
+            ),
             debugShowCheckedModeBanner: false,
             // Add localization support
             localizationsDelegates: const [
@@ -182,4 +187,16 @@ class VinabikeApp extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _detectPublicStoreHost() {
+  if (!kIsWeb) {
+    return false;
+  }
+
+  final host = Uri.base.host.toLowerCase();
+  return host == 'vinabike-store.web.app' ||
+      host == 'vinabike-store.firebaseapp.com' ||
+      host == 'vinabike.cl' ||
+      host == 'www.vinabike.cl';
 }

@@ -82,9 +82,11 @@ Page<dynamic> _buildPageWithNoTransition(
 }
 
 class AppRouter {
-  static GoRouter? _router;
-
-  static GoRouter createRouter(AuthService authService) {
+  static GoRouter createRouter(
+    AuthService authService, {
+    String? initialLocationOverride,
+    bool forcePublicStoreHost = false,
+  }) {
     // Public store routes (customer-facing, no auth required)
     final publicRoutes = [
       '/tienda',
@@ -96,17 +98,31 @@ class AppRouter {
       '/tienda/contacto',
     ];
 
-    _router ??= GoRouter(
-      initialLocation: '/login', // Start at login, will redirect to dashboard if authenticated
+    final effectiveInitialLocation = initialLocationOverride ??
+        (forcePublicStoreHost ? '/tienda' : '/login');
+
+    final router = GoRouter(
+      initialLocation: effectiveInitialLocation,
       refreshListenable: authService,
       redirect: (context, state) {
         if (authService.isInitializing) {
           return null;
         }
 
+        final isPublicRoute = publicRoutes.any(
+          (route) => state.uri.path.startsWith(route),
+        );
+
+        if (forcePublicStoreHost) {
+          // Force public storefront hosts to stay within /tienda routes.
+          if (!isPublicRoute) {
+            return '/tienda';
+          }
+          return null;
+        }
+
         final isLoggedIn = authService.isAuthenticated;
         final loggingIn = state.matchedLocation == '/login';
-        final isPublicRoute = publicRoutes.any((route) => state.matchedLocation.startsWith(route));
 
         // Allow access to public store routes without authentication
         if (isPublicRoute) {
@@ -734,6 +750,6 @@ class AppRouter {
       ],
     );
 
-    return _router!;
+    return router;
   }
 }

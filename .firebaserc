@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "project-vinabike"
-  }
+  },
+  "targets": {
+    "project-vinabike": {
+      "hosting": {
+        "store": [
+          "vinabike-store"
+        ],
+        "erp": [
+          "project-vinabike"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

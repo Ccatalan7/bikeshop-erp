@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../modules/website/models/website_models.dart';
 import '../../modules/website/services/website_service.dart';
+import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../shared/models/product.dart';
-import '../../shared/services/inventory_service.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../theme/public_store_theme.dart';
 
@@ -32,7 +33,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
     try {
       final websiteService = context.read<WebsiteService>();
-      final inventoryService = context.read<InventoryService>();
 
       if (websiteService.settings.isEmpty) {
         await websiteService.loadSettings();
@@ -45,14 +45,11 @@ class _PublicHomePageState extends State<PublicHomePage> {
           websiteService.banners.where((banner) => banner.active).toList();
 
       await websiteService.loadFeaturedProducts();
-      final featuredProductIds = websiteService.featuredProducts;
-      final allProducts = await inventoryService.getProducts();
-
-      _featuredProducts = allProducts
-          .where((product) =>
-              featuredProductIds.any((fp) => fp.productId == product.id))
-          .take(8)
+      final featuredEntries = websiteService.featuredProducts
+          .where((fp) => fp.active)
           .toList();
+
+      _featuredProducts = await _fetchFeaturedProducts(featuredEntries);
     } catch (error) {
       debugPrint('[PublicHomePage] Error loading data: $error');
     } finally {
@@ -60,6 +57,122 @@ class _PublicHomePageState extends State<PublicHomePage> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<List<Product>> _fetchFeaturedProducts(
+    List<FeaturedProduct> featuredEntries,
+  ) async {
+    if (featuredEntries.isEmpty) {
+      return const [];
+    }
+
+    final productIds =
+        featuredEntries.map((entry) => entry.productId).toSet().toList();
+
+    try {
+      final response = await Supabase.instance.client
+          .from('products')
+          .select()
+          .inFilter('id', productIds)
+          .eq('show_on_website', true)
+          .eq('is_active', true);
+
+      final productsById = <String, Product>{};
+      for (final row in response as List<dynamic>) {
+        try {
+          final map = Map<String, dynamic>.from(row as Map);
+          final product = _productFromMap(map);
+          productsById[product.id] = product;
+        } catch (error) {
+          debugPrint('[PublicHomePage] Failed to parse product: $error');
+        }
+      }
+
+      final orderedProducts = <Product>[];
+      for (final entry in featuredEntries..sort((a, b) => a.orderIndex.compareTo(b.orderIndex))) {
+        final product = productsById[entry.productId];
+        if (product != null) {
+          orderedProducts.add(product);
+        }
+      }
+
+      return orderedProducts.take(8).toList();
+    } catch (error) {
+      debugPrint(
+          '[PublicHomePage] Error fetching featured product details: $error');
+      return const [];
+    }
+  }
+
+  Product _productFromMap(Map<String, dynamic> json) {
+    final price = (json['price'] as num?)?.toDouble() ?? 0.0;
+    final cost = (json['cost'] as num?)?.toDouble() ?? 0.0;
+    final stockQuantity =
+        json['inventory_qty'] as int? ?? json['stock_quantity'] as int? ?? 0;
+    final minStock =
+        json['min_stock_level'] as int? ?? json['min_stock'] as int? ?? 0;
+    final maxStock =
+        json['max_stock_level'] as int? ?? json['max_stock'] as int? ?? 0;
+    final categoryValue = (json['category'] as String?) ?? 'other';
+
+    final productTypeValue = (json['product_type'] as String?)?.toLowerCase();
+
+    return Product(
+      id: json['id']?.toString() ?? '',
+      name: (json['name'] as String?) ?? 'Sin nombre',
+      sku: (json['sku'] as String?) ?? '',
+      barcode: json['barcode'] as String?,
+      price: price,
+      cost: cost,
+      stockQuantity: stockQuantity,
+      minStockLevel: minStock,
+      maxStockLevel: maxStock > 0 ? maxStock : 100,
+      imageUrl: json['image_url'] as String?,
+      imageUrls: (json['image_urls'] as List?)?.cast<String>() ?? const [],
+      description: json['description'] as String?,
+      category: ProductCategory.values.firstWhere(
+        (c) => c.name == categoryValue,
+        orElse: () => ProductCategory.other,
+      ),
+      categoryId: json['category_id']?.toString(),
+      categoryName: json['category_name'] as String?,
+      brand: json['brand'] as String?,
+      model: json['model'] as String?,
+      specifications:
+          Map<String, String>.from(json['specifications'] as Map? ?? {}),
+      tags: (json['tags'] as List?)?.cast<String>() ?? const [],
+      unit: ProductUnit.values.firstWhere(
+        (u) => u.name == json['unit'],
+        orElse: () => ProductUnit.unit,
+      ),
+      weight: (json['weight'] as num?)?.toDouble() ?? 0.0,
+      trackStock: json['track_stock'] as bool? ?? true,
+      isActive: json['is_active'] as bool? ?? true,
+      productType: ProductType.values.firstWhere(
+        (t) => t.name == productTypeValue,
+        orElse: () => ProductType.product,
+      ),
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  DateTime _parseDate(dynamic value) {
+    if (value == null) return DateTime.now();
+    if (value is DateTime) return value;
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value) ?? DateTime.now();
+    }
+    try {
+      final dynamic dynamicValue = value;
+      final result = dynamicValue.toDate();
+      if (result is DateTime) {
+        return result;
+      }
+    } catch (_) {
+      // Ignore conversion errors and fallback below.
+    }
+    return DateTime.now();
   }
 
   @override
@@ -89,7 +202,12 @@ class _PublicHomePageState extends State<PublicHomePage> {
         child: Column(
           children: [
             for (final block in visibleBlocks) ...[
-              _buildBlockFromData(block, primaryColor, accentColor),
+              _buildBlockFromData(
+                block,
+                primaryColor,
+                accentColor,
+                websiteService,
+              ),
               const SizedBox(height: 48),
             ],
           ],
@@ -117,32 +235,25 @@ class _PublicHomePageState extends State<PublicHomePage> {
     Map<String, dynamic> blockData,
     Color primaryColor,
     Color accentColor,
+    WebsiteService websiteService,
   ) {
-    final blockType = blockData['block_type'] ?? '';
+    final blockType = (blockData['block_type'] ?? '').toString();
     final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
+    final headingFont = websiteService.getSetting('theme_heading_font');
+    final bodyFont = websiteService.getSetting('theme_body_font');
 
-    switch (blockType) {
-      case 'hero':
-        return _buildHeroBlock(data, primaryColor, accentColor);
-      case 'products':
-        return _buildProductsBlock(data, primaryColor, accentColor);
-      case 'services':
-        return _buildServicesBlock(data, primaryColor);
-      case 'about':
-        return _buildAboutBlock(data);
-      case 'testimonials':
-        return _buildTestimonialsBlock(data);
-      case 'features':
-        return _buildFeaturesBlock(data, primaryColor, accentColor);
-      case 'cta':
-        return _buildCtaBlock(data, primaryColor, accentColor);
-      case 'gallery':
-        return _buildGalleryBlock(data);
-      case 'contact':
-        return _buildContactBlock(data);
-      default:
-        return const SizedBox.shrink();
-    }
+    return WebsiteBlockRenderer.build(
+      context: context,
+      blockType: blockType,
+      data: data,
+      primaryColor: primaryColor,
+      accentColor: accentColor,
+      featuredProducts: blockType == 'products' ? _featuredProducts : null,
+      previewMode: false,
+      headingFont: headingFont.isNotEmpty ? headingFont : null,
+      bodyFont: bodyFont.isNotEmpty ? bodyFont : null,
+      onNavigate: (route) => context.go(route),
+    );
   }
 
   Widget _buildHeroSection(Color primaryColor, Color accentColor) {
@@ -574,283 +685,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
         ),
       ),
     );
-  }
-
-  Widget _buildHeroBlock(
-    Map<String, dynamic> data,
-    Color primaryColor,
-    Color accentColor,
-  ) {
-    final title = (data['title'] ?? 'Bienvenido') as String;
-    final subtitle = (data['subtitle'] ?? '') as String;
-    final ctaText =
-        (data['ctaText'] ?? data['buttonText'] ?? 'Ver más').toString();
-    final ctaLink =
-        (data['ctaLink'] ?? data['buttonLink'] ?? '/tienda/productos')
-            .toString();
-    final imageUrl = data['imageUrl'];
-    final showOverlay = (data['showOverlay'] ?? true) as bool;
-    final overlayOpacity =
-        ((data['overlayOpacity'] ?? 0.5) as num).clamp(0.0, 1.0).toDouble();
-
-    final hasImage = imageUrl != null && imageUrl.toString().isNotEmpty;
-
-    return Container(
-      height: 480,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        image: hasImage
-            ? DecorationImage(
-                image: NetworkImage(imageUrl.toString()),
-                fit: BoxFit.cover,
-              )
-            : null,
-        gradient: !hasImage
-            ? LinearGradient(
-                colors: [
-                  primaryColor,
-                  accentColor.withOpacity(0.85),
-                ],
-              )
-            : null,
-      ),
-      child: Container(
-        decoration: showOverlay
-            ? BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(overlayOpacity * 0.75),
-                    Colors.black.withOpacity(overlayOpacity),
-                  ],
-                ),
-              )
-            : null,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                      color: Colors.white,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              if (subtitle.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: Colors.white70,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: () => context
-                    .go(ctaLink.isNotEmpty ? ctaLink : '/tienda/productos'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
-                ),
-                child: Text(ctaText),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProductsBlock(
-    Map<String, dynamic> data,
-    Color primaryColor,
-    Color accentColor,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 64),
-      child: _buildFeaturedProductsSection(primaryColor, accentColor),
-    );
-  }
-
-  Widget _buildServicesBlock(Map<String, dynamic> data, Color primaryColor) {
-    final title = data['title'] ?? 'Nuestros Servicios';
-    final services = data['services'] as List? ?? [];
-
-    if (services.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
-      child: Column(
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.displaySmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
-          Wrap(
-            spacing: 24,
-            runSpacing: 24,
-            alignment: WrapAlignment.center,
-            children: services.map((service) {
-              final serviceData = service as Map<String, dynamic>;
-              return SizedBox(
-                width: 300,
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: [
-                        Icon(
-                          _getIconData(serviceData['icon'] ?? 'star'),
-                          size: 48,
-                          color: primaryColor,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          serviceData['title'] ?? '',
-                          style: Theme.of(context).textTheme.titleLarge,
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          serviceData['description'] ?? '',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAboutBlock(Map<String, dynamic> data) {
-    final title = data['title'] ?? 'Sobre Nosotros';
-    final content = data['content'] ?? '';
-
-    if (content.toString().isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
-      child: Column(
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.displaySmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            content,
-            style: Theme.of(context).textTheme.bodyLarge,
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTestimonialsBlock(Map<String, dynamic> data) {
-    return const SizedBox(height: 64);
-  }
-
-  Widget _buildFeaturesBlock(
-    Map<String, dynamic> data,
-    Color primaryColor,
-    Color accentColor,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 64),
-      child: _buildWhyChooseUsSection(primaryColor),
-    );
-  }
-
-  Widget _buildCtaBlock(
-    Map<String, dynamic> data,
-    Color primaryColor,
-    Color accentColor,
-  ) {
-    final title = data['title'] ?? 'Visita nuestra tienda';
-    final buttonText =
-        (data['buttonText'] ?? data['ctaText'] ?? 'Ver productos').toString();
-    final buttonLink =
-        (data['buttonLink'] ?? data['ctaLink'] ?? '/tienda/productos')
-            .toString();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64),
-      width: double.infinity,
-      color: primaryColor,
-      child: Center(
-        child: Column(
-          children: [
-            Text(
-              title,
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    color: Colors.white,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: () => context.go(
-                buttonLink.isNotEmpty ? buttonLink : '/tienda/productos',
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: accentColor,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
-              ),
-              child: Text(buttonText),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGalleryBlock(Map<String, dynamic> data) {
-    return const SizedBox(height: 64);
-  }
-
-  Widget _buildContactBlock(Map<String, dynamic> data) {
-    return const SizedBox(height: 64);
-  }
-
-  IconData _getIconData(String iconName) {
-    switch (iconName) {
-      case 'directions_bike':
-        return Icons.directions_bike;
-      case 'build':
-        return Icons.build;
-      case 'shopping_bag':
-        return Icons.shopping_bag;
-      case 'star':
-        return Icons.star;
-      case 'favorite':
-        return Icons.favorite;
-      case 'support_agent':
-        return Icons.support_agent;
-      default:
-        return Icons.star;
-    }
   }
 
   Color _resolveColor(String raw, Color fallback) {
