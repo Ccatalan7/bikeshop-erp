@@ -7876,6 +7876,22 @@ begin
     select 1 from pg_policies
     where schemaname = 'public'
       and tablename = 'website_settings'
+      and policyname = 'Public can read website settings'
+  ) then
+    create policy "Public can read website settings"
+      on website_settings
+      for select
+      to anon
+      using (true);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'website_settings'
       and policyname = 'Authenticated can manage settings'
   ) then
     create policy "Authenticated can manage settings"
@@ -7902,6 +7918,22 @@ begin
       on online_orders
       for insert
       with check (true); -- Anyone can place an order
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'online_orders'
+      and policyname = 'Public can read orders'
+  ) then
+    create policy "Public can read orders"
+      on online_orders
+      for select
+      to anon
+      using (true);
   end if;
 end $$;
 
@@ -7952,6 +7984,22 @@ begin
       on online_order_items
       for insert
       with check (true);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'online_order_items'
+      and policyname = 'Public can read order items'
+  ) then
+    create policy "Public can read order items"
+      on online_order_items
+      for select
+      to anon
+      using (true);
   end if;
 end $$;
 
