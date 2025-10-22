@@ -141,7 +141,58 @@ class WebsiteBlockRegistry {
         'imagePosition': 'right',
         'imageUrl': null,
       },
-      usesCustomEditor: true,
+      usesCustomEditor: false,
+      fields: const [
+        WebsiteBlockFieldSchema(
+          key: 'title',
+          label: 'Título',
+          type: WebsiteBlockFieldType.text,
+          defaultValue: 'Somos Vinabike',
+          group: 'content',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'content',
+          label: 'Contenido',
+          type: WebsiteBlockFieldType.textarea,
+          defaultValue:
+              'Llevamos más de 10 años reparando bicicletas y asesorando ciclistas en Chile.',
+          group: 'content',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'imageUrl',
+          label: 'Imagen',
+          type: WebsiteBlockFieldType.image,
+          group: 'media',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'imagePosition',
+          label: 'Posición de la imagen',
+          type: WebsiteBlockFieldType.select,
+          defaultValue: 'right',
+          options: const [
+            WebsiteBlockFieldOption(value: 'left', label: 'Izquierda'),
+            WebsiteBlockFieldOption(value: 'right', label: 'Derecha'),
+          ],
+          group: 'layout',
+        ),
+      ],
+      controlSections: const [
+        WebsiteBlockControlSection(
+          id: 'content',
+          label: 'Contenido',
+          fieldKeys: ['title', 'content'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'media',
+          label: 'Medios',
+          fieldKeys: ['imageUrl'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'layout',
+          label: 'Diseño',
+          fieldKeys: ['imagePosition'],
+        ),
+      ],
     ),
     WebsiteBlockType.testimonials: WebsiteBlockDefinition(
       type: WebsiteBlockType.testimonials,

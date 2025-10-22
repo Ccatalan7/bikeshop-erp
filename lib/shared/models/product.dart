@@ -17,6 +17,29 @@ class Product {
   final String? brand;
   final String? model;
   final Map<String, String> specifications;
+  final String? supplierId;
+  final String? supplierReference;
+  final String? manufacturer;
+  final String? manufacturerSku;
+  final String? gtin;
+  final String? hsCode;
+  final String? countryOfOrigin;
+  final String? color;
+  final String? size;
+  final String? material;
+  final ProductDimensions? dimensions;
+  final int warrantyMonths;
+  final String lifecycleStatus;
+  final bool serialized;
+  final bool lotTracking;
+  final bool expirationTracking;
+  final int? expiryDays;
+  final int leadTimeDays;
+  final int reorderQuantity;
+  final String? warehouseLocation;
+  final String priceCurrency;
+  final String costCurrency;
+  final double? taxRate;
   final List<String> tags;
   final ProductUnit unit;
   final double weight; // in kg
@@ -45,6 +68,29 @@ class Product {
     this.brand,
     this.model,
     this.specifications = const {},
+    this.supplierId,
+    this.supplierReference,
+    this.manufacturer,
+    this.manufacturerSku,
+    this.gtin,
+    this.hsCode,
+    this.countryOfOrigin,
+    this.color,
+    this.size,
+    this.material,
+    this.dimensions,
+    this.warrantyMonths = 0,
+    this.lifecycleStatus = 'active',
+    this.serialized = false,
+    this.lotTracking = false,
+    this.expirationTracking = false,
+    this.expiryDays,
+    this.leadTimeDays = 0,
+    this.reorderQuantity = 0,
+    this.warehouseLocation,
+    this.priceCurrency = 'CLP',
+    this.costCurrency = 'CLP',
+    this.taxRate,
     this.tags = const [],
     this.unit = ProductUnit.unit,
     this.weight = 0.0,
@@ -81,6 +127,31 @@ class Product {
       model: json['model'] as String?,
       specifications:
           Map<String, String>.from(json['specifications'] as Map? ?? {}),
+      supplierId: json['supplier_id'] as String?,
+      supplierReference: json['supplier_reference'] as String?,
+      manufacturer: json['manufacturer'] as String?,
+      manufacturerSku: json['manufacturer_sku'] as String?,
+      gtin: json['gtin'] as String?,
+      hsCode: json['hs_code'] as String?,
+      countryOfOrigin: json['country_of_origin'] as String?,
+      color: json['color'] as String?,
+      size: json['size'] as String?,
+      material: json['material'] as String?,
+      dimensions: ProductDimensions.fromJsonNullable(json['dimensions']),
+      warrantyMonths: json['warranty_months'] as int? ?? 0,
+      lifecycleStatus: json['lifecycle_status'] as String? ?? 'active',
+      serialized: json['serialized'] as bool? ?? false,
+      lotTracking: json['lot_tracking'] as bool? ?? false,
+      expirationTracking: json['expiration_tracking'] as bool? ?? false,
+      expiryDays: json['expiry_days'] as int?,
+      leadTimeDays: json['lead_time_days'] as int? ?? 0,
+      reorderQuantity: json['reorder_quantity'] as int? ?? 0,
+      warehouseLocation: json['warehouse_location'] as String?,
+      priceCurrency:
+          (json['price_currency'] as String? ?? 'CLP').toString().toUpperCase(),
+      costCurrency:
+          (json['cost_currency'] as String? ?? 'CLP').toString().toUpperCase(),
+      taxRate: (json['tax_rate'] as num?)?.toDouble(),
       tags: (json['tags'] as List?)?.cast<String>() ?? const [],
       unit: ProductUnit.values.firstWhere(
         (u) => u.name == json['unit'],
@@ -118,6 +189,29 @@ class Product {
       'brand': brand,
       'model': model,
       'specifications': specifications,
+      'supplier_id': supplierId,
+      'supplier_reference': supplierReference,
+      'manufacturer': manufacturer,
+      'manufacturer_sku': manufacturerSku,
+      'gtin': gtin,
+      'hs_code': hsCode,
+      'country_of_origin': countryOfOrigin,
+      'color': color,
+      'size': size,
+      'material': material,
+      'dimensions': dimensions?.toJson(),
+      'warranty_months': warrantyMonths,
+      'lifecycle_status': lifecycleStatus,
+      'serialized': serialized,
+      'lot_tracking': lotTracking,
+      'expiration_tracking': expirationTracking,
+      'expiry_days': expiryDays,
+      'lead_time_days': leadTimeDays,
+      'reorder_quantity': reorderQuantity,
+      'warehouse_location': warehouseLocation,
+      'price_currency': priceCurrency,
+      'cost_currency': costCurrency,
+      'tax_rate': taxRate,
       'tags': tags,
       'unit': unit.name,
       'weight': weight,
@@ -148,6 +242,29 @@ class Product {
     String? brand,
     String? model,
     Map<String, String>? specifications,
+    String? supplierId,
+    String? supplierReference,
+    String? manufacturer,
+    String? manufacturerSku,
+    String? gtin,
+    String? hsCode,
+    String? countryOfOrigin,
+    String? color,
+    String? size,
+    String? material,
+    ProductDimensions? dimensions,
+    int? warrantyMonths,
+    String? lifecycleStatus,
+    bool? serialized,
+    bool? lotTracking,
+    bool? expirationTracking,
+    int? expiryDays,
+    int? leadTimeDays,
+    int? reorderQuantity,
+    String? warehouseLocation,
+    String? priceCurrency,
+    String? costCurrency,
+    double? taxRate,
     List<String>? tags,
     ProductUnit? unit,
     double? weight,
@@ -176,6 +293,29 @@ class Product {
       brand: brand ?? this.brand,
       model: model ?? this.model,
       specifications: specifications ?? this.specifications,
+      supplierId: supplierId ?? this.supplierId,
+      supplierReference: supplierReference ?? this.supplierReference,
+      manufacturer: manufacturer ?? this.manufacturer,
+      manufacturerSku: manufacturerSku ?? this.manufacturerSku,
+      gtin: gtin ?? this.gtin,
+      hsCode: hsCode ?? this.hsCode,
+      countryOfOrigin: countryOfOrigin ?? this.countryOfOrigin,
+      color: color ?? this.color,
+      size: size ?? this.size,
+      material: material ?? this.material,
+      dimensions: dimensions ?? this.dimensions,
+      warrantyMonths: warrantyMonths ?? this.warrantyMonths,
+      lifecycleStatus: lifecycleStatus ?? this.lifecycleStatus,
+      serialized: serialized ?? this.serialized,
+      lotTracking: lotTracking ?? this.lotTracking,
+      expirationTracking: expirationTracking ?? this.expirationTracking,
+      expiryDays: expiryDays ?? this.expiryDays,
+      leadTimeDays: leadTimeDays ?? this.leadTimeDays,
+      reorderQuantity: reorderQuantity ?? this.reorderQuantity,
+      warehouseLocation: warehouseLocation ?? this.warehouseLocation,
+      priceCurrency: priceCurrency ?? this.priceCurrency,
+      costCurrency: costCurrency ?? this.costCurrency,
+      taxRate: taxRate ?? this.taxRate,
       tags: tags ?? this.tags,
       unit: unit ?? this.unit,
       weight: weight ?? this.weight,
@@ -275,6 +415,67 @@ enum ProductType {
 
   const ProductType(this.displayName);
   final String displayName;
+}
+
+class ProductDimensions {
+  final double? length;
+  final double? width;
+  final double? height;
+  final String unit;
+
+  const ProductDimensions({
+    this.length,
+    this.width,
+    this.height,
+    this.unit = 'cm',
+  });
+
+  factory ProductDimensions.fromJson(Map<String, dynamic> json) {
+    return ProductDimensions(
+      length: _toDouble(json['length']),
+      width: _toDouble(json['width']),
+      height: _toDouble(json['height']),
+      unit: (json['unit'] as String? ?? 'cm').trim(),
+    );
+  }
+
+  static ProductDimensions? fromJsonNullable(dynamic value) {
+    if (value == null) return null;
+    if (value is ProductDimensions) return value;
+    if (value is Map) {
+      final map = Map<String, dynamic>.from(value);
+      if (map.isEmpty) return null;
+      final dims = ProductDimensions.fromJson(map);
+      return dims.isEmpty ? null : dims;
+    }
+    return null;
+  }
+
+  Map<String, dynamic> toJson() {
+    final result = <String, dynamic>{'unit': unit};
+    if (length != null) result['length'] = length;
+    if (width != null) result['width'] = width;
+    if (height != null) result['height'] = height;
+    return result;
+  }
+
+  bool get isEmpty =>
+      (length == null || length == 0) &&
+      (width == null || width == 0) &&
+      (height == null || height == 0);
+
+  static double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String && value.trim().isNotEmpty) {
+      final normalized = value
+          .trim()
+          .replaceAll(RegExp(r'[^0-9,.-]'), '')
+          .replaceAll(',', '.');
+      return double.tryParse(normalized);
+    }
+    return null;
+  }
 }
 
 DateTime _parseDate(dynamic value) {

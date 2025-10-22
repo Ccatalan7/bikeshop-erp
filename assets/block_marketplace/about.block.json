@@ -2,7 +2,7 @@
   "type": "about",
   "title": "Sobre Nosotros",
   "description": "Bloque de texto/imágenes orientado a presentar la historia del taller.",
-  "usesCustomEditor": true,
+  "usesCustomEditor": false,
   "category": "Contenido",
   "tags": ["about", "historia", "nosotros"],
   "version": 1,
@@ -12,5 +12,55 @@
     "content": "Llevamos más de 10 años reparando bicicletas y asesorando ciclistas en Chile.",
     "imagePosition": "right",
     "imageUrl": null
-  }
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título",
+      "type": "text",
+      "defaultValue": "Somos Vinabike",
+      "group": "content"
+    },
+    {
+      "key": "content",
+      "label": "Contenido",
+      "type": "textarea",
+      "defaultValue": "Llevamos más de 10 años reparando bicicletas y asesorando ciclistas en Chile.",
+      "group": "content"
+    },
+    {
+      "key": "imageUrl",
+      "label": "Imagen",
+      "type": "image",
+      "group": "media"
+    },
+    {
+      "key": "imagePosition",
+      "label": "Posición de la imagen",
+      "type": "select",
+      "options": [
+        {"value": "left", "label": "Izquierda"},
+        {"value": "right", "label": "Derecha"}
+      ],
+      "defaultValue": "right",
+      "group": "layout"
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "content"]
+    },
+    {
+      "id": "media",
+      "label": "Medios",
+      "fields": ["imageUrl"]
+    },
+    {
+      "id": "layout",
+      "label": "Diseño",
+      "fields": ["imagePosition"]
+    }
+  ]
 }

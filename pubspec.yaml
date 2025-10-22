@@ -48,6 +48,9 @@ dependencies:
   path: ^1.9.1
   mime: ^2.0.0
   shared_preferences: ^2.2.3
+  csv: ^5.1.1
+  excel: ^4.0.2
+  file_saver: ^0.2.8
 
 dev_dependencies:
   flutter_test:

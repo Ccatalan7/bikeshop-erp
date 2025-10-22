@@ -441,7 +441,9 @@ class WebsiteService extends ChangeNotifier {
         };
       }).toList();
 
-      await _supabase.from('website_settings').upsert(payload);
+    await _supabase
+      .from('website_settings')
+      .upsert(payload, onConflict: 'key');
       await loadSettings();
     } catch (e) {
       _error = '$errorContext: $e';

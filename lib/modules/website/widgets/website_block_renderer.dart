@@ -370,7 +370,7 @@ class WebsiteBlockRenderer {
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: itemsPerRow,
-              childAspectRatio: 0.75,
+              childAspectRatio: 0.68,
               crossAxisSpacing: 24,
               mainAxisSpacing: 24,
             ),

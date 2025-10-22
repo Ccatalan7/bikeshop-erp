@@ -329,7 +329,6 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       debugPrint('[OdooEditor] Failed to load theme settings: $e');
     }
   }
-
   Future<void> _loadFromDatabase() async {
     try {
       final websiteService = context.read<WebsiteService>();
@@ -348,10 +347,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       );
 
       if (loadedBlocks.isEmpty) {
-        // No blocks in database, use defaults
         _initializeDefaultBlocks();
       } else {
-        // Convert database blocks to WebsiteBlock objects
         _blocks = loadedBlocks.map((blockData) {
           final typeRaw = (blockData['block_type'] ?? 'hero').toString();
           final dataRaw =
@@ -377,7 +374,6 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       }
     } catch (e) {
       debugPrint('[OdooEditor] Error loading blocks: $e');
-      // Fallback to defaults on error
       _initializeDefaultBlocks();
       if (mounted) {
         setState(() {});
@@ -900,45 +896,6 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         ),
       );
       return null;
-    }
-  }
-
-  Future<void> _pickImage() async {
-    if (_selectedBlockId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ No hay ningún bloque seleccionado'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    final imageUrl = await _pickAndUploadImage(folder: 'website/banners');
-    if (imageUrl == null) {
-      return;
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    final blockIndex = _blocks.indexWhere((b) => b.id == _selectedBlockId);
-    if (blockIndex == -1) {
-      return;
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _blocks[blockIndex].data['imageUrl'] = imageUrl;
-      _hasChanges = true;
-    });
-
-    if (_autoSaveEnabled && mounted) {
-      await _saveChanges(showNotification: false);
     }
   }
 
@@ -2301,8 +2258,6 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         return _buildProductsEditControls(block, theme);
       case WebsiteBlockType.services:
         return _buildServicesEditControls(block, theme);
-      case WebsiteBlockType.about:
-        return _buildAboutEditControls(block, theme);
       default:
         return [
           const Text('Controles en desarrollo...'),
@@ -3998,53 +3953,6 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       const SizedBox(height: 8),
       const Text('Añadir/editar servicios en desarrollo...',
           style: TextStyle(color: Colors.grey)),
-    ];
-  }
-
-  List<Widget> _buildAboutEditControls(WebsiteBlock block, ThemeData theme) {
-    return [
-      _buildTextField(
-        label: 'Título',
-        value: block.data['title'] ?? '',
-        onChanged: (value) {
-          block.data['title'] = value;
-          setState(() => _markAsChanged());
-        },
-      ),
-      const SizedBox(height: 16),
-      _buildTextField(
-        label: 'Contenido',
-        value: block.data['content'] ?? '',
-        maxLines: 5,
-        onChanged: (value) {
-          block.data['content'] = value;
-          setState(() => _markAsChanged());
-        },
-      ),
-      const SizedBox(height: 16),
-      DropdownButtonFormField<String>(
-        decoration: const InputDecoration(
-          labelText: 'Posición de Imagen',
-          border: OutlineInputBorder(),
-        ),
-        initialValue: block.data['imagePosition'] ?? 'right',
-        items: const [
-          DropdownMenuItem(value: 'left', child: Text('Izquierda')),
-          DropdownMenuItem(value: 'right', child: Text('Derecha')),
-        ],
-        onChanged: (value) {
-          setState(() {
-            block.data['imagePosition'] = value;
-            _markAsChanged();
-          });
-        },
-      ),
-      const SizedBox(height: 16),
-      ElevatedButton.icon(
-        onPressed: _pickImage,
-        icon: const Icon(Icons.image),
-        label: const Text('Cambiar Imagen'),
-      ),
     ];
   }
 

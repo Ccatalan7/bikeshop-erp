@@ -148,9 +148,9 @@ class _PublicHomePageState extends State<PublicHomePage> {
       final response = await Supabase.instance.client
           .from('products')
           .select()
-          .inFilter('id', productIds)
-          .eq('show_on_website', true)
-          .eq('is_active', true);
+      .inFilter('id', productIds)
+      .eq('show_on_website', true)
+      .eq('is_active', true);
 
       final productsById = <String, Product>{};
       for (final row in response as List<dynamic>) {
@@ -578,7 +578,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 4,
-              childAspectRatio: 0.75,
+              childAspectRatio: 0.68,
               crossAxisSpacing: 24,
               mainAxisSpacing: 24,
             ),

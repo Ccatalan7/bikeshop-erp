@@ -20,6 +20,7 @@ import '../../modules/bikeshop/pages/pegas_table_page.dart';
 import '../../modules/bikeshop/pages/mechanic_job_form_page.dart';
 import '../../modules/inventory/pages/product_list_page.dart';
 import '../../modules/inventory/pages/product_form_page.dart';
+import '../../modules/inventory/pages/product_import_page.dart';
 import '../../modules/inventory/pages/category_list_page.dart';
 import '../../modules/inventory/pages/category_form_page.dart';
 import '../../modules/inventory/pages/stock_movement_list_page.dart';
@@ -437,6 +438,14 @@ class AppRouter {
             context,
             state,
             const ProductFormPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/inventory/products/import',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const ProductImportPage(),
           ),
         ),
         GoRoute(

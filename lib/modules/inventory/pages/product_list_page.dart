@@ -310,6 +310,17 @@ class _ProductListPageState extends State<ProductListPage> {
           ),
           const SizedBox(width: 16),
           AppButton(
+            text: 'Importar',
+            icon: Icons.file_upload_outlined,
+            type: ButtonType.outline,
+            onPressed: () {
+              context.push('/inventory/products/import').then((_) {
+                _loadProducts();
+              });
+            },
+          ),
+          const SizedBox(width: 12),
+          AppButton(
             text: 'Nuevo producto',
             icon: Icons.add,
             onPressed: () {

@@ -218,6 +218,108 @@ begin
     alter table products add column specifications jsonb not null default '{}'::jsonb;
   end if;
 
+  -- Add supplier relationship
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'supplier_id') then
+    alter table products add column supplier_id uuid references public.suppliers(id) on delete set null;
+  end if;
+
+  -- Add supplier reference codes
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'supplier_reference') then
+    alter table products add column supplier_reference text;
+  end if;
+
+  -- Add manufacturer metadata
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'manufacturer') then
+    alter table products add column manufacturer text;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'manufacturer_sku') then
+    alter table products add column manufacturer_sku text;
+  end if;
+
+  -- Add international product identifiers
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'gtin') then
+    alter table products add column gtin text;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'hs_code') then
+    alter table products add column hs_code text;
+  end if;
+
+  -- Add origin and variant attributes
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'country_of_origin') then
+    alter table products add column country_of_origin text;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'color') then
+    alter table products add column color text;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'size') then
+    alter table products add column size text;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'material') then
+    alter table products add column material text;
+  end if;
+
+  -- Add dimensional data
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'dimensions') then
+    alter table products add column dimensions jsonb not null default '{}'::jsonb;
+  end if;
+
+  -- Add warranty and lifecycle controls
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'warranty_months') then
+    alter table products add column warranty_months integer not null default 0;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'lifecycle_status') then
+    alter table products add column lifecycle_status text not null default 'active';
+  end if;
+
+  -- Add tracking flags
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'serialized') then
+    alter table products add column serialized boolean not null default false;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'lot_tracking') then
+    alter table products add column lot_tracking boolean not null default false;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'expiration_tracking') then
+    alter table products add column expiration_tracking boolean not null default false;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'expiry_days') then
+    alter table products add column expiry_days integer;
+  end if;
+
+  -- Add planning attributes
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'lead_time_days') then
+    alter table products add column lead_time_days integer not null default 0;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'reorder_quantity') then
+    alter table products add column reorder_quantity integer not null default 0;
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'warehouse_location') then
+    alter table products add column warehouse_location text;
+  end if;
+
+  -- Add pricing metadata
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'price_currency') then
+    alter table products add column price_currency text not null default 'CLP';
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'cost_currency') then
+    alter table products add column cost_currency text not null default 'CLP';
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'tax_rate') then
+    alter table products add column tax_rate numeric(5,2);
+  end if;
+
   -- Add tags array
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'tags') then
     alter table products add column tags text[] not null default array[]::text[];
@@ -256,6 +358,10 @@ begin
   -- Sync inventory_qty to stock_quantity for existing records
   update products set stock_quantity = inventory_qty where stock_quantity = 0 and inventory_qty > 0;
 end $$;
+
+create index if not exists idx_products_supplier_id on products(supplier_id);
+create index if not exists idx_products_gtin on products(gtin);
+create index if not exists idx_products_hs_code on products(hs_code);
  
 create table if not exists suppliers (
   id uuid primary key default gen_random_uuid(),
@@ -3874,6 +3980,21 @@ begin
       on products
       for select
       using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'products'
+      and policyname = 'Public website products read'
+  ) then
+    create policy "Public website products read"
+      on products
+      for select
+      using (show_on_website = true and is_active = true);
   end if;
 end $$;
 
