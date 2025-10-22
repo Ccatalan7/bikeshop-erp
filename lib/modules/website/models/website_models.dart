@@ -157,6 +157,154 @@ class WebsiteContent {
   }
 }
 
+class ThemePreset {
+  final String id;
+  final String name;
+  final String? description;
+  final int primaryColor;
+  final int accentColor;
+  final int backgroundColor;
+  final int textColor;
+  final String headingFont;
+  final String bodyFont;
+  final double headingSize;
+  final double bodySize;
+  final double sectionSpacing;
+  final double containerPadding;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const ThemePreset({
+    required this.id,
+    required this.name,
+    this.description,
+    required this.primaryColor,
+    required this.accentColor,
+    required this.backgroundColor,
+    required this.textColor,
+    required this.headingFont,
+    required this.bodyFont,
+    required this.headingSize,
+    required this.bodySize,
+    required this.sectionSpacing,
+    required this.containerPadding,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory ThemePreset.fromJson(Map<String, dynamic> json) {
+    double parseDouble(dynamic value, double fallback) {
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        final parsed = double.tryParse(value);
+        if (parsed != null) return parsed;
+      }
+      return fallback;
+    }
+
+    int parseColor(dynamic value, int fallback) {
+      if (value is int) return value;
+      if (value is String) {
+        final trimmed = value.trim();
+        if (trimmed.isEmpty) return fallback;
+        final parsed = int.tryParse(trimmed);
+        if (parsed != null) return parsed;
+        final hex = trimmed.replaceAll('#', '');
+        final hexValue = int.tryParse(hex, radix: 16);
+        if (hexValue != null) {
+          return hex.length <= 6 ? 0xFF000000 | hexValue : hexValue;
+        }
+      }
+      return fallback;
+    }
+
+    DateTime parseDate(dynamic value, DateTime fallback) {
+      if (value is DateTime) return value;
+      if (value is String) {
+        final parsed = DateTime.tryParse(value);
+        if (parsed != null) return parsed.toUtc();
+      }
+      return fallback;
+    }
+
+    final now = DateTime.now().toUtc();
+
+    return ThemePreset(
+      id: (json['id'] ?? '').toString(),
+      name: (json['name'] ?? 'Preset sin título').toString(),
+      description: json['description'] as String?,
+      primaryColor: parseColor(json['primaryColor'], 0xFF2E7D32),
+      accentColor: parseColor(json['accentColor'], 0xFFFF6F00),
+      backgroundColor: parseColor(json['backgroundColor'], 0xFFFFFFFF),
+      textColor: parseColor(json['textColor'], 0xFF212121),
+      headingFont: (json['headingFont'] ?? 'Roboto').toString(),
+      bodyFont: (json['bodyFont'] ?? 'Roboto').toString(),
+      headingSize: parseDouble(json['headingSize'], 48.0),
+      bodySize: parseDouble(json['bodySize'], 16.0),
+      sectionSpacing: parseDouble(json['sectionSpacing'], 64.0),
+      containerPadding: parseDouble(json['containerPadding'], 24.0),
+      createdAt: parseDate(json['createdAt'], now),
+      updatedAt: parseDate(json['updatedAt'], now),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'primaryColor': primaryColor,
+      'accentColor': accentColor,
+      'backgroundColor': backgroundColor,
+      'textColor': textColor,
+      'headingFont': headingFont,
+      'bodyFont': bodyFont,
+      'headingSize': headingSize,
+      'bodySize': bodySize,
+      'sectionSpacing': sectionSpacing,
+      'containerPadding': containerPadding,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
+
+  ThemePreset copyWith({
+    String? id,
+    String? name,
+    String? description,
+    int? primaryColor,
+    int? accentColor,
+    int? backgroundColor,
+    int? textColor,
+    String? headingFont,
+    String? bodyFont,
+    double? headingSize,
+    double? bodySize,
+    double? sectionSpacing,
+    double? containerPadding,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return ThemePreset(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      primaryColor: primaryColor ?? this.primaryColor,
+      accentColor: accentColor ?? this.accentColor,
+      backgroundColor: backgroundColor ?? this.backgroundColor,
+      textColor: textColor ?? this.textColor,
+      headingFont: headingFont ?? this.headingFont,
+      bodyFont: bodyFont ?? this.bodyFont,
+      headingSize: headingSize ?? this.headingSize,
+      bodySize: bodySize ?? this.bodySize,
+      sectionSpacing: sectionSpacing ?? this.sectionSpacing,
+      containerPadding: containerPadding ?? this.containerPadding,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+}
+
 class WebsiteSetting {
   final String id;
   final String key;

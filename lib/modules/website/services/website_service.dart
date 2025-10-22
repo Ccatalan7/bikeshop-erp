@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/website_models.dart';
@@ -11,6 +13,7 @@ class WebsiteService extends ChangeNotifier {
   List<FeaturedProduct> _featuredProducts = [];
   List<WebsiteContent> _contents = [];
   Map<String, String> _settings = {};
+  List<ThemePreset> _themePresets = [];
   List<OnlineOrder> _orders = [];
   List<Map<String, dynamic>> _blocks = []; // Odoo-style editor blocks
 
@@ -22,6 +25,7 @@ class WebsiteService extends ChangeNotifier {
   List<FeaturedProduct> get featuredProducts => _featuredProducts;
   List<WebsiteContent> get contents => _contents;
   Map<String, String> get settings => _settings;
+  List<ThemePreset> get themePresets => List.unmodifiable(_themePresets);
   List<OnlineOrder> get orders => _orders;
   List<Map<String, dynamic>> get blocks => _blocks;
   bool get isLoading => _isLoading;
@@ -331,6 +335,8 @@ class WebsiteService extends ChangeNotifier {
         _settings[row['key'] as String] = row['value'] as String? ?? '';
       }
 
+      _themePresets = _parseThemePresets(_settings['theme_presets']);
+
       _error = null;
     } catch (e) {
       _error = 'Error al cargar configuración: $e';
@@ -342,24 +348,107 @@ class WebsiteService extends ChangeNotifier {
   }
 
   Future<void> saveSetting(String key, String value) async {
-    try {
-      await _supabase.from('website_settings').upsert({
-        'key': key,
-        'value': value,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-
-      await loadSettings();
-    } catch (e) {
-      _error = 'Error al guardar configuración: $e';
-      debugPrint(_error);
-      notifyListeners();
-      rethrow;
-    }
+    await _upsertSettings(
+      {key: value},
+      errorContext: 'Error al guardar configuración',
+    );
   }
 
   String getSetting(String key, [String defaultValue = '']) {
     return _settings[key] ?? defaultValue;
+  }
+
+  List<ThemePreset> _parseThemePresets(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return [];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+
+      List<ThemePreset> presets = [];
+
+      if (decoded is List) {
+        presets = decoded
+            .whereType<Map<String, dynamic>>()
+            .map(ThemePreset.fromJson)
+            .toList();
+      } else if (decoded is Map<String, dynamic>) {
+        presets = [ThemePreset.fromJson(decoded)];
+      }
+
+      presets.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return presets;
+    } catch (e) {
+      debugPrint('Error al parsear theme_presets: $e');
+    }
+
+    return [];
+  }
+
+  Future<void> saveThemePreset(ThemePreset preset) async {
+    final now = DateTime.now().toUtc();
+    final updatedPreset = preset.copyWith(updatedAt: now);
+
+    final updatedPresets = [
+      ..._themePresets.where((existing) => existing.id != updatedPreset.id),
+      updatedPreset,
+    ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+    await _persistThemePresets(updatedPresets,
+        errorContext: 'Error al guardar el preset de tema');
+  }
+
+  Future<void> deleteThemePreset(String presetId) async {
+    final updatedPresets =
+        _themePresets.where((preset) => preset.id != presetId).toList();
+
+    await _persistThemePresets(updatedPresets,
+        errorContext: 'Error al eliminar el preset de tema');
+  }
+
+  Future<void> _persistThemePresets(
+    List<ThemePreset> presets, {
+    required String errorContext,
+  }) async {
+    final encoded =
+        jsonEncode(presets.map((preset) => preset.toJson()).toList());
+
+    await _upsertSettings(
+      {'theme_presets': encoded},
+      errorContext: errorContext,
+    );
+
+    _settings['theme_presets'] = encoded;
+    _themePresets = presets;
+  }
+
+  Future<void> _upsertSettings(
+    Map<String, dynamic> values, {
+    required String errorContext,
+  }) async {
+    if (values.isEmpty) {
+      return;
+    }
+
+    try {
+      final timestamp = DateTime.now().toIso8601String();
+      final payload = values.entries.map((entry) {
+        return {
+          'key': entry.key,
+          'value': entry.value?.toString() ?? '',
+          'updated_at': timestamp,
+        };
+      }).toList();
+
+      await _supabase.from('website_settings').upsert(payload);
+      await loadSettings();
+    } catch (e) {
+      _error = '$errorContext: $e';
+      debugPrint(_error);
+      notifyListeners();
+      rethrow;
+    }
   }
 
   // ============================================================================
@@ -568,34 +657,19 @@ class WebsiteService extends ChangeNotifier {
     required String subtitle,
     String? imageUrl,
   }) async {
-    try {
-      // Save to settings table
-      await _supabase.from('website_settings').upsert([
-        {
-          'key': 'hero_title',
-          'value': title,
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        {
-          'key': 'hero_subtitle',
-          'value': subtitle,
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        if (imageUrl != null)
-          {
-            'key': 'hero_image_url',
-            'value': imageUrl,
-            'updated_at': DateTime.now().toIso8601String(),
-          },
-      ]);
+    final values = <String, dynamic>{
+      'hero_title': title,
+      'hero_subtitle': subtitle,
+    };
 
-      await loadSettings();
-    } catch (e) {
-      _error = 'Error al actualizar sección hero: $e';
-      debugPrint(_error);
-      notifyListeners();
-      rethrow;
+    if (imageUrl != null) {
+      values['hero_image_url'] = imageUrl;
     }
+
+    await _upsertSettings(
+      values,
+      errorContext: 'Error al actualizar sección hero',
+    );
   }
 
   /// Update theme colors
@@ -603,27 +677,43 @@ class WebsiteService extends ChangeNotifier {
     required int primaryColor,
     required int accentColor,
   }) async {
-    try {
-      await _supabase.from('website_settings').upsert([
-        {
-          'key': 'theme_primary_color',
-          'value': primaryColor.toString(),
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        {
-          'key': 'theme_accent_color',
-          'value': accentColor.toString(),
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-      ]);
+    await _upsertSettings(
+      {
+        'theme_primary_color': primaryColor,
+        'theme_accent_color': accentColor,
+      },
+      errorContext: 'Error al actualizar colores',
+    );
+  }
 
-      await loadSettings();
-    } catch (e) {
-      _error = 'Error al actualizar colores: $e';
-      debugPrint(_error);
-      notifyListeners();
-      rethrow;
-    }
+  /// Update complete theme configuration
+  Future<void> updateThemeSettings({
+    required int primaryColor,
+    required int accentColor,
+    required int backgroundColor,
+    required int textColor,
+    required String headingFont,
+    required String bodyFont,
+    required double headingSize,
+    required double bodySize,
+    required double sectionSpacing,
+    required double containerPadding,
+  }) async {
+    await _upsertSettings(
+      {
+        'theme_primary_color': primaryColor,
+        'theme_accent_color': accentColor,
+        'theme_background_color': backgroundColor,
+        'theme_text_color': textColor,
+        'theme_heading_font': headingFont,
+        'theme_body_font': bodyFont,
+        'theme_heading_size': headingSize,
+        'theme_body_size': bodySize,
+        'theme_section_spacing': sectionSpacing,
+        'theme_container_padding': containerPadding,
+      },
+      errorContext: 'Error al actualizar configuración de tema',
+    );
   }
 
   /// Update contact information
@@ -632,32 +722,14 @@ class WebsiteService extends ChangeNotifier {
     required String email,
     required String address,
   }) async {
-    try {
-      await _supabase.from('website_settings').upsert([
-        {
-          'key': 'contact_phone',
-          'value': phone,
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        {
-          'key': 'contact_email',
-          'value': email,
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        {
-          'key': 'contact_address',
-          'value': address,
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-      ]);
-
-      await loadSettings();
-    } catch (e) {
-      _error = 'Error al actualizar información de contacto: $e';
-      debugPrint(_error);
-      notifyListeners();
-      rethrow;
-    }
+    await _upsertSettings(
+      {
+        'contact_phone': phone,
+        'contact_email': email,
+        'contact_address': address,
+      },
+      errorContext: 'Error al actualizar información de contacto',
+    );
   }
 
   // ============================================================================

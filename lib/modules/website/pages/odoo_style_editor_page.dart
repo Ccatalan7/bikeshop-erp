@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -53,10 +54,14 @@ class WebsiteBlock {
     Map<String, dynamic>? data,
     bool? isVisible,
   }) {
+    Map<String, dynamic> cloneData(Map<String, dynamic> source) {
+      return jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
+    }
+
     return WebsiteBlock(
       id: id ?? this.id,
       type: type ?? this.type,
-      data: data ?? Map.from(this.data),
+      data: data != null ? cloneData(data) : cloneData(this.data),
       isVisible: isVisible ?? this.isVisible,
     );
   }
@@ -108,6 +113,27 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   double _bodySize = 16.0;
   double _sectionSpacing = 64.0;
   double _containerPadding = 24.0;
+  List<ThemePreset> _themePresets = [];
+  final TextEditingController _presetNameController = TextEditingController();
+  bool _isSavingPreset = false;
+  final Set<String> _presetActionsInProgress = {};
+  late final DateFormat _presetDateFormat = DateFormat('dd/MM HH:mm');
+  final Map<String, double> _defaultPreviewWidths = const {
+    'mobile': 390,
+    'tablet': 960,
+    'desktop': 1280,
+  };
+  final Map<String, double?> _customPreviewWidths = {
+    'mobile': null,
+    'tablet': null,
+    'desktop': null,
+  };
+  final Map<String, RangeValues> _previewWidthRanges = const {
+    'mobile': RangeValues(320, 480),
+    'tablet': RangeValues(640, 1280),
+    'desktop': RangeValues(960, 1600),
+  };
+  bool _showSafeAreaGuides = false;
 
   @override
   void initState() {
@@ -117,18 +143,154 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     _startAutoSave();
   }
 
+  static const List<String> _supportedBreakpoints = [
+    'desktop',
+    'tablet',
+    'mobile'
+  ];
+  static const Map<String, String> _breakpointLabels = {
+    'desktop': 'Escritorio',
+    'tablet': 'Tablet',
+    'mobile': 'Móvil',
+  };
+  static const Map<String, IconData> _breakpointIcons = {
+    'desktop': Icons.desktop_windows_outlined,
+    'tablet': Icons.tablet_mac_outlined,
+    'mobile': Icons.smartphone_outlined,
+  };
+
+  Map<String, bool> _defaultBreakpointVisibility() {
+    return {
+      for (final breakpoint in _supportedBreakpoints) breakpoint: true,
+    };
+  }
+
+  bool? _castToBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized.isEmpty) return null;
+      if (normalized == 'true' ||
+          normalized == '1' ||
+          normalized == 'sí' ||
+          normalized == 'si') {
+        return true;
+      }
+      if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+        return false;
+      }
+    }
+    return null;
+  }
+
+  Map<String, bool> _normalizeVisibilityMap(dynamic raw) {
+    final visibility = _defaultBreakpointVisibility();
+    dynamic source = raw;
+
+    if (source is String) {
+      final trimmed = source.trim();
+      if (trimmed.isEmpty) {
+        source = null;
+      } else {
+        try {
+          final decoded = jsonDecode(trimmed);
+          if (decoded is Map) {
+            source = decoded;
+          }
+        } catch (_) {
+          source = null;
+        }
+      }
+    }
+
+    if (source is Map) {
+      source.forEach((key, value) {
+        final keyString = key.toString();
+        if (!visibility.containsKey(keyString)) {
+          return;
+        }
+        final parsed = _castToBool(value);
+        if (parsed != null) {
+          visibility[keyString] = parsed;
+        }
+      });
+    }
+
+    return visibility;
+  }
+
+  Map<String, bool> _ensureVisibilityForBlock(WebsiteBlock block) {
+    final normalized = _normalizeVisibilityMap(block.data['visibility']);
+    final resolved = Map<String, bool>.from(normalized);
+    block.data['visibility'] = resolved;
+    return resolved;
+  }
+
+  bool _isBlockVisibleOnBreakpoint(WebsiteBlock block, String breakpoint) {
+    final visibility = _ensureVisibilityForBlock(block);
+    return visibility[breakpoint] ?? true;
+  }
+
+  bool _isBlockVisibleForPreview(WebsiteBlock block) {
+    if (!block.isVisible) {
+      return false;
+    }
+    return _isBlockVisibleOnBreakpoint(block, _previewMode);
+  }
+
+  String _breakpointLabel(String breakpoint) {
+    return _breakpointLabels[breakpoint] ?? breakpoint;
+  }
+
+  IconData _breakpointIcon(String breakpoint) {
+    return _breakpointIcons[breakpoint] ?? Icons.devices_other;
+  }
+
+  void _updateBreakpointVisibility(
+    WebsiteBlock block,
+    String breakpoint,
+    bool enabled,
+  ) {
+    if (!_supportedBreakpoints.contains(breakpoint)) {
+      return;
+    }
+
+    setState(() {
+      final current = Map<String, bool>.from(_ensureVisibilityForBlock(block));
+      current[breakpoint] = enabled;
+      block.data['visibility'] = current;
+      _markAsChanged();
+    });
+  }
+
   Future<void> _loadThemeSettings() async {
     try {
       final service = context.read<WebsiteService>();
       await service.loadSettings();
       final primary = service.getSetting('theme_primary_color');
       final accent = service.getSetting('theme_accent_color');
+      final background = service.getSetting('theme_background_color');
+      final text = service.getSetting('theme_text_color');
       final headingFont = service.getSetting('theme_heading_font');
       final bodyFont = service.getSetting('theme_body_font');
+      final headingSize = service.getSetting('theme_heading_size');
+      final bodySize = service.getSetting('theme_body_size');
+      final sectionSpacing = service.getSetting('theme_section_spacing');
+      final containerPadding = service.getSetting('theme_container_padding');
 
       final parsedPrimary = _tryParseColor(primary);
       final parsedAccent = _tryParseColor(accent);
+      final parsedBackground = _tryParseColor(background);
+      final parsedText = _tryParseColor(text);
+      final parsedHeadingSize = double.tryParse(headingSize);
+      final parsedBodySize = double.tryParse(bodySize);
+      final parsedSectionSpacing = double.tryParse(sectionSpacing);
+      final parsedContainerPadding = double.tryParse(containerPadding);
+      final presets = List<ThemePreset>.from(service.themePresets)
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
+      if (!mounted) return;
       setState(() {
         if (parsedPrimary != null) {
           _primaryColor = parsedPrimary;
@@ -136,12 +298,32 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         if (parsedAccent != null) {
           _accentColor = parsedAccent;
         }
+        if (parsedBackground != null) {
+          _backgroundColor = parsedBackground;
+        }
+        if (parsedText != null) {
+          _textColor = parsedText;
+        }
         if (headingFont.isNotEmpty) {
           _headingFont = headingFont;
         }
         if (bodyFont.isNotEmpty) {
           _bodyFont = bodyFont;
         }
+        if (parsedHeadingSize != null) {
+          _headingSize = parsedHeadingSize.clamp(24.0, 72.0).toDouble();
+        }
+        if (parsedBodySize != null) {
+          _bodySize = parsedBodySize.clamp(12.0, 24.0).toDouble();
+        }
+        if (parsedSectionSpacing != null) {
+          _sectionSpacing = parsedSectionSpacing.clamp(32.0, 128.0).toDouble();
+        }
+        if (parsedContainerPadding != null) {
+          _containerPadding =
+              parsedContainerPadding.clamp(16.0, 64.0).toDouble();
+        }
+        _themePresets = presets;
       });
     } catch (e) {
       debugPrint('[OdooEditor] Failed to load theme settings: $e');
@@ -150,10 +332,10 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
   Future<void> _loadFromDatabase() async {
     try {
-      await WebsiteBlockRegistry.ensureInitialized();
-
       final websiteService = context.read<WebsiteService>();
       final inventoryService = context.read<InventoryService>();
+
+      await WebsiteBlockRegistry.ensureInitialized();
 
       await Future.wait([
         websiteService.loadBlocks(),
@@ -174,12 +356,14 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           final typeRaw = (blockData['block_type'] ?? 'hero').toString();
           final dataRaw =
               Map<String, dynamic>.from(blockData['block_data'] ?? {});
-          return WebsiteBlock(
+          final block = WebsiteBlock(
             id: blockData['id']?.toString() ?? _uuid.v4(),
             type: _parseBlockType(typeRaw),
             data: dataRaw,
             isVisible: blockData['is_visible'] ?? true,
           );
+          _ensureVisibilityForBlock(block);
+          return block;
         }).toList();
 
         if (_blocks.isNotEmpty) {
@@ -220,11 +404,13 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
     _blocks = defaultTypes.map((type) {
       final definition = WebsiteBlockRegistry.definitionFor(type);
-      return WebsiteBlock(
+      final block = WebsiteBlock(
         id: _uuid.v4(),
         type: type,
         data: _cloneBlockData(definition.defaultData),
       );
+      _ensureVisibilityForBlock(block);
+      return block;
     }).toList();
 
     if (_blocks.isNotEmpty) {
@@ -318,6 +504,23 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           'isVisible': block.isVisible,
         };
       }).toList();
+
+      await websiteService.updateThemeSettings(
+        primaryColor: _primaryColor.toARGB32(),
+        accentColor: _accentColor.toARGB32(),
+        backgroundColor: _backgroundColor.toARGB32(),
+        textColor: _textColor.toARGB32(),
+        headingFont: _headingFont,
+        bodyFont: _bodyFont,
+        headingSize: _headingSize,
+        bodySize: _bodySize,
+        sectionSpacing: _sectionSpacing,
+        containerPadding: _containerPadding,
+      );
+
+      if (!mounted) {
+        return;
+      }
 
       // Save to database
       await websiteService.saveBlocks(blocksData);
@@ -424,11 +627,13 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
   WebsiteBlock _createBlockTemplate(WebsiteBlockType type) {
     final definition = WebsiteBlockRegistry.definitionFor(type);
-    return WebsiteBlock(
+    final block = WebsiteBlock(
       id: _uuid.v4(),
       type: type,
       data: _cloneBlockData(definition.defaultData),
     );
+    _ensureVisibilityForBlock(block);
+    return block;
   }
 
   void _removeBlock(String blockId) {
@@ -512,24 +717,46 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     _moveBlock(index, _blocks.length - 1);
   }
 
-  void _toggleBlockVisibility(String blockId) {
+  void _setBlockVisibility(
+    String blockId,
+    bool visible, {
+    bool showFeedback = true,
+  }) {
     final blockIndex = _blocks.indexWhere((b) => b.id == blockId);
     if (blockIndex == -1) {
       return;
     }
 
+    if (_blocks[blockIndex].isVisible == visible) {
+      return;
+    }
+
     setState(() {
-      _blocks[blockIndex].isVisible = !_blocks[blockIndex].isVisible;
+      _blocks[blockIndex].isVisible = visible;
       _markAsChanged();
     });
 
-    final action = _blocks[blockIndex].isVisible ? 'mostrado' : 'ocultado';
+    if (!mounted || !showFeedback) {
+      return;
+    }
+
+    final action = visible ? 'mostrado' : 'ocultado';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('✓ Bloque $action'),
         duration: const Duration(seconds: 2),
       ),
     );
+  }
+
+  void _toggleBlockVisibility(String blockId) {
+    final blockIndex = _blocks.indexWhere((b) => b.id == blockId);
+    if (blockIndex == -1) {
+      return;
+    }
+
+    final shouldShow = !_blocks[blockIndex].isVisible;
+    _setBlockVisibility(blockId, shouldShow);
   }
 
   String _getBlockTypeName(WebsiteBlockType type) {
@@ -595,6 +822,10 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         return null;
       }
 
+      if (!mounted) {
+        return null;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Row(
@@ -623,9 +854,16 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         folder: folder,
       );
 
+      if (!mounted) {
+        return null;
+      }
+
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
       if (imageUrl == null) {
+        if (!mounted) {
+          return null;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('❌ No se pudo obtener la URL de la imagen'),
@@ -634,6 +872,10 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           ),
         );
         return null;
+      }
+
+      if (!mounted) {
+        return imageUrl;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -646,6 +888,9 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
       return imageUrl;
     } catch (e) {
+      if (!mounted) {
+        return null;
+      }
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -674,8 +919,16 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       return;
     }
 
+    if (!mounted) {
+      return;
+    }
+
     final blockIndex = _blocks.indexWhere((b) => b.id == _selectedBlockId);
     if (blockIndex == -1) {
+      return;
+    }
+
+    if (!mounted) {
       return;
     }
 
@@ -684,14 +937,16 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       _hasChanges = true;
     });
 
-    if (_autoSaveEnabled) {
+    if (_autoSaveEnabled && mounted) {
       await _saveChanges(showNotification: false);
     }
   }
 
   @override
   void dispose() {
+    _autoSaveEnabled = false;
     _autoSaveTimer?.cancel();
+    _presetNameController.dispose();
     super.dispose();
   }
 
@@ -745,7 +1000,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
             ),
           if (_autoSaveEnabled && !_hasChanges)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.green.shade100,
                 borderRadius: BorderRadius.circular(4),
@@ -945,13 +1201,13 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                 setState(() => _previewMode = newSelection.first);
               },
               style: ButtonStyle(
-                backgroundColor: MaterialStateProperty.resolveWith((states) {
-                  if (states.contains(MaterialState.selected)) {
+                backgroundColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
                     return Colors.blue;
                   }
                   return Colors.transparent;
                 }),
-                foregroundColor: MaterialStateProperty.all(Colors.white),
+                foregroundColor: WidgetStateProperty.all(Colors.white),
               ),
             ),
           ),
@@ -994,56 +1250,257 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
               ],
             ),
           ),
+
+          const SizedBox(width: 12),
+
+          Tooltip(
+            message: 'Opciones de vista',
+            child: IconButton(
+              icon: const Icon(Icons.tune, color: Colors.white, size: 20),
+              onPressed: _openPreviewOptions,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildResponsivePreview(ThemeData theme) {
-    double previewWidth;
-    switch (_previewMode) {
+  double _resolvePreviewWidth(String mode, double maxWidth) {
+    final defaultWidth = _defaultPreviewWidths[mode] ?? maxWidth;
+    final customWidth = _customPreviewWidths[mode];
+    final range = _previewWidthRanges[mode] ?? const RangeValues(320, 1600);
+    final minWidth = range.start;
+    final maxAllowed = math.max(minWidth, math.min(range.end, maxWidth));
+    final desired = (customWidth ?? defaultWidth).clamp(minWidth, maxAllowed);
+    return desired;
+  }
+
+  RangeValues _effectiveRangeForMode(String mode, double maxWidth) {
+    final base = _previewWidthRanges[mode] ?? const RangeValues(320, 1600);
+    final maxAllowed = math.max(base.start, math.min(base.end, maxWidth));
+    return RangeValues(base.start, maxAllowed);
+  }
+
+  Future<void> _openPreviewOptions() async {
+    if (!mounted) return;
+    final mode = _previewMode;
+    final mediaWidth = MediaQuery.sizeOf(context).width;
+    final maxWidth = math.max(320.0, mediaWidth - 96);
+    var range = _effectiveRangeForMode(mode, maxWidth);
+    var localWidth =
+        (_customPreviewWidths[mode] ?? _defaultPreviewWidths[mode] ?? range.end)
+            .clamp(range.start, range.end);
+    var localShowGuides = _showSafeAreaGuides;
+    final defaultWidth = _defaultPreviewWidths[mode] ?? range.end;
+
+    final applied = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Vista ${_breakpointLabel(mode)}'),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Ancho de lienzo: ${localWidth.round()} px'),
+                    Slider(
+                      value: localWidth,
+                      min: range.start,
+                      max: range.end,
+                      divisions:
+                          (range.end - range.start).clamp(10, 80).round(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          localWidth = value;
+                        });
+                      },
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () {
+                          setDialogState(() {
+                            localWidth =
+                                defaultWidth.clamp(range.start, range.end);
+                          });
+                        },
+                        icon: const Icon(Icons.restart_alt_outlined),
+                        label: const Text('Restaurar por defecto'),
+                      ),
+                    ),
+                    const Divider(),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Mostrar guías de safe-area'),
+                      subtitle: const Text(
+                        'Visualiza las zonas seguras para contenido crítico.',
+                      ),
+                      value: localShowGuides,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          localShowGuides = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(dialogContext).pop(false);
+                      },
+                      child: const Text('Cancelar'),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Aplicar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (applied == true && mounted) {
+      setState(() {
+        final defaultWidth = _defaultPreviewWidths[mode] ?? range.end;
+        final normalizedWidth = localWidth.clamp(range.start, range.end);
+        _customPreviewWidths[mode] =
+            (normalizedWidth - defaultWidth).abs() < 0.5
+                ? null
+                : normalizedWidth;
+        _showSafeAreaGuides = localShowGuides;
+      });
+    }
+  }
+
+  Widget _buildSafeAreaOverlay(String mode) {
+    final EdgeInsets safeInsets;
+    switch (mode) {
       case 'mobile':
-        previewWidth = 375;
+        safeInsets = const EdgeInsets.fromLTRB(16, 48, 16, 34);
         break;
       case 'tablet':
-        previewWidth = 768;
+        safeInsets = const EdgeInsets.fromLTRB(24, 48, 24, 32);
         break;
       default:
-        previewWidth = double.infinity;
+        safeInsets = const EdgeInsets.fromLTRB(32, 64, 32, 48);
+        break;
     }
 
-    return Center(
-      child: Transform.scale(
-        scale: _previewZoom,
-        child: Container(
-          width: previewWidth,
-          margin: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: _backgroundColor,
-            borderRadius:
-                BorderRadius.circular(_previewMode != 'desktop' ? 12 : 8),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 20,
-                spreadRadius: 2,
+  final highlight = Colors.tealAccent.withValues(alpha: 0.85);
+
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+        border: Border.all(
+          color: highlight.withValues(alpha: 0.25), width: 2),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Padding(
+              padding: safeInsets,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: highlight, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius:
-                BorderRadius.circular(_previewMode != 'desktop' ? 12 : 8),
-            child: _buildClickablePreview(context),
+            ),
           ),
         ),
       ),
     );
   }
 
+  Widget _buildResponsivePreview(ThemeData theme) {
+    final mediaSize = MediaQuery.sizeOf(context);
+    final maxWidth = math.max(320.0, mediaSize.width - 96);
+    final previewWidth = _resolvePreviewWidth(_previewMode, maxWidth);
+    final borderRadius =
+        BorderRadius.circular(_previewMode != 'desktop' ? 16 : 12);
+    final previewLabel =
+        '${previewWidth.round()} px · ${_breakpointLabel(_previewMode)}';
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Center(
+            child: Transform.scale(
+              scale: _previewZoom,
+              child: Container(
+                width: previewWidth,
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _backgroundColor,
+                  borderRadius: borderRadius,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 24,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: Colors.black.withValues(alpha: 0.05),
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: borderRadius,
+                  child: Stack(
+                    children: [
+                      _buildClickablePreview(context),
+                      if (_showSafeAreaGuides)
+                        _buildSafeAreaOverlay(_previewMode),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              previewLabel,
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+
   Widget _buildClickablePreview(BuildContext context) {
     return ReorderableListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: _blocks.length,
       onReorder: (oldIndex, newIndex) {
@@ -1075,7 +1532,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                 boxShadow: isSelected
                     ? [
                         BoxShadow(
-                          color: Colors.blue.withOpacity(0.3),
+                          color: Colors.blue.withValues(alpha: 0.3),
                           blurRadius: 10,
                           spreadRadius: 2,
                         ),
@@ -1097,7 +1554,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                           borderRadius: BorderRadius.circular(8),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
+                              color: Colors.black.withValues(alpha: 0.2),
                               blurRadius: 8,
                             ),
                           ],
@@ -1108,8 +1565,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                             // Drag handle
                             ReorderableDragStartListener(
                               index: index,
-                              child: IconButton(
-                                icon: const Icon(Icons.drag_indicator,
+                              child: const IconButton(
+                                icon: Icon(Icons.drag_indicator,
                                     color: Colors.white, size: 16),
                                 onPressed: null,
                                 tooltip: 'Arrastrar para reordenar',
@@ -1226,65 +1683,117 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     );
   }
 
+  Widget _buildHiddenBlockPlaceholder({
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    final theme = Theme.of(context);
+    final foreground = theme.colorScheme.onSurfaceVariant;
+
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: foreground),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: foreground.withValues(alpha: 0.75),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBlockPreview(WebsiteBlock block) {
+    final baseTheme = Theme.of(context);
+    final themedText = baseTheme.textTheme.apply(
+      bodyColor: _textColor,
+      displayColor: _textColor,
+    );
+
+    final themedData = baseTheme.copyWith(textTheme: themedText);
+    final horizontalPadding = _containerPadding.clamp(0.0, 200.0).toDouble();
+    final verticalPadding = (_sectionSpacing / 2).clamp(0.0, 200.0).toDouble();
+
+    Widget content;
+
     // Show placeholder for hidden blocks in editor
     if (!block.isVisible) {
-      return Container(
-        padding: const EdgeInsets.all(32),
-        color: Colors.grey.shade200,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.visibility_off, size: 48, color: Colors.grey),
-              const SizedBox(height: 12),
-              Text(
-                'Bloque oculto: ${_getBlockTypeName(block.type)}',
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Este bloque no se mostrará en el sitio público',
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
+      content = _buildHiddenBlockPlaceholder(
+        icon: Icons.visibility_off,
+        title: 'Bloque oculto: ${_getBlockTypeName(block.type)}',
+        description: 'Este bloque no se mostrará en el sitio público.',
+      );
+    } else if (!_isBlockVisibleForPreview(block)) {
+      final label = _breakpointLabel(_previewMode);
+      content = _buildHiddenBlockPlaceholder(
+        icon: Icons.visibility_off_outlined,
+        title: 'Oculto en vista $label',
+        description:
+            'Este bloque permanece disponible en otras vistas. Activa ${label.toLowerCase()} desde el panel derecho para mostrarlo aquí.',
+      );
+    } else {
+      final blockType = block.type.name;
+      final data = Map<String, dynamic>.from(block.data);
+      final websiteService = context.read<WebsiteService>();
+      final inventoryService = context.read<InventoryService>();
+
+      final previewFeaturedProducts = block.type == WebsiteBlockType.products
+          ? _resolveEditorFeaturedProducts(
+              websiteService.featuredProducts,
+              inventoryService.products,
+            )
+          : null;
+
+      content = WebsiteBlockRenderer.build(
+        context: context,
+        blockType: blockType,
+        data: data,
+        primaryColor: _primaryColor,
+        accentColor: _accentColor,
+        featuredProducts: previewFeaturedProducts,
+        previewMode: true,
+        headingFont: _headingFont,
+        bodyFont: _bodyFont,
+        headingSize: _headingSize,
+        bodySize: _bodySize,
+        onNavigate: (_) {},
       );
     }
 
-    final blockType = block.type.name;
-    final data = Map<String, dynamic>.from(block.data);
-    final websiteService = context.read<WebsiteService>();
-    final inventoryService = context.read<InventoryService>();
-
-    final previewFeaturedProducts = block.type == WebsiteBlockType.products
-        ? _resolveEditorFeaturedProducts(
-            websiteService.featuredProducts,
-            inventoryService.products,
-          )
-        : null;
-
-    return WebsiteBlockRenderer.build(
-      context: context,
-      blockType: blockType,
-      data: data,
-      primaryColor: _primaryColor,
-      accentColor: _accentColor,
-      featuredProducts: previewFeaturedProducts,
-      previewMode: true,
-      headingFont: _headingFont,
-      bodyFont: _bodyFont,
-      headingSize: _headingSize,
-      bodySize: _bodySize,
-      onNavigate: (_) {},
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        horizontalPadding,
+        verticalPadding,
+        horizontalPadding,
+        verticalPadding,
+      ),
+      child: Theme(
+        data: themedData,
+        child: content,
+      ),
     );
   }
 
@@ -1358,9 +1867,9 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: isActive
-                ? theme.colorScheme.primaryContainer.withOpacity(0.3)
-                : null,
+      color: isActive
+        ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+        : null,
             border: Border(
               bottom: BorderSide(
                 color:
@@ -1429,9 +1938,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
-          ...byCategory[category]!
-              .map((definition) => _buildBlockDefinitionCard(definition, theme))
-              .toList(),
+      ...byCategory[category]!
+        .map((definition) => _buildBlockDefinitionCard(definition, theme)),
           const SizedBox(height: 24),
         ],
       ],
@@ -1448,7 +1956,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             margin: const EdgeInsets.only(right: 6, top: 6),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.08),
+              color: theme.colorScheme.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
@@ -1557,7 +2065,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.touch_app, size: 64, color: Colors.grey),
+            const Icon(Icons.touch_app, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
             Text(
               'Selecciona un bloque\npara editarlo',
@@ -1604,9 +2112,178 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         ),
         const Divider(height: 32),
 
+        _buildResponsiveVisibilityControls(block, theme),
+        const Divider(height: 32),
+
         // Block-specific controls
         ...(_buildBlockEditControls(block, theme)),
       ],
+    );
+  }
+
+  Widget _buildResponsiveVisibilityControls(
+    WebsiteBlock block,
+    ThemeData theme,
+  ) {
+    final visibility = _ensureVisibilityForBlock(block);
+    final isBlockVisible = block.isVisible;
+    final isHiddenInCurrentView =
+        isBlockVisible && !_isBlockVisibleOnBreakpoint(block, _previewMode);
+
+    Widget buildBanner({
+      required IconData icon,
+      required String message,
+      required Color background,
+      required Color foreground,
+    }) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: foreground, size: 18),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final chips = _supportedBreakpoints.map((breakpoint) {
+      final label = _breakpointLabel(breakpoint) +
+          (breakpoint == _previewMode ? ' · Vista actual' : '');
+      final isEnabled = visibility[breakpoint] ?? true;
+      final iconColor = !isBlockVisible
+          ? theme.disabledColor
+          : isEnabled
+              ? theme.colorScheme.primary
+              : theme.colorScheme.onSurfaceVariant;
+
+      return Tooltip(
+        message: isEnabled
+            ? 'Visible en ${_breakpointLabel(breakpoint)}'
+            : 'Oculto en ${_breakpointLabel(breakpoint)}',
+        child: FilterChip(
+          avatar: Icon(
+            _breakpointIcon(breakpoint),
+            size: 18,
+            color: iconColor,
+          ),
+          label: Text(label),
+          selected: isEnabled,
+          showCheckmark: isBlockVisible,
+          checkmarkColor: theme.colorScheme.primary,
+          onSelected: isBlockVisible
+              ? (selected) => _updateBreakpointVisibility(
+                    block,
+                    breakpoint,
+                    selected,
+                  )
+              : null,
+          backgroundColor: theme.colorScheme.surfaceContainerHigh,
+      selectedColor:
+        theme.colorScheme.primary.withValues(alpha: 0.18),
+          disabledColor: theme.colorScheme.surfaceContainerHighest,
+          labelStyle: theme.textTheme.bodyMedium?.copyWith(
+            color: isBlockVisible
+                ? theme.colorScheme.onSurface
+                : theme.disabledColor,
+            fontWeight:
+                breakpoint == _previewMode ? FontWeight.w600 : FontWeight.w500,
+          ),
+        ),
+      );
+    }).toList();
+
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+    side: BorderSide(
+      color: theme.dividerColor.withValues(alpha: 0.5)),
+      ),
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLowest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.devices_other_outlined,
+                    color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Visibilidad por dispositivo',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Controla en qué vistas aparece este bloque. Usa el selector superior para previsualizar cada breakpoint.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Mostrar bloque en el sitio'),
+              subtitle: Text(
+                'Desactiva para ocultarlo en todas las vistas.',
+                style: theme.textTheme.bodySmall,
+              ),
+              value: isBlockVisible,
+              onChanged: (value) => _setBlockVisibility(
+                block.id,
+                value,
+                showFeedback: false,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: chips,
+            ),
+            if (!isBlockVisible)
+              buildBanner(
+                icon: Icons.visibility_off,
+                message:
+                    'Este bloque está oculto globalmente. Actívalo para ajustar la visibilidad por dispositivo.',
+                background: theme.colorScheme.errorContainer,
+                foreground: theme.colorScheme.onErrorContainer,
+              )
+            else if (isHiddenInCurrentView)
+              buildBanner(
+                icon: Icons.visibility_off_outlined,
+                message:
+                    'Oculto en vista ${_breakpointLabel(_previewMode)}. Activa el chip correspondiente para mostrarlo.',
+                background: theme.colorScheme.secondaryContainer,
+                foreground: theme.colorScheme.onSecondaryContainer,
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1778,8 +2455,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
               labelText: field.label,
               border: const OutlineInputBorder(),
             ),
-            value:
-                options.any((option) => option.value == value) ? value : null,
+      initialValue:
+        options.any((option) => option.value == value) ? value : null,
             items: options
                 .map(
                   (option) => DropdownMenuItem<String>(
@@ -2033,7 +2710,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                 labelText: field.label,
                 border: const OutlineInputBorder(),
               ),
-              value: _resolveSelectValue(field, value?.toString()),
+              initialValue: _resolveSelectValue(field, value?.toString()),
               items: field.options
                   .map(
                     (option) => DropdownMenuItem<String>(
@@ -2785,7 +3462,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         Container(
           height: 160,
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceVariant,
+            color: theme.colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: theme.dividerColor),
           ),
@@ -2900,11 +3577,17 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   }
 
   String _colorToHex(Color color) {
-    return '#'
-            '${color.red.toRadixString(16).padLeft(2, '0')}'
-            '${color.green.toRadixString(16).padLeft(2, '0')}'
-            '${color.blue.toRadixString(16).padLeft(2, '0')}'
-        .toUpperCase();
+    int toChannel(double component) {
+      final scaled = (component * 255.0).round();
+      if (scaled < 0) return 0;
+      if (scaled > 255) return 255;
+      return scaled;
+    }
+
+    final red = toChannel(color.r).toRadixString(16).padLeft(2, '0');
+    final green = toChannel(color.g).toRadixString(16).padLeft(2, '0');
+    final blue = toChannel(color.b).toRadixString(16).padLeft(2, '0');
+    return '#$red$green$blue'.toUpperCase();
   }
 
   List<Widget> _buildCarouselEditControls(WebsiteBlock block, ThemeData theme) {
@@ -2956,7 +3639,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           labelText: 'Animación',
           border: OutlineInputBorder(),
         ),
-        value: animation,
+        initialValue: animation,
         items: const [
           DropdownMenuItem(value: 'slide', child: Text('Deslizar')),
           DropdownMenuItem(value: 'fade', child: Text('Desvanecer')),
@@ -3003,7 +3686,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       ...slides.asMap().entries.map((entry) {
         final index = entry.key;
         return _buildCarouselSlideCard(block, slides, index, theme);
-      }).toList(),
+      }),
       if (slides.isNotEmpty) const SizedBox(height: 16),
       OutlinedButton.icon(
         onPressed: () {
@@ -3114,14 +3797,14 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
-                            color: theme.colorScheme.surfaceVariant,
+                            color: theme.colorScheme.surfaceContainerHighest,
                             alignment: Alignment.center,
                             child: const Icon(Icons.broken_image, size: 40),
                           );
                         },
                       )
                     : Container(
-                        color: theme.colorScheme.surfaceVariant,
+                        color: theme.colorScheme.surfaceContainerHighest,
                         alignment: Alignment.center,
                         child: const Icon(Icons.image, size: 48),
                       ),
@@ -3284,7 +3967,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           labelText: 'Layout',
           border: OutlineInputBorder(),
         ),
-        value: block.data['layout'] ?? 'grid',
+        initialValue: block.data['layout'] ?? 'grid',
         items: const [
           DropdownMenuItem(value: 'grid', child: Text('Grilla')),
           DropdownMenuItem(value: 'list', child: Text('Lista')),
@@ -3344,7 +4027,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           labelText: 'Posición de Imagen',
           border: OutlineInputBorder(),
         ),
-        value: block.data['imagePosition'] ?? 'right',
+        initialValue: block.data['imagePosition'] ?? 'right',
         items: const [
           DropdownMenuItem(value: 'left', child: Text('Izquierda')),
           DropdownMenuItem(value: 'right', child: Text('Derecha')),
@@ -3397,6 +4080,9 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
               theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 24),
+
+        _buildThemePresetSection(theme),
+        const Divider(height: 32),
 
         // Colors section
         Text(
@@ -3468,7 +4154,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
             labelText: 'Fuente de Encabezados',
             border: OutlineInputBorder(),
           ),
-          value: _headingFont,
+          initialValue: _headingFont,
           items: const [
             DropdownMenuItem(value: 'Roboto', child: Text('Roboto')),
             DropdownMenuItem(value: 'Montserrat', child: Text('Montserrat')),
@@ -3490,7 +4176,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
             labelText: 'Fuente del Cuerpo',
             border: OutlineInputBorder(),
           ),
-          value: _bodyFont,
+          initialValue: _bodyFont,
           items: const [
             DropdownMenuItem(value: 'Roboto', child: Text('Roboto')),
             DropdownMenuItem(value: 'Montserrat', child: Text('Montserrat')),
@@ -3578,6 +4264,397 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     );
   }
 
+  Widget _buildThemePresetSection(ThemeData theme) {
+    final helperStyle = theme.textTheme.bodySmall?.copyWith(
+  color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Presets de Tema',
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Guarda combinaciones de colores, tipografías y espaciados para reutilizarlas en futuros lanzamientos.',
+          style: helperStyle,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _presetNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre del preset',
+                  hintText: 'Ej. Campaña de primavera',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              onPressed: _isSavingPreset ? null : _handleSavePreset,
+              icon: _isSavingPreset
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_alt),
+              label: Text(_isSavingPreset ? 'Guardando...' : 'Guardar preset'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_themePresets.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest
+          .withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'Todavía no tienes presets guardados. Configura el tema y presiona "Guardar preset" para construir tu biblioteca reutilizable.',
+              style: helperStyle,
+            ),
+          )
+        else
+          Column(
+            children: _themePresets
+                .map((preset) => _buildThemePresetTile(preset, theme))
+                .toList(),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildThemePresetTile(ThemePreset preset, ThemeData theme) {
+    final bool isActive = _isPresetActive(preset);
+    final bool isDeleting = _presetActionsInProgress.contains(preset.id);
+
+    final Color borderColor = isActive
+        ? theme.colorScheme.secondary
+  : theme.dividerColor.withValues(alpha: 0.5);
+
+    final Color backgroundColor = isActive
+  ? theme.colorScheme.secondaryContainer.withValues(alpha: 0.6)
+        : theme.colorScheme.surface;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        leading: _buildPresetColorPreview(preset),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                preset.name,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (isActive)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Activo',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSecondary,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        subtitle: Text(
+          'Actualizado ${_formatPresetDate(preset.updatedAt)}',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.65),
+          ),
+        ),
+        trailing: Wrap(
+          spacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            TextButton.icon(
+              onPressed: () => _handleApplyPreset(preset),
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Aplicar'),
+            ),
+            if (isDeleting)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              IconButton(
+                tooltip: 'Eliminar preset',
+                onPressed: () => _handleDeletePreset(preset),
+                icon: const Icon(Icons.delete_outline),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPresetColorPreview(ThemePreset preset) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black12),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(preset.primaryColor),
+            Color(preset.accentColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleSavePreset() async {
+    final name = _presetNameController.text.trim();
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingresa un nombre para guardar el preset.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSavingPreset = true);
+
+    final service = context.read<WebsiteService>();
+    ThemePreset? existing;
+
+    for (final preset in _themePresets) {
+      if (preset.name.toLowerCase() == name.toLowerCase()) {
+        existing = preset;
+        break;
+      }
+    }
+
+    final now = DateTime.now().toUtc();
+
+    final ThemePreset presetToSave = (existing != null)
+        ? existing.copyWith(
+            primaryColor: _primaryColor.toARGB32(),
+            accentColor: _accentColor.toARGB32(),
+            backgroundColor: _backgroundColor.toARGB32(),
+            textColor: _textColor.toARGB32(),
+            headingFont: _headingFont,
+            bodyFont: _bodyFont,
+            headingSize: _headingSize,
+            bodySize: _bodySize,
+            sectionSpacing: _sectionSpacing,
+            containerPadding: _containerPadding,
+            updatedAt: now,
+          )
+        : ThemePreset(
+            id: _uuid.v4(),
+            name: name,
+            description: null,
+            primaryColor: _primaryColor.toARGB32(),
+            accentColor: _accentColor.toARGB32(),
+            backgroundColor: _backgroundColor.toARGB32(),
+            textColor: _textColor.toARGB32(),
+            headingFont: _headingFont,
+            bodyFont: _bodyFont,
+            headingSize: _headingSize,
+            bodySize: _bodySize,
+            sectionSpacing: _sectionSpacing,
+            containerPadding: _containerPadding,
+            createdAt: now,
+            updatedAt: now,
+          );
+
+    try {
+      await service.saveThemePreset(presetToSave);
+      if (!mounted) return;
+
+      _presetNameController.clear();
+      FocusScope.of(context).unfocus();
+      final updatedPresets = List<ThemePreset>.from(service.themePresets)
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      setState(() {
+        _themePresets = updatedPresets;
+      });
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(existing != null
+                ? 'Preset actualizado exitosamente.'
+                : 'Preset guardado exitosamente.'),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar preset: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingPreset = false);
+      }
+    }
+  }
+
+  void _handleApplyPreset(ThemePreset preset) {
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _primaryColor = Color(preset.primaryColor);
+      _accentColor = Color(preset.accentColor);
+      _backgroundColor = Color(preset.backgroundColor);
+      _textColor = Color(preset.textColor);
+      _headingFont = preset.headingFont;
+      _bodyFont = preset.bodyFont;
+      _headingSize = preset.headingSize.clamp(24.0, 72.0).toDouble();
+      _bodySize = preset.bodySize.clamp(12.0, 24.0).toDouble();
+      _sectionSpacing = preset.sectionSpacing.clamp(32.0, 128.0).toDouble();
+      _containerPadding = preset.containerPadding.clamp(16.0, 64.0).toDouble();
+    });
+
+    _markAsChanged();
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Preset aplicado. Guarda los cambios para publicarlo.'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 3),
+        ),
+      );
+  }
+
+  Future<void> _handleDeletePreset(ThemePreset preset) async {
+    FocusScope.of(context).unfocus();
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Eliminar preset'),
+            content: Text(
+              '¿Eliminar el preset "${preset.name}"? Esta acción no se puede deshacer.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Eliminar'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _presetActionsInProgress.add(preset.id);
+    });
+
+    final service = context.read<WebsiteService>();
+
+    try {
+      await service.deleteThemePreset(preset.id);
+      if (!mounted) return;
+
+      final updatedPresets = List<ThemePreset>.from(service.themePresets)
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      setState(() {
+        _themePresets = updatedPresets;
+      });
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Preset "${preset.name}" eliminado.'),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Error al eliminar preset: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _presetActionsInProgress.remove(preset.id);
+        });
+      }
+    }
+  }
+
+  bool _isPresetActive(ThemePreset preset) {
+    const double tolerance = 0.5;
+
+  return preset.primaryColor == _primaryColor.toARGB32() &&
+    preset.accentColor == _accentColor.toARGB32() &&
+    preset.backgroundColor == _backgroundColor.toARGB32() &&
+    preset.textColor == _textColor.toARGB32() &&
+        preset.headingFont == _headingFont &&
+        preset.bodyFont == _bodyFont &&
+        (_headingSize - preset.headingSize).abs() <= tolerance &&
+        (_bodySize - preset.bodySize).abs() <= tolerance &&
+        (_sectionSpacing - preset.sectionSpacing).abs() <= tolerance &&
+        (_containerPadding - preset.containerPadding).abs() <= tolerance;
+  }
+
+  String _formatPresetDate(DateTime date) {
+    return _presetDateFormat.format(date.toLocal());
+  }
+
   Widget _buildColorPicker({
     required String label,
     required Color color,
@@ -3610,7 +4687,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                   Text(label,
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   Text(
-                    '#${color.value.toRadixString(16).substring(2).toUpperCase()}',
+                    '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}',
                     style: const TextStyle(color: Colors.grey, fontSize: 12),
                   ),
                 ],

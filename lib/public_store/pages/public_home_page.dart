@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -22,10 +24,84 @@ class _PublicHomePageState extends State<PublicHomePage> {
   List<WebsiteBanner> _banners = [];
   List<Product> _featuredProducts = [];
 
+  static const List<String> _responsiveBreakpoints = [
+    'desktop',
+    'tablet',
+    'mobile'
+  ];
+
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  String _currentBreakpoint(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 640) {
+      return 'mobile';
+    }
+    if (width < 1024) {
+      return 'tablet';
+    }
+    return 'desktop';
+  }
+
+  bool? _toBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true' ||
+          normalized == '1' ||
+          normalized == 'si' ||
+          normalized == 'sí') {
+        return true;
+      }
+      if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+        return false;
+      }
+    }
+    return null;
+  }
+
+  Map<String, bool> _normalizeBlockVisibility(dynamic raw) {
+    final visibility = {
+      for (final breakpoint in _responsiveBreakpoints) breakpoint: true,
+    };
+
+    dynamic source = raw;
+
+    if (source is String) {
+      final trimmed = source.trim();
+      if (trimmed.isEmpty) {
+        source = null;
+      } else {
+        try {
+          final decoded = jsonDecode(trimmed);
+          if (decoded is Map) {
+            source = decoded;
+          }
+        } catch (_) {
+          source = null;
+        }
+      }
+    }
+
+    if (source is Map) {
+      source.forEach((key, value) {
+        final keyString = key.toString();
+        if (!visibility.containsKey(keyString)) {
+          return;
+        }
+        final parsed = _toBool(value);
+        if (parsed != null) {
+          visibility[keyString] = parsed;
+        }
+      });
+    }
+
+    return visibility;
   }
 
   Future<void> _loadData() async {
@@ -186,13 +262,54 @@ class _PublicHomePageState extends State<PublicHomePage> {
       websiteService.getSetting('theme_accent_color', ''),
       PublicStoreTheme.accentGreen,
     );
+    final headingFont = websiteService.getSetting('theme_heading_font', '');
+    final bodyFont = websiteService.getSetting('theme_body_font', '');
+    final headingSize = _resolveDouble(
+      websiteService.getSetting('theme_heading_size', ''),
+      48.0,
+      min: 24.0,
+      max: 72.0,
+    );
+    final bodySize = _resolveDouble(
+      websiteService.getSetting('theme_body_size', ''),
+      16.0,
+      min: 12.0,
+      max: 24.0,
+    );
+    final textColor = _resolveColor(
+      websiteService.getSetting('theme_text_color', ''),
+      PublicStoreTheme.textPrimary,
+    );
+    final sectionSpacing = _resolveDouble(
+      websiteService.getSetting('theme_section_spacing', ''),
+      64.0,
+      min: 32.0,
+      max: 128.0,
+    );
+    final containerPadding = _resolveDouble(
+      websiteService.getSetting('theme_container_padding', ''),
+      24.0,
+      min: 16.0,
+      max: 64.0,
+    );
 
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final currentBreakpoint = _currentBreakpoint(context);
+
     final visibleBlocks = List<Map<String, dynamic>>.from(
-      websiteService.blocks.where((block) => block['is_visible'] ?? true),
+      websiteService.blocks.where((block) {
+        final isGloballyVisible = block['is_visible'] ?? true;
+        if (!isGloballyVisible) {
+          return false;
+        }
+
+        final data = Map<String, dynamic>.from(block['block_data'] ?? {});
+        final visibility = _normalizeBlockVisibility(data['visibility']);
+        return visibility[currentBreakpoint] ?? true;
+      }),
     )..sort(
         (a, b) => (a['order_index'] ?? 0).compareTo(b['order_index'] ?? 0),
       );
@@ -201,32 +318,45 @@ class _PublicHomePageState extends State<PublicHomePage> {
       return SingleChildScrollView(
         child: Column(
           children: [
-            for (final block in visibleBlocks) ...[
+            for (final block in visibleBlocks)
               _buildBlockFromData(
                 block,
                 primaryColor,
                 accentColor,
-                websiteService,
+                headingFont: headingFont,
+                bodyFont: bodyFont,
+                headingSize: headingSize,
+                bodySize: bodySize,
+                textColor: textColor,
+                sectionSpacing: sectionSpacing,
+                containerPadding: containerPadding,
               ),
-              const SizedBox(height: 48),
-            ],
+            SizedBox(height: sectionSpacing),
           ],
         ),
       );
     }
 
     return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildHeroSection(primaryColor, accentColor),
-          const SizedBox(height: 64),
-          _buildFeaturedProductsSection(primaryColor, accentColor),
-          const SizedBox(height: 64),
-          _buildCategoriesSection(primaryColor),
-          const SizedBox(height: 64),
-          _buildWhyChooseUsSection(primaryColor),
-          const SizedBox(height: 64),
-        ],
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          textTheme: Theme.of(context).textTheme.apply(
+                bodyColor: textColor,
+                displayColor: textColor,
+              ),
+        ),
+        child: Column(
+          children: [
+            _buildHeroSection(primaryColor, accentColor),
+            SizedBox(height: sectionSpacing),
+            _buildFeaturedProductsSection(primaryColor, accentColor),
+            SizedBox(height: sectionSpacing),
+            _buildCategoriesSection(primaryColor),
+            SizedBox(height: sectionSpacing),
+            _buildWhyChooseUsSection(primaryColor),
+            SizedBox(height: sectionSpacing),
+          ],
+        ),
       ),
     );
   }
@@ -234,15 +364,31 @@ class _PublicHomePageState extends State<PublicHomePage> {
   Widget _buildBlockFromData(
     Map<String, dynamic> blockData,
     Color primaryColor,
-    Color accentColor,
-    WebsiteService websiteService,
-  ) {
+    Color accentColor, {
+    required String headingFont,
+    required String bodyFont,
+    required double headingSize,
+    required double bodySize,
+    required Color textColor,
+    required double sectionSpacing,
+    required double containerPadding,
+  }) {
     final blockType = (blockData['block_type'] ?? '').toString();
     final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
-    final headingFont = websiteService.getSetting('theme_heading_font');
-    final bodyFont = websiteService.getSetting('theme_body_font');
+    data.remove('visibility');
+    final resolvedHeadingFont = headingFont.isNotEmpty ? headingFont : null;
+    final resolvedBodyFont = bodyFont.isNotEmpty ? bodyFont : null;
 
-    return WebsiteBlockRenderer.build(
+    final baseTheme = Theme.of(context);
+    final themedText = baseTheme.textTheme.apply(
+      bodyColor: textColor,
+      displayColor: textColor,
+    );
+
+    final horizontalPadding = containerPadding.clamp(0.0, 200.0).toDouble();
+    final verticalPadding = (sectionSpacing / 2).clamp(0.0, 200.0).toDouble();
+
+    final content = WebsiteBlockRenderer.build(
       context: context,
       blockType: blockType,
       data: data,
@@ -250,9 +396,24 @@ class _PublicHomePageState extends State<PublicHomePage> {
       accentColor: accentColor,
       featuredProducts: blockType == 'products' ? _featuredProducts : null,
       previewMode: false,
-      headingFont: headingFont.isNotEmpty ? headingFont : null,
-      bodyFont: bodyFont.isNotEmpty ? bodyFont : null,
+      headingFont: resolvedHeadingFont,
+      bodyFont: resolvedBodyFont,
+      headingSize: headingSize,
+      bodySize: bodySize,
       onNavigate: (route) => context.go(route),
+    );
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        horizontalPadding,
+        verticalPadding,
+        horizontalPadding,
+        verticalPadding,
+      ),
+      child: Theme(
+        data: baseTheme.copyWith(textTheme: themedText),
+        child: content,
+      ),
     );
   }
 
@@ -717,5 +878,31 @@ class _PublicHomePageState extends State<PublicHomePage> {
     }
 
     return parsed ?? fallback;
+  }
+
+  double _resolveDouble(
+    String raw,
+    double fallback, {
+    double? min,
+    double? max,
+  }) {
+    final value = raw.trim();
+    if (value.isEmpty) {
+      return fallback;
+    }
+
+    final parsed = double.tryParse(value);
+    if (parsed == null) {
+      return fallback;
+    }
+
+    var result = parsed;
+    if (min != null && result < min) {
+      result = min;
+    }
+    if (max != null && result > max) {
+      result = max;
+    }
+    return result;
   }
 }

@@ -72,8 +72,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       websiteService.getSetting('theme_accent_color', ''),
       PublicStoreTheme.accentGreen,
     );
+    final backgroundColor = _resolveColor(
+      websiteService.getSetting('theme_background_color', ''),
+      Colors.white,
+    );
 
     return Scaffold(
+      backgroundColor: backgroundColor,
       body: Stack(
         children: [
           Column(
