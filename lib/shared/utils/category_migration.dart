@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import '../services/database_service.dart';
 import '../../modules/inventory/services/category_service.dart';
-import '../../modules/inventory/models/category_models.dart' as inventory_models;
+import '../../modules/inventory/models/category_models.dart'
+    as inventory_models;
 
 /// Migration helper to convert from enum-based categories to database-driven categories
 class CategoryMigration {
@@ -14,7 +15,7 @@ class CategoryMigration {
   Future<void> migrate() async {
     try {
       if (kDebugMode) print('Starting category migration...');
-      
+
       // Step 1: Check if categories table exists and has data
       final existingCategories = await _categoryService.getCategories();
       if (existingCategories.isNotEmpty) {
@@ -40,23 +41,28 @@ class CategoryMigration {
     final defaultCategories = [
       inventory_models.Category(
         name: 'Bicicletas',
-        description: 'Bicicletas completas de todos los tipos (MTB, ruta, urbana, etc.)',
+        description:
+            'Bicicletas completas de todos los tipos (MTB, ruta, urbana, etc.)',
       ),
       inventory_models.Category(
         name: 'Repuestos',
-        description: 'Piezas y componentes para bicicletas (frenos, cambios, etc.)',
+        description:
+            'Piezas y componentes para bicicletas (frenos, cambios, etc.)',
       ),
       inventory_models.Category(
         name: 'Accesorios',
-        description: 'Accesorios y complementos para ciclistas (luces, timbre, candados)',
+        description:
+            'Accesorios y complementos para ciclistas (luces, timbre, candados)',
       ),
       inventory_models.Category(
         name: 'Ropa',
-        description: 'Vestimenta y equipamiento para ciclistas (cascos, guantes, jersey)',
+        description:
+            'Vestimenta y equipamiento para ciclistas (cascos, guantes, jersey)',
       ),
       inventory_models.Category(
         name: 'Herramientas',
-        description: 'Herramientas para mantenimiento y reparación de bicicletas',
+        description:
+            'Herramientas para mantenimiento y reparación de bicicletas',
       ),
       inventory_models.Category(
         name: 'Mantenimiento',
@@ -83,7 +89,7 @@ class CategoryMigration {
     try {
       // Get all categories
       final categories = await _categoryService.getCategories();
-      
+
       // Create a map of old enum names to new category IDs
       final categoryMap = <String, String>{
         'bicycle': _findCategoryId(categories, 'Bicicletas'),
@@ -97,7 +103,7 @@ class CategoryMigration {
 
       // Get all products
       final products = await _db.select('products');
-      
+
       if (products.isEmpty) {
         if (kDebugMode) print('No products to migrate.');
         return;
@@ -110,13 +116,13 @@ class CategoryMigration {
           final oldCategory = product['category'] as String?;
           if (oldCategory != null && categoryMap.containsKey(oldCategory)) {
             final categoryId = categoryMap[oldCategory];
-            
+
             // Update the product with the new category_id
             await _db.update('products', product['id'].toString(), {
               'category_id': categoryId,
               'updated_at': DateTime.now().toIso8601String(),
             });
-            
+
             migratedCount++;
           }
         } catch (e) {
@@ -124,14 +130,16 @@ class CategoryMigration {
         }
       }
 
-      if (kDebugMode) print('Migrated $migratedCount products to new category system.');
+      if (kDebugMode)
+        print('Migrated $migratedCount products to new category system.');
     } catch (e) {
       if (kDebugMode) print('Error migrating product categories: $e');
     }
   }
 
   /// Helper to find category ID by name
-  String _findCategoryId(List<inventory_models.Category> categories, String name) {
+  String _findCategoryId(
+      List<inventory_models.Category> categories, String name) {
     try {
       return categories.firstWhere((cat) => cat.name == name).id!;
     } catch (e) {

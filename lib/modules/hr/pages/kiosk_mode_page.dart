@@ -34,20 +34,21 @@ class _KioskModePageState extends State<KioskModePage> {
 
   Future<void> _loadEmployees() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final hrService = context.read<HRService>();
-      
-      final employees = await hrService.getEmployees(status: EmployeeStatus.active);
+
+      final employees =
+          await hrService.getEmployees(status: EmployeeStatus.active);
       final checkedIn = await hrService.getCheckedInEmployees();
-      
+
       final Map<String, bool> statusMap = {};
       for (final emp in checkedIn) {
         statusMap[emp['employee_id'] as String] = true;
       }
-      
+
       if (!mounted) return;
-      
+
       setState(() {
         _employees = employees;
         _checkedInStatus = statusMap;
@@ -55,9 +56,9 @@ class _KioskModePageState extends State<KioskModePage> {
       });
     } catch (e) {
       if (!mounted) return;
-      
+
       setState(() => _isLoading = false);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
@@ -69,7 +70,7 @@ class _KioskModePageState extends State<KioskModePage> {
 
   Future<void> _handleEmployeeTap(Employee employee) async {
     final isCheckedIn = _checkedInStatus[employee.id] ?? false;
-    
+
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
@@ -79,12 +80,12 @@ class _KioskModePageState extends State<KioskModePage> {
         isCheckingOut: isCheckedIn,
       ),
     );
-    
+
     if (confirmed != true) return;
-    
+
     try {
       final hrService = context.read<HRService>();
-      
+
       if (isCheckedIn) {
         // Check out
         final checkedInList = await hrService.getCheckedInEmployees();
@@ -92,18 +93,18 @@ class _KioskModePageState extends State<KioskModePage> {
           (e) => e['employee_id'] == employee.id,
           orElse: () => <String, dynamic>{},
         );
-        
+
         if (employeeRecord.isEmpty) {
           throw Exception('No se encontró registro de entrada');
         }
-        
+
         await hrService.checkOut(
           employeeRecord['attendance_id'] as String,
           location: 'Tienda',
         );
-        
+
         if (!mounted) return;
-        
+
         await _showSuccessDialog(employee, false);
       } else {
         // Check in
@@ -111,17 +112,17 @@ class _KioskModePageState extends State<KioskModePage> {
           employee.id!,
           location: 'Tienda',
         );
-        
+
         if (!mounted) return;
-        
+
         await _showSuccessDialog(employee, true);
       }
-      
+
       // Refresh employee list
       await _loadEmployees();
     } catch (e) {
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
@@ -136,7 +137,7 @@ class _KioskModePageState extends State<KioskModePage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtitleColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
-    
+
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -197,7 +198,7 @@ class _KioskModePageState extends State<KioskModePage> {
 
   List<Employee> get _filteredEmployees {
     if (_searchQuery.isEmpty) return _employees;
-    
+
     final query = _searchQuery.toLowerCase();
     return _employees.where((emp) {
       return emp.fullName.toLowerCase().contains(query) ||
@@ -210,7 +211,7 @@ class _KioskModePageState extends State<KioskModePage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.grey[100]!;
     final cardBgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
-    
+
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
@@ -239,8 +240,10 @@ class _KioskModePageState extends State<KioskModePage> {
               style: TextStyle(color: isDark ? Colors.white : Colors.black87),
               decoration: InputDecoration(
                 hintText: 'Buscar empleado...',
-                hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
-                prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                hintStyle: TextStyle(
+                    color: isDark ? Colors.grey[500] : Colors.grey[600]),
+                prefixIcon: Icon(Icons.search,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600]),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -277,7 +280,8 @@ class _KioskModePageState extends State<KioskModePage> {
                       )
                     : GridView.builder(
                         padding: const EdgeInsets.all(16),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 3, // 3 columns for tablets
                           childAspectRatio: 1.0,
                           crossAxisSpacing: 16,
@@ -286,7 +290,8 @@ class _KioskModePageState extends State<KioskModePage> {
                         itemCount: _filteredEmployees.length,
                         itemBuilder: (context, index) {
                           final employee = _filteredEmployees[index];
-                          final isCheckedIn = _checkedInStatus[employee.id] ?? false;
+                          final isCheckedIn =
+                              _checkedInStatus[employee.id] ?? false;
                           return _EmployeeCard(
                             employee: employee,
                             isCheckedIn: isCheckedIn,
@@ -332,14 +337,16 @@ class _EmployeeCard extends StatelessWidget {
     final cardBgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtitleColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
-    
+
     return Card(
       elevation: 4,
       color: cardBgColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: isCheckedIn ? Colors.green : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
+          color: isCheckedIn
+              ? Colors.green
+              : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
           width: 2,
         ),
       ),
@@ -354,7 +361,8 @@ class _EmployeeCard extends StatelessWidget {
               // Status badge
               if (isCheckedIn)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.green,
                     borderRadius: BorderRadius.circular(12),
@@ -448,7 +456,7 @@ class _ConfirmationDialog extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtitleColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
-    
+
     return AlertDialog(
       backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
       title: Text(

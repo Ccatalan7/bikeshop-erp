@@ -18,13 +18,15 @@ class HRService extends ChangeNotifier {
   Future<List<Department>> getDepartments({bool activeOnly = true}) async {
     try {
       var query = _client.from('departments').select();
-      
+
       if (activeOnly) {
         query = query.eq('active', true);
       }
-      
+
       final response = await query.order('name');
-      return (response as List).map((json) => Department.fromMap(json)).toList();
+      return (response as List)
+          .map((json) => Department.fromMap(json))
+          .toList();
     } catch (e) {
       debugPrint('Error getting departments: $e');
       rethrow;
@@ -33,11 +35,8 @@ class HRService extends ChangeNotifier {
 
   Future<Department?> getDepartmentById(String id) async {
     try {
-      final response = await _client
-          .from('departments')
-          .select()
-          .eq('id', id)
-          .single();
+      final response =
+          await _client.from('departments').select().eq('id', id).single();
       return Department.fromMap(response);
     } catch (e) {
       debugPrint('Error getting department: $e');
@@ -108,8 +107,7 @@ class HRService extends ChangeNotifier {
 
       if (searchQuery != null && searchQuery.isNotEmpty) {
         query = query.or(
-          'first_name.ilike.%$searchQuery%,last_name.ilike.%$searchQuery%,employee_number.ilike.%$searchQuery%,rut.ilike.%$searchQuery%'
-        );
+            'first_name.ilike.%$searchQuery%,last_name.ilike.%$searchQuery%,employee_number.ilike.%$searchQuery%,rut.ilike.%$searchQuery%');
       }
 
       final response = await query.order('last_name').order('first_name');
@@ -122,11 +120,8 @@ class HRService extends ChangeNotifier {
 
   Future<Employee?> getEmployeeById(String id) async {
     try {
-      final response = await _client
-          .from('employees')
-          .select()
-          .eq('id', id)
-          .single();
+      final response =
+          await _client.from('employees').select().eq('id', id).single();
       return Employee.fromMap(response);
     } catch (e) {
       debugPrint('Error getting employee: $e');
@@ -202,7 +197,9 @@ class HRService extends ChangeNotifier {
       }
 
       final response = await query.order('name');
-      return (response as List).map((json) => WorkSchedule.fromMap(json)).toList();
+      return (response as List)
+          .map((json) => WorkSchedule.fromMap(json))
+          .toList();
     } catch (e) {
       debugPrint('Error getting work schedules: $e');
       rethrow;
@@ -211,11 +208,8 @@ class HRService extends ChangeNotifier {
 
   Future<WorkSchedule?> getWorkScheduleById(String id) async {
     try {
-      final response = await _client
-          .from('work_schedules')
-          .select()
-          .eq('id', id)
-          .single();
+      final response =
+          await _client.from('work_schedules').select().eq('id', id).single();
       return WorkSchedule.fromMap(response);
     } catch (e) {
       debugPrint('Error getting work schedule: $e');
@@ -284,7 +278,9 @@ class HRService extends ChangeNotifier {
       }
 
       final response = await query.order('start_date', ascending: false);
-      return (response as List).map((json) => EmployeeContract.fromMap(json)).toList();
+      return (response as List)
+          .map((json) => EmployeeContract.fromMap(json))
+          .toList();
     } catch (e) {
       debugPrint('Error getting contracts: $e');
       rethrow;
@@ -393,7 +389,9 @@ class HRService extends ChangeNotifier {
       }
 
       final response = await query.order('check_in', ascending: false);
-      return (response as List).map((json) => Attendance.fromMap(json)).toList();
+      return (response as List)
+          .map((json) => Attendance.fromMap(json))
+          .toList();
     } catch (e) {
       debugPrint('Error getting attendances: $e');
       rethrow;
@@ -402,11 +400,8 @@ class HRService extends ChangeNotifier {
 
   Future<Attendance?> getAttendanceById(String id) async {
     try {
-      final response = await _client
-          .from('attendances')
-          .select()
-          .eq('id', id)
-          .single();
+      final response =
+          await _client.from('attendances').select().eq('id', id).single();
       return Attendance.fromMap(response);
     } catch (e) {
       debugPrint('Error getting attendance: $e');
@@ -451,7 +446,7 @@ class HRService extends ChangeNotifier {
         'p_start_date': startDate.toIso8601String().split('T')[0],
         'p_end_date': endDate.toIso8601String().split('T')[0],
       });
-      
+
       if (response is List && response.isNotEmpty) {
         return AttendanceSummary.fromMap(response.first);
       }
@@ -488,7 +483,7 @@ class HRService extends ChangeNotifier {
           .insert(attendance.toMap())
           .select()
           .single();
-      
+
       notifyListeners();
       return Attendance.fromMap(response);
     } catch (e) {
@@ -577,7 +572,8 @@ class HRService extends ChangeNotifier {
     }
   }
 
-  Future<void> approveAttendance(String attendanceId, String approvedById) async {
+  Future<void> approveAttendance(
+      String attendanceId, String approvedById) async {
     try {
       await _client.from('attendances').update({
         'status': 'approved',
@@ -591,7 +587,8 @@ class HRService extends ChangeNotifier {
     }
   }
 
-  Future<void> rejectAttendance(String attendanceId, String approvedById) async {
+  Future<void> rejectAttendance(
+      String attendanceId, String approvedById) async {
     try {
       await _client.from('attendances').update({
         'status': 'rejected',
@@ -623,7 +620,9 @@ class HRService extends ChangeNotifier {
         locationCheckOut: location ?? 'Oficina',
         breakMinutes: breakMinutes,
         notes: notes,
-        status: checkOut != null ? AttendanceStatus.completed : AttendanceStatus.ongoing,
+        status: checkOut != null
+            ? AttendanceStatus.completed
+            : AttendanceStatus.ongoing,
       );
 
       final response = await _client
@@ -631,7 +630,7 @@ class HRService extends ChangeNotifier {
           .insert(attendance.toMap())
           .select()
           .single();
-      
+
       notifyListeners();
       return Attendance.fromMap(response);
     } catch (e) {
@@ -657,12 +656,14 @@ class HRService extends ChangeNotifier {
       }
 
       final lastNumber = response.first['employee_number'] as String;
-      final numberPart = int.tryParse(lastNumber.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+      final numberPart =
+          int.tryParse(lastNumber.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
       final newNumber = (numberPart + 1).toString().padLeft(3, '0');
       return 'EMP$newNumber';
     } catch (e) {
       debugPrint('Error generating employee number: $e');
-      return 'EMP${DateTime.now().millisecondsSinceEpoch % 1000}'.padLeft(3, '0');
+      return 'EMP${DateTime.now().millisecondsSinceEpoch % 1000}'
+          .padLeft(3, '0');
     }
   }
 
@@ -671,12 +672,12 @@ class HRService extends ChangeNotifier {
     try {
       final employees = await getEmployees(status: EmployeeStatus.active);
       final Map<String, int> counts = {};
-      
+
       for (final employee in employees) {
         final deptId = employee.departmentId ?? 'sin_departamento';
         counts[deptId] = (counts[deptId] ?? 0) + 1;
       }
-      
+
       return counts;
     } catch (e) {
       debugPrint('Error getting employee count by department: $e');
@@ -689,20 +690,18 @@ class HRService extends ChangeNotifier {
     try {
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
-      
+
       final activeEmployees = await getEmployees(status: EmployeeStatus.active);
       final todayAttendances = await getAttendances(
         startDate: startOfDay,
         endDate: today,
       );
-      
+
       if (activeEmployees.isEmpty) return 0.0;
-      
-      final uniqueEmployees = todayAttendances
-          .map((a) => a.employeeId)
-          .toSet()
-          .length;
-      
+
+      final uniqueEmployees =
+          todayAttendances.map((a) => a.employeeId).toSet().length;
+
       return (uniqueEmployees / activeEmployees.length) * 100;
     } catch (e) {
       debugPrint('Error getting today attendance rate: $e');

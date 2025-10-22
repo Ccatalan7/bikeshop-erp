@@ -1442,8 +1442,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: filteredJobs.length,
-            itemBuilder: (context, index) =>
-                _buildJobCard(filteredJobs[index]),
+            itemBuilder: (context, index) => _buildJobCard(filteredJobs[index]),
           ),
       ],
     );
@@ -1542,11 +1541,11 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     final allTypes = TimelineEventType.values;
     final allSelected = _timelineTypeFilters.length == allTypes.length;
     final defaultSort = _timelineSortKey == 'date_desc';
-  final hasFiltersApplied =
-    _timelineSearchTerm.isNotEmpty || !defaultSort || !allSelected;
-  final filterSummary = allSelected
-    ? 'Todos los tipos'
-    : '${_timelineTypeFilters.length} de ${allTypes.length} tipos seleccionados';
+    final hasFiltersApplied =
+        _timelineSearchTerm.isNotEmpty || !defaultSort || !allSelected;
+    final filterSummary = allSelected
+        ? 'Todos los tipos'
+        : '${_timelineTypeFilters.length} de ${allTypes.length} tipos seleccionados';
 
     return Card(
       margin: EdgeInsets.zero,
@@ -1787,9 +1786,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
 
     if (result != null) {
       setState(() {
-        _timelineTypeFilters = result.isEmpty
-            ? <TimelineEventType>{}
-            : result;
+        _timelineTypeFilters = result.isEmpty ? <TimelineEventType>{} : result;
       });
     }
   }

@@ -44,9 +44,9 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
 
     try {
       await _resetService.performFactoryReset();
-      
+
       if (!mounted) return;
-      
+
       // Clear all service caches to force reload
       try {
         final accountingService = context.read<AccountingService>();
@@ -54,21 +54,21 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
       } catch (e) {
         debugPrint('Could not reload accounting service: $e');
       }
-      
+
       try {
         final salesService = context.read<SalesService>();
         // Sales service will reload on next access
       } catch (e) {
         debugPrint('Could not access sales service: $e');
       }
-      
+
       try {
         final inventoryService = context.read<InventoryService>();
         // Inventory service will reload on next access
       } catch (e) {
         debugPrint('Could not access inventory service: $e');
       }
-      
+
       // Show success and navigate to login
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -171,9 +171,7 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
         backgroundColor: Colors.red[700],
         foregroundColor: Colors.white,
       ),
-      body: _isLoading
-          ? _buildLoadingView()
-          : _buildResetForm(),
+      body: _isLoading ? _buildLoadingView() : _buildResetForm(),
     );
   }
 
@@ -267,7 +265,8 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  _buildDataItem(Icons.receipt_long, 'Facturas de venta y compra'),
+                  _buildDataItem(
+                      Icons.receipt_long, 'Facturas de venta y compra'),
                   _buildDataItem(Icons.inventory, 'Productos e inventario'),
                   _buildDataItem(Icons.people, 'Clientes y proveedores'),
                   _buildDataItem(Icons.account_balance, 'Asientos contables'),
@@ -341,7 +340,10 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
                       hintText: 'ELIMINAR',
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.keyboard),
-                      suffixIcon: _confirmController.text.trim().toUpperCase() == 'ELIMINAR'
+                      suffixIcon: _confirmController.text
+                                  .trim()
+                                  .toUpperCase() ==
+                              'ELIMINAR'
                           ? const Icon(Icons.check_circle, color: Colors.green)
                           : null,
                     ),
@@ -356,8 +358,8 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
 
           // Reset button
           FilledButton.icon(
-            onPressed: _confirmationChecked && 
-                     _confirmController.text.trim().toUpperCase() == 'ELIMINAR'
+            onPressed: _confirmationChecked &&
+                    _confirmController.text.trim().toUpperCase() == 'ELIMINAR'
                 ? _performReset
                 : null,
             icon: const Icon(Icons.delete_forever),

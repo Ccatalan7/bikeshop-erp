@@ -23,7 +23,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
   BalanceSheet? _balanceSheet;
   bool _isLoading = false;
   String? _errorMessage;
-  
+
   late DateTime _asOfDate;
   late ReportPeriod _selectedPeriod;
   final NumberFormat _currencyFormat = NumberFormat.currency(
@@ -50,10 +50,10 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
 
     try {
       final service = context.read<FinancialReportsService>();
-      
+
       // Calculate period start for ROE/ROA (beginning of year)
       final periodStart = DateTime(_asOfDate.year, 1, 1);
-      
+
       final balanceSheet = await service.generateBalanceSheet(
         asOfDate: _asOfDate,
         periodStartDate: periodStart,
@@ -65,16 +65,17 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
       });
     } catch (e) {
       String errorMsg = 'Error al generar el reporte: $e';
-      
+
       // Check if it's a function not found error
-      if (e.toString().contains('function') && 
-          (e.toString().contains('does not exist') || e.toString().contains('not found'))) {
+      if (e.toString().contains('function') &&
+          (e.toString().contains('does not exist') ||
+              e.toString().contains('not found'))) {
         errorMsg = 'La función de base de datos no existe.\n\n'
-                  'Por favor, ejecuta el archivo:\n'
-                  'supabase/sql/core_schema.sql\n\n'
-                  'en tu base de datos Supabase para crear las funciones necesarias.';
+            'Por favor, ejecuta el archivo:\n'
+            'supabase/sql/core_schema.sql\n\n'
+            'en tu base de datos Supabase para crear las funciones necesarias.';
       }
-      
+
       setState(() {
         _errorMessage = errorMsg;
         _isLoading = false;
@@ -103,14 +104,14 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
               icon: const Icon(Icons.refresh),
               tooltip: 'Actualizar',
             ),
-            
+
             // Export button
             IconButton(
               onPressed: _balanceSheet != null ? _showExportMenu : null,
               icon: const Icon(Icons.download),
               tooltip: 'Exportar',
             ),
-            
+
             const SizedBox(width: 8),
           ],
         ),
@@ -126,7 +127,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                 showEndDate: false, // Only show single date for balance sheet
               ),
             ),
-            
+
             // Report content
             Expanded(
               child: _buildContent(),
@@ -196,23 +197,24 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
             subtitle: _balanceSheet!.subtitle,
             generatedAt: _balanceSheet!.generatedAt,
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Accounting equation validation
           _buildAccountingEquationCard(),
-          
+
           const SizedBox(height: 24),
-          
+
           // Financial ratios
           _buildFinancialRatiosCards(),
-          
+
           const SizedBox(height: 24),
-          
+
           // Report lines with horizontal scroll if needed
           LayoutBuilder(
             builder: (context, constraints) {
-              final contentWidth = constraints.maxWidth > 1200 ? 1200.0 : constraints.maxWidth;
+              final contentWidth =
+                  constraints.maxWidth > 1200 ? 1200.0 : constraints.maxWidth;
               return SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Container(
@@ -235,7 +237,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
               );
             },
           ),
-          
+
           const SizedBox(height: 32),
         ],
       ),
@@ -274,9 +276,9 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                           ? 'Ecuación Contable Balanceada'
                           : 'Advertencia: Ecuación Contable Desbalanceada',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: isBalanced ? Colors.green : Colors.red,
-                      ),
+                            fontWeight: FontWeight.bold,
+                            color: isBalanced ? Colors.green : Colors.red,
+                          ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -288,9 +290,9 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                       Text(
                         'Diferencia: ${_currencyFormat.format(difference)}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.red,
-                          fontWeight: FontWeight.bold,
-                        ),
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                     ],
                   ],
@@ -315,11 +317,11 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
           Text(
             'Indicadores Financieros',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(height: 16),
-          
+
           // Liquidity ratios
           Row(
             children: [
@@ -346,9 +348,9 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Leverage ratios
           Row(
             children: [
@@ -375,10 +377,10 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
               ),
             ],
           ),
-          
+
           if (_balanceSheet!.periodNetIncome != 0) ...[
             const SizedBox(height: 16),
-            
+
             // Profitability ratios
             Row(
               children: [
@@ -434,9 +436,9 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                   child: Text(
                     title,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.secondary,
-                      fontWeight: FontWeight.bold,
-                    ),
+                          color: Theme.of(context).colorScheme.secondary,
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                 ),
               ],
@@ -445,17 +447,17 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
             Text(
               value,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
             ),
             const SizedBox(height: 4),
             Text(
               formula,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 10,
-                fontStyle: FontStyle.italic,
-              ),
+                    fontSize: 10,
+                    fontStyle: FontStyle.italic,
+                  ),
             ),
           ],
         ),
@@ -478,7 +480,9 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                 onTap: () {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Exportación PDF disponible próximamente')),
+                    const SnackBar(
+                        content:
+                            Text('Exportación PDF disponible próximamente')),
                   );
                 },
               ),
@@ -489,7 +493,9 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                 onTap: () {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Exportación Excel disponible próximamente')),
+                    const SnackBar(
+                        content:
+                            Text('Exportación Excel disponible próximamente')),
                   );
                 },
               ),

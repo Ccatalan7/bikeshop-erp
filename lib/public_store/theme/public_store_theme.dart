@@ -7,39 +7,42 @@ class PublicStoreTheme {
   static const Color primaryBlue = Color(0xFF2563EB); // Professional blue
   static const Color secondaryGray = Color(0xFF64748B); // Elegant gray
   static const Color accentGreen = Color(0xFF25D366); // WhatsApp green
-  
+
   // Background Colors (Light & Clean)
   static const Color background = Color(0xFFFFFFFF); // Pure white
   static const Color surface = Color(0xFFF8FAFC); // Subtle off-white
   static const Color cardBackground = Colors.white;
-  
+
   // Text Colors (Easy to Read)
   static const Color textPrimary = Color(0xFF1E293B); // Dark gray
   static const Color textSecondary = Color(0xFF64748B); // Medium gray
   static const Color textMuted = Color(0xFF94A3B8); // Light gray
-  
+
   // Accent Colors
   static const Color success = Color(0xFF10B981); // Green for success
-  static const Color successGreen = Color(0xFF10B981); // Alias for compatibility
+  static const Color successGreen =
+      Color(0xFF10B981); // Alias for compatibility
   static const Color warning = Color(0xFFF59E0B); // Orange for warnings
-  static const Color warningYellow = Color(0xFFF59E0B); // Alias for compatibility
+  static const Color warningYellow =
+      Color(0xFFF59E0B); // Alias for compatibility
   static const Color error = Color(0xFFEF4444); // Red for errors
   static const Color errorRed = Color(0xFFEF4444); // Alias for compatibility
   static const Color info = Color(0xFF3B82F6); // Blue for info
-  
+
   // UI Elements
   static const Color divider = Color(0xFFE2E8F0);
   static const Color border = Color(0xFFCBD5E1);
   static const Color shadow = Color(0x1A000000); // 10% black
-  
+
   // Hero Overlay
-  static const Color heroOverlay = Color(0x99000000); // 60% black overlay for hero text
-  
+  static const Color heroOverlay =
+      Color(0x99000000); // 60% black overlay for hero text
+
   static ThemeData get theme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      
+
       // Color Scheme
       colorScheme: const ColorScheme.light(
         primary: primaryBlue,
@@ -51,10 +54,10 @@ class PublicStoreTheme {
         onSurface: textPrimary,
         onError: Colors.white,
       ),
-      
+
       // Scaffold
       scaffoldBackgroundColor: background,
-      
+
       // AppBar
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.white,
@@ -68,7 +71,7 @@ class PublicStoreTheme {
         ),
         iconTheme: IconThemeData(color: textPrimary),
       ),
-      
+
       // Card
       cardTheme: CardThemeData(
         color: cardBackground,
@@ -79,7 +82,7 @@ class PublicStoreTheme {
         ),
         margin: const EdgeInsets.all(8),
       ),
-      
+
       // Elevated Button
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -96,7 +99,7 @@ class PublicStoreTheme {
           ),
         ),
       ),
-      
+
       // Outlined Button
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
@@ -112,7 +115,7 @@ class PublicStoreTheme {
           ),
         ),
       ),
-      
+
       // Text Button
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
@@ -124,7 +127,7 @@ class PublicStoreTheme {
           ),
         ),
       ),
-      
+
       // Input Decoration
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -145,10 +148,11 @@ class PublicStoreTheme {
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: error),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         hintStyle: const TextStyle(color: textMuted),
       ),
-      
+
       // Chip
       chipTheme: ChipThemeData(
         backgroundColor: surface,
@@ -161,20 +165,20 @@ class PublicStoreTheme {
         secondaryLabelStyle: const TextStyle(color: textSecondary),
         brightness: Brightness.light,
       ),
-      
+
       // Divider
       dividerTheme: const DividerThemeData(
         color: divider,
         thickness: 1,
         space: 1,
       ),
-      
+
       // Icon
       iconTheme: const IconThemeData(
         color: textSecondary,
         size: 24,
       ),
-      
+
       // Text Theme
       textTheme: const TextTheme(
         // Display (Hero Text)
@@ -195,7 +199,7 @@ class PublicStoreTheme {
           fontWeight: FontWeight.bold,
           color: textPrimary,
         ),
-        
+
         // Headlines
         headlineLarge: TextStyle(
           fontSize: 28,
@@ -212,7 +216,7 @@ class PublicStoreTheme {
           fontWeight: FontWeight.w600,
           color: textPrimary,
         ),
-        
+
         // Titles
         titleLarge: TextStyle(
           fontSize: 18,
@@ -229,7 +233,7 @@ class PublicStoreTheme {
           fontWeight: FontWeight.w600,
           color: textPrimary,
         ),
-        
+
         // Body
         bodyLarge: TextStyle(
           fontSize: 16,
@@ -249,7 +253,7 @@ class PublicStoreTheme {
           color: textMuted,
           height: 1.5,
         ),
-        
+
         // Labels
         labelLarge: TextStyle(
           fontSize: 14,
@@ -269,22 +273,22 @@ class PublicStoreTheme {
       ),
     );
   }
-  
+
   // Shadow for Cards
   static List<BoxShadow> get cardShadow => [
-    BoxShadow(
-      color: shadow,
-      blurRadius: 8,
-      offset: const Offset(0, 2),
-    ),
-  ];
-  
+        BoxShadow(
+          color: shadow,
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ];
+
   // Shadow for Floating Elements
   static List<BoxShadow> get floatingShadow => [
-    BoxShadow(
-      color: shadow,
-      blurRadius: 16,
-      offset: const Offset(0, 4),
-    ),
-  ];
+        BoxShadow(
+          color: shadow,
+          blurRadius: 16,
+          offset: const Offset(0, 4),
+        ),
+      ];
 }

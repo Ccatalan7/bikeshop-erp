@@ -33,7 +33,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
     });
 
     try {
-      final websiteService = Provider.of<WebsiteService>(context, listen: false);
+      final websiteService =
+          Provider.of<WebsiteService>(context, listen: false);
       final order = await websiteService.getOrderById(widget.orderId);
 
       setState(() {
@@ -73,7 +74,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
             const SizedBox(height: 16),
             Text(
               _error ?? 'Error desconocido',
-              style: const TextStyle(fontSize: 16, color: PublicStoreTheme.textSecondary),
+              style: const TextStyle(
+                  fontSize: 16, color: PublicStoreTheme.textSecondary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -82,7 +84,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: PublicStoreTheme.primaryBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               ),
               child: const Text('Volver al Inicio'),
             ),
@@ -99,7 +102,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.shopping_bag_outlined, size: 64, color: PublicStoreTheme.textSecondary),
+            const Icon(Icons.shopping_bag_outlined,
+                size: 64, color: PublicStoreTheme.textSecondary),
             const SizedBox(height: 16),
             const Text(
               'Pedido no encontrado',
@@ -108,7 +112,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
             const SizedBox(height: 8),
             const Text(
               'No pudimos encontrar este pedido.',
-              style: TextStyle(fontSize: 16, color: PublicStoreTheme.textSecondary),
+              style: TextStyle(
+                  fontSize: 16, color: PublicStoreTheme.textSecondary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -117,7 +122,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: PublicStoreTheme.primaryBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               ),
               child: const Text('Volver al Inicio'),
             ),
@@ -299,7 +305,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
                         _buildPaymentInfo('Cuenta Corriente', '1234567890'),
                         _buildPaymentInfo('RUT', '12.345.678-9'),
                         _buildPaymentInfo('Nombre', 'Vinabike SpA'),
-                        _buildPaymentInfo('Monto', ChileanUtils.formatCurrency(order.total)),
+                        _buildPaymentInfo(
+                            'Monto', ChileanUtils.formatCurrency(order.total)),
                         const SizedBox(height: 12),
                         const Text(
                           'Una vez realizada la transferencia, envía el comprobante a ventas@vinabike.cl con tu número de pedido.',
@@ -356,7 +363,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
                       onPressed: () => context.go('/tienda/productos'),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: const BorderSide(color: PublicStoreTheme.primaryBlue),
+                        side: const BorderSide(
+                            color: PublicStoreTheme.primaryBlue),
                       ),
                       child: const Text('Seguir Comprando'),
                     ),

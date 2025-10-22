@@ -72,8 +72,9 @@ class IncomeStatement extends FinancialReport {
       totalOperatingIncome > 0 ? (grossProfit / totalOperatingIncome) * 100 : 0;
 
   /// Operating profit margin (%)
-  double get operatingMargin =>
-      totalOperatingIncome > 0 ? (operatingProfit / totalOperatingIncome) * 100 : 0;
+  double get operatingMargin => totalOperatingIncome > 0
+      ? (operatingProfit / totalOperatingIncome) * 100
+      : 0;
 
   /// Net profit margin (%)
   double get netMargin =>
@@ -124,9 +125,9 @@ class IncomeStatement extends FinancialReport {
         amount: -totalCostOfSales, // Show as negative
         category: 'costOfSales',
       ));
-      lines.addAll(costOfSales.map((line) => 
-        line.copyWith(amount: -line.amount) // Show as negative
-      ));
+      lines.addAll(costOfSales
+          .map((line) => line.copyWith(amount: -line.amount) // Show as negative
+              ));
       lines.add(ReportLine.blank());
     }
 
@@ -144,9 +145,9 @@ class IncomeStatement extends FinancialReport {
         amount: -totalOperatingExpenses, // Show as negative
         category: 'operatingExpense',
       ));
-      lines.addAll(operatingExpenses.map((line) => 
-        line.copyWith(amount: -line.amount) // Show as negative
-      ));
+      lines.addAll(operatingExpenses
+          .map((line) => line.copyWith(amount: -line.amount) // Show as negative
+              ));
       lines.add(ReportLine.blank());
     }
 
@@ -164,9 +165,9 @@ class IncomeStatement extends FinancialReport {
         amount: -totalFinancialExpenses, // Show as negative
         category: 'financialExpense',
       ));
-      lines.addAll(financialExpenses.map((line) => 
-        line.copyWith(amount: -line.amount) // Show as negative
-      ));
+      lines.addAll(financialExpenses
+          .map((line) => line.copyWith(amount: -line.amount) // Show as negative
+              ));
       lines.add(ReportLine.blank());
     }
 
@@ -184,9 +185,9 @@ class IncomeStatement extends FinancialReport {
         amount: -totalTaxes, // Show as negative
         category: 'taxExpense',
       ));
-      lines.addAll(taxes.map((line) => 
-        line.copyWith(amount: -line.amount) // Show as negative
-      ));
+      lines.addAll(taxes
+          .map((line) => line.copyWith(amount: -line.amount) // Show as negative
+              ));
       lines.add(ReportLine.blank());
     }
 
@@ -208,7 +209,8 @@ class IncomeStatement extends FinancialReport {
       'generated_at': generatedAt.toIso8601String(),
       'operating_income': operatingIncome.map((l) => l.toJson()).toList(),
       'total_operating_income': totalOperatingIncome,
-      'non_operating_income': nonOperatingIncome.map((l) => l.toJson()).toList(),
+      'non_operating_income':
+          nonOperatingIncome.map((l) => l.toJson()).toList(),
       'total_non_operating_income': totalNonOperatingIncome,
       'cost_of_sales': costOfSales.map((l) => l.toJson()).toList(),
       'total_cost_of_sales': totalCostOfSales,

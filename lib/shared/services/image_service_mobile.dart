@@ -15,7 +15,7 @@ class ImageServicePlatform {
       }
 
       final file = result.files.first;
-      
+
       if (file.bytes != null) {
         return (bytes: file.bytes!, name: file.name);
       } else if (file.path != null) {

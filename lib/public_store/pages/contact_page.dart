@@ -22,7 +22,8 @@ class ContactPage extends StatelessWidget {
 
   Future<void> _launchWhatsApp() async {
     const phone = '56912345678'; // Replace with actual WhatsApp number
-    const message = '¡Hola! Me gustaría obtener más información sobre sus productos.';
+    const message =
+        '¡Hola! Me gustaría obtener más información sobre sus productos.';
     final url = 'https://wa.me/$phone?text=${Uri.encodeComponent(message)}';
     await _launchUrl(url);
   }
@@ -116,7 +117,7 @@ class ContactPage extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 800;
-        
+
         return Wrap(
           spacing: 24,
           runSpacing: 24,
@@ -127,8 +128,11 @@ class ContactPage extends StatelessWidget {
               subtitle: 'Viña del Mar, Chile',
               details: 'Av. Libertad 1234\nViña del Mar, Región de Valparaíso',
               color: PublicStoreTheme.primaryBlue,
-              onTap: () => _launchUrl('https://maps.google.com/?q=Viña+del+Mar'),
-              width: isWide ? (constraints.maxWidth - 48) / 3 : constraints.maxWidth,
+              onTap: () =>
+                  _launchUrl('https://maps.google.com/?q=Viña+del+Mar'),
+              width: isWide
+                  ? (constraints.maxWidth - 48) / 3
+                  : constraints.maxWidth,
             ),
             _buildContactCard(
               icon: Icons.phone_outlined,
@@ -137,7 +141,9 @@ class ContactPage extends StatelessWidget {
               details: 'Lunes a Viernes: 9:00 - 19:00\nSábado: 10:00 - 14:00',
               color: const Color(0xFF10B981),
               onTap: () => _launchPhone('+56912345678'),
-              width: isWide ? (constraints.maxWidth - 48) / 3 : constraints.maxWidth,
+              width: isWide
+                  ? (constraints.maxWidth - 48) / 3
+                  : constraints.maxWidth,
             ),
             _buildContactCard(
               icon: Icons.email_outlined,
@@ -146,7 +152,9 @@ class ContactPage extends StatelessWidget {
               details: 'Respondemos en 24 horas\nventas@vinabike.cl',
               color: const Color(0xFFF59E0B),
               onTap: () => _launchEmail('contacto@vinabike.cl'),
-              width: isWide ? (constraints.maxWidth - 48) / 3 : constraints.maxWidth,
+              width: isWide
+                  ? (constraints.maxWidth - 48) / 3
+                  : constraints.maxWidth,
             ),
           ],
         );
@@ -236,7 +244,7 @@ class ContactPage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 32),
-        
+
         // Map Placeholder (replace with actual Google Maps embed)
         Container(
           height: 400,
@@ -270,7 +278,8 @@ class ContactPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       TextButton.icon(
-                        onPressed: () => _launchUrl('https://maps.google.com/?q=Viña+del+Mar'),
+                        onPressed: () => _launchUrl(
+                            'https://maps.google.com/?q=Viña+del+Mar'),
                         icon: const Icon(Icons.directions),
                         label: const Text('Ver en Google Maps'),
                       ),
@@ -309,7 +318,6 @@ class ContactPage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 32),
-        
         Card(
           elevation: 2,
           child: Padding(
@@ -335,7 +343,7 @@ class ContactPage extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   TextFormField(
                     controller: emailController,
                     decoration: const InputDecoration(
@@ -356,7 +364,7 @@ class ContactPage extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   TextFormField(
                     controller: messageController,
                     decoration: const InputDecoration(
@@ -377,17 +385,17 @@ class ContactPage extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 24),
-                  
+
                   ElevatedButton(
                     onPressed: () {
                       if (formKey.currentState!.validate()) {
                         // For now, open email client with pre-filled message
                         final subject = 'Contacto desde sitio web';
-                        final body = 'Nombre: ${nameController.text}\n\n${messageController.text}';
+                        final body =
+                            'Nombre: ${nameController.text}\n\n${messageController.text}';
                         _launchUrl(
-                          'mailto:contacto@vinabike.cl?subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(body)}'
-                        );
-                        
+                            'mailto:contacto@vinabike.cl?subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(body)}');
+
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Abriendo cliente de correo...'),
@@ -407,11 +415,12 @@ class ContactPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // WhatsApp Alternative
                   OutlinedButton.icon(
                     onPressed: _launchWhatsApp,
-                    icon: const Icon(Icons.chat_bubble_outline, color: Color(0xFF25D366)),
+                    icon: const Icon(Icons.chat_bubble_outline,
+                        color: Color(0xFF25D366)),
                     label: const Text(
                       'O escríbenos por WhatsApp',
                       style: TextStyle(color: Color(0xFF25D366)),
@@ -440,7 +449,8 @@ class ContactPage extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: const [
-                Icon(Icons.access_time, size: 32, color: PublicStoreTheme.primaryBlue),
+                Icon(Icons.access_time,
+                    size: 32, color: PublicStoreTheme.primaryBlue),
                 SizedBox(width: 12),
                 Text(
                   'Horario de Atención',
@@ -452,11 +462,9 @@ class ContactPage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-            
             _buildHourRow('Lunes a Viernes', '9:00 - 19:00', true),
             _buildHourRow('Sábado', '10:00 - 14:00', true),
             _buildHourRow('Domingo', 'Cerrado', false),
-            
             const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(16),

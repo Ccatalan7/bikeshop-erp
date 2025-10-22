@@ -1,0 +1,77 @@
+{
+  "type": "cta",
+  "title": "Llamado a la Acción",
+  "description": "Invita a tus visitantes a realizar la siguiente acción.",
+  "usesCustomEditor": false,
+  "category": "Conversión",
+  "tags": ["cta", "botón", "acción"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Agenda tu mantención hoy",
+    "subtitle": "Estamos listos para ayudarte con tu bicicleta",
+    "buttonText": "Agendar",
+    "buttonLink": "/contacto",
+    "backgroundImage": null,
+    "overlayColor": "#000000",
+    "overlayOpacity": 0.5
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título",
+      "type": "text",
+      "defaultValue": "Agenda tu mantención hoy"
+    },
+    {
+      "key": "subtitle",
+      "label": "Subtítulo",
+      "type": "textarea",
+      "defaultValue": "Estamos listos para ayudarte"
+    },
+    {
+      "key": "buttonText",
+      "label": "Texto del botón",
+      "type": "text",
+      "defaultValue": "Agendar"
+    },
+    {
+      "key": "buttonLink",
+      "label": "Enlace del botón",
+      "type": "text",
+      "defaultValue": "/contacto"
+    },
+    {
+      "key": "backgroundImage",
+      "label": "Imagen de fondo",
+      "type": "image"
+    },
+    {
+      "key": "overlayColor",
+      "label": "Color de superposición",
+      "type": "color",
+      "defaultValue": "#000000"
+    },
+    {
+      "key": "overlayOpacity",
+      "label": "Opacidad de superposición",
+      "type": "number",
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "defaultValue": 0.5
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "subtitle", "buttonText", "buttonLink"]
+    },
+    {
+      "id": "design",
+      "label": "Diseño",
+      "fields": ["backgroundImage", "overlayColor", "overlayOpacity"]
+    }
+  ]
+}

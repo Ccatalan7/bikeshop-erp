@@ -32,20 +32,20 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final hrService = context.read<HRService>();
-      
+
       final employees = await hrService.getEmployees(
         status: _selectedStatus,
         departmentId: _selectedDepartmentId,
         searchQuery: _searchQuery.isEmpty ? null : _searchQuery,
       );
-      
+
       final departments = await hrService.getDepartments(activeOnly: false);
-      
+
       if (!mounted) return;
-      
+
       setState(() {
         _employees = employees;
         _departments = departments;
@@ -53,9 +53,9 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      
+
       setState(() => _isLoading = false);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
@@ -78,7 +78,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
         departments: _departments,
       ),
     );
-    
+
     if (result != null) {
       _loadData();
     }
@@ -108,25 +108,25 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
         ],
       ),
     );
-    
+
     if (confirmed == true && mounted) {
       try {
         final hrService = context.read<HRService>();
         await hrService.deleteEmployee(employee.id!);
-        
+
         if (!mounted) return;
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('✅ Empleado ${employee.fullName} eliminado'),
             backgroundColor: Colors.green,
           ),
         );
-        
+
         _loadData();
       } catch (e) {
         if (!mounted) return;
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
@@ -173,7 +173,8 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                     decoration: const InputDecoration(
                       labelText: 'Estado',
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       border: OutlineInputBorder(),
                     ),
                     items: [
@@ -194,7 +195,8 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                             label = 'Desvinculado';
                             break;
                         }
-                        return DropdownMenuItem(value: status, child: Text(label));
+                        return DropdownMenuItem(
+                            value: status, child: Text(label));
                       }),
                     ],
                     onChanged: (value) {
@@ -212,15 +214,16 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                     decoration: const InputDecoration(
                       labelText: 'Departamento',
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       border: OutlineInputBorder(),
                     ),
                     items: [
                       const DropdownMenuItem(value: null, child: Text('Todos')),
                       ..._departments.map((dept) => DropdownMenuItem(
-                        value: dept.id,
-                        child: Text(dept.name),
-                      )),
+                            value: dept.id,
+                            child: Text(dept.name),
+                          )),
                     ],
                     onChanged: (value) {
                       setState(() => _selectedDepartmentId = value);
@@ -347,7 +350,8 @@ class _EmployeeCard extends StatelessWidget {
               // Avatar
               CircleAvatar(
                 radius: 28,
-                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                backgroundColor:
+                    Theme.of(context).primaryColor.withOpacity(0.1),
                 child: employee.photoUrl != null
                     ? ClipOval(
                         child: Image.network(
@@ -393,7 +397,8 @@ class _EmployeeCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: _getStatusColor().withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
@@ -432,7 +437,8 @@ class _EmployeeCard extends StatelessWidget {
                         ),
                         if (employee.rut != null) ...[
                           const SizedBox(width: 12),
-                          Icon(Icons.credit_card, size: 14, color: Colors.grey[500]),
+                          Icon(Icons.credit_card,
+                              size: 14, color: Colors.grey[500]),
                           const SizedBox(width: 4),
                           Text(
                             employee.rut!,
@@ -508,7 +514,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
   final _addressController = TextEditingController();
   final _cityController = TextEditingController();
   final _notesController = TextEditingController();
-  
+
   String? _departmentId;
   EmploymentType _employmentType = EmploymentType.fullTime;
   EmployeeStatus _status = EmployeeStatus.active;
@@ -568,7 +574,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
 
     try {
       final hrService = context.read<HRService>();
-      
+
       final employee = Employee(
         id: widget.employee?.id,
         employeeNumber: _employeeNumberController.text,
@@ -583,7 +589,8 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
         status: _status,
         birthDate: _birthDate,
         hireDate: _hireDate,
-        address: _addressController.text.isEmpty ? null : _addressController.text,
+        address:
+            _addressController.text.isEmpty ? null : _addressController.text,
         city: _cityController.text.isEmpty ? null : _cityController.text,
         notes: _notesController.text.isEmpty ? null : _notesController.text,
       );
@@ -632,7 +639,9 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                   const Icon(Icons.person, color: Colors.white),
                   const SizedBox(width: 12),
                   Text(
-                    widget.employee == null ? 'Nuevo Empleado' : 'Editar Empleado',
+                    widget.employee == null
+                        ? 'Nuevo Empleado'
+                        : 'Editar Empleado',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -665,8 +674,9 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                 labelText: 'Nombre *',
                                 border: OutlineInputBorder(),
                               ),
-                              validator: (value) =>
-                                  value?.isEmpty ?? true ? 'Campo requerido' : null,
+                              validator: (value) => value?.isEmpty ?? true
+                                  ? 'Campo requerido'
+                                  : null,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -677,8 +687,9 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                 labelText: 'Apellido *',
                                 border: OutlineInputBorder(),
                               ),
-                              validator: (value) =>
-                                  value?.isEmpty ?? true ? 'Campo requerido' : null,
+                              validator: (value) => value?.isEmpty ?? true
+                                  ? 'Campo requerido'
+                                  : null,
                             ),
                           ),
                         ],
@@ -693,8 +704,9 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                 labelText: 'Número de Empleado *',
                                 border: OutlineInputBorder(),
                               ),
-                              validator: (value) =>
-                                  value?.isEmpty ?? true ? 'Campo requerido' : null,
+                              validator: (value) => value?.isEmpty ?? true
+                                  ? 'Campo requerido'
+                                  : null,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -745,8 +757,9 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                 labelText: 'Cargo *',
                                 border: OutlineInputBorder(),
                               ),
-                              validator: (value) =>
-                                  value?.isEmpty ?? true ? 'Campo requerido' : null,
+                              validator: (value) => value?.isEmpty ?? true
+                                  ? 'Campo requerido'
+                                  : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -762,12 +775,14 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                   value: null,
                                   child: Text('Sin departamento'),
                                 ),
-                                ...widget.departments.map((dept) => DropdownMenuItem(
-                                  value: dept.id,
-                                  child: Text(dept.name),
-                                )),
+                                ...widget.departments
+                                    .map((dept) => DropdownMenuItem(
+                                          value: dept.id,
+                                          child: Text(dept.name),
+                                        )),
                               ],
-                              onChanged: (value) => setState(() => _departmentId = value),
+                              onChanged: (value) =>
+                                  setState(() => _departmentId = value),
                             ),
                           ),
                         ],
@@ -798,7 +813,8 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                     label = 'Practicante';
                                     break;
                                 }
-                                return DropdownMenuItem(value: type, child: Text(label));
+                                return DropdownMenuItem(
+                                    value: type, child: Text(label));
                               }).toList(),
                               onChanged: (value) =>
                                   setState(() => _employmentType = value!),
@@ -828,9 +844,11 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                     label = 'Desvinculado';
                                     break;
                                 }
-                                return DropdownMenuItem(value: status, child: Text(label));
+                                return DropdownMenuItem(
+                                    value: status, child: Text(label));
                               }).toList(),
-                              onChanged: (value) => setState(() => _status = value!),
+                              onChanged: (value) =>
+                                  setState(() => _status = value!),
                             ),
                           ),
                         ],

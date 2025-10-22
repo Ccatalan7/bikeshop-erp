@@ -1,0 +1,71 @@
+{
+  "type": "stats",
+  "title": "Indicadores",
+  "description": "Muestra logros del taller: bicis reparadas, clientes felices, etc.",
+  "usesCustomEditor": false,
+  "category": "Contenido",
+  "tags": ["indicadores", "estadísticas", "logros"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Resultados que nos respaldan",
+    "metrics": [
+      {
+        "label": "Bicis reparadas",
+        "value": "1200",
+        "suffix": "+"
+      },
+      {
+        "label": "Clientes felices",
+        "value": "980",
+        "suffix": "+"
+      },
+      {
+        "label": "Años en el mercado",
+        "value": "10"
+      }
+    ]
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título",
+      "type": "text",
+      "defaultValue": "Resultados que nos respaldan"
+    },
+    {
+      "key": "metrics",
+      "label": "Indicadores",
+      "type": "repeater",
+      "itemLabel": "Indicador",
+      "minItems": 1,
+      "itemFields": [
+        {
+          "key": "label",
+          "label": "Etiqueta",
+          "type": "text",
+          "defaultValue": "Indicador"
+        },
+        {
+          "key": "value",
+          "label": "Valor",
+          "type": "text",
+          "defaultValue": "0"
+        },
+        {
+          "key": "suffix",
+          "label": "Sufijo",
+          "type": "text",
+          "defaultValue": "+"
+        }
+      ]
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "metrics"]
+    }
+  ]
+}

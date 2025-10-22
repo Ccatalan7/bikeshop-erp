@@ -1,0 +1,96 @@
+{
+  "type": "team",
+  "title": "Equipo",
+  "description": "Presenta a los mecánicos y especialistas del taller con su rol.",
+  "usesCustomEditor": false,
+  "category": "Social",
+  "tags": ["equipo", "staff", "colaboradores"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Nuestro Equipo",
+    "description": "Conoce a los especialistas que cuidan tu bicicleta.",
+    "members": [
+      {
+        "name": "Daniela Torres",
+        "role": "Jefa de taller",
+        "bio": "Especialista en bike fitting y suspensiones con 8 años de experiencia.",
+        "avatarUrl": "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=60",
+        "instagram": "https://instagram.com/daniela.ride",
+        "linkedin": "https://linkedin.com/in/daniela-torres"
+      },
+      {
+        "name": "Pablo Fuentes",
+        "role": "Mecánico Senior",
+        "bio": "Experto en transmisión y sistemas hidráulicos. Apasionado por el gravel.",
+        "avatarUrl": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=300&q=60",
+        "instagram": "https://instagram.com/pablo.bike"
+      }
+    ]
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título",
+      "type": "text",
+      "defaultValue": "Nuestro Equipo"
+    },
+    {
+      "key": "description",
+      "label": "Descripción",
+      "type": "textarea",
+      "defaultValue": "Conoce a los especialistas que cuidan tu bicicleta."
+    },
+    {
+      "key": "members",
+      "label": "Integrantes",
+      "type": "repeater",
+      "itemLabel": "Integrante",
+      "minItems": 1,
+      "itemFields": [
+        {
+          "key": "name",
+          "label": "Nombre",
+          "type": "text",
+          "defaultValue": "Nombre"
+        },
+        {
+          "key": "role",
+          "label": "Cargo",
+          "type": "text",
+          "defaultValue": "Cargo"
+        },
+        {
+          "key": "bio",
+          "label": "Descripción",
+          "type": "textarea",
+          "defaultValue": "Describe la experiencia del integrante"
+        },
+        {
+          "key": "avatarUrl",
+          "label": "Avatar (URL)",
+          "type": "text"
+        },
+        {
+          "key": "instagram",
+          "label": "Instagram",
+          "type": "text",
+          "group": "social"
+        },
+        {
+          "key": "linkedin",
+          "label": "LinkedIn",
+          "type": "text",
+          "group": "social"
+        }
+      ]
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "description", "members"]
+    }
+  ]
+}

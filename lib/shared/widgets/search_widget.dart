@@ -4,27 +4,27 @@ class SearchWidget extends StatefulWidget {
   final String hintText;
   final Function(String) onSearchChanged;
   final VoidCallback? onClear;
-  
+
   const SearchWidget({
     super.key,
     required this.hintText,
     required this.onSearchChanged,
     this.onClear,
   });
-  
+
   @override
   State<SearchWidget> createState() => _SearchWidgetState();
 }
 
 class _SearchWidgetState extends State<SearchWidget> {
   final TextEditingController _controller = TextEditingController();
-  
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Padding(

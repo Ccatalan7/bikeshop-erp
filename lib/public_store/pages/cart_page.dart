@@ -36,8 +36,8 @@ class CartPage extends StatelessWidget {
                 Text(
                   '${cart.itemCount} ${cart.itemCount == 1 ? 'producto' : 'productos'}',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: PublicStoreTheme.textSecondary,
-                  ),
+                        color: PublicStoreTheme.textSecondary,
+                      ),
                 ),
                 const SizedBox(height: 32),
                 _buildCartItems(context, cart),
@@ -88,8 +88,8 @@ class CartPage extends StatelessWidget {
             Text(
               '¡Agrega productos para comenzar tu compra!',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: PublicStoreTheme.textSecondary,
-              ),
+                    color: PublicStoreTheme.textSecondary,
+                  ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
@@ -98,7 +98,8 @@ class CartPage extends StatelessWidget {
               icon: const Icon(Icons.shopping_bag_outlined),
               label: const Text('EXPLORAR PRODUCTOS'),
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
               ),
             ),
             const SizedBox(height: 16),
@@ -120,7 +121,8 @@ class CartPage extends StatelessWidget {
     );
   }
 
-  Widget _buildCartItem(BuildContext context, CartProvider cart, CartItem item) {
+  Widget _buildCartItem(
+      BuildContext context, CartProvider cart, CartItem item) {
     final product = item.product;
     final isOutOfStock = product.stockQuantity < item.quantity;
 
@@ -180,7 +182,8 @@ class CartPage extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             InkWell(
-                              onTap: () => context.go('/tienda/producto/${product.id}'),
+                              onTap: () =>
+                                  context.go('/tienda/producto/${product.id}'),
                               child: Text(
                                 product.name,
                                 style: Theme.of(context).textTheme.titleLarge,
@@ -190,17 +193,23 @@ class CartPage extends StatelessWidget {
                               const SizedBox(height: 4),
                               Text(
                                 product.brand!,
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: PublicStoreTheme.textSecondary,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: PublicStoreTheme.textSecondary,
+                                    ),
                               ),
                             ],
                             const SizedBox(height: 8),
                             Text(
                               'SKU: ${product.sku}',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: PublicStoreTheme.textMuted,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: PublicStoreTheme.textMuted,
+                                  ),
                             ),
                           ],
                         ),
@@ -220,7 +229,8 @@ class CartPage extends StatelessWidget {
                   // Stock Warning
                   if (isOutOfStock)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
                         color: PublicStoreTheme.error.withOpacity(0.1),
@@ -238,10 +248,13 @@ class CartPage extends StatelessWidget {
                           Expanded(
                             child: Text(
                               'Stock insuficiente. Solo ${product.stockQuantity} disponibles.',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: PublicStoreTheme.error,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: PublicStoreTheme.error,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                             ),
                           ),
                         ],
@@ -257,14 +270,18 @@ class CartPage extends StatelessWidget {
                         children: [
                           Text(
                             'Cantidad:',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                           const SizedBox(width: 16),
                           Container(
                             decoration: BoxDecoration(
-                              border: Border.all(color: PublicStoreTheme.border),
+                              border:
+                                  Border.all(color: PublicStoreTheme.border),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
@@ -285,11 +302,13 @@ class CartPage extends StatelessWidget {
                                   alignment: Alignment.center,
                                   child: Text(
                                     '${item.quantity}',
-                                    style: Theme.of(context).textTheme.titleMedium,
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
                                   ),
                                 ),
                                 IconButton(
-                                  onPressed: item.quantity < product.stockQuantity
+                                  onPressed: item.quantity <
+                                          product.stockQuantity
                                       ? () => cart.incrementQuantity(product.id)
                                       : null,
                                   icon: const Icon(Icons.add, size: 18),
@@ -311,16 +330,20 @@ class CartPage extends StatelessWidget {
                         children: [
                           Text(
                             ChileanUtils.formatCurrency(item.subtotal),
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              color: PublicStoreTheme.primaryBlue,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
+                                  color: PublicStoreTheme.primaryBlue,
+                                  fontWeight: FontWeight.bold,
+                                ),
                           ),
                           Text(
                             '${ChileanUtils.formatCurrency(product.price)} c/u',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: PublicStoreTheme.textMuted,
-                            ),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: PublicStoreTheme.textMuted,
+                                    ),
                           ),
                         ],
                       ),
@@ -375,15 +398,15 @@ class CartPage extends StatelessWidget {
                 Text(
                   'Total',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 Text(
                   ChileanUtils.formatCurrency(cart.total),
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: PublicStoreTheme.primaryBlue,
-                    fontWeight: FontWeight.bold,
-                  ),
+                        color: PublicStoreTheme.primaryBlue,
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
               ],
             ),
@@ -459,19 +482,19 @@ class CartPage extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: isSecondary
-                ? PublicStoreTheme.textSecondary
-                : PublicStoreTheme.textPrimary,
-          ),
+                color: isSecondary
+                    ? PublicStoreTheme.textSecondary
+                    : PublicStoreTheme.textPrimary,
+              ),
         ),
         Text(
           value,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: isSecondary
-                ? PublicStoreTheme.textSecondary
-                : PublicStoreTheme.textPrimary,
-          ),
+                fontWeight: FontWeight.w600,
+                color: isSecondary
+                    ? PublicStoreTheme.textSecondary
+                    : PublicStoreTheme.textPrimary,
+              ),
         ),
       ],
     );

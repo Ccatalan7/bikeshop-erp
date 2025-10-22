@@ -126,19 +126,39 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     final supplier = Supplier(
       id: _existing?.id ?? '',
       name: _nameController.text.trim(),
-      email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-      phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-      rut: _rutController.text.trim().isEmpty ? null : _rutController.text.trim(),
-      address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
-      city: _cityController.text.trim().isEmpty ? null : _cityController.text.trim(),
-      region: _regionController.text.trim().isEmpty ? null : _regionController.text.trim(),
-      comuna: _comunaController.text.trim().isEmpty ? null : _comunaController.text.trim(),
+      email: _emailController.text.trim().isEmpty
+          ? null
+          : _emailController.text.trim(),
+      phone: _phoneController.text.trim().isEmpty
+          ? null
+          : _phoneController.text.trim(),
+      rut: _rutController.text.trim().isEmpty
+          ? null
+          : _rutController.text.trim(),
+      address: _addressController.text.trim().isEmpty
+          ? null
+          : _addressController.text.trim(),
+      city: _cityController.text.trim().isEmpty
+          ? null
+          : _cityController.text.trim(),
+      region: _regionController.text.trim().isEmpty
+          ? null
+          : _regionController.text.trim(),
+      comuna: _comunaController.text.trim().isEmpty
+          ? null
+          : _comunaController.text.trim(),
       type: _type,
-      contactPerson: _contactController.text.trim().isEmpty ? null : _contactController.text.trim(),
-      website: _websiteController.text.trim().isEmpty ? null : _websiteController.text.trim(),
+      contactPerson: _contactController.text.trim().isEmpty
+          ? null
+          : _contactController.text.trim(),
+      website: _websiteController.text.trim().isEmpty
+          ? null
+          : _websiteController.text.trim(),
       bankDetails: _existing?.bankDetails ?? const {},
       paymentTerms: _paymentTerms,
-      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      notes: _notesController.text.trim().isEmpty
+          ? null
+          : _notesController.text.trim(),
       isActive: _isActive,
       createdAt: _existing?.createdAt ?? now,
       updatedAt: now,
@@ -151,7 +171,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_existing == null ? 'Proveedor creado correctamente' : 'Proveedor actualizado'),
+          content: Text(_existing == null
+              ? 'Proveedor creado correctamente'
+              : 'Proveedor actualizado'),
           backgroundColor: Colors.green,
         ),
       );
@@ -159,7 +181,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo guardar el proveedor: $e'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text('No se pudo guardar el proveedor: $e'),
+            backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) {
@@ -198,7 +222,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
           ),
           Expanded(
             child: Text(
-              widget.supplierId != null ? 'Editar proveedor' : 'Nuevo proveedor',
+              widget.supplierId != null
+                  ? 'Editar proveedor'
+                  : 'Nuevo proveedor',
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
           ),
@@ -229,7 +255,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Datos del proveedor', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                  const Text('Datos del proveedor',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _nameController,
@@ -237,9 +265,10 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                       labelText: 'Nombre legal',
                       hintText: 'Ej: Importadora Vinabike Ltda.',
                     ),
-                    validator: (value) => (value == null || value.trim().isEmpty)
-                        ? 'Ingresa el nombre del proveedor'
-                        : null,
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty)
+                            ? 'Ingresa el nombre del proveedor'
+                            : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -260,7 +289,8 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Correo electrónico'),
+                    decoration:
+                        const InputDecoration(labelText: 'Correo electrónico'),
                     autovalidateMode: AutovalidateMode.onUserInteraction,
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) return null;
@@ -298,7 +328,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Dirección y contacto', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                  const Text('Dirección y contacto',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _addressController,
@@ -322,7 +354,8 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _contactController,
-                    decoration: const InputDecoration(labelText: 'Persona de contacto'),
+                    decoration:
+                        const InputDecoration(labelText: 'Persona de contacto'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -345,14 +378,17 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Condiciones comerciales', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                  const Text('Condiciones comerciales',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<SupplierType>(
                           value: _type,
-                          decoration: const InputDecoration(labelText: 'Tipo de proveedor'),
+                          decoration: const InputDecoration(
+                              labelText: 'Tipo de proveedor'),
                           items: SupplierType.values
                               .map((type) => DropdownMenuItem(
                                     value: type,
@@ -370,7 +406,8 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                       Expanded(
                         child: DropdownButtonFormField<PaymentTerms>(
                           value: _paymentTerms,
-                          decoration: const InputDecoration(labelText: 'Condiciones de pago'),
+                          decoration: const InputDecoration(
+                              labelText: 'Condiciones de pago'),
                           items: PaymentTerms.values
                               .map((term) => DropdownMenuItem(
                                     value: term,
@@ -390,7 +427,8 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Proveedor activo'),
-                    subtitle: const Text('Controla la visibilidad en las listas de selección.'),
+                    subtitle: const Text(
+                        'Controla la visibilidad en las listas de selección.'),
                     value: _isActive,
                     onChanged: (value) => setState(() => _isActive = value),
                   ),
@@ -399,7 +437,8 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                     controller: _notesController,
                     decoration: const InputDecoration(
                       labelText: 'Notas internas',
-                      hintText: 'Información relevante para compras o contabilidad',
+                      hintText:
+                          'Información relevante para compras o contabilidad',
                     ),
                     maxLines: 3,
                   ),

@@ -55,7 +55,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Inversiones Temporales',
     type: AccountType.asset,
     category: AccountCategory.currentAsset,
-    description: 'Instrumentos financieros de corto plazo fácilmente realizables.',
+    description:
+        'Instrumentos financieros de corto plazo fácilmente realizables.',
   ),
   AccountDefinition(
     code: '1130',
@@ -113,7 +114,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Otros Activos Corrientes',
     type: AccountType.asset,
     category: AccountCategory.currentAsset,
-    description: 'Activos circulantes no clasificados en otra cuenta específica.',
+    description:
+        'Activos circulantes no clasificados en otra cuenta específica.',
   ),
   AccountDefinition(
     code: '1180',
@@ -185,7 +187,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Depreciación Acumulada Activos Fijos',
     type: AccountType.asset,
     category: AccountCategory.otherAsset,
-    description: 'Cuenta correctiva que acumula las depreciaciones reconocidas.',
+    description:
+        'Cuenta correctiva que acumula las depreciaciones reconocidas.',
     parentCode: '1200',
   ),
 
@@ -202,7 +205,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Documentos por Pagar',
     type: AccountType.liability,
     category: AccountCategory.currentLiability,
-    description: 'Letras, pagarés y otros documentos por pagar en el corto plazo.',
+    description:
+        'Letras, pagarés y otros documentos por pagar en el corto plazo.',
   ),
   AccountDefinition(
     code: '2120',
@@ -216,7 +220,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Remuneraciones por Pagar',
     type: AccountType.liability,
     category: AccountCategory.currentLiability,
-    description: 'Sueldos, salarios y beneficios devengados pendientes de pago.',
+    description:
+        'Sueldos, salarios y beneficios devengados pendientes de pago.',
   ),
   AccountDefinition(
     code: '2135',
@@ -230,7 +235,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Anticipos de Clientes',
     type: AccountType.liability,
     category: AccountCategory.currentLiability,
-    description: 'Pagos recibidos de clientes pendientes de facturar o entregar.',
+    description:
+        'Pagos recibidos de clientes pendientes de facturar o entregar.',
   ),
   AccountDefinition(
     code: '2150',
@@ -244,7 +250,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Retenciones y Aportes por Pagar',
     type: AccountType.tax,
     category: AccountCategory.taxPayable,
-    description: 'Retenciones previsionales, de honorarios e impuestos a enterar.',
+    description:
+        'Retenciones previsionales, de honorarios e impuestos a enterar.',
   ),
   AccountDefinition(
     code: '2160',
@@ -258,7 +265,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Provisiones y Pasivos Estimados',
     type: AccountType.liability,
     category: AccountCategory.currentLiability,
-    description: 'Reservas para contingencias, vacaciones y otras obligaciones.',
+    description:
+        'Reservas para contingencias, vacaciones y otras obligaciones.',
   ),
   AccountDefinition(
     code: '2200',
@@ -304,14 +312,16 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Reservas Legales y Estatutarias',
     type: AccountType.equity,
     category: AccountCategory.capital,
-    description: 'Reservas obrigatorias o voluntarias constituidas por la empresa.',
+    description:
+        'Reservas obrigatorias o voluntarias constituidas por la empresa.',
   ),
   AccountDefinition(
     code: '3200',
     name: 'Utilidades Retenidas',
     type: AccountType.equity,
     category: AccountCategory.retainedEarnings,
-    description: 'Resultados acumulados de ejercicios anteriores no distribuidos.',
+    description:
+        'Resultados acumulados de ejercicios anteriores no distribuidos.',
   ),
   AccountDefinition(
     code: '3300',
@@ -342,7 +352,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Ingresos por Ventas de Servicios',
     type: AccountType.income,
     category: AccountCategory.operatingIncome,
-    description: 'Ingresos por prestación de servicios profesionales o técnicos.',
+    description:
+        'Ingresos por prestación de servicios profesionales o técnicos.',
     parentCode: '4100',
   ),
   AccountDefinition(
@@ -364,7 +375,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Ingresos Financieros',
     type: AccountType.income,
     category: AccountCategory.nonOperatingIncome,
-    description: 'Intereses ganados, diferencias de cambio y rendimientos financieros.',
+    description:
+        'Intereses ganados, diferencias de cambio y rendimientos financieros.',
   ),
   AccountDefinition(
     code: '4500',
@@ -442,7 +454,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     name: 'Arriendos y Leasing Operativo',
     type: AccountType.expense,
     category: AccountCategory.operatingExpense,
-    description: 'Pagos por arriendo de inmuebles, equipos y leasing operativo.',
+    description:
+        'Pagos por arriendo de inmuebles, equipos y leasing operativo.',
   ),
   AccountDefinition(
     code: '5215',

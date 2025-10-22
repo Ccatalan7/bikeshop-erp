@@ -25,16 +25,16 @@ class ChartOfAccountsService extends ChangeNotifier {
     try {
       debugPrint('🔄 Initializing Chart of Accounts...');
       final startTime = DateTime.now();
-      
+
       _accounts.clear();
 
       // Only ensure standard accounts if database is empty or force refresh
       if (forceRefresh) {
         await _ensureStandardChartOfAccounts();
       }
-      
+
       final remoteAccounts = await _databaseService.select('accounts');
-      
+
       final loadTime = DateTime.now().difference(startTime).inMilliseconds;
       debugPrint('✅ Loaded ${remoteAccounts.length} accounts in ${loadTime}ms');
 
@@ -46,7 +46,7 @@ class ChartOfAccountsService extends ChangeNotifier {
       _accounts.addAll(mappedAccounts);
       _isInitialized = true;
       notifyListeners();
-      
+
       final totalTime = DateTime.now().difference(startTime).inMilliseconds;
       debugPrint('✅ Chart of Accounts initialized in ${totalTime}ms');
     } catch (e) {

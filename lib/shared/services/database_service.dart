@@ -15,9 +15,10 @@ class DatabaseService extends ChangeNotifier {
   }) async {
     try {
       if (kDebugMode) {
-        debugPrint('🔍 DB Query: $table | where: $where | whereIn: ${whereIn?.length} items | orderBy: $orderBy | limit: $limit');
+        debugPrint(
+            '🔍 DB Query: $table | where: $where | whereIn: ${whereIn?.length} items | orderBy: $orderBy | limit: $limit');
       }
-      
+
       // Use dynamic to handle different builder types in the chain
       dynamic query = _client.from(table).select();
 
@@ -45,11 +46,11 @@ class DatabaseService extends ChangeNotifier {
       }
 
       final data = await query;
-      
+
       if (kDebugMode) {
         debugPrint('✅ DB Result: ${(data as List).length} rows from $table');
       }
-      
+
       return (data as List)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
@@ -173,7 +174,8 @@ class DatabaseService extends ChangeNotifier {
         final mappedLines = lines
             .map((line) => {
                   ...line,
-                  'entry_id': entryId, // Correct column name from core_schema.sql
+                  'entry_id':
+                      entryId, // Correct column name from core_schema.sql
                   'created_at': line['created_at'] ?? now,
                   'updated_at': line['updated_at'] ?? now,
                 })
@@ -258,7 +260,8 @@ class DatabaseService extends ChangeNotifier {
   }
 
   // Generic RPC call for custom PostgreSQL functions
-  Future<dynamic> rpc(String functionName, {Map<String, dynamic>? params}) async {
+  Future<dynamic> rpc(String functionName,
+      {Map<String, dynamic>? params}) async {
     try {
       if (kDebugMode) {
         debugPrint('🔧 RPC Call: $functionName | params: $params');

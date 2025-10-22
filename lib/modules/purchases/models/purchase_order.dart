@@ -39,7 +39,7 @@ class PurchaseOrder {
       orderNumber: json['order_number'] as String,
       supplierId: json['supplier_id'] as int,
       date: DateTime.parse(json['date'] as String),
-      expectedDate: json['expected_date'] != null 
+      expectedDate: json['expected_date'] != null
           ? DateTime.parse(json['expected_date'] as String)
           : null,
       status: json['status'] as String,
@@ -47,15 +47,15 @@ class PurchaseOrder {
       tax: (json['tax'] as num).toDouble(),
       total: (json['total'] as num).toDouble(),
       notes: json['notes'] as String?,
-      items: json['purchase_order_items'] != null 
+      items: json['purchase_order_items'] != null
           ? (json['purchase_order_items'] as List)
               .map((item) => PurchaseOrderItem.fromJson(item))
               .toList()
           : [],
-      createdAt: json['created_at'] != null 
+      createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : null,
-      updatedAt: json['updated_at'] != null 
+      updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'] as String)
           : null,
       supplierName: json['suppliers']?['name'] as String?,

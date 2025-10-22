@@ -34,7 +34,8 @@ class ExpandableMenuItem extends StatelessWidget {
     for (final subItem in subItems) {
       final prefix = '${subItem.route}/';
       if (location.startsWith(prefix)) {
-        if (bestMatch == null || subItem.route.length > bestMatch.route.length) {
+        if (bestMatch == null ||
+            subItem.route.length > bestMatch.route.length) {
           bestMatch = subItem;
         }
       }
@@ -59,11 +60,11 @@ class ExpandableMenuItem extends StatelessWidget {
               splashFactory: NoSplash.splashFactory,
               highlightColor: Colors.transparent,
               hoverColor: Colors.transparent,
-              onTap: enabled
-                  ? () => onExpansionChanged?.call(!isExpanded)
-                  : null,
+              onTap:
+                  enabled ? () => onExpansionChanged?.call(!isExpanded) : null,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   color: isAnySubItemSelected
@@ -86,7 +87,9 @@ class ExpandableMenuItem extends StatelessWidget {
                       child: Text(
                         title,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: isAnySubItemSelected ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight: isAnySubItemSelected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                           color: enabled
                               ? (isAnySubItemSelected
                                   ? theme.primaryColor
@@ -132,7 +135,8 @@ class ExpandableMenuItem extends StatelessWidget {
                           }
                         : null,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(6),
                         color: isSelected
@@ -153,10 +157,13 @@ class ExpandableMenuItem extends StatelessWidget {
                             child: Text(
                               subItem.title,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
                                 color: isSelected
                                     ? theme.primaryColor
-                                    : theme.colorScheme.onSurface.withOpacity(0.8),
+                                    : theme.colorScheme.onSurface
+                                        .withOpacity(0.8),
                               ),
                             ),
                           ),

@@ -298,7 +298,8 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
                 Expanded(
                   child: GridView.builder(
                     padding: const EdgeInsets.all(16),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
@@ -307,7 +308,8 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
                     itemCount: _sections.length,
                     itemBuilder: (context, index) {
                       final section = _sections[index];
-                      final savedContent = websiteService.getContentById(section.id);
+                      final savedContent =
+                          websiteService.getContentById(section.id);
                       final hasContent = savedContent?.content != null;
 
                       return _buildSectionCard(
@@ -555,7 +557,8 @@ class _ContentEditorPageState extends State<_ContentEditorPage> {
   @override
   void initState() {
     super.initState();
-    final initialContent = widget.savedContent?.content ?? widget.section.defaultContent;
+    final initialContent =
+        widget.savedContent?.content ?? widget.section.defaultContent;
     _contentController = TextEditingController(text: initialContent);
     _contentController.addListener(() {
       if (!_hasChanges) {
@@ -660,7 +663,8 @@ class _ContentEditorPageState extends State<_ContentEditorPage> {
                         fontSize: 14,
                       ),
                       decoration: const InputDecoration(
-                        hintText: 'Escribe el contenido aquí...\n\nPuedes usar Markdown:\n# Título\n## Subtítulo\n**negrita**\n*cursiva*\n- Lista',
+                        hintText:
+                            'Escribe el contenido aquí...\n\nPuedes usar Markdown:\n# Título\n## Subtítulo\n**negrita**\n*cursiva*\n- Lista',
                         border: OutlineInputBorder(),
                         contentPadding: EdgeInsets.all(16),
                       ),
@@ -775,7 +779,7 @@ class _ContentEditorPageState extends State<_ContentEditorPage> {
 
     try {
       final service = context.read<WebsiteService>();
-      
+
       final content = WebsiteContent(
         id: widget.section.id,
         title: widget.section.title,
@@ -813,7 +817,8 @@ class _ContentEditorPageState extends State<_ContentEditorPage> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('¿Descartar cambios?'),
-          content: const Text('Tienes cambios sin guardar. ¿Deseas salir de todos modos?'),
+          content: const Text(
+              'Tienes cambios sin guardar. ¿Deseas salir de todos modos?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -836,4 +841,3 @@ class _ContentEditorPageState extends State<_ContentEditorPage> {
     }
   }
 }
-

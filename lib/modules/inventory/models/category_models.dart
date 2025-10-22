@@ -25,8 +25,8 @@ class Category {
       description: json['description'],
       imageUrl: json['image_url'],
       isActive: json['is_active'] ?? true,
-    createdAt: _parseDate(json['created_at']),
-    updatedAt: _parseDate(json['updated_at']),
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
     );
   }
 

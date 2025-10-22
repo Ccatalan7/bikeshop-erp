@@ -1,0 +1,16 @@
+{
+  "type": "about",
+  "title": "Sobre Nosotros",
+  "description": "Bloque de texto/imágenes orientado a presentar la historia del taller.",
+  "usesCustomEditor": true,
+  "category": "Contenido",
+  "tags": ["about", "historia", "nosotros"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Somos Vinabike",
+    "content": "Llevamos más de 10 años reparando bicicletas y asesorando ciclistas en Chile.",
+    "imagePosition": "right",
+    "imageUrl": null
+  }
+}

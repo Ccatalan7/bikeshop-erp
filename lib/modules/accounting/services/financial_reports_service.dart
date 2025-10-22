@@ -57,7 +57,7 @@ class FinancialReportsService extends ChangeNotifier {
       for (final row in result) {
         final category = row['category']?.toString() ?? '';
         final amount = _parseDouble(row['amount']) ?? 0.0;
-        
+
         final line = ReportLine.account(
           code: row['account_code']?.toString() ?? '',
           name: row['account_name']?.toString() ?? '',
@@ -96,13 +96,15 @@ class FinancialReportsService extends ChangeNotifier {
       // Calculate totals and margins
       final grossProfit = totalOperatingIncome - totalCostOfSales;
       final operatingProfit = grossProfit - totalOperatingExpenses;
-      final profitBeforeTax = operatingProfit + totalNonOperatingIncome - totalFinancialExpenses;
+      final profitBeforeTax =
+          operatingProfit + totalNonOperatingIncome - totalFinancialExpenses;
       final netIncome = profitBeforeTax - totalTaxes;
 
       debugPrint('📈 Income Statement Summary:');
       debugPrint('   Revenue: \$${totalOperatingIncome.toStringAsFixed(2)}');
       debugPrint('   Gross Profit: \$${grossProfit.toStringAsFixed(2)}');
-      debugPrint('   Operating Profit: \$${operatingProfit.toStringAsFixed(2)}');
+      debugPrint(
+          '   Operating Profit: \$${operatingProfit.toStringAsFixed(2)}');
       debugPrint('   Net Income: \$${netIncome.toStringAsFixed(2)}');
 
       return IncomeStatement(
@@ -218,8 +220,10 @@ class FinancialReportsService extends ChangeNotifier {
         }
       }
 
-      final totalAssets = totalCurrentAssets + totalFixedAssets + totalOtherAssets;
-      final totalLiabilities = totalCurrentLiabilities + totalLongTermLiabilities;
+      final totalAssets =
+          totalCurrentAssets + totalFixedAssets + totalOtherAssets;
+      final totalLiabilities =
+          totalCurrentLiabilities + totalLongTermLiabilities;
 
       // Calculate period net income if period start is provided
       double periodNetIncome = 0;
@@ -236,9 +240,11 @@ class FinancialReportsService extends ChangeNotifier {
 
       debugPrint('📊 Balance Sheet Summary:');
       debugPrint('   Total Assets: \$${totalAssets.toStringAsFixed(2)}');
-      debugPrint('   Total Liabilities: \$${totalLiabilities.toStringAsFixed(2)}');
+      debugPrint(
+          '   Total Liabilities: \$${totalLiabilities.toStringAsFixed(2)}');
       debugPrint('   Total Equity: \$${totalEquity.toStringAsFixed(2)}');
-      debugPrint('   Balanced: ${(totalAssets - (totalLiabilities + totalEquity)).abs() < 1.00}');
+      debugPrint(
+          '   Balanced: ${(totalAssets - (totalLiabilities + totalEquity)).abs() < 1.00}');
 
       return BalanceSheet(
         startDate: periodStartDate ?? asOfDate,

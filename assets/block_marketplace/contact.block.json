@@ -1,0 +1,86 @@
+{
+  "type": "contact",
+  "title": "Contacto",
+  "description": "Entrega información de contacto y formulario de consulta.",
+  "usesCustomEditor": false,
+  "category": "Conversión",
+  "tags": ["contacto", "formulario", "mapa"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Contáctanos",
+    "subtitle": "Resolvemos dudas y agendamos servicios en menos de 24h.",
+    "phone": "+56 9 1234 5678",
+    "email": "contacto@vinabike.cl",
+    "address": "Av. Providencia 1234, Santiago",
+    "mapUrl": "https://maps.google.com",
+    "showForm": true,
+    "showMap": false
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título",
+      "type": "text",
+      "defaultValue": "Contáctanos",
+      "group": "content"
+    },
+    {
+      "key": "subtitle",
+      "label": "Subtítulo",
+      "type": "textarea",
+      "defaultValue": "Resolvemos dudas y agendamos servicios en menos de 24h.",
+      "group": "content"
+    },
+    {
+      "key": "phone",
+      "label": "Teléfono",
+      "type": "text",
+      "group": "content"
+    },
+    {
+      "key": "email",
+      "label": "Email",
+      "type": "text",
+      "group": "content"
+    },
+    {
+      "key": "address",
+      "label": "Dirección",
+      "type": "textarea",
+      "group": "content"
+    },
+    {
+      "key": "mapUrl",
+      "label": "URL del mapa",
+      "type": "text",
+      "group": "content"
+    },
+    {
+      "key": "showForm",
+      "label": "Mostrar formulario",
+      "type": "toggle",
+      "defaultValue": true,
+      "group": "layout"
+    },
+    {
+      "key": "showMap",
+      "label": "Mostrar mapa",
+      "type": "toggle",
+      "defaultValue": false,
+      "group": "layout"
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "subtitle", "phone", "email", "address", "mapUrl"]
+    },
+    {
+      "id": "layout",
+      "label": "Diseño",
+      "fields": ["showForm", "showMap"]
+    }
+  ]
+}

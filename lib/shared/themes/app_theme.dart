@@ -5,13 +5,13 @@ class AppTheme {
   static const Color primaryBlue = Color(0xFF1976D2);
   static const Color primaryRed = Color(0xFFD32F2F);
   static const Color primaryWhite = Color(0xFFFFFFFF);
-  
+
   static const Color accentGreen = Color(0xFF388E3C);
   static const Color accentOrange = Color(0xFFFF9800);
-  
+
   static const Color backgroundLight = Color(0xFFF5F5F5);
   static const Color backgroundDark = Color(0xFF121212);
-  
+
   static ThemeData lightTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
@@ -58,7 +58,7 @@ class AppTheme {
       ),
     ),
   );
-  
+
   static ThemeData darkTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,

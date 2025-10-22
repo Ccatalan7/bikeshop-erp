@@ -52,13 +52,16 @@ class POSTransaction {
       id: json['id'] ?? '',
       cashierId: json['cashier_id'] ?? '',
       customerId: json['customer_id'],
-      customer: json['customer'] != null ? Customer.fromJson(json['customer']) : null,
+      customer:
+          json['customer'] != null ? Customer.fromJson(json['customer']) : null,
       items: (json['items'] as List?)
-          ?.map((item) => POSCartItem.fromJson(item))
-          .toList() ?? [],
+              ?.map((item) => POSCartItem.fromJson(item))
+              .toList() ??
+          [],
       payments: (json['payments'] as List?)
-          ?.map((payment) => POSPayment.fromJson(payment))
-          .toList() ?? [],
+              ?.map((payment) => POSPayment.fromJson(payment))
+              .toList() ??
+          [],
       subtotal: (json['subtotal'] ?? 0).toDouble(),
       taxAmount: (json['tax_amount'] ?? 0).toDouble(),
       discountAmount: (json['discount_amount'] ?? 0).toDouble(),
@@ -68,10 +71,14 @@ class POSTransaction {
         orElse: () => POSTransactionStatus.draft,
       ),
       notes: json['notes'],
-      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
-      completedAt: json['completed_at'] != null ? DateTime.parse(json['completed_at']) : null,
+      createdAt: DateTime.parse(
+          json['created_at'] ?? DateTime.now().toIso8601String()),
+      completedAt: json['completed_at'] != null
+          ? DateTime.parse(json['completed_at'])
+          : null,
       receiptNumber: json['receipt_number'],
-      journalEntryId: json['entry_id'] ?? json['journal_entry_id'], // Fallback for old data
+      journalEntryId:
+          json['entry_id'] ?? json['journal_entry_id'], // Fallback for old data
     );
   }
 
@@ -137,18 +144,22 @@ class POSTransaction {
 
   // Calculated properties
   int get totalItems => items.fold(0, (sum, item) => sum + item.quantity);
-  double get totalPaid => payments.fold(0.0, (sum, payment) => sum + payment.amount);
+  double get totalPaid =>
+      payments.fold(0.0, (sum, payment) => sum + payment.amount);
   double get changeAmount => totalPaid - total;
   bool get isFullyPaid => totalPaid >= total;
   bool get requiresChange => totalPaid > total;
 
   @override
-  String toString() => 'POSTransaction(id: $id, total: \$${total.toStringAsFixed(0)}, status: $status)';
+  String toString() =>
+      'POSTransaction(id: $id, total: \$${total.toStringAsFixed(0)}, status: $status)';
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is POSTransaction && runtimeType == other.runtimeType && id == other.id;
+      other is POSTransaction &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
 
   @override
   int get hashCode => id.hashCode;
@@ -176,7 +187,8 @@ class POSPayment {
       method: PaymentMethod.fromJson(json['method']),
       amount: (json['amount'] ?? 0).toDouble(),
       reference: json['reference'],
-      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
+      createdAt: DateTime.parse(
+          json['created_at'] ?? DateTime.now().toIso8601String()),
     );
   }
 
@@ -191,7 +203,8 @@ class POSPayment {
   }
 
   @override
-  String toString() => 'POSPayment(method: ${method.name}, amount: \$${amount.toStringAsFixed(0)})';
+  String toString() =>
+      'POSPayment(method: ${method.name}, amount: \$${amount.toStringAsFixed(0)})';
 
   @override
   bool operator ==(Object other) =>

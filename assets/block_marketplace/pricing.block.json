@@ -1,0 +1,99 @@
+{
+  "type": "pricing",
+  "title": "Planes y Precios",
+  "description": "Comparador de planes con precios, beneficios y llamado a la acción.",
+  "usesCustomEditor": false,
+  "category": "Conversión",
+  "tags": ["precios", "planes", "tabla"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Planes de Servicio",
+    "subtitle": "Elige el plan que mejor se ajuste a tus necesidades y presupuesto.",
+    "plans": [
+      {
+        "name": "Mantención Básica",
+        "price": "29.990",
+        "features": [
+          "Revisión de frenos",
+          "Ajuste de cambios",
+          "Limpieza básica"
+        ],
+        "ctaText": "Reservar",
+        "ctaLink": "/tienda/productos"
+      },
+      {
+        "name": "Full Service",
+        "price": "59.990",
+        "features": [
+          "Incluye plan básico",
+          "Lubricación completa",
+          "Ajuste integral"
+        ],
+        "ctaText": "Reservar",
+        "ctaLink": "/tienda/productos"
+      }
+    ]
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título principal",
+      "type": "text",
+      "group": "content"
+    },
+    {
+      "key": "subtitle",
+      "label": "Subtítulo",
+      "type": "textarea",
+      "group": "content"
+    },
+    {
+      "key": "plans",
+      "label": "Planes",
+      "type": "repeater",
+      "itemLabel": "Plan",
+      "minItems": 1,
+      "maxItems": 6,
+      "itemFields": [
+        {
+          "key": "name",
+          "label": "Nombre del plan",
+          "type": "text",
+          "defaultValue": "Plan"
+        },
+        {
+          "key": "price",
+          "label": "Precio",
+          "type": "text",
+          "defaultValue": "0"
+        },
+        {
+          "key": "features",
+          "label": "Beneficios",
+          "type": "chips",
+          "defaultValue": []
+        },
+        {
+          "key": "ctaText",
+          "label": "Texto del botón",
+          "type": "text",
+          "defaultValue": "Reservar"
+        },
+        {
+          "key": "ctaLink",
+          "label": "Enlace del botón",
+          "type": "text",
+          "defaultValue": "/tienda/productos"
+        }
+      ]
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "subtitle", "plans"]
+    }
+  ]
+}

@@ -26,14 +26,16 @@ class PurchaseInvoiceFormPage extends StatefulWidget {
   });
 
   @override
-  State<PurchaseInvoiceFormPage> createState() => _PurchaseInvoiceFormPageState();
+  State<PurchaseInvoiceFormPage> createState() =>
+      _PurchaseInvoiceFormPageState();
 }
 
 class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   static const double _ivaRate = 0.19;
 
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _invoiceNumberController = TextEditingController();
+  final TextEditingController _invoiceNumberController =
+      TextEditingController();
   final TextEditingController _referenceController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
@@ -88,7 +90,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       _productCache = results[1] as List<Product>;
 
       if (widget.invoiceId != null) {
-        final invoice = await _purchaseService.getPurchaseInvoice(widget.invoiceId!);
+        final invoice =
+            await _purchaseService.getPurchaseInvoice(widget.invoiceId!);
         if (invoice != null) {
           _loadedInvoice = invoice;
           _applyInvoice(invoice);
@@ -177,12 +180,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   String _buildSuggestedNumber() {
     final now = DateTime.now();
-    final datePortion = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final datePortion =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final timePortion = now.millisecondsSinceEpoch.toString().substring(7);
     return 'FC-$datePortion-$timePortion';
   }
 
-  double get _subtotal => _lineEntries.fold<double>(0, (sum, entry) => sum + entry.line.netAmountClamped);
+  double get _subtotal => _lineEntries.fold<double>(
+      0, (sum, entry) => sum + entry.line.netAmountClamped);
 
   double get _iva => _subtotal * _ivaRate;
 
@@ -195,11 +200,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   Future<void> _openSupplierSelector() async {
     if (_supplierCache.isEmpty) {
       try {
-        _supplierCache = await _purchaseService.getSuppliers(forceRefresh: true);
+        _supplierCache =
+            await _purchaseService.getSuppliers(forceRefresh: true);
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar proveedores: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error al cargar proveedores: $e'),
+              backgroundColor: Colors.red),
         );
         return;
       }
@@ -232,7 +240,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     } catch (e) {
       if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al crear proveedor: $e'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text('Error al crear proveedor: $e'),
+            backgroundColor: Colors.red),
       );
       return null;
     }
@@ -245,7 +255,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar productos: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error al cargar productos: $e'),
+              backgroundColor: Colors.red),
         );
         return;
       }
@@ -298,7 +310,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   Future<void> _pickDate({required bool isIssueDate}) async {
-    final initial = isIssueDate ? _issueDate : (_dueDate ?? _issueDate.add(const Duration(days: 30)));
+    final initial = isIssueDate
+        ? _issueDate
+        : (_dueDate ?? _issueDate.add(const Duration(days: 30)));
 
     final selected = await showDatePicker(
       context: context,
@@ -385,8 +399,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       total: _total,
       items: items,
       // Set prepayment model when creating new invoice
-      prepaymentModel: _loadedInvoice != null 
-          ? _loadedInvoice!.prepaymentModel 
+      prepaymentModel: _loadedInvoice != null
+          ? _loadedInvoice!.prepaymentModel
           : widget.isPrepayment,
     );
 
@@ -422,7 +436,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   Future<void> _markAsReceived() async {
     if (widget.invoiceId == null) return;
-    
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -445,25 +459,26 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ],
       ),
     );
-    
+
     if (confirm != true) return;
-    
+
     setState(() => _isUpdatingStatus = true);
-    
+
     try {
       final updated = await _purchaseService.markAsReceived(widget.invoiceId!);
       if (!mounted) return;
-      
+
       if (updated != null) {
         setState(() {
           _status = updated.status;
           _loadedInvoice = updated;
         });
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Factura marcada como recibida. Inventario actualizado.'),
+          content:
+              Text('Factura marcada como recibida. Inventario actualizado.'),
           backgroundColor: Colors.green,
         ),
       );
@@ -484,7 +499,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   Future<void> _markAsPaid() async {
     if (widget.invoiceId == null) return;
-    
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -506,22 +521,22 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ],
       ),
     );
-    
+
     if (confirm != true) return;
-    
+
     setState(() => _isUpdatingStatus = true);
-    
+
     try {
       final updated = await _purchaseService.markAsPaid(widget.invoiceId!);
       if (!mounted) return;
-      
+
       if (updated != null) {
         setState(() {
           _status = updated.status;
           _loadedInvoice = updated;
         });
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Factura marcada como pagada'),
@@ -545,11 +560,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   Future<void> _revertToDraft() async {
     if (widget.invoiceId == null) return;
-    
-    final statusName = _status == PurchaseInvoiceStatus.received 
-        ? 'recibida' 
-        : 'pagada';
-    
+
+    final statusName =
+        _status == PurchaseInvoiceStatus.received ? 'recibida' : 'pagada';
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -575,25 +589,26 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ],
       ),
     );
-    
+
     if (confirm != true) return;
-    
+
     setState(() => _isUpdatingStatus = true);
-    
+
     try {
       final updated = await _purchaseService.revertToDraft(widget.invoiceId!);
       if (!mounted) return;
-      
+
       if (updated != null) {
         setState(() {
           _status = updated.status;
           _loadedInvoice = updated;
         });
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Factura revertida a borrador. Inventario y contabilidad actualizados.'),
+          content: Text(
+              'Factura revertida a borrador. Inventario y contabilidad actualizados.'),
           backgroundColor: Colors.orange,
           duration: Duration(seconds: 4),
         ),
@@ -616,7 +631,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   Future<void> _revertToReceived() async {
     if (widget.invoiceId == null) return;
-    
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -640,22 +655,23 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ],
       ),
     );
-    
+
     if (confirm != true) return;
-    
+
     setState(() => _isUpdatingStatus = true);
-    
+
     try {
-      final updated = await _purchaseService.revertToReceived(widget.invoiceId!);
+      final updated =
+          await _purchaseService.revertToReceived(widget.invoiceId!);
       if (!mounted) return;
-      
+
       if (updated != null) {
         setState(() {
           _status = updated.status;
           _loadedInvoice = updated;
         });
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Factura revertida a recibida'),
@@ -679,7 +695,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   Future<void> _deleteInvoice() async {
     if (widget.invoiceId == null) return;
-    
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -709,22 +725,22 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ],
       ),
     );
-    
+
     if (confirm != true) return;
-    
+
     setState(() => _isUpdatingStatus = true);
-    
+
     try {
       await _purchaseService.deletePurchaseInvoice(widget.invoiceId!);
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Factura eliminada correctamente'),
           backgroundColor: Colors.green,
         ),
       );
-      
+
       // Return to list page
       context.pop(true);
     } catch (e) {
@@ -771,17 +787,18 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   Widget _buildHeader() {
-    final canMarkAsReceived = widget.invoiceId != null && 
-        _status == PurchaseInvoiceStatus.draft;
-    final canMarkAsPaid = widget.invoiceId != null && 
-        _status == PurchaseInvoiceStatus.received;
-    final canRevertToDraft = widget.invoiceId != null && 
-        (_status == PurchaseInvoiceStatus.received || _status == PurchaseInvoiceStatus.paid);
-    final canRevertToReceived = widget.invoiceId != null && 
-        _status == PurchaseInvoiceStatus.paid;
-    final canDelete = widget.invoiceId != null && 
-        _status == PurchaseInvoiceStatus.draft;
-    
+    final canMarkAsReceived =
+        widget.invoiceId != null && _status == PurchaseInvoiceStatus.draft;
+    final canMarkAsPaid =
+        widget.invoiceId != null && _status == PurchaseInvoiceStatus.received;
+    final canRevertToDraft = widget.invoiceId != null &&
+        (_status == PurchaseInvoiceStatus.received ||
+            _status == PurchaseInvoiceStatus.paid);
+    final canRevertToReceived =
+        widget.invoiceId != null && _status == PurchaseInvoiceStatus.paid;
+    final canDelete =
+        widget.invoiceId != null && _status == PurchaseInvoiceStatus.draft;
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Row(
@@ -796,8 +813,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.invoiceId != null ? 'Editar factura de compra' : 'Nueva factura de compra',
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  widget.invoiceId != null
+                      ? 'Editar factura de compra'
+                      : 'Nueva factura de compra',
+                  style: const TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 if (widget.invoiceId != null)
                   Padding(
@@ -825,12 +845,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             ElevatedButton.icon(
               onPressed: _isUpdatingStatus ? null : _revertToReceived,
               icon: _isUpdatingStatus
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.undo),
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.undo),
               label: const Text('Volver a Recibida'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange,
@@ -843,12 +864,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             ElevatedButton.icon(
               onPressed: _isUpdatingStatus ? null : _revertToDraft,
               icon: _isUpdatingStatus
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.undo),
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.undo),
               label: const Text('Volver a Borrador'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.grey[700],
@@ -861,13 +883,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           if (canMarkAsReceived) ...[
             ElevatedButton.icon(
               onPressed: _isUpdatingStatus ? null : _markAsReceived,
-              icon: _isUpdatingStatus 
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.inventory_2),
+              icon: _isUpdatingStatus
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.inventory_2),
               label: const Text('Marcar como Recibida'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
@@ -880,12 +903,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             ElevatedButton.icon(
               onPressed: _isUpdatingStatus ? null : _markAsPaid,
               icon: _isUpdatingStatus
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.payment),
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.payment),
               label: const Text('Marcar como Pagada'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
@@ -908,7 +932,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   Widget _buildStatusChip(PurchaseInvoiceStatus status) {
     Color color;
     IconData icon;
-    
+
     switch (status) {
       case PurchaseInvoiceStatus.draft:
         color = Colors.grey;
@@ -935,7 +959,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         icon = Icons.cancel;
         break;
     }
-    
+
     return Chip(
       avatar: Icon(icon, size: 16, color: Colors.white),
       label: Text(
@@ -969,7 +993,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   Widget _buildSupplierCard() {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey[300]!)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey[300]!)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -979,12 +1005,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               children: [
                 const Icon(Icons.store_outlined),
                 const SizedBox(width: 8),
-                const Text('Proveedor', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                const Text('Proveedor',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                 const Spacer(),
                 TextButton.icon(
                   onPressed: _openSupplierSelector,
                   icon: const Icon(Icons.search),
-                  label: Text(_selectedSupplier == null ? 'Seleccionar' : 'Cambiar'),
+                  label: Text(
+                      _selectedSupplier == null ? 'Seleccionar' : 'Cambiar'),
                 ),
               ],
             ),
@@ -1000,15 +1029,21 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                 children: [
                   Text(
                     _selectedSupplier!.name,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  if (_selectedSupplier!.rut != null && _selectedSupplier!.rut!.isNotEmpty)
-                    Text('RUT: ${ChileanUtils.formatRut(_selectedSupplier!.rut!)}'),
-                  if (_selectedSupplier!.email != null && _selectedSupplier!.email!.isNotEmpty)
+                  if (_selectedSupplier!.rut != null &&
+                      _selectedSupplier!.rut!.isNotEmpty)
+                    Text(
+                        'RUT: ${ChileanUtils.formatRut(_selectedSupplier!.rut!)}'),
+                  if (_selectedSupplier!.email != null &&
+                      _selectedSupplier!.email!.isNotEmpty)
                     Text('Email: ${_selectedSupplier!.email}'),
-                  if (_selectedSupplier!.phone != null && _selectedSupplier!.phone!.isNotEmpty)
+                  if (_selectedSupplier!.phone != null &&
+                      _selectedSupplier!.phone!.isNotEmpty)
                     Text('Teléfono: ${_selectedSupplier!.phone}'),
-                  if (_selectedSupplier!.address != null && _selectedSupplier!.address!.isNotEmpty)
+                  if (_selectedSupplier!.address != null &&
+                      _selectedSupplier!.address!.isNotEmpty)
                     Text('Dirección: ${_selectedSupplier!.address}'),
                 ],
               ),
@@ -1021,13 +1056,16 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   Widget _buildInvoiceMetaCard() {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey[300]!)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey[300]!)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Detalles de la factura', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            const Text('Detalles de la factura',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -1038,9 +1076,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                       labelText: 'Número de factura',
                       hintText: 'Ej: FC-0001',
                     ),
-                    validator: (value) => (value == null || value.trim().isEmpty)
-                        ? 'Ingresa el número de factura'
-                        : null,
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty)
+                            ? 'Ingresa el número de factura'
+                            : null,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -1093,7 +1132,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                           suffixIcon: Icon(Icons.event),
                         ),
                         controller: TextEditingController(
-                          text: ChileanUtils.formatDate(_dueDate ?? _issueDate.add(const Duration(days: 30))),
+                          text: ChileanUtils.formatDate(_dueDate ??
+                              _issueDate.add(const Duration(days: 30))),
                         ),
                       ),
                     ),
@@ -1126,7 +1166,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   Widget _buildLinesCard() {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey[300]!)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey[300]!)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -1136,7 +1178,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               children: [
                 const Icon(Icons.list_alt_outlined),
                 const SizedBox(width: 8),
-                const Text('Productos y servicios', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                const Text('Productos y servicios',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                 const Spacer(),
                 TextButton.icon(
                   onPressed: _openProductSelector,
@@ -1179,11 +1223,27 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         children: const [
-          Expanded(flex: 4, child: Text('Producto', style: TextStyle(fontWeight: FontWeight.w600))),
-          Expanded(flex: 2, child: Text('Cantidad', style: TextStyle(fontWeight: FontWeight.w600))),
-          Expanded(flex: 2, child: Text('Costo unitario', style: TextStyle(fontWeight: FontWeight.w600))),
-          Expanded(flex: 2, child: Text('Descuento', style: TextStyle(fontWeight: FontWeight.w600))),
-          Expanded(flex: 2, child: Text('Subtotal', style: TextStyle(fontWeight: FontWeight.w600), textAlign: TextAlign.end)),
+          Expanded(
+              flex: 4,
+              child: Text('Producto',
+                  style: TextStyle(fontWeight: FontWeight.w600))),
+          Expanded(
+              flex: 2,
+              child: Text('Cantidad',
+                  style: TextStyle(fontWeight: FontWeight.w600))),
+          Expanded(
+              flex: 2,
+              child: Text('Costo unitario',
+                  style: TextStyle(fontWeight: FontWeight.w600))),
+          Expanded(
+              flex: 2,
+              child: Text('Descuento',
+                  style: TextStyle(fontWeight: FontWeight.w600))),
+          Expanded(
+              flex: 2,
+              child: Text('Subtotal',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.end)),
           SizedBox(width: 40),
         ],
       ),
@@ -1193,18 +1253,24 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   Widget _buildSummaryCard() {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey[300]!)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey[300]!)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Resumen', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            const Text('Resumen',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
-            _buildSummaryRow('Subtotal', ChileanUtils.formatCurrency(_subtotal)),
+            _buildSummaryRow(
+                'Subtotal', ChileanUtils.formatCurrency(_subtotal)),
             _buildSummaryRow('IVA (19%)', ChileanUtils.formatCurrency(_iva)),
             const Divider(),
-            _buildSummaryRow('Total a pagar', ChileanUtils.formatCurrency(_total), isTotal: true),
+            _buildSummaryRow(
+                'Total a pagar', ChileanUtils.formatCurrency(_total),
+                isTotal: true),
           ],
         ),
       ),
@@ -1216,10 +1282,16 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: TextStyle(fontWeight: isTotal ? FontWeight.bold : FontWeight.normal))),
+          Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                      fontWeight:
+                          isTotal ? FontWeight.bold : FontWeight.normal))),
           Text(
             value,
-            style: TextStyle(fontSize: isTotal ? 18 : 16, fontWeight: isTotal ? FontWeight.bold : FontWeight.w600),
+            style: TextStyle(
+                fontSize: isTotal ? 18 : 16,
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.w600),
           ),
         ],
       ),
@@ -1230,9 +1302,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 class _PurchaseLineEntry {
   _PurchaseLineEntry({required PurchaseInvoiceItem line})
       : line = line,
-        quantityController = TextEditingController(text: line.quantity.toStringAsFixed(0)),
-        unitCostController = TextEditingController(text: line.unitCost.toStringAsFixed(0)),
-        discountController = TextEditingController(text: line.discount.toStringAsFixed(0));
+        quantityController =
+            TextEditingController(text: line.quantity.toStringAsFixed(0)),
+        unitCostController =
+            TextEditingController(text: line.unitCost.toStringAsFixed(0)),
+        discountController =
+            TextEditingController(text: line.discount.toStringAsFixed(0));
 
   PurchaseInvoiceItem line;
   final TextEditingController quantityController;
@@ -1241,21 +1316,24 @@ class _PurchaseLineEntry {
 
   void attachListeners(VoidCallback onChanged) {
     quantityController.addListener(() {
-      final value = double.tryParse(quantityController.text.replaceAll(',', '.'));
+      final value =
+          double.tryParse(quantityController.text.replaceAll(',', '.'));
       if (value != null && value >= 0) {
         line = line.copyWith(quantity: value);
         onChanged();
       }
     });
     unitCostController.addListener(() {
-      final value = double.tryParse(unitCostController.text.replaceAll(',', '.'));
+      final value =
+          double.tryParse(unitCostController.text.replaceAll(',', '.'));
       if (value != null && value >= 0) {
         line = line.copyWith(unitCost: value);
         onChanged();
       }
     });
     discountController.addListener(() {
-      final value = double.tryParse(discountController.text.replaceAll(',', '.'));
+      final value =
+          double.tryParse(discountController.text.replaceAll(',', '.'));
       if (value != null && value >= 0) {
         line = line.copyWith(discount: value);
         onChanged();
@@ -1288,9 +1366,12 @@ class _PurchaseLineRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(entry.line.productName ?? 'Producto', style: const TextStyle(fontWeight: FontWeight.w600)),
-                if (entry.line.productSku != null && entry.line.productSku!.isNotEmpty)
-                  Text('SKU: ${entry.line.productSku}', style: const TextStyle(color: Colors.grey)),
+                Text(entry.line.productName ?? 'Producto',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                if (entry.line.productSku != null &&
+                    entry.line.productSku!.isNotEmpty)
+                  Text('SKU: ${entry.line.productSku}',
+                      style: const TextStyle(color: Colors.grey)),
               ],
             ),
           ),
@@ -1299,8 +1380,11 @@ class _PurchaseLineRow extends StatelessWidget {
             child: TextField(
               controller: entry.quantityController,
               decoration: const InputDecoration(labelText: 'Cantidad'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+              ],
             ),
           ),
           const SizedBox(width: 8),
@@ -1309,8 +1393,11 @@ class _PurchaseLineRow extends StatelessWidget {
             child: TextField(
               controller: entry.unitCostController,
               decoration: const InputDecoration(labelText: 'Costo'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+              ],
             ),
           ),
           const SizedBox(width: 8),
@@ -1319,8 +1406,11 @@ class _PurchaseLineRow extends StatelessWidget {
             child: TextField(
               controller: entry.discountController,
               decoration: const InputDecoration(labelText: 'Descuento'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+              ],
             ),
           ),
           const SizedBox(width: 8),
@@ -1348,9 +1438,11 @@ class _PurchaseLineRow extends StatelessWidget {
 
 class _SupplierSelector extends StatefulWidget {
   final List<shared_supplier.Supplier> suppliers;
-  final Future<shared_supplier.Supplier?> Function(String name) onCreateSupplier;
+  final Future<shared_supplier.Supplier?> Function(String name)
+      onCreateSupplier;
 
-  const _SupplierSelector({required this.suppliers, required this.onCreateSupplier});
+  const _SupplierSelector(
+      {required this.suppliers, required this.onCreateSupplier});
 
   @override
   State<_SupplierSelector> createState() => _SupplierSelectorState();
@@ -1409,12 +1501,13 @@ class _SupplierSelectorState extends State<_SupplierSelector> {
           initialChildSize: 0.8,
           builder: (context, controller) {
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return Container(
               padding: const EdgeInsets.all(16.0),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1488,7 +1581,9 @@ class _SupplierSelectorState extends State<_SupplierSelector> {
                             child: Text(
                               'No se encontraron proveedores',
                               style: TextStyle(
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
                               ),
                             ),
                           )
@@ -1499,8 +1594,8 @@ class _SupplierSelectorState extends State<_SupplierSelector> {
                               final supplier = _filtered[index];
                               return ListTile(
                                 leading: CircleAvatar(
-                                  backgroundColor: isDark 
-                                      ? Colors.grey[800] 
+                                  backgroundColor: isDark
+                                      ? Colors.grey[800]
                                       : Colors.grey[200],
                                   child: Icon(
                                     Icons.store_outlined,
@@ -1516,23 +1611,30 @@ class _SupplierSelectorState extends State<_SupplierSelector> {
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    if (supplier.rut != null && supplier.rut!.isNotEmpty)
+                                    if (supplier.rut != null &&
+                                        supplier.rut!.isNotEmpty)
                                       Text(
                                         'RUT: ${ChileanUtils.formatRut(supplier.rut!)}',
                                         style: TextStyle(
-                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                          color: isDark
+                                              ? Colors.grey[400]
+                                              : Colors.grey[600],
                                         ),
                                       ),
-                                    if (supplier.email != null && supplier.email!.isNotEmpty)
+                                    if (supplier.email != null &&
+                                        supplier.email!.isNotEmpty)
                                       Text(
                                         supplier.email!,
                                         style: TextStyle(
-                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                          color: isDark
+                                              ? Colors.grey[400]
+                                              : Colors.grey[600],
                                         ),
                                       ),
                                   ],
                                 ),
-                                onTap: () => Navigator.of(context).pop(supplier),
+                                onTap: () =>
+                                    Navigator.of(context).pop(supplier),
                               );
                             },
                           ),
@@ -1583,8 +1685,8 @@ class _ProductSelectorState extends State<_ProductSelector> {
           product.brand,
           product.model,
         ];
-        return candidates.any((value) =>
-            value != null && value.toLowerCase().contains(query));
+        return candidates.any(
+            (value) => value != null && value.toLowerCase().contains(query));
       }).toList();
     });
   }
@@ -1602,12 +1704,13 @@ class _ProductSelectorState extends State<_ProductSelector> {
           initialChildSize: 0.85,
           builder: (context, controller) {
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            
+
             return Container(
               padding: const EdgeInsets.all(16.0),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Column(
                 children: [
@@ -1644,7 +1747,9 @@ class _ProductSelectorState extends State<_ProductSelector> {
                             child: Text(
                               'No se encontraron productos',
                               style: TextStyle(
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
                               ),
                             ),
                           )
@@ -1655,13 +1760,16 @@ class _ProductSelectorState extends State<_ProductSelector> {
                               final product = _filtered[index];
                               return ListTile(
                                 leading: CircleAvatar(
-                                  backgroundColor: isDark 
-                                      ? Colors.grey[800] 
+                                  backgroundColor: isDark
+                                      ? Colors.grey[800]
                                       : Colors.grey[200],
                                   child: Text(
-                                    product.name.isNotEmpty ? product.name[0].toUpperCase() : '?',
+                                    product.name.isNotEmpty
+                                        ? product.name[0].toUpperCase()
+                                        : '?',
                                     style: TextStyle(
-                                      color: isDark ? Colors.white : Colors.black,
+                                      color:
+                                          isDark ? Colors.white : Colors.black,
                                     ),
                                   ),
                                 ),
@@ -1677,7 +1785,9 @@ class _ProductSelectorState extends State<_ProductSelector> {
                                     Text(
                                       'SKU: ${product.sku}',
                                       style: TextStyle(
-                                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                        color: isDark
+                                            ? Colors.grey[400]
+                                            : Colors.grey[600],
                                         fontSize: 13,
                                       ),
                                     ),
@@ -1686,7 +1796,9 @@ class _ProductSelectorState extends State<_ProductSelector> {
                                         Text(
                                           'Costo: ${ChileanUtils.formatCurrency(product.cost)}',
                                           style: TextStyle(
-                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                            color: isDark
+                                                ? Colors.grey[400]
+                                                : Colors.grey[600],
                                             fontSize: 13,
                                           ),
                                         ),
@@ -1698,16 +1810,25 @@ class _ProductSelectorState extends State<_ProductSelector> {
                                           ),
                                           decoration: BoxDecoration(
                                             color: product.stockQuantity > 0
-                                                ? (isDark ? Colors.green[900] : Colors.green[100])
-                                                : (isDark ? Colors.red[900] : Colors.red[100]),
-                                            borderRadius: BorderRadius.circular(4),
+                                                ? (isDark
+                                                    ? Colors.green[900]
+                                                    : Colors.green[100])
+                                                : (isDark
+                                                    ? Colors.red[900]
+                                                    : Colors.red[100]),
+                                            borderRadius:
+                                                BorderRadius.circular(4),
                                           ),
                                           child: Text(
                                             'Stock: ${product.stockQuantity}',
                                             style: TextStyle(
                                               color: product.stockQuantity > 0
-                                                  ? (isDark ? Colors.green[300] : Colors.green[800])
-                                                  : (isDark ? Colors.red[300] : Colors.red[800]),
+                                                  ? (isDark
+                                                      ? Colors.green[300]
+                                                      : Colors.green[800])
+                                                  : (isDark
+                                                      ? Colors.red[300]
+                                                      : Colors.red[800]),
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -1719,7 +1840,9 @@ class _ProductSelectorState extends State<_ProductSelector> {
                                 ),
                                 trailing: Icon(
                                   Icons.chevron_right,
-                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
                                 ),
                                 onTap: () => Navigator.of(context).pop(product),
                               );

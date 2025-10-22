@@ -35,7 +35,7 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
     try {
       // Initialize Chilean chart of accounts if empty
       await _accountingService.initializeChileanChartOfAccounts();
-      
+
       final chartOfAccounts = await _accountingService.getChartOfAccounts();
       setState(() {
         _chartOfAccounts = chartOfAccounts;
@@ -60,21 +60,21 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
 
   Map<AccountType, List<Account>> _getFilteredAccounts() {
     if (_searchTerm.isEmpty) return _chartOfAccounts;
-    
+
     final filtered = <AccountType, List<Account>>{};
-    
+
     for (final entry in _chartOfAccounts.entries) {
       final filteredAccounts = entry.value
           .where((account) =>
               account.code.toLowerCase().contains(_searchTerm.toLowerCase()) ||
               account.name.toLowerCase().contains(_searchTerm.toLowerCase()))
           .toList();
-      
+
       if (filteredAccounts.isNotEmpty) {
         filtered[entry.key] = filteredAccounts;
       }
     }
-    
+
     return filtered;
   }
 
@@ -107,13 +107,13 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
               ],
             ),
           ),
-          
+
           // Search
           SearchWidget(
             hintText: 'Buscar por código o nombre de cuenta...',
             onSearchChanged: _onSearchChanged,
           ),
-          
+
           // Content
           Expanded(
             child: _isLoading
@@ -127,7 +127,7 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
 
   Widget _buildChartOfAccounts() {
     final filteredAccounts = _getFilteredAccounts();
-    
+
     if (filteredAccounts.isEmpty) {
       return const Center(
         child: Text(
@@ -150,7 +150,7 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
 
   Widget _buildAccountTypeSection(AccountType type, List<Account> accounts) {
     final typeName = type.displayName;
-    
+
     return Card(
       child: ExpansionTile(
         title: Text(
@@ -160,7 +160,8 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        subtitle: Text('${accounts.length} cuenta${accounts.length != 1 ? 's' : ''}'),
+        subtitle:
+            Text('${accounts.length} cuenta${accounts.length != 1 ? 's' : ''}'),
         children: [
           ...accounts.map((account) => _buildAccountTile(account)),
         ],
@@ -187,8 +188,9 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
           ),
         ),
       ),
-    title: Text(account.name),
-    subtitle: Text('Código: ${account.code}\n${account.category.displayName}'),
+      title: Text(account.name),
+      subtitle:
+          Text('Código: ${account.code}\n${account.category.displayName}'),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

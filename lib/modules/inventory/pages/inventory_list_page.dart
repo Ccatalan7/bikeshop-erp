@@ -91,16 +91,19 @@ class _InventoryListPageState extends State<InventoryListPage> {
 
   void _applyFilters() {
     List<Product> filtered = _products;
-    
+
     if (_searchTerm.isNotEmpty) {
       filtered = filtered
           .where((product) =>
               product.name.toLowerCase().contains(_searchTerm.toLowerCase()) ||
               product.sku.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-              (product.brand?.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false))
+              (product.brand
+                      ?.toLowerCase()
+                      .contains(_searchTerm.toLowerCase()) ??
+                  false))
           .toList();
     }
-    
+
     setState(() => _filteredProducts = filtered);
   }
 
@@ -150,13 +153,13 @@ class _InventoryListPageState extends State<InventoryListPage> {
               ],
             ),
           ),
-          
+
           // Search
           SearchWidget(
             hintText: 'Buscar por nombre, SKU o marca...',
             onSearchChanged: _onSearchChanged,
           ),
-          
+
           // Filters
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -174,10 +177,11 @@ class _InventoryListPageState extends State<InventoryListPage> {
                         value: null,
                         child: Text('Todas las categorías'),
                       ),
-                      ..._categories.map((category) => DropdownMenuItem<String?>(
-                            value: category.id,
-                            child: Text(category.name),
-                          )),
+                      ..._categories
+                          .map((category) => DropdownMenuItem<String?>(
+                                value: category.id,
+                                child: Text(category.name),
+                              )),
                     ],
                     onChanged: _onCategoryIdChanged,
                   ),
@@ -196,7 +200,7 @@ class _InventoryListPageState extends State<InventoryListPage> {
             ),
           ),
           const SizedBox(height: 16),
-          
+
           // Stats
           if (!_isLoading && _products.isNotEmpty)
             Container(
@@ -211,26 +215,24 @@ class _InventoryListPageState extends State<InventoryListPage> {
                   _buildStatItem('Total', _products.length.toString()),
                   const SizedBox(width: 24),
                   _buildStatItem(
-                    'Stock Bajo', 
+                    'Stock Bajo',
                     _products.where((p) => p.isLowStock).length.toString(),
                     color: Colors.orange,
                   ),
                   const SizedBox(width: 24),
                   _buildStatItem(
-                    'Sin Stock', 
+                    'Sin Stock',
                     _products.where((p) => p.isOutOfStock).length.toString(),
                     color: Colors.red,
                   ),
                   const SizedBox(width: 24),
                   _buildStatItem(
-                    'Mostrando', 
-                    _filteredProducts.length.toString()
-                  ),
+                      'Mostrando', _filteredProducts.length.toString()),
                 ],
               ),
             ),
           const SizedBox(height: 16),
-          
+
           // Content
           Expanded(
             child: _isLoading
@@ -277,7 +279,9 @@ class _InventoryListPageState extends State<InventoryListPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              _searchTerm.isEmpty && _selectedCategoryId == null && !_showLowStockOnly
+              _searchTerm.isEmpty &&
+                      _selectedCategoryId == null &&
+                      !_showLowStockOnly
                   ? 'No hay productos registrados'
                   : 'No se encontraron productos',
               style: TextStyle(
@@ -285,7 +289,9 @@ class _InventoryListPageState extends State<InventoryListPage> {
                 color: Colors.grey[600],
               ),
             ),
-            if (_searchTerm.isEmpty && _selectedCategoryId == null && !_showLowStockOnly) ...[
+            if (_searchTerm.isEmpty &&
+                _selectedCategoryId == null &&
+                !_showLowStockOnly) ...[
               const SizedBox(height: 16),
               AppButton(
                 text: 'Agregar Primer Producto',
@@ -368,7 +374,7 @@ class _InventoryListPageState extends State<InventoryListPage> {
                 ),
               ),
             ),
-            
+
             // Product info
             Expanded(
               flex: 2,
@@ -412,7 +418,7 @@ class _InventoryListPageState extends State<InventoryListPage> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    
+
                     // SKU and category
                     Text(
                       'SKU: ${product.sku}',
@@ -422,14 +428,16 @@ class _InventoryListPageState extends State<InventoryListPage> {
                       ),
                     ),
                     Text(
-                      product.categoryName ?? categoryNames[product.categoryId] ?? 'Sin categoría',
+                      product.categoryName ??
+                          categoryNames[product.categoryId] ??
+                          'Sin categoría',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],
                       ),
                     ),
                     const Spacer(),
-                    
+
                     // Price and stock
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -455,9 +463,10 @@ class _InventoryListPageState extends State<InventoryListPage> {
                                       : product.isLowStock
                                           ? Colors.orange
                                           : Colors.grey[600],
-                                  fontWeight: product.isOutOfStock || product.isLowStock
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
+                                  fontWeight:
+                                      product.isOutOfStock || product.isLowStock
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
                                 ),
                               ),
                             ],
@@ -466,7 +475,9 @@ class _InventoryListPageState extends State<InventoryListPage> {
                         IconButton(
                           icon: const Icon(Icons.edit, size: 20),
                           onPressed: () {
-                            context.push('/inventory/products/${product.id}/edit').then((_) {
+                            context
+                                .push('/inventory/products/${product.id}/edit')
+                                .then((_) {
                               _loadProducts();
                             });
                           },

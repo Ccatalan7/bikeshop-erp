@@ -51,9 +51,9 @@ class DashboardScreen extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 32),
-            
+
             // Module Cards Section
             const Text(
               'Módulos Principales',
@@ -63,7 +63,7 @@ class DashboardScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Core Modules Grid
             GridView.count(
               shrinkWrap: true,

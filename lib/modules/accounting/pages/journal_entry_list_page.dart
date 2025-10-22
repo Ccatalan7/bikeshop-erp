@@ -40,12 +40,12 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
   Future<void> _loadJournalEntries() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-    
+
     try {
       // Force reload from database to get fresh data
       await _accountingService.reloadJournalEntries();
       final entries = await _accountingService.getJournalEntries();
-      
+
       if (!mounted) return;
       setState(() {
         _journalEntries = entries;
@@ -71,13 +71,24 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
     setState(() {
       _filteredEntries = _journalEntries.where((entry) {
         final matchesSearch = _searchTerm.isEmpty ||
-            entry.entryNumber.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-            entry.description.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-            (entry.sourceModule?.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false) ||
-            (entry.sourceReference?.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false);
-        
-        final matchesType = _selectedType == null || entry.type == _selectedType;
-        
+            entry.entryNumber
+                .toLowerCase()
+                .contains(_searchTerm.toLowerCase()) ||
+            entry.description
+                .toLowerCase()
+                .contains(_searchTerm.toLowerCase()) ||
+            (entry.sourceModule
+                    ?.toLowerCase()
+                    .contains(_searchTerm.toLowerCase()) ??
+                false) ||
+            (entry.sourceReference
+                    ?.toLowerCase()
+                    .contains(_searchTerm.toLowerCase()) ??
+                false);
+
+        final matchesType =
+            _selectedType == null || entry.type == _selectedType;
+
         return matchesSearch && matchesType;
       }).toList();
     });
@@ -111,9 +122,9 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
     try {
       // Delete journal entry using accounting service
       await _accountingService.deleteJournalEntry(entry.id!);
-      
+
       if (!mounted) return;
-      
+
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -122,12 +133,12 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
           duration: const Duration(seconds: 1),
         ),
       );
-      
+
       // Reload entries
       await _loadJournalEntries();
     } catch (e) {
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
@@ -181,8 +192,8 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                             value: null,
                             child: Text('Todos'),
                           ),
-                          ...JournalEntryType.values.map((type) =>
-                            DropdownMenuItem<JournalEntryType?>(
+                          ...JournalEntryType.values.map(
+                            (type) => DropdownMenuItem<JournalEntryType?>(
                               value: type,
                               child: Text(type.displayName),
                             ),
@@ -197,13 +208,16 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                       icon: const Icon(Icons.refresh),
                       tooltip: 'Actualizar',
                       style: IconButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
                       ),
                     ),
                     const SizedBox(width: 8),
                     AppButton(
                       text: 'Nuevo Asiento',
-                      onPressed: () => context.push('/accounting/journal-entries/new'),
+                      onPressed: () =>
+                          context.push('/accounting/journal-entries/new'),
                       icon: Icons.add,
                     ),
                   ],
@@ -227,7 +241,7 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
               ],
             ),
           ),
-          
+
           // Entries List
           Expanded(
             child: _isLoading
@@ -247,17 +261,24 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                               _searchTerm.isEmpty && _selectedType == null
                                   ? 'No hay asientos contables registrados'
                                   : 'No se encontraron asientos que coincidan con los filtros',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: Theme.of(context).disabledColor,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context).disabledColor,
+                                  ),
                             ),
-                            if (_searchTerm.isEmpty && _selectedType == null) ...[
+                            if (_searchTerm.isEmpty &&
+                                _selectedType == null) ...[
                               const SizedBox(height: 8),
                               Text(
                                 'Los asientos se crean automáticamente con las ventas y compras',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).disabledColor,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: Theme.of(context).disabledColor,
+                                    ),
                               ),
                             ],
                           ],
@@ -276,17 +297,23 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                   Expanded(
                                     flex: 2,
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           entry.entryNumber,
-                                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                         ),
                                         Text(
                                           _dateFormat.format(entry.date),
-                                          style: Theme.of(context).textTheme.bodySmall,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
                                         ),
                                       ],
                                     ),
@@ -295,7 +322,9 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                     flex: 3,
                                     child: Text(
                                       entry.description,
-                                      style: Theme.of(context).textTheme.bodyMedium,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium,
                                     ),
                                   ),
                                   Expanded(
@@ -306,7 +335,8 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: _getTypeColor(entry.type).withOpacity(0.1),
+                                        color: _getTypeColor(entry.type)
+                                            .withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
                                           color: _getTypeColor(entry.type),
@@ -331,7 +361,8 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: _getStatusColor(entry.status).withOpacity(0.1),
+                                      color: _getStatusColor(entry.status)
+                                          .withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: _getStatusColor(entry.status),
@@ -350,19 +381,30 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                   const SizedBox(width: 8),
                                   Text(
                                     _currencyFormat.format(entry.totalDebit),
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: entry.isBalanced ? null : Colors.red,
-                                    ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: entry.isBalanced
+                                              ? null
+                                              : Colors.red,
+                                        ),
                                   ),
                                 ],
                               ),
-                              subtitle: entry.sourceModule != null || entry.sourceReference != null
+                              subtitle: entry.sourceModule != null ||
+                                      entry.sourceReference != null
                                   ? Text(
                                       '${entry.sourceModule ?? ''} ${entry.sourceReference ?? ''}',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: Theme.of(context).colorScheme.secondary,
-                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .secondary,
+                                          ),
                                     )
                                   : null,
                               trailing: Row(
@@ -371,31 +413,41 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                   // 🗑️ TEMP: Quick delete button for testing
                                   IconButton(
                                     onPressed: () => _quickDeleteEntry(entry),
-                                    icon: const Icon(Icons.delete_forever, color: Colors.red, size: 20),
+                                    icon: const Icon(Icons.delete_forever,
+                                        color: Colors.red, size: 20),
                                     tooltip: 'Eliminar (Testing)',
                                   ),
                                 ],
                               ),
                               children: [
                                 Container(
-                                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                  margin:
+                                      const EdgeInsets.fromLTRB(16, 0, 16, 16),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const Divider(),
                                       Text(
                                         'Líneas del Asiento',
-                                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                       ),
                                       const SizedBox(height: 12),
                                       // Column headers for journal lines
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 8),
                                         decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.surfaceVariant,
-                                          borderRadius: BorderRadius.circular(4),
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .surfaceVariant,
+                                          borderRadius:
+                                              BorderRadius.circular(4),
                                         ),
                                         child: Row(
                                           children: [
@@ -423,9 +475,13 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                               width: 120,
                                               child: Text(
                                                 'Debe',
-                                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
                                                 textAlign: TextAlign.right,
                                               ),
                                             ),
@@ -434,9 +490,13 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                               width: 120,
                                               child: Text(
                                                 'Haber',
-                                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
                                                 textAlign: TextAlign.right,
                                               ),
                                             ),
@@ -444,103 +504,143 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                                         ),
                                       ),
                                       const SizedBox(height: 8),
-                                      ...entry.lines.map((line) => Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          border: Border(
-                                            bottom: BorderSide(
-                                              color: Theme.of(context).dividerColor,
-                                              width: 0.5,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              flex: 3,
-                                              child: Text(
-                                                '${line.accountCode} - ${line.accountName}',
-                                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                                  fontWeight: FontWeight.w500,
+                                      ...entry.lines
+                                          .map((line) => Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  border: Border(
+                                                    bottom: BorderSide(
+                                                      color: Theme.of(context)
+                                                          .dividerColor,
+                                                      width: 0.5,
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 3,
-                                              child: Text(
-                                                line.description,
-                                                style: Theme.of(context).textTheme.bodySmall,
-                                              ),
-                                            ),
-                                            SizedBox(
-                                              width: 120,
-                                              child: Text(
-                                                line.debitAmount > 0
-                                                    ? _currencyFormat.format(line.debitAmount)
-                                                    : '',
-                                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                                  fontWeight: FontWeight.w600,
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      flex: 3,
+                                                      child: Text(
+                                                        '${line.accountCode} - ${line.accountName}',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w500,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      flex: 3,
+                                                      child: Text(
+                                                        line.description,
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .bodySmall,
+                                                      ),
+                                                    ),
+                                                    SizedBox(
+                                                      width: 120,
+                                                      child: Text(
+                                                        line.debitAmount > 0
+                                                            ? _currencyFormat
+                                                                .format(line
+                                                                    .debitAmount)
+                                                            : '',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                        textAlign:
+                                                            TextAlign.right,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 16),
+                                                    SizedBox(
+                                                      width: 120,
+                                                      child: Text(
+                                                        line.creditAmount > 0
+                                                            ? _currencyFormat
+                                                                .format(line
+                                                                    .creditAmount)
+                                                            : '',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                        textAlign:
+                                                            TextAlign.right,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
-                                                textAlign: TextAlign.right,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 16),
-                                            SizedBox(
-                                              width: 120,
-                                              child: Text(
-                                                line.creditAmount > 0
-                                                    ? _currencyFormat.format(line.creditAmount)
-                                                    : '',
-                                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                                textAlign: TextAlign.right,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      )).toList(),
+                                              ))
+                                          .toList(),
                                       const SizedBox(height: 8),
                                       Container(
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
-                                          color: entry.isBalanced 
+                                          color: entry.isBalanced
                                               ? Colors.green.withOpacity(0.1)
                                               : Colors.red.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                           border: Border.all(
-                                            color: entry.isBalanced ? Colors.green : Colors.red,
+                                            color: entry.isBalanced
+                                                ? Colors.green
+                                                : Colors.red,
                                             width: 1,
                                           ),
                                         ),
                                         child: Row(
                                           children: [
                                             Icon(
-                                              entry.isBalanced 
-                                                  ? Icons.check_circle 
+                                              entry.isBalanced
+                                                  ? Icons.check_circle
                                                   : Icons.error,
-                                              color: entry.isBalanced ? Colors.green : Colors.red,
+                                              color: entry.isBalanced
+                                                  ? Colors.green
+                                                  : Colors.red,
                                               size: 16,
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              entry.isBalanced 
+                                              entry.isBalanced
                                                   ? 'Asiento balanceado'
                                                   : 'Asiento desbalanceado',
                                               style: TextStyle(
-                                                color: entry.isBalanced ? Colors.green : Colors.red,
+                                                color: entry.isBalanced
+                                                    ? Colors.green
+                                                    : Colors.red,
                                                 fontWeight: FontWeight.w500,
                                               ),
                                             ),
                                             const Spacer(),
                                             Text(
                                               'Debe: ${_currencyFormat.format(entry.totalDebit)}',
-                                              style: Theme.of(context).textTheme.bodySmall,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall,
                                             ),
                                             const SizedBox(width: 16),
                                             Text(
                                               'Haber: ${_currencyFormat.format(entry.totalCredit)}',
-                                              style: Theme.of(context).textTheme.bodySmall,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall,
                                             ),
                                           ],
                                         ),

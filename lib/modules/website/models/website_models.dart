@@ -201,32 +201,32 @@ class OnlineOrder {
   final String customerName;
   final String? customerPhone;
   final String? customerAddress;
-  
+
   final double subtotal;
   final double taxAmount;
   final double shippingCost;
   final double discountAmount;
   final double total;
-  
+
   final String status;
   final String paymentStatus;
-  
+
   final String? paymentMethod;
   final String? paymentReference;
   final DateTime? paidAt;
-  
+
   final String? trackingNumber;
   final DateTime? shippedAt;
   final DateTime? deliveredAt;
-  
+
   final String? salesInvoiceId;
-  
+
   final String? customerNotes;
   final String? internalNotes;
-  
+
   final DateTime createdAt;
   final DateTime updatedAt;
-  
+
   final List<OnlineOrderItem> items;
 
   OnlineOrder({
@@ -276,10 +276,16 @@ class OnlineOrder {
       paymentStatus: json['payment_status'] as String? ?? 'pending',
       paymentMethod: json['payment_method'] as String?,
       paymentReference: json['payment_reference'] as String?,
-      paidAt: json['paid_at'] != null ? DateTime.parse(json['paid_at'] as String) : null,
+      paidAt: json['paid_at'] != null
+          ? DateTime.parse(json['paid_at'] as String)
+          : null,
       trackingNumber: json['tracking_number'] as String?,
-      shippedAt: json['shipped_at'] != null ? DateTime.parse(json['shipped_at'] as String) : null,
-      deliveredAt: json['delivered_at'] != null ? DateTime.parse(json['delivered_at'] as String) : null,
+      shippedAt: json['shipped_at'] != null
+          ? DateTime.parse(json['shipped_at'] as String)
+          : null,
+      deliveredAt: json['delivered_at'] != null
+          ? DateTime.parse(json['delivered_at'] as String)
+          : null,
       salesInvoiceId: json['sales_invoice_id'] as String?,
       customerNotes: json['customer_notes'] as String?,
       internalNotes: json['internal_notes'] as String?,

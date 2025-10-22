@@ -8,7 +8,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
 
 /// 🎨 VISUAL WEBSITE EDITOR - PHASE 2 ENHANCED
-/// 
+///
 /// A professional split-screen editor with ADVANCED features:
 /// - 📷 Image upload (drag & drop)
 /// - 🎨 Advanced color picker (RGB/HSL with live preview)
@@ -22,9 +22,9 @@ import '../services/website_service.dart';
 /// - 📊 Live analytics preview
 ///
 /// This is the AWESOME version! 🚀
-/// 
+///
 /// A split-screen editor with live preview for instant visual feedback.
-/// 
+///
 /// ARCHITECTURE (Expandable):
 /// - Phase 1: Basic split-screen with hero section, colors, contact
 /// - Phase 2: Drag-and-drop components
@@ -44,29 +44,29 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
   // Edit mode state
   bool _isSaving = false;
   bool _hasChanges = false;
-  
+
   // Hero Section
   final _heroTitleController = TextEditingController();
   final _heroSubtitleController = TextEditingController();
   String? _heroImageUrl;
-  
+
   // Theme Colors
   Color _primaryColor = const Color(0xFF2E7D32);
   Color _accentColor = const Color(0xFFFF6F00);
-  
+
   // Contact Info
   final _contactPhoneController = TextEditingController();
   final _contactEmailController = TextEditingController();
   final _contactAddressController = TextEditingController();
-  
+
   // UI State
   String _selectedSection = 'hero'; // hero, colors, contact
-  
+
   @override
   void initState() {
     super.initState();
     _loadCurrentSettings();
-    
+
     // Track changes
     _heroTitleController.addListener(_markAsChanged);
     _heroSubtitleController.addListener(_markAsChanged);
@@ -74,54 +74,56 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
     _contactEmailController.addListener(_markAsChanged);
     _contactAddressController.addListener(_markAsChanged);
   }
-  
+
   void _markAsChanged() {
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
     }
   }
-  
+
   Future<void> _loadCurrentSettings() async {
     // TODO: Load from database via WebsiteService
     // For now, using default values
     setState(() {
       _heroTitleController.text = 'SERVICIOS Y PRODUCTOS DE BICICLETA';
-      _heroSubtitleController.text = 'TODO LO QUE NECESITAS PARA TU BICICLETA EN VIÑA DEL MAR';
+      _heroSubtitleController.text =
+          'TODO LO QUE NECESITAS PARA TU BICICLETA EN VIÑA DEL MAR';
       _contactPhoneController.text = '+56 9 XXXX XXXX';
       _contactEmailController.text = 'info@vinabike.cl';
-      _contactAddressController.text = 'Álvarez 32, Local 17\nViña del Mar, Chile';
+      _contactAddressController.text =
+          'Álvarez 32, Local 17\nViña del Mar, Chile';
     });
   }
-  
+
   Future<void> _saveChanges() async {
     setState(() => _isSaving = true);
-    
+
     try {
       final websiteService = context.read<WebsiteService>();
-      
+
       // Save to database
       await websiteService.updateHeroSection(
         title: _heroTitleController.text,
         subtitle: _heroSubtitleController.text,
         imageUrl: _heroImageUrl,
       );
-      
+
       await websiteService.updateThemeColors(
         primaryColor: _primaryColor.value,
         accentColor: _accentColor.value,
       );
-      
+
       await websiteService.updateContactInfo(
         phone: _contactPhoneController.text,
         email: _contactEmailController.text,
         address: _contactAddressController.text,
       );
-      
+
       setState(() {
         _hasChanges = false;
         _isSaving = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -132,7 +134,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       }
     } catch (e) {
       setState(() => _isSaving = false);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -143,7 +145,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       }
     }
   }
-  
+
   @override
   void dispose() {
     _heroTitleController.dispose();
@@ -157,7 +159,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return MainLayout(
       child: Scaffold(
         backgroundColor: theme.colorScheme.surfaceContainerLowest,
@@ -186,22 +188,25 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
               label: const Text('Vista Previa'),
             ),
             const SizedBox(width: 8),
-            
+
             // Save button
             ElevatedButton.icon(
               onPressed: _hasChanges && !_isSaving ? _saveChanges : null,
-              icon: _isSaving 
-                ? const SizedBox(
-                    width: 16, 
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.save),
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.save),
               label: Text(_isSaving ? 'Guardando...' : 'Guardar Cambios'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _hasChanges ? theme.colorScheme.primary : Colors.grey,
+                backgroundColor:
+                    _hasChanges ? theme.colorScheme.primary : Colors.grey,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
             ),
             const SizedBox(width: 16),
@@ -248,7 +253,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                         ],
                       ),
                     ),
-                    
+
                     // Preview content
                     Expanded(
                       child: _buildLivePreview(context),
@@ -257,7 +262,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                 ),
               ),
             ),
-            
+
             // RIGHT SIDE: Edit Panel
             Container(
               width: 400,
@@ -297,10 +302,10 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                       ],
                     ),
                   ),
-                  
+
                   // Section selector
                   _buildSectionSelector(context),
-                  
+
                   // Edit controls
                   Expanded(
                     child: _buildEditControls(context),
@@ -313,10 +318,10 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       ),
     );
   }
-  
+
   Widget _buildSectionSelector(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -348,10 +353,10 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       ),
     );
   }
-  
+
   Widget _buildSectionChip(String section, String label, IconData icon) {
     final isSelected = _selectedSection == section;
-    
+
     return FilterChip(
       selected: isSelected,
       label: Row(
@@ -368,7 +373,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       selectedColor: Theme.of(context).colorScheme.primaryContainer,
     );
   }
-  
+
   Widget _buildEditControls(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -382,10 +387,10 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       ),
     );
   }
-  
+
   List<Widget> _buildHeroControls(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return [
       Text(
         '🎯 Sección Hero / Banner Principal',
@@ -401,7 +406,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         ),
       ),
       const SizedBox(height: 24),
-      
+
       // Title
       TextField(
         controller: _heroTitleController,
@@ -414,7 +419,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         maxLines: 2,
       ),
       const SizedBox(height: 16),
-      
+
       // Subtitle
       TextField(
         controller: _heroSubtitleController,
@@ -427,7 +432,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         maxLines: 2,
       ),
       const SizedBox(height: 16),
-      
+
       // Image upload (Phase 2)
       OutlinedButton.icon(
         onPressed: () {
@@ -440,11 +445,11 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         icon: const Icon(Icons.image),
         label: const Text('Cambiar Imagen de Fondo'),
       ),
-      
+
       const SizedBox(height: 24),
       const Divider(),
       const SizedBox(height: 16),
-      
+
       // Tips
       Container(
         padding: const EdgeInsets.all(12),
@@ -472,10 +477,10 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       ),
     ];
   }
-  
+
   List<Widget> _buildColorControls(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return [
       Text(
         '🎨 Colores del Tema',
@@ -491,7 +496,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         ),
       ),
       const SizedBox(height: 24),
-      
+
       // Primary Color
       _buildColorPicker(
         context,
@@ -505,7 +510,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         },
       ),
       const SizedBox(height: 16),
-      
+
       // Accent Color
       _buildColorPicker(
         context,
@@ -518,11 +523,11 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
           });
         },
       ),
-      
+
       const SizedBox(height: 24),
       const Divider(),
       const SizedBox(height: 16),
-      
+
       // Presets (Phase 2)
       Text(
         'Paletas Predefinidas',
@@ -534,14 +539,17 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       Wrap(
         spacing: 8,
         children: [
-          _buildColorPreset('Verde Naturaleza', const Color(0xFF2E7D32), const Color(0xFF66BB6A)),
-          _buildColorPreset('Azul Profesional', const Color(0xFF1976D2), const Color(0xFF42A5F5)),
-          _buildColorPreset('Naranja Energía', const Color(0xFFFF6F00), const Color(0xFFFF9800)),
+          _buildColorPreset('Verde Naturaleza', const Color(0xFF2E7D32),
+              const Color(0xFF66BB6A)),
+          _buildColorPreset('Azul Profesional', const Color(0xFF1976D2),
+              const Color(0xFF42A5F5)),
+          _buildColorPreset('Naranja Energía', const Color(0xFFFF6F00),
+              const Color(0xFFFF9800)),
         ],
       ),
     ];
   }
-  
+
   Widget _buildColorPicker(
     BuildContext context, {
     required String label,
@@ -592,7 +600,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       ],
     );
   }
-  
+
   Widget _buildColorPreset(String name, Color primary, Color accent) {
     return Tooltip(
       message: name,
@@ -628,10 +636,10 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       ),
     );
   }
-  
+
   List<Widget> _buildContactControls(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return [
       Text(
         '📞 Información de Contacto',
@@ -647,7 +655,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         ),
       ),
       const SizedBox(height: 24),
-      
+
       // Phone
       TextField(
         controller: _contactPhoneController,
@@ -659,7 +667,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         ),
       ),
       const SizedBox(height: 16),
-      
+
       // Email
       TextField(
         controller: _contactEmailController,
@@ -672,7 +680,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         keyboardType: TextInputType.emailAddress,
       ),
       const SizedBox(height: 16),
-      
+
       // Address
       TextField(
         controller: _contactAddressController,
@@ -686,11 +694,11 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       ),
     ];
   }
-  
+
   Widget _buildLivePreview(BuildContext context) {
     // This will render a live preview of the public store
     // For now, showing a mock preview that updates in real-time
-    
+
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -730,7 +738,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                   ],
                 ),
               ),
-              
+
               // Hero Section (LIVE PREVIEW)
               Container(
                 height: 400,
@@ -751,9 +759,9 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          _heroTitleController.text.isEmpty 
-                            ? 'TU TÍTULO AQUÍ'
-                            : _heroTitleController.text,
+                          _heroTitleController.text.isEmpty
+                              ? 'TU TÍTULO AQUÍ'
+                              : _heroTitleController.text,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 48,
@@ -770,8 +778,8 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                         const SizedBox(height: 16),
                         Text(
                           _heroSubtitleController.text.isEmpty
-                            ? 'Tu subtítulo aquí'
-                            : _heroSubtitleController.text,
+                              ? 'Tu subtítulo aquí'
+                              : _heroSubtitleController.text,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
@@ -802,7 +810,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                   ),
                 ),
               ),
-              
+
               // Mock content
               Padding(
                 padding: const EdgeInsets.all(32),
@@ -855,7 +863,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                   ],
                 ),
               ),
-              
+
               // Mock Footer (with live contact info)
               Container(
                 padding: const EdgeInsets.all(32),
@@ -878,7 +886,8 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                           const SizedBox(height: 8),
                           Text(
                             'Tu tienda de confianza',
-                            style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                            style:
+                                TextStyle(color: Colors.white.withOpacity(0.7)),
                           ),
                         ],
                       ),
@@ -896,22 +905,25 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            _contactPhoneController.text.isEmpty 
-                              ? 'Teléfono'
-                              : _contactPhoneController.text,
-                            style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                            _contactPhoneController.text.isEmpty
+                                ? 'Teléfono'
+                                : _contactPhoneController.text,
+                            style:
+                                TextStyle(color: Colors.white.withOpacity(0.7)),
                           ),
                           Text(
                             _contactEmailController.text.isEmpty
-                              ? 'Email'
-                              : _contactEmailController.text,
-                            style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                                ? 'Email'
+                                : _contactEmailController.text,
+                            style:
+                                TextStyle(color: Colors.white.withOpacity(0.7)),
                           ),
                           Text(
                             _contactAddressController.text.isEmpty
-                              ? 'Dirección'
-                              : _contactAddressController.text,
-                            style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                                ? 'Dirección'
+                                : _contactAddressController.text,
+                            style:
+                                TextStyle(color: Colors.white.withOpacity(0.7)),
                           ),
                         ],
                       ),
@@ -925,7 +937,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       ),
     );
   }
-  
+
   void _showUnsavedChangesDialog() {
     showDialog(
       context: context,

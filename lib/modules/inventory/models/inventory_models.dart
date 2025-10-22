@@ -66,10 +66,10 @@ class Product {
           : [],
       isActive: json['is_active'] ?? true,
       productType: _parseProductType(json['product_type']),
-      createdAt: json['created_at'] is String 
+      createdAt: json['created_at'] is String
           ? DateTime.parse(json['created_at'])
           : (json['created_at'] as dynamic).toDate(),
-      updatedAt: json['updated_at'] is String 
+      updatedAt: json['updated_at'] is String
           ? DateTime.parse(json['updated_at'])
           : (json['updated_at'] as dynamic).toDate(),
     );
@@ -106,12 +106,12 @@ class Product {
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
-    
+
     // Only include id if it's not null (for updates)
     if (id != null) {
       json['id'] = id;
     }
-    
+
     return json;
   }
 
@@ -163,10 +163,10 @@ class Product {
 
   bool get isLowStock => inventoryQty <= minStockLevel;
   bool get isOutOfStock => inventoryQty <= 0;
-  
+
   double get marginAmount => price - cost;
   double get marginPercentage => cost > 0 ? (marginAmount / cost) * 100 : 0;
-  
+
   double get inventoryValue => cost * inventoryQty;
 }
 
@@ -244,14 +244,14 @@ class StockMovement {
 }
 
 enum StockMovementType {
-  purchase,     // Compra (entrada)
-  sale,         // Venta (salida)
-  adjustment,   // Ajuste manual
-  transfer,     // Transferencia
-  return_in,    // Devolución entrada
-  return_out,   // Devolución salida
-  damaged,      // Producto dañado
-  lost,         // Producto perdido
+  purchase, // Compra (entrada)
+  sale, // Venta (salida)
+  adjustment, // Ajuste manual
+  transfer, // Transferencia
+  return_in, // Devolución entrada
+  return_out, // Devolución salida
+  damaged, // Producto dañado
+  lost, // Producto perdido
 }
 
 class Warehouse {

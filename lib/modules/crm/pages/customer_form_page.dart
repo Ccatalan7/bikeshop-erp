@@ -15,7 +15,7 @@ import '../services/customer_service.dart';
 
 class CustomerFormPage extends StatefulWidget {
   final String? customerId;
-  
+
   const CustomerFormPage({super.key, this.customerId});
 
   @override
@@ -25,19 +25,19 @@ class CustomerFormPage extends StatefulWidget {
 class _CustomerFormPageState extends State<CustomerFormPage> {
   final _formKey = GlobalKey<FormState>();
   late CustomerService _customerService;
-  
+
   final _nameController = TextEditingController();
   final _rutController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
-  
+
   String? _selectedRegion;
   bool _isActive = true;
   String? _imageUrl;
   Uint8List? _selectedImageBytes;
   String? _selectedImageName;
-  
+
   bool _isLoading = false;
   bool _isSaving = false;
   Customer? _existingCustomer;
@@ -66,7 +66,8 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
   Future<void> _loadCustomer() async {
     setState(() => _isLoading = true);
     try {
-      final customer = await _customerService.getCustomerById(widget.customerId!);
+      final customer =
+          await _customerService.getCustomerById(widget.customerId!);
       if (customer != null) {
         _existingCustomer = customer;
         _nameController.text = customer.name;
@@ -119,7 +120,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
     setState(() => _isSaving = true);
     try {
       String? finalImageUrl = _imageUrl;
-      
+
       // Upload image if selected
       if (_selectedImageBytes != null && _selectedImageName != null) {
         final uploadUrl = await ImageService.uploadBytes(
@@ -130,7 +131,8 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
         );
 
         if (uploadUrl == null) {
-          throw Exception('No se pudo subir la imagen del cliente. Intenta nuevamente.');
+          throw Exception(
+              'No se pudo subir la imagen del cliente. Intenta nuevamente.');
         }
 
         finalImageUrl = uploadUrl;
@@ -140,9 +142,15 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
         id: _existingCustomer?.id,
         name: _nameController.text.trim(),
         rut: _rutController.text.trim(),
-        email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-        phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-        address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
+        email: _emailController.text.trim().isEmpty
+            ? null
+            : _emailController.text.trim(),
+        phone: _phoneController.text.trim().isEmpty
+            ? null
+            : _phoneController.text.trim(),
+        address: _addressController.text.trim().isEmpty
+            ? null
+            : _addressController.text.trim(),
         region: _selectedRegion,
         imageUrl: finalImageUrl,
         isActive: _isActive,
@@ -157,7 +165,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_existingCustomer != null 
+            content: Text(_existingCustomer != null
                 ? 'Cliente actualizado exitosamente'
                 : 'Cliente creado exitosamente'),
             backgroundColor: Colors.green,
@@ -215,7 +223,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                 ),
                 Expanded(
                   child: Text(
-                    _existingCustomer != null 
+                    _existingCustomer != null
                         ? 'Editar Cliente'
                         : 'Nuevo Cliente',
                     style: const TextStyle(
@@ -233,7 +241,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
               ],
             ),
           ),
-          
+
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
@@ -266,7 +274,8 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                                 : ImageService.buildAvatarImage(
                                     imageUrl: _imageUrl,
                                     radius: 60,
-                                    initials: '?', // Temporarily disabled to debug freeze
+                                    initials:
+                                        '?', // Temporarily disabled to debug freeze
                                   ),
                           ),
                         ),
@@ -280,7 +289,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  
+
                   // Personal information
                   const Text(
                     'Información Personal',
@@ -290,7 +299,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   TextFormField(
                     controller: _nameController,
                     decoration: const InputDecoration(
@@ -306,7 +315,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                     // No onChanged - avatar updates via ListenableBuilder
                   ),
                   const SizedBox(height: 16),
-                  
+
                   TextFormField(
                     controller: _rutController,
                     decoration: const InputDecoration(
@@ -321,13 +330,14 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                       if (formatted != value) {
                         _rutController.value = TextEditingValue(
                           text: formatted,
-                          selection: TextSelection.collapsed(offset: formatted.length),
+                          selection:
+                              TextSelection.collapsed(offset: formatted.length),
                         );
                       }
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -336,14 +346,16 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                       prefixIcon: Icon(Icons.email),
                     ),
                     validator: (value) {
-                      if (value != null && value.isNotEmpty && !value.contains('@')) {
+                      if (value != null &&
+                          value.isNotEmpty &&
+                          !value.contains('@')) {
                         return 'Ingrese un correo válido';
                       }
                       return null;
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   TextFormField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
@@ -353,7 +365,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  
+
                   // Address information
                   const Text(
                     'Información de Ubicación',
@@ -363,7 +375,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   DropdownButtonFormField<String>(
                     value: _selectedRegion,
                     decoration: const InputDecoration(
@@ -381,7 +393,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   TextFormField(
                     controller: _addressController,
                     maxLines: 3,
@@ -392,7 +404,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  
+
                   // Status
                   const Text(
                     'Estado del Cliente',
@@ -402,10 +414,10 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   SwitchListTile(
                     title: const Text('Cliente Activo'),
-                    subtitle: Text(_isActive 
+                    subtitle: Text(_isActive
                         ? 'El cliente puede realizar compras'
                         : 'Cliente deshabilitado'),
                     value: _isActive,
@@ -413,9 +425,9 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                       setState(() => _isActive = value);
                     },
                   ),
-                  
+
                   const SizedBox(height: 32),
-                  
+
                   // Actions
                   Row(
                     children: [
@@ -429,7 +441,9 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: AppButton(
-                          text: _existingCustomer != null ? 'Actualizar' : 'Crear Cliente',
+                          text: _existingCustomer != null
+                              ? 'Actualizar'
+                              : 'Crear Cliente',
                           onPressed: _saveCustomer,
                           isLoading: _isSaving,
                         ),

@@ -73,11 +73,14 @@ class Product {
         (c) => c.name == json['category'],
         orElse: () => ProductCategory.other,
       ),
-      categoryId: json['category_id'] as String? ?? json['categoryId'] as String?,
-      categoryName: json['category_name'] as String? ?? json['categoryName'] as String?,
+      categoryId:
+          json['category_id'] as String? ?? json['categoryId'] as String?,
+      categoryName:
+          json['category_name'] as String? ?? json['categoryName'] as String?,
       brand: json['brand'] as String?,
       model: json['model'] as String?,
-      specifications: Map<String, String>.from(json['specifications'] as Map? ?? {}),
+      specifications:
+          Map<String, String>.from(json['specifications'] as Map? ?? {}),
       tags: (json['tags'] as List?)?.cast<String>() ?? const [],
       unit: ProductUnit.values.firstWhere(
         (u) => u.name == json['unit'],
@@ -186,15 +189,15 @@ class Product {
 
   // Business logic methods
   double get priceWithIva => price * 1.19; // Chilean IVA is 19%
-  
+
   double get marginPercent => price > 0 ? ((price - cost) / price) * 100 : 0;
-  
+
   double get marginAmount => price - cost;
-  
+
   bool get isLowStock => trackStock && stockQuantity <= minStockLevel;
-  
+
   bool get isOverStock => trackStock && stockQuantity >= maxStockLevel;
-  
+
   bool get isOutOfStock => trackStock && stockQuantity <= 0;
 
   StockStatus get stockStatus {
@@ -206,8 +209,9 @@ class Product {
   }
 
   String get displayName => '$name${brand != null ? ' - $brand' : ''}';
-  
-  String get fullName => '$name${brand != null ? ' $brand' : ''}${model != null ? ' $model' : ''}';
+
+  String get fullName =>
+      '$name${brand != null ? ' $brand' : ''}${model != null ? ' $model' : ''}';
 
   @override
   String toString() {

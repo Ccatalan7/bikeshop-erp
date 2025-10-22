@@ -40,7 +40,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
   Map<String, List<Attendance>> _attendancesByEmployee = {};
   bool _isLoading = true;
   Timer? _refreshTimer;
-  
+
   @override
   void initState() {
     super.initState();
@@ -63,17 +63,18 @@ class _AttendancesPageState extends State<AttendancesPage> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final hrService = context.read<HRService>();
       final dateRange = _getDateRangeForView();
-      
-      final employees = await hrService.getEmployees(status: EmployeeStatus.active);
+
+      final employees =
+          await hrService.getEmployees(status: EmployeeStatus.active);
       final attendances = await hrService.getAttendances(
         startDate: dateRange.start,
         endDate: dateRange.end,
       );
-      
+
       // Group attendances by employee
       final Map<String, List<Attendance>> grouped = {};
       for (final attendance in attendances) {
@@ -82,9 +83,9 @@ class _AttendancesPageState extends State<AttendancesPage> {
         }
         grouped[attendance.employeeId]!.add(attendance);
       }
-      
+
       if (!mounted) return;
-      
+
       setState(() {
         _employees = employees;
         _attendancesByEmployee = grouped;
@@ -92,9 +93,9 @@ class _AttendancesPageState extends State<AttendancesPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      
+
       setState(() => _isLoading = false);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: \$e'),
@@ -107,26 +108,30 @@ class _AttendancesPageState extends State<AttendancesPage> {
   DateTimeRange _getDateRangeForView() {
     switch (_currentView) {
       case TimeView.day:
-        final start = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-        return DateTimeRange(start: start, end: start.add(const Duration(days: 1)));
-      
+        final start = DateTime(
+            _selectedDate.year, _selectedDate.month, _selectedDate.day);
+        return DateTimeRange(
+            start: start, end: start.add(const Duration(days: 1)));
+
       case TimeView.week:
-        final weekStart = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
+        final weekStart =
+            _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
         final start = DateTime(weekStart.year, weekStart.month, weekStart.day);
-        return DateTimeRange(start: start, end: start.add(const Duration(days: 7)));
-      
+        return DateTimeRange(
+            start: start, end: start.add(const Duration(days: 7)));
+
       case TimeView.month:
         final start = DateTime(_selectedDate.year, _selectedDate.month, 1);
         final end = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
         return DateTimeRange(start: start, end: end);
-      
+
       case TimeView.quarter:
         final quarter = ((_selectedDate.month - 1) ~/ 3) + 1;
         final startMonth = (quarter - 1) * 3 + 1;
         final start = DateTime(_selectedDate.year, startMonth, 1);
         final end = DateTime(_selectedDate.year, startMonth + 3, 0);
         return DateTimeRange(start: start, end: end);
-      
+
       case TimeView.year:
         final start = DateTime(_selectedDate.year, 1, 1);
         final end = DateTime(_selectedDate.year, 12, 31);
@@ -194,22 +199,22 @@ class _AttendancesPageState extends State<AttendancesPage> {
     final DateFormat dayFormat = DateFormat('d MMM');
     final DateFormat monthFormat = DateFormat('MMMM yyyy');
     final DateFormat yearFormat = DateFormat('yyyy');
-    
+
     switch (_currentView) {
       case TimeView.day:
         return dayFormat.format(_selectedDate);
-      
+
       case TimeView.week:
         final range = _getDateRangeForView();
         return 'Semana, de ${dayFormat.format(range.start)} a ${dayFormat.format(range.end.subtract(const Duration(days: 1)))}';
-      
+
       case TimeView.month:
         return monthFormat.format(_selectedDate);
-      
+
       case TimeView.quarter:
         final quarter = ((_selectedDate.month - 1) ~/ 3) + 1;
         return 'Trimestre $quarter ${_selectedDate.year}';
-      
+
       case TimeView.year:
         return yearFormat.format(_selectedDate);
     }
@@ -282,7 +287,8 @@ class _AttendancesPageState extends State<AttendancesPage> {
           try {
             final hrService = context.read<HRService>();
             // TODO: Get current user ID properly
-            await hrService.approveAttendance(attendance.id!, 'current-user-id');
+            await hrService.approveAttendance(
+                attendance.id!, 'current-user-id');
             if (!mounted) return;
             Navigator.of(context).pop();
             _loadData(); // Refresh data
@@ -428,8 +434,8 @@ class _AttendancesPageState extends State<AttendancesPage> {
                 child: Text(
                   _getDateRangeLabel(),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
               ),
             ],
@@ -516,7 +522,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
 
   List<DateTime> _getDaysInRange(DateTimeRange range) {
     final List<DateTime> days = [];
-    
+
     // For year view, return first day of each month (12 columns)
     if (_currentView == TimeView.year) {
       for (int month = 1; month <= 12; month++) {
@@ -524,20 +530,20 @@ class _AttendancesPageState extends State<AttendancesPage> {
       }
       return days;
     }
-    
+
     // For other views, return all days in range
     DateTime current = range.start;
     while (current.isBefore(range.end)) {
       days.add(current);
       current = current.add(const Duration(days: 1));
     }
-    
+
     return days;
   }
 
   Widget _buildGridHeader(List<DateTime> days) {
     final cellHeight = _getCellHeight();
-    
+
     return Row(
       children: [
         Container(
@@ -581,7 +587,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
   Widget _buildDayHeader(DateTime day) {
     final cellWidth = _getCellWidth();
     final cellHeight = _getCellHeight();
-    
+
     final isToday = DateTime.now().year == day.year &&
         DateTime.now().month == day.month &&
         DateTime.now().day == day.day;
@@ -599,14 +605,17 @@ class _AttendancesPageState extends State<AttendancesPage> {
         ),
         textAlign: TextAlign.center,
       );
-    } else if (_currentView == TimeView.quarter || _currentView == TimeView.month) {
+    } else if (_currentView == TimeView.quarter ||
+        _currentView == TimeView.month) {
       // For quarter/month view, show compact day number
       headerContent = Text(
         DateFormat('d').format(day),
         style: TextStyle(
           fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
           fontSize: 12,
-          color: isToday ? Theme.of(context).primaryColor : Theme.of(context).colorScheme.onSurface,
+          color: isToday
+              ? Theme.of(context).primaryColor
+              : Theme.of(context).colorScheme.onSurface,
         ),
         textAlign: TextAlign.center,
       );
@@ -620,7 +629,9 @@ class _AttendancesPageState extends State<AttendancesPage> {
             style: TextStyle(
               fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
               fontSize: 11,
-              color: isToday ? Theme.of(context).primaryColor : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              color: isToday
+                  ? Theme.of(context).primaryColor
+                  : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
             ),
           ),
           const SizedBox(height: 4),
@@ -629,7 +640,9 @@ class _AttendancesPageState extends State<AttendancesPage> {
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 14,
-              color: isToday ? Theme.of(context).primaryColor : Theme.of(context).colorScheme.onSurface,
+              color: isToday
+                  ? Theme.of(context).primaryColor
+                  : Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ],
@@ -642,18 +655,23 @@ class _AttendancesPageState extends State<AttendancesPage> {
       alignment: Alignment.center,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isToday ? Theme.of(context).primaryColor.withOpacity(0.1) : Theme.of(context).colorScheme.surface,
-        border: Border.all(color: isToday ? Theme.of(context).primaryColor : Colors.grey[300]!),
+        color: isToday
+            ? Theme.of(context).primaryColor.withOpacity(0.1)
+            : Theme.of(context).colorScheme.surface,
+        border: Border.all(
+            color:
+                isToday ? Theme.of(context).primaryColor : Colors.grey[300]!),
       ),
       child: headerContent,
     );
   }
 
-  Widget _buildEmployeeRow(Employee employee, List<DateTime> days, int employeeIndex) {
+  Widget _buildEmployeeRow(
+      Employee employee, List<DateTime> days, int employeeIndex) {
     final color = _getEmployeeColor(employeeIndex);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cellHeight = _getCellHeight();
-    
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
@@ -664,7 +682,8 @@ class _AttendancesPageState extends State<AttendancesPage> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[50],
-              border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[300]!),
+              border: Border.all(
+                  color: isDark ? Colors.grey[800]! : Colors.grey[300]!),
             ),
             child: Row(
               children: [
@@ -672,10 +691,13 @@ class _AttendancesPageState extends State<AttendancesPage> {
                   backgroundColor: color,
                   radius: 20,
                   child: employee.photoUrl != null
-                      ? ClipOval(child: Image.network(employee.photoUrl!, fit: BoxFit.cover))
+                      ? ClipOval(
+                          child: Image.network(employee.photoUrl!,
+                              fit: BoxFit.cover))
                       : Text(
                           employee.initials,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                 ),
                 const SizedBox(width: 12),
@@ -716,16 +738,15 @@ class _AttendancesPageState extends State<AttendancesPage> {
   Widget _buildAttendanceCell(Employee employee, DateTime day, Color color) {
     final cellWidth = _getCellWidth();
     final cellHeight = _getCellHeight();
-    
+
     final attendances = _attendancesByEmployee[employee.id] ?? [];
-    
+
     List<Attendance> dayAttendances;
-    
+
     // For year view, get all attendances in the month (day represents first day of month)
     if (_currentView == TimeView.year) {
       dayAttendances = attendances.where((att) {
-        return att.checkIn.year == day.year &&
-            att.checkIn.month == day.month;
+        return att.checkIn.year == day.year && att.checkIn.month == day.month;
       }).toList();
     } else {
       // For other views, get attendances for the specific day
@@ -775,22 +796,23 @@ class _AttendancesPageState extends State<AttendancesPage> {
           } else {
             workedDuration = '--:--';
           }
-          
+
           // Time range (this goes INSIDE parentheses)
           final checkIn = DateFormat('HH:mm').format(attendance.checkIn);
-          final checkInWithSeconds = DateFormat('HH:mm:ss').format(attendance.checkIn);
+          final checkInWithSeconds =
+              DateFormat('HH:mm:ss').format(attendance.checkIn);
           final checkOut = attendance.checkOut != null
               ? DateFormat('HH:mm').format(attendance.checkOut!)
               : '...';
           final checkOutWithSeconds = attendance.checkOut != null
               ? DateFormat('HH:mm:ss').format(attendance.checkOut!)
               : '...';
-          
+
           // Color coding based on status
           Color blockColor;
           Color borderColor;
           Color textColor;
-          
+
           if (attendance.isOngoing) {
             blockColor = Colors.green.shade100;
             borderColor = Colors.green.shade700;
@@ -813,7 +835,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
           String displayText;
           double fontSize;
           EdgeInsets padding;
-          
+
           if (_currentView == TimeView.quarter) {
             // Quarter view: "11:08 (...)" - duration + truncated times
             displayText = '$workedDuration (...)';
@@ -823,7 +845,8 @@ class _AttendancesPageState extends State<AttendancesPage> {
             // Month view: try to fit, truncate if needed
             // Try: "11:08 (14:00-23:08)" or "11:08 (...)" if too long
             final fullText = '$workedDuration ($checkIn-$checkOut)';
-            displayText = fullText.length > 20 ? '$workedDuration (...)' : fullText;
+            displayText =
+                fullText.length > 20 ? '$workedDuration (...)' : fullText;
             fontSize = 9;
             padding = const EdgeInsets.symmetric(horizontal: 4, vertical: 3);
           } else if (_currentView == TimeView.week) {
@@ -833,7 +856,8 @@ class _AttendancesPageState extends State<AttendancesPage> {
             padding = const EdgeInsets.symmetric(horizontal: 6, vertical: 4);
           } else if (_currentView == TimeView.year) {
             // Year view: "07:42 (11:00:00-19:42:14)" - duration + full times with SECONDS
-            displayText = '$workedDuration ($checkInWithSeconds-$checkOutWithSeconds)';
+            displayText =
+                '$workedDuration ($checkInWithSeconds-$checkOutWithSeconds)';
             fontSize = 8;
             padding = const EdgeInsets.symmetric(horizontal: 2, vertical: 2);
           } else {
@@ -846,9 +870,11 @@ class _AttendancesPageState extends State<AttendancesPage> {
           return GestureDetector(
             onTap: () => _showAttendanceDetailDialog(attendance),
             child: Tooltip(
-              message: 'Duración: $workedDuration\nEntrada: $checkIn\nSalida: $checkOut',
+              message:
+                  'Duración: $workedDuration\nEntrada: $checkIn\nSalida: $checkOut',
               child: Container(
-                margin: EdgeInsets.only(bottom: _currentView == TimeView.year ? 1 : 3),
+                margin: EdgeInsets.only(
+                    bottom: _currentView == TimeView.year ? 1 : 3),
                 padding: padding,
                 decoration: BoxDecoration(
                   color: blockColor,
@@ -892,9 +918,7 @@ class _ViewButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: isSelected
-          ? Theme.of(context).primaryColor
-          : Colors.grey[200],
+      color: isSelected ? Theme.of(context).primaryColor : Colors.grey[200],
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onTap,
@@ -933,7 +957,8 @@ class _AttendanceDetailDialog extends StatefulWidget {
   });
 
   @override
-  State<_AttendanceDetailDialog> createState() => _AttendanceDetailDialogState();
+  State<_AttendanceDetailDialog> createState() =>
+      _AttendanceDetailDialogState();
 }
 
 class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
@@ -941,7 +966,7 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
   late DateTime? _checkOut;
   late String _notes;
   late int _overtimeMinutes;
-  
+
   @override
   void initState() {
     super.initState();
@@ -952,8 +977,9 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
   }
 
   Future<void> _pickDateTime(bool isCheckIn) async {
-    final DateTime initialDate = isCheckIn ? _checkIn : (_checkOut ?? DateTime.now());
-    
+    final DateTime initialDate =
+        isCheckIn ? _checkIn : (_checkOut ?? DateTime.now());
+
     // Show date picker
     final DateTime? pickedDate = await showDatePicker(
       context: context,
@@ -961,11 +987,11 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
     );
-    
+
     if (pickedDate == null) return;
-    
+
     if (!mounted) return;
-    
+
     // Show time picker with 24-hour format
     final TimeOfDay? pickedTime = await showTimePicker(
       context: context,
@@ -977,9 +1003,9 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
         );
       },
     );
-    
+
     if (pickedTime == null) return;
-    
+
     final DateTime combined = DateTime(
       pickedDate.year,
       pickedDate.month,
@@ -987,7 +1013,7 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
       pickedTime.hour,
       pickedTime.minute,
     );
-    
+
     setState(() {
       if (isCheckIn) {
         _checkIn = combined;
@@ -1032,7 +1058,7 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
     final textColor = isDark ? Colors.white : Colors.black87;
     final labelColor = isDark ? Colors.grey[400]! : Colors.grey[700]!;
     final inputBgColor = isDark ? const Color(0xFF3C3C3C) : Colors.grey[100]!;
-    
+
     return Dialog(
       backgroundColor: bgColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1050,7 +1076,8 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[100],
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Column(
                 children: [
@@ -1076,7 +1103,7 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                 ],
               ),
             ),
-            
+
             // Content
             Expanded(
               child: SingleChildScrollView(
@@ -1147,7 +1174,7 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    
+
                     // Check-in time
                     Text(
                       'Entrada',
@@ -1161,9 +1188,13 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                     InkWell(
                       onTap: () => _pickDateTime(true),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          border: Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[400]!),
+                          border: Border.all(
+                              color: isDark
+                                  ? Colors.grey[700]!
+                                  : Colors.grey[400]!),
                           borderRadius: BorderRadius.circular(8),
                           color: inputBgColor,
                         ),
@@ -1179,13 +1210,15 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                                 ),
                               ),
                             ),
-                            Icon(Icons.edit, size: 20, color: isDark ? Colors.blue[300] : Colors.blue),
+                            Icon(Icons.edit,
+                                size: 20,
+                                color: isDark ? Colors.blue[300] : Colors.blue),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 24),
-                    
+
                     // Check-out time
                     Text(
                       'Salida',
@@ -1199,9 +1232,13 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                     InkWell(
                       onTap: () => _pickDateTime(false),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          border: Border.all(color: isDark ? Colors.grey[700]! : Colors.grey[400]!),
+                          border: Border.all(
+                              color: isDark
+                                  ? Colors.grey[700]!
+                                  : Colors.grey[400]!),
                           borderRadius: BorderRadius.circular(8),
                           color: inputBgColor,
                         ),
@@ -1210,7 +1247,8 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                             Expanded(
                               child: Text(
                                 _checkOut != null
-                                    ? DateFormat('dd/MM/yyyy HH:mm').format(_checkOut!)
+                                    ? DateFormat('dd/MM/yyyy HH:mm')
+                                        .format(_checkOut!)
                                     : 'No registrado',
                                 style: TextStyle(
                                   fontSize: 16,
@@ -1219,13 +1257,15 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                                 ),
                               ),
                             ),
-                            Icon(Icons.edit, size: 20, color: isDark ? Colors.blue[300] : Colors.blue),
+                            Icon(Icons.edit,
+                                size: 20,
+                                color: isDark ? Colors.blue[300] : Colors.blue),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 24),
-                    
+
                     // Worked time
                     Text(
                       'Tiempo trabajado',
@@ -1237,7 +1277,8 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                     ),
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: inputBgColor,
                         borderRadius: BorderRadius.circular(8),
@@ -1256,7 +1297,7 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    
+
                     // Overtime (Horas extra)
                     Text(
                       'Horas extra',
@@ -1288,7 +1329,7 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    
+
                     // Notes
                     Text(
                       'Notas',
@@ -1314,11 +1355,17 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                         fillColor: inputBgColor,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey[400]!),
+                          borderSide: BorderSide(
+                              color: isDark
+                                  ? Colors.grey[700]!
+                                  : Colors.grey[400]!),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey[400]!),
+                          borderSide: BorderSide(
+                              color: isDark
+                                  ? Colors.grey[700]!
+                                  : Colors.grey[400]!),
                         ),
                       ),
                     ),
@@ -1326,27 +1373,30 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                 ),
               ),
             ),
-            
+
             // Footer buttons
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[100],
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                borderRadius:
+                    const BorderRadius.vertical(bottom: Radius.circular(12)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   TextButton.icon(
                     icon: const Icon(Icons.delete, color: Colors.red),
-                    label: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+                    label: const Text('Eliminar',
+                        style: TextStyle(color: Colors.red)),
                     onPressed: () {
                       // Confirm deletion
                       showDialog(
                         context: context,
                         builder: (ctx) => AlertDialog(
                           title: const Text('Confirmar eliminación'),
-                          content: const Text('¿Está seguro que desea eliminar esta asistencia?'),
+                          content: const Text(
+                              '¿Está seguro que desea eliminar esta asistencia?'),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.of(ctx).pop(),
@@ -1357,7 +1407,8 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                                 Navigator.of(ctx).pop();
                                 widget.onDelete();
                               },
-                              child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+                              child: const Text('Eliminar',
+                                  style: TextStyle(color: Colors.red)),
                             ),
                           ],
                         ),
@@ -1376,7 +1427,8 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF714B67),
                         ),
-                        child: const Text('Guardar y cerrar', style: TextStyle(color: Colors.white)),
+                        child: const Text('Guardar y cerrar',
+                            style: TextStyle(color: Colors.white)),
                       ),
                     ],
                   ),
@@ -1391,10 +1443,13 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
 
   Widget _buildStatusWorkflow() {
     final status = widget.attendance.status;
-    
+
     return Row(
       children: [
-        _buildStatusChip('Por aprobar', status == AttendanceStatus.ongoing || status == AttendanceStatus.completed),
+        _buildStatusChip(
+            'Por aprobar',
+            status == AttendanceStatus.ongoing ||
+                status == AttendanceStatus.completed),
         const SizedBox(width: 8),
         const Icon(Icons.chevron_right, color: Colors.grey),
         const SizedBox(width: 8),
@@ -1413,7 +1468,8 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
       decoration: BoxDecoration(
         color: isActive ? const Color(0xFF4DD0E1) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isActive ? const Color(0xFF4DD0E1) : Colors.grey[400]!),
+        border: Border.all(
+            color: isActive ? const Color(0xFF4DD0E1) : Colors.grey[400]!),
       ),
       child: Text(
         label,

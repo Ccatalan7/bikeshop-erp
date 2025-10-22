@@ -82,11 +82,11 @@ class PaymentMethod {
   );
 
   static List<PaymentMethod> get defaultMethods => [
-    cash,
-    card,
-    voucher,
-    transfer,
-  ];
+        cash,
+        card,
+        voucher,
+        transfer,
+      ];
 
   @override
   String toString() => 'PaymentMethod(name: $name, type: $type)';
@@ -94,7 +94,9 @@ class PaymentMethod {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PaymentMethod && runtimeType == other.runtimeType && id == other.id;
+      other is PaymentMethod &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
 
   @override
   int get hashCode => id.hashCode;

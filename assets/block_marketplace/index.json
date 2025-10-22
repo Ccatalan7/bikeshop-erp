@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "blocks": [
+    "hero.block.json",
+    "carousel.block.json",
+    "products.block.json",
+    "services.block.json",
+    "about.block.json",
+    "testimonials.block.json",
+    "features.block.json",
+    "cta.block.json",
+    "gallery.block.json",
+    "contact.block.json",
+    "faq.block.json",
+    "pricing.block.json",
+    "team.block.json",
+    "stats.block.json",
+    "footer.block.json"
+  ]
+}

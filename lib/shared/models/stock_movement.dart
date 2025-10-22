@@ -4,7 +4,8 @@ class StockMovement {
   final String productSku;
   final String productName;
   final String type; // 'IN' or 'OUT'
-  final String? movementType; // 'sales_invoice', 'purchase_invoice', 'adjustment', etc.
+  final String?
+      movementType; // 'sales_invoice', 'purchase_invoice', 'adjustment', etc.
   final double quantity; // Positive for IN, negative for OUT
   final String? reference;
   final String? notes;

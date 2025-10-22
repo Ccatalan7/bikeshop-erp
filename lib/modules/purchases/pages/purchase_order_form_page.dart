@@ -6,7 +6,7 @@ import '../../../shared/widgets/app_button.dart';
 
 class PurchaseOrderFormPage extends StatefulWidget {
   final String? orderId;
-  
+
   const PurchaseOrderFormPage({super.key, this.orderId});
 
   @override
@@ -35,9 +35,7 @@ class _PurchaseOrderFormPageState extends State<PurchaseOrderFormPage> {
                   ),
                   Expanded(
                     child: Text(
-                      widget.orderId != null 
-                          ? 'Editar Orden'
-                          : 'Nueva Orden',
+                      widget.orderId != null ? 'Editar Orden' : 'Nueva Orden',
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -56,7 +54,7 @@ class _PurchaseOrderFormPageState extends State<PurchaseOrderFormPage> {
                 ],
               ),
             ),
-            
+
             Expanded(
               child: Center(
                 child: Column(

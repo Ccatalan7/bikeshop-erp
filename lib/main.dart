@@ -33,7 +33,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (!SupabaseConfig.isConfigured && kDebugMode) {
-    debugPrint('[Supabase] WARNING: SupabaseConfig still has placeholder values. '
+    debugPrint(
+        '[Supabase] WARNING: SupabaseConfig still has placeholder values. '
         'Update lib/shared/config/supabase_config.dart or provide dart-defines.');
   }
 
@@ -87,57 +88,69 @@ class VinabikeApp extends StatelessWidget {
           return service;
         }),
         ChangeNotifierProvider(create: (_) => NavigationService()),
-        
+
         // Business services
-        ChangeNotifierProvider(create: (context) => InventoryService(
-          db: Provider.of<DatabaseService>(context, listen: false),
-        )),
-        ChangeNotifierProvider(create: (context) => CategoryService(
-          Provider.of<DatabaseService>(context, listen: false),
-        )),
-        ChangeNotifierProvider(create: (context) => CustomerService(
-          Provider.of<DatabaseService>(context, listen: false),
-        )),
-        ChangeNotifierProvider(create: (context) => BikeshopService(
-          Provider.of<DatabaseService>(context, listen: false),
-        )),
-        ChangeNotifierProvider(create: (context) => AccountingService(
-          Provider.of<DatabaseService>(context, listen: false),
-        )),
-        ChangeNotifierProvider(create: (context) => FinancialReportsService(
-          Provider.of<DatabaseService>(context, listen: false),
-        )),
-        ChangeNotifierProvider(create: (context) => PurchaseService(
-          Provider.of<DatabaseService>(context, listen: false),
-        )),
+        ChangeNotifierProvider(
+            create: (context) => InventoryService(
+                  db: Provider.of<DatabaseService>(context, listen: false),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => CategoryService(
+                  Provider.of<DatabaseService>(context, listen: false),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => CustomerService(
+                  Provider.of<DatabaseService>(context, listen: false),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => BikeshopService(
+                  Provider.of<DatabaseService>(context, listen: false),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => AccountingService(
+                  Provider.of<DatabaseService>(context, listen: false),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => FinancialReportsService(
+                  Provider.of<DatabaseService>(context, listen: false),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => PurchaseService(
+                  Provider.of<DatabaseService>(context, listen: false),
+                )),
         ChangeNotifierProvider(create: (_) => HRService()),
         ChangeNotifierProvider(create: (_) => WebsiteService()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
-        ChangeNotifierProxyProvider2<DatabaseService, AccountingService, SalesService>(
+        ChangeNotifierProxyProvider2<DatabaseService, AccountingService,
+            SalesService>(
           create: (context) => SalesService(
             context.read<DatabaseService>(),
             context.read<AccountingService>(),
           ),
           update: (context, databaseService, accountingService, previous) {
-            final service = previous ?? SalesService(databaseService, accountingService);
+            final service =
+                previous ?? SalesService(databaseService, accountingService);
             service.updateDependencies(databaseService, accountingService);
             return service;
           },
         ),
-        
+
         // POS service depends on Inventory, Sales, and PaymentMethod
-        ChangeNotifierProxyProvider3<InventoryService, SalesService, PaymentMethodService, POSService>(
+        ChangeNotifierProxyProvider3<InventoryService, SalesService,
+            PaymentMethodService, POSService>(
           create: (context) => POSService(
             inventoryService: context.read<InventoryService>(),
             salesService: context.read<SalesService>(),
             paymentMethodService: context.read<PaymentMethodService>(),
           ),
-          update: (context, inventoryService, salesService, paymentMethodService, previous) {
-            final service = previous ?? POSService(
-              inventoryService: inventoryService,
-              salesService: salesService,
-              paymentMethodService: paymentMethodService,
-            );
+          update: (context, inventoryService, salesService,
+              paymentMethodService, previous) {
+            final service = previous ??
+                POSService(
+                  inventoryService: inventoryService,
+                  salesService: salesService,
+                  paymentMethodService: paymentMethodService,
+                );
             service.updateDependencies(
               inventoryService: inventoryService,
               salesService: salesService,
@@ -150,9 +163,10 @@ class VinabikeApp extends StatelessWidget {
       child: Builder(
         builder: (context) {
           // Initialize purchase service dependency
-          final accountingService = Provider.of<AccountingService>(context, listen: false);
+          final accountingService =
+              Provider.of<AccountingService>(context, listen: false);
           PurchaseService.setAccountingService(accountingService);
-          
+
           final authService = context.read<AuthService>();
           final isPublicStoreHost = _detectPublicStoreHost();
 

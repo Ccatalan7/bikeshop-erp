@@ -74,7 +74,7 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
     final theme = Theme.of(context);
     final websiteService = context.watch<WebsiteService>();
     final featured = websiteService.featuredProducts;
-    
+
     // Get full product details for featured products
     final featuredProductDetails = featured
         .map((fp) => _allProducts.firstWhere(
@@ -209,7 +209,8 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      Icon(Icons.add_circle_outline, color: theme.colorScheme.primary),
+                      Icon(Icons.add_circle_outline,
+                          color: theme.colorScheme.primary),
                       const SizedBox(width: 8),
                       Text(
                         'Agregar Productos',
@@ -262,7 +263,8 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
                               ),
                             )
                           : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
                               itemCount: _filteredProducts.length,
                               itemBuilder: (context, index) {
                                 final product = _filteredProducts[index];
@@ -300,7 +302,8 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
           children: [
             // Image
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(8)),
               child: product.imageUrl != null
                   ? CachedNetworkImage(
                       imageUrl: product.imageUrl!,
@@ -513,4 +516,3 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
     }
   }
 }
-

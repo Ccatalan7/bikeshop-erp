@@ -12,43 +12,43 @@ class WebsiteSettingsPage extends StatefulWidget {
 
 class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
   final _formKey = GlobalKey<FormState>();
-  
+
   // Store info
   late final TextEditingController _storeNameController;
   late final TextEditingController _storeUrlController;
   late final TextEditingController _storeDescriptionController;
-  
+
   // Contact info
   late final TextEditingController _contactEmailController;
   late final TextEditingController _contactPhoneController;
   late final TextEditingController _contactAddressController;
   late final TextEditingController _whatsappController;
-  
+
   // Social media
   late final TextEditingController _facebookController;
   late final TextEditingController _instagramController;
   late final TextEditingController _twitterController;
   late final TextEditingController _youtubeController;
-  
+
   // SEO
   late final TextEditingController _metaTitleController;
   late final TextEditingController _metaDescriptionController;
   late final TextEditingController _metaKeywordsController;
-  
+
   // Feature toggles
   bool _enableOrders = true;
   bool _showPrices = true;
   bool _requireLogin = false;
   bool _enableReviews = false;
   bool _showStock = true;
-  
+
   bool _isLoading = false;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize controllers
     _storeNameController = TextEditingController();
     _storeUrlController = TextEditingController();
@@ -64,7 +64,7 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
     _metaTitleController = TextEditingController();
     _metaDescriptionController = TextEditingController();
     _metaKeywordsController = TextEditingController();
-    
+
     // Load settings
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSettings();
@@ -92,40 +92,57 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
 
   Future<void> _loadSettings() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final service = context.read<WebsiteService>();
       await service.loadSettings();
-      
+
       if (mounted) {
         setState(() {
           // Store info
-          _storeNameController.text = service.getSetting('store_name', 'Vinabike');
-          _storeUrlController.text = service.getSetting('store_url', 'https://tienda.vinabike.cl');
-          _storeDescriptionController.text = service.getSetting('store_description', 'Tienda de bicicletas y accesorios en Chile');
-          
+          _storeNameController.text =
+              service.getSetting('store_name', 'Vinabike');
+          _storeUrlController.text =
+              service.getSetting('store_url', 'https://tienda.vinabike.cl');
+          _storeDescriptionController.text = service.getSetting(
+              'store_description',
+              'Tienda de bicicletas y accesorios en Chile');
+
           // Contact
-          _contactEmailController.text = service.getSetting('contact_email', 'contacto@vinabike.cl');
-          _contactPhoneController.text = service.getSetting('contact_phone', '+56 2 2345 6789');
-          _contactAddressController.text = service.getSetting('contact_address', 'Av. Providencia 123, Santiago');
-          _whatsappController.text = service.getSetting('whatsapp', '+56912345678');
-          
+          _contactEmailController.text =
+              service.getSetting('contact_email', 'contacto@vinabike.cl');
+          _contactPhoneController.text =
+              service.getSetting('contact_phone', '+56 2 2345 6789');
+          _contactAddressController.text = service.getSetting(
+              'contact_address', 'Av. Providencia 123, Santiago');
+          _whatsappController.text =
+              service.getSetting('whatsapp', '+56912345678');
+
           // Social media
-          _facebookController.text = service.getSetting('facebook', 'vinabikechile');
-          _instagramController.text = service.getSetting('instagram', '@vinabikecl');
+          _facebookController.text =
+              service.getSetting('facebook', 'vinabikechile');
+          _instagramController.text =
+              service.getSetting('instagram', '@vinabikecl');
           _twitterController.text = service.getSetting('twitter', '@vinabike');
-          _youtubeController.text = service.getSetting('youtube', '@vinabikechannel');
-          
+          _youtubeController.text =
+              service.getSetting('youtube', '@vinabikechannel');
+
           // SEO
-          _metaTitleController.text = service.getSetting('meta_title', 'Vinabike - Tienda de Bicicletas');
-          _metaDescriptionController.text = service.getSetting('meta_description', 'Las mejores bicicletas y accesorios en Chile. Envío a todo el país.');
-          _metaKeywordsController.text = service.getSetting('meta_keywords', 'bicicletas, mtb, ruta, accesorios, ciclismo, chile');
-          
+          _metaTitleController.text = service.getSetting(
+              'meta_title', 'Vinabike - Tienda de Bicicletas');
+          _metaDescriptionController.text = service.getSetting(
+              'meta_description',
+              'Las mejores bicicletas y accesorios en Chile. Envío a todo el país.');
+          _metaKeywordsController.text = service.getSetting('meta_keywords',
+              'bicicletas, mtb, ruta, accesorios, ciclismo, chile');
+
           // Feature toggles
           _enableOrders = service.getSetting('enable_orders', 'true') == 'true';
           _showPrices = service.getSetting('show_prices', 'true') == 'true';
-          _requireLogin = service.getSetting('require_login', 'false') == 'true';
-          _enableReviews = service.getSetting('enable_reviews', 'false') == 'true';
+          _requireLogin =
+              service.getSetting('require_login', 'false') == 'true';
+          _enableReviews =
+              service.getSetting('enable_reviews', 'false') == 'true';
           _showStock = service.getSetting('show_stock', 'true') == 'true';
         });
       }
@@ -271,7 +288,8 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                         decoration: InputDecoration(
                           labelText: 'Facebook',
                           hintText: 'usuario o URL',
-                          prefixIcon: Icon(Icons.facebook, color: Colors.blue[700]),
+                          prefixIcon:
+                              Icon(Icons.facebook, color: Colors.blue[700]),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -280,7 +298,8 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                         decoration: InputDecoration(
                           labelText: 'Instagram',
                           hintText: '@usuario',
-                          prefixIcon: Icon(Icons.camera_alt, color: Colors.pink[400]),
+                          prefixIcon:
+                              Icon(Icons.camera_alt, color: Colors.pink[400]),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -289,7 +308,8 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                         decoration: InputDecoration(
                           labelText: 'Twitter / X',
                           hintText: '@usuario',
-                          prefixIcon: Icon(Icons.alternate_email, color: Colors.blue[400]),
+                          prefixIcon: Icon(Icons.alternate_email,
+                              color: Colors.blue[400]),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -298,7 +318,8 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                         decoration: InputDecoration(
                           labelText: 'YouTube',
                           hintText: '@canal',
-                          prefixIcon: Icon(Icons.video_library, color: Colors.red[600]),
+                          prefixIcon:
+                              Icon(Icons.video_library, color: Colors.red[600]),
                         ),
                       ),
                     ],
@@ -327,7 +348,8 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                         controller: _metaDescriptionController,
                         decoration: const InputDecoration(
                           labelText: 'Meta Descripción',
-                          hintText: 'Descripción que aparece en resultados de búsqueda',
+                          hintText:
+                              'Descripción que aparece en resultados de búsqueda',
                           prefixIcon: Icon(Icons.description),
                           helperText: 'Máximo 160 caracteres',
                         ),
@@ -358,9 +380,11 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                     children: [
                       SwitchListTile(
                         title: const Text('Habilitar Pedidos Online'),
-                        subtitle: const Text('Los clientes pueden hacer compras'),
+                        subtitle:
+                            const Text('Los clientes pueden hacer compras'),
                         value: _enableOrders,
-                        onChanged: (value) => setState(() => _enableOrders = value),
+                        onChanged: (value) =>
+                            setState(() => _enableOrders = value),
                         secondary: Icon(
                           Icons.shopping_cart,
                           color: _enableOrders ? Colors.green : Colors.grey,
@@ -369,9 +393,11 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                       const Divider(),
                       SwitchListTile(
                         title: const Text('Mostrar Precios'),
-                        subtitle: const Text('Precios visibles para visitantes'),
+                        subtitle:
+                            const Text('Precios visibles para visitantes'),
                         value: _showPrices,
-                        onChanged: (value) => setState(() => _showPrices = value),
+                        onChanged: (value) =>
+                            setState(() => _showPrices = value),
                         secondary: Icon(
                           Icons.attach_money,
                           color: _showPrices ? Colors.green : Colors.grey,
@@ -382,7 +408,8 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                         title: const Text('Mostrar Stock'),
                         subtitle: const Text('Cantidad disponible visible'),
                         value: _showStock,
-                        onChanged: (value) => setState(() => _showStock = value),
+                        onChanged: (value) =>
+                            setState(() => _showStock = value),
                         secondary: Icon(
                           Icons.inventory,
                           color: _showStock ? Colors.green : Colors.grey,
@@ -393,7 +420,8 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                         title: const Text('Requiere Login para Comprar'),
                         subtitle: const Text('Los clientes deben crear cuenta'),
                         value: _requireLogin,
-                        onChanged: (value) => setState(() => _requireLogin = value),
+                        onChanged: (value) =>
+                            setState(() => _requireLogin = value),
                         secondary: Icon(
                           Icons.login,
                           color: _requireLogin ? Colors.orange : Colors.grey,
@@ -402,9 +430,11 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                       const Divider(),
                       SwitchListTile(
                         title: const Text('Habilitar Reseñas'),
-                        subtitle: const Text('Los clientes pueden dejar comentarios'),
+                        subtitle:
+                            const Text('Los clientes pueden dejar comentarios'),
                         value: _enableReviews,
-                        onChanged: (value) => setState(() => _enableReviews = value),
+                        onChanged: (value) =>
+                            setState(() => _enableReviews = value),
                         secondary: Icon(
                           Icons.star,
                           color: _enableReviews ? Colors.amber : Colors.grey,
@@ -425,7 +455,8 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.save),
-                    label: Text(_isSaving ? 'Guardando...' : 'Guardar Configuración'),
+                    label: Text(
+                        _isSaving ? 'Guardando...' : 'Guardar Configuración'),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       minimumSize: const Size.fromHeight(50),
@@ -489,31 +520,31 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
 
     try {
       final service = context.read<WebsiteService>();
-      
+
       // Save all settings
       final settings = {
         // Store
         'store_name': _storeNameController.text,
         'store_url': _storeUrlController.text,
         'store_description': _storeDescriptionController.text,
-        
+
         // Contact
         'contact_email': _contactEmailController.text,
         'contact_phone': _contactPhoneController.text,
         'contact_address': _contactAddressController.text,
         'whatsapp': _whatsappController.text,
-        
+
         // Social
         'facebook': _facebookController.text,
         'instagram': _instagramController.text,
         'twitter': _twitterController.text,
         'youtube': _youtubeController.text,
-        
+
         // SEO
         'meta_title': _metaTitleController.text,
         'meta_description': _metaDescriptionController.text,
         'meta_keywords': _metaKeywordsController.text,
-        
+
         // Features
         'enable_orders': _enableOrders.toString(),
         'show_prices': _showPrices.toString(),
@@ -550,4 +581,3 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
     }
   }
 }
-

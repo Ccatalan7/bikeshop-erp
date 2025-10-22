@@ -51,7 +51,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   // 🗑️ TEMP: Quick delete for testing (no confirmation)
   Future<void> _quickDeleteInvoice(Invoice invoice) async {
     final salesService = context.read<SalesService>();
-    
+
     // Check if invoice has ID
     if (invoice.id == null || invoice.id!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -62,13 +62,13 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       );
       return;
     }
-    
+
     try {
       // Delete invoice directly
       await salesService.deleteInvoice(invoice.id!);
-      
+
       if (!mounted) return;
-      
+
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -77,12 +77,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           duration: const Duration(seconds: 1),
         ),
       );
-      
+
       // Refresh list
       await _refreshInvoices(showErrors: false);
     } catch (e) {
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
@@ -129,13 +129,13 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               ],
             ),
           ),
-          
+
           // Search
           SearchWidget(
             hintText: 'Buscar por cliente o referencia...',
             onSearchChanged: _onSearchChanged,
           ),
-          
+
           // Content
           Expanded(
             child: isLoading
@@ -160,7 +160,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              _searchTerm.isEmpty 
+              _searchTerm.isEmpty
                   ? 'No hay facturas registradas'
                   : 'No se encontraron facturas',
               style: TextStyle(
@@ -250,7 +250,6 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 ],
               ),
               const SizedBox(height: 12),
-              
               Row(
                 children: [
                   Icon(
@@ -306,10 +305,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                     tooltip: 'Eliminar (Testing)',
                     iconSize: 20,
                   ),
-                  if (invoice.balance > 0 && invoice.status != InvoiceStatus.cancelled)
+                  if (invoice.balance > 0 &&
+                      invoice.status != InvoiceStatus.cancelled)
                     TextButton.icon(
                       onPressed: () {
-                        context.push('/sales/invoices/${invoice.id}', extra: {'openPayment': true}).then((_) {
+                        context.push('/sales/invoices/${invoice.id}',
+                            extra: {'openPayment': true}).then((_) {
                           _refreshInvoices(showErrors: false);
                         });
                       },

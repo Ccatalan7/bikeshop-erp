@@ -38,15 +38,15 @@ class ReceiptPreview extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            
+
             Text(
               'Venta de Bicicletas y Accesorios',
               style: theme.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
-            
+
             const Divider(height: 24),
-            
+
             // Receipt info
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -60,18 +60,19 @@ class ReceiptPreview extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Fecha:', style: theme.textTheme.bodyMedium),
                 Text(
-                  dateFormat.format(transaction.completedAt ?? transaction.createdAt),
+                  dateFormat
+                      .format(transaction.completedAt ?? transaction.createdAt),
                   style: theme.textTheme.bodyMedium,
                 ),
               ],
             ),
-            
+
             if (transaction.customer != null) ...[
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -88,57 +89,57 @@ class ReceiptPreview extends StatelessWidget {
                 ],
               ),
             ],
-            
+
             const Divider(height: 24),
-            
+
             // Items
             ...transaction.items.map((item) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          item.product.name,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.product.name,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w500,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          Text(
+                            '\$${item.total.toStringAsFixed(0)}',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
                       ),
-                      Text(
-                        '\$${item.total.toStringAsFixed(0)}',
-                        style: theme.textTheme.bodyMedium,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '  ${item.quantity} x \$${item.unitPrice.toStringAsFixed(0)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          if (item.discount > 0)
+                            Text(
+                              'Desc. ${item.discount.toStringAsFixed(0)}%',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.tertiary,
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '  ${item.quantity} x \$${item.unitPrice.toStringAsFixed(0)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      if (item.discount > 0)
-                        Text(
-                          'Desc. ${item.discount.toStringAsFixed(0)}%',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.tertiary,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            )),
-            
+                )),
+
             const Divider(height: 24),
-            
+
             // Totals
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -150,7 +151,7 @@ class ReceiptPreview extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             if (transaction.discountAmount > 0)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -164,7 +165,7 @@ class ReceiptPreview extends StatelessWidget {
                   ),
                 ],
               ),
-            
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -175,9 +176,9 @@ class ReceiptPreview extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             const Divider(height: 16),
-            
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -195,24 +196,24 @@ class ReceiptPreview extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             // Payment methods
             const Divider(height: 24),
-            
+
             ...transaction.payments.map((payment) => Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  payment.method.name,
-                  style: theme.textTheme.bodyMedium,
-                ),
-                Text(
-                  '\$${payment.amount.toStringAsFixed(0)}',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
-            )),
-            
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      payment.method.name,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    Text(
+                      '\$${payment.amount.toStringAsFixed(0)}',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                )),
+
             if (transaction.changeAmount > 0) ...[
               const SizedBox(height: 8),
               Row(
@@ -233,9 +234,9 @@ class ReceiptPreview extends StatelessWidget {
                 ],
               ),
             ],
-            
+
             const Divider(height: 24),
-            
+
             // Footer
             Text(
               '¡Gracias por su compra!',
@@ -244,9 +245,9 @@ class ReceiptPreview extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             Text(
               'Garantía 30 días',
               style: theme.textTheme.bodySmall?.copyWith(
@@ -254,7 +255,7 @@ class ReceiptPreview extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            
+
             // Actions
             if (showActions) ...[
               const SizedBox(height: 16),
@@ -268,10 +269,8 @@ class ReceiptPreview extends StatelessWidget {
                         label: const Text('Imprimir'),
                       ),
                     ),
-                  
                   if (onPrint != null && onShare != null)
                     const SizedBox(width: 8),
-                  
                   if (onShare != null)
                     Expanded(
                       child: OutlinedButton.icon(

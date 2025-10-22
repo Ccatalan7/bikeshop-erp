@@ -7,7 +7,7 @@ class AppButton extends StatelessWidget {
   final bool isLoading;
   final IconData? icon;
   final double? width;
-  
+
   const AppButton({
     super.key,
     required this.text,
@@ -17,14 +17,14 @@ class AppButton extends StatelessWidget {
     this.icon,
     this.width,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     Color backgroundColor;
     Color foregroundColor;
-    
+
     switch (type) {
       case ButtonType.primary:
         backgroundColor = theme.primaryColor;
@@ -43,7 +43,7 @@ class AppButton extends StatelessWidget {
         foregroundColor = theme.primaryColor;
         break;
     }
-    
+
     Widget buttonChild = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -64,7 +64,7 @@ class AppButton extends StatelessWidget {
         Text(text),
       ],
     );
-    
+
     if (type == ButtonType.outline) {
       return SizedBox(
         width: width,
@@ -82,7 +82,7 @@ class AppButton extends StatelessWidget {
         ),
       );
     }
-    
+
     return SizedBox(
       width: width,
       child: ElevatedButton(

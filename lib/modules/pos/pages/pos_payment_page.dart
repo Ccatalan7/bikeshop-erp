@@ -28,7 +28,8 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
   shared_customer.Customer? _selectedCustomer;
   List<shared_customer.Customer> _customers = [];
   bool _isLoadingCustomers = true;
-  final TextEditingController _customerSearchController = TextEditingController();
+  final TextEditingController _customerSearchController =
+      TextEditingController();
 
   @override
   void initState() {
@@ -55,9 +56,10 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
 
   Future<void> _loadCustomers() async {
     try {
-      final customerService = Provider.of<CustomerService>(context, listen: false);
-  final crmCustomers = await customerService.getCustomers();
-  final mappedCustomers = crmCustomers
+      final customerService =
+          Provider.of<CustomerService>(context, listen: false);
+      final crmCustomers = await customerService.getCustomers();
+      final mappedCustomers = crmCustomers
           .where((customer) => (customer.id ?? '').isNotEmpty)
           .map(_mapCrmCustomer)
           .toList()
@@ -198,26 +200,33 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Subtotal:', style: theme.textTheme.bodyLarge),
-                                Text('\$${posService.cartNetAmount.toStringAsFixed(0)}'),
+                                Text('Subtotal:',
+                                    style: theme.textTheme.bodyLarge),
+                                Text(
+                                    '\$${posService.cartNetAmount.toStringAsFixed(0)}'),
                               ],
                             ),
                             if (posService.cartDiscountAmount > 0)
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('Descuento:', style: theme.textTheme.bodyLarge),
+                                  Text('Descuento:',
+                                      style: theme.textTheme.bodyLarge),
                                   Text(
                                     '-\$${posService.cartDiscountAmount.toStringAsFixed(0)}',
-                                    style: TextStyle(color: theme.colorScheme.error),
+                                    style: TextStyle(
+                                        color: theme.colorScheme.error),
                                   ),
                                 ],
                               ),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('IVA (19%):', style: theme.textTheme.bodyLarge),
-                                Text('\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
+                                Text('IVA (19%):',
+                                    style: theme.textTheme.bodyLarge),
+                                Text(
+                                    '\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
                               ],
                             ),
                             const Divider(),
@@ -226,13 +235,15 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                               children: [
                                 Text(
                                   'TOTAL:',
-                                  style: theme.textTheme.headlineSmall?.copyWith(
+                                  style:
+                                      theme.textTheme.headlineSmall?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 Text(
                                   '\$${posService.cartTotal.toStringAsFixed(0)}',
-                                  style: theme.textTheme.headlineSmall?.copyWith(
+                                  style:
+                                      theme.textTheme.headlineSmall?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: theme.colorScheme.primary,
                                   ),
@@ -271,9 +282,10 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                             child: Text('Cliente Genérico'),
                           ),
                           ..._customers.map((customer) {
-                            final identifier = (customer.rut?.isNotEmpty ?? false)
-                                ? customer.rut!
-                                : (customer.email ?? 'Sin RUT');
+                            final identifier =
+                                (customer.rut?.isNotEmpty ?? false)
+                                    ? customer.rut!
+                                    : (customer.email ?? 'Sin RUT');
                             return DropdownMenuItem<shared_customer.Customer?>(
                               value: customer,
                               child: Text('${customer.name} - $identifier'),
@@ -298,7 +310,8 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                     PaymentMethodSelector(
                       paymentMethods: PaymentMethod.defaultMethods,
                       selectedMethod: _selectedPaymentMethod,
-                      showAmountInput: false, // Parent page handles amount input
+                      showAmountInput:
+                          false, // Parent page handles amount input
                       onMethodSelected: (method) {
                         setState(() {
                           _selectedPaymentMethod = method;
@@ -369,10 +382,12 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.check),
-                        label: Text(_isProcessing ? 'Procesando...' : 'Confirmar Pago'),
+                        label: Text(
+                            _isProcessing ? 'Procesando...' : 'Confirmar Pago'),
                         style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),

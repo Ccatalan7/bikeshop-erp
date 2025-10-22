@@ -126,7 +126,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         }
       } else {
         _invoiceNumberController.text = _buildSuggestedNumber();
-        
+
         // Preselect customer if coming from a job
         if (widget.preselectedJobId != null) {
           await _loadJobAndPreselectCustomer(widget.preselectedJobId!);
@@ -228,12 +228,12 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       // Get database service from context
       final db = Provider.of<DatabaseService>(context, listen: false);
       final jobData = await db.selectById('mechanic_jobs', jobId);
-      
+
       if (jobData != null) {
         final customerId = jobData['customer_id'] as String?;
         if (customerId != null) {
           _preselectCustomer(customerId);
-          
+
           // Set reference to job number
           final jobNumber = jobData['job_number'] as String?;
           if (jobNumber != null) {
@@ -247,7 +247,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   void _preselectCustomer(String customerId) {
-    final customer = _cachedCustomers.where((c) => c.id == customerId).firstOrNull;
+    final customer =
+        _cachedCustomers.where((c) => c.id == customerId).firstOrNull;
     if (customer != null) {
       setState(() {
         _selectedCustomer = customer;

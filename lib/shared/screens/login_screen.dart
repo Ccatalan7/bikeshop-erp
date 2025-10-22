@@ -41,7 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _emailController.text.trim(),
         _passwordController.text,
       );
-      
+
       if (mounted) {
         context.go('/dashboard');
       }
@@ -149,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       final success = await authService.signInWithGoogle();
-      
+
       if (success && mounted) {
         // The auth state listener will handle navigation
         context.go('/dashboard');
@@ -167,7 +167,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al iniciar sesión con Google: ${e.toString()}'),
+            content:
+                Text('Error al iniciar sesión con Google: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -216,7 +217,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: Colors.blue,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Title
                   const Text(
                     'Vinabike ERP',
@@ -264,7 +265,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                          _obscurePassword
+                              ? Icons.visibility
+                              : Icons.visibility_off,
                         ),
                         onPressed: () {
                           setState(() => _obscurePassword = !_obscurePassword);
@@ -346,7 +349,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
                       height: 20,
                       width: 20,
-                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, size: 20),
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.g_mobiledata, size: 20),
                     ),
                     label: const Text('Continuar con Google'),
                     style: OutlinedButton.styleFrom(

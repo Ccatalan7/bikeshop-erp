@@ -99,8 +99,14 @@ class FactoryResetService {
         break;
 
       case 'purchases':
-        await _supabase.from('purchase_payments').delete().not('id', 'is', null);
-        await _supabase.from('purchase_invoices').delete().not('id', 'is', null);
+        await _supabase
+            .from('purchase_payments')
+            .delete()
+            .not('id', 'is', null);
+        await _supabase
+            .from('purchase_invoices')
+            .delete()
+            .not('id', 'is', null);
         break;
 
       case 'inventory':
@@ -151,10 +157,7 @@ class FactoryResetService {
 
       for (final table in tables) {
         try {
-          final response = await _supabase
-              .from(table)
-              .select()
-              .count();
+          final response = await _supabase.from(table).select().count();
           stats[table] = response.count ?? 0;
         } catch (e) {
           // Table might not exist or RLS might prevent access

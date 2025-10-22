@@ -1,0 +1,82 @@
+{
+  "type": "features",
+  "title": "Características",
+  "description": "Lista atributos destacados, diferenciales o garantías del negocio.",
+  "usesCustomEditor": false,
+  "category": "Contenido",
+  "tags": ["features", "ventajas", "servicios"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Por qué elegirnos",
+    "features": [
+      {
+        "icon": "verified",
+        "title": "Servicio certificado",
+        "description": "Técnicos con amplia experiencia en bicicletas."
+      },
+      {
+        "icon": "pedal_bike",
+        "title": "Variedad de productos",
+        "description": "Catálogo actualizado con las mejores marcas."
+      },
+      {
+        "icon": "support_agent",
+        "title": "Acompañamiento experto",
+        "description": "Te ayudamos a elegir la bicicleta perfecta."
+      }
+    ]
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título principal",
+      "type": "text",
+      "defaultValue": "Por qué elegirnos",
+      "group": "content"
+    },
+    {
+      "key": "features",
+      "label": "Características",
+      "type": "repeater",
+      "itemLabel": "Característica",
+      "minItems": 1,
+      "itemFields": [
+        {
+          "key": "icon",
+          "label": "Ícono",
+          "type": "select",
+          "defaultValue": "verified",
+          "options": [
+            {"value": "verified", "label": "Certificado"},
+            {"value": "pedal_bike", "label": "Bicicleta"},
+            {"value": "support_agent", "label": "Soporte"},
+            {"value": "build", "label": "Taller"},
+            {"value": "shopping_bag", "label": "Compras"},
+            {"value": "favorite", "label": "Favorito"},
+            {"value": "star", "label": "Estrella"}
+          ]
+        },
+        {
+          "key": "title",
+          "label": "Título",
+          "type": "text",
+          "defaultValue": "Ventaja"
+        },
+        {
+          "key": "description",
+          "label": "Descripción",
+          "type": "textarea",
+          "defaultValue": "Describe la característica"
+        }
+      ]
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "features"]
+    }
+  ]
+}

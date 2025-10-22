@@ -12,7 +12,7 @@ class PurchaseService extends ChangeNotifier {
 
   final DatabaseService _db;
   static AccountingService? _accountingService;
-  
+
   // Helper to get Supabase client
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -84,7 +84,8 @@ class PurchaseService extends ChangeNotifier {
     }
   }
 
-  Future<shared_supplier.Supplier> saveSupplier(shared_supplier.Supplier supplier) async {
+  Future<shared_supplier.Supplier> saveSupplier(
+      shared_supplier.Supplier supplier) async {
     try {
       final payload = supplier.toJson();
       if (supplier.id.isEmpty) {
@@ -116,13 +117,12 @@ class PurchaseService extends ChangeNotifier {
     }
   }
 
-  Future<List<PurchaseInvoice>> getPurchaseInvoices({bool forceRefresh = false}) async {
+  Future<List<PurchaseInvoice>> getPurchaseInvoices(
+      {bool forceRefresh = false}) async {
     if (_invoicesLoaded && !forceRefresh) return _invoiceCache;
     try {
       final data = await _db.select('purchase_invoices');
-      _invoiceCache = data
-          .map((row) => PurchaseInvoice.fromJson(row))
-          .toList()
+      _invoiceCache = data.map((row) => PurchaseInvoice.fromJson(row)).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
       _invoicesLoaded = true;
       return _invoiceCache;
@@ -145,8 +145,7 @@ class PurchaseService extends ChangeNotifier {
     try {
       PurchaseInvoice saved;
       if (invoice.id == null) {
-        final payload = invoice.toJson()
-          ..remove('id');
+        final payload = invoice.toJson()..remove('id');
         final result = await _db.insert('purchase_invoices', payload);
         saved = PurchaseInvoice.fromJson(result);
       } else {
@@ -175,16 +174,14 @@ class PurchaseService extends ChangeNotifier {
       if (invoice == null) {
         throw Exception('Factura no encontrada');
       }
-      
+
       // Only allow deletion of draft invoices
       if (invoice.status != PurchaseInvoiceStatus.draft) {
-        throw Exception(
-          'Solo se pueden eliminar facturas en estado Borrador. '
-          'Esta factura está en estado: ${invoice.status.displayName}. '
-          'Usa "Volver a Borrador" primero si necesitas eliminarla.'
-        );
+        throw Exception('Solo se pueden eliminar facturas en estado Borrador. '
+            'Esta factura está en estado: ${invoice.status.displayName}. '
+            'Usa "Volver a Borrador" primero si necesitas eliminarla.');
       }
-      
+
       await _db.delete('purchase_invoices', id);
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
@@ -204,24 +201,24 @@ class PurchaseService extends ChangeNotifier {
         'status': status.name,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
-      
+
       final result = await _db.update('purchase_invoices', invoiceId, payload);
       final updated = PurchaseInvoice.fromJson(result);
-      
+
       // Update cache
       _invoiceCache = _invoiceCache.map((inv) {
         return inv.id == invoiceId ? updated : inv;
       }).toList();
-      
+
       // Refresh accounting if service available
       if (_accountingService != null) {
         await _accountingService!.initialize();
         await _accountingService!.journalEntries.loadJournalEntries();
       }
-      
+
       // Fetch fresh data from database
       final refreshed = await getPurchaseInvoice(invoiceId);
-      
+
       notifyListeners();
       return refreshed ?? updated;
     } catch (e) {
@@ -290,18 +287,17 @@ class PurchaseService extends ChangeNotifier {
   // Purchase Payments
   // =====================================================
 
-  Future<List<PurchasePayment>> getPurchasePayments({bool forceRefresh = false}) async {
+  Future<List<PurchasePayment>> getPurchasePayments(
+      {bool forceRefresh = false}) async {
     if (_paymentsLoaded && !forceRefresh) {
       return _paymentCache;
     }
 
     try {
       final data = await _db.select('purchase_payments');
-      _paymentCache = data
-          .map((row) => PurchasePayment.fromJson(row))
-          .toList()
+      _paymentCache = data.map((row) => PurchasePayment.fromJson(row)).toList()
         ..sort((a, b) => b.date.compareTo(a.date)); // Most recent first
-      
+
       _paymentsLoaded = true;
       notifyListeners();
       return _paymentCache;
@@ -316,7 +312,7 @@ class PurchaseService extends ChangeNotifier {
         'purchase_payments',
         where: 'invoice_id=$invoiceId',
       );
-      
+
       return data.map((row) => PurchasePayment.fromJson(row)).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
     } catch (e) {
@@ -329,11 +325,11 @@ class PurchaseService extends ChangeNotifier {
       final payload = payment.toJson()..remove('id');
       final result = await _db.insert('purchase_payments', payload);
       final created = PurchasePayment.fromJson(result);
-      
+
       // Refresh caches
       await getPurchasePayments(forceRefresh: true);
       await getPurchaseInvoices(forceRefresh: true);
-      
+
       notifyListeners();
       return created;
     } catch (e) {
@@ -344,11 +340,11 @@ class PurchaseService extends ChangeNotifier {
   Future<void> deletePayment(String paymentId) async {
     try {
       await _db.delete('purchase_payments', paymentId);
-      
+
       // Refresh caches
       await getPurchasePayments(forceRefresh: true);
       await getPurchaseInvoices(forceRefresh: true);
-      
+
       notifyListeners();
     } catch (e) {
       throw Exception('No se pudo eliminar el pago: $e');
@@ -362,14 +358,11 @@ class PurchaseService extends ChangeNotifier {
   /// Mark invoice as sent to supplier (Draft → Sent)
   Future<void> markInvoiceAsSent(String invoiceId) async {
     try {
-      await _supabase
-          .from('purchase_invoices')
-          .update({
-            'status': 'sent',
-            'sent_date': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', invoiceId);
-      
+      await _supabase.from('purchase_invoices').update({
+        'status': 'sent',
+        'sent_date': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', invoiceId);
+
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
     } catch (e) {
@@ -384,16 +377,13 @@ class PurchaseService extends ChangeNotifier {
     required DateTime supplierInvoiceDate,
   }) async {
     try {
-      await _supabase
-          .from('purchase_invoices')
-          .update({
-            'status': 'confirmed',
-            'confirmed_date': DateTime.now().toUtc().toIso8601String(),
-            'supplier_invoice_number': supplierInvoiceNumber,
-            'supplier_invoice_date': supplierInvoiceDate.toIso8601String(),
-          })
-          .eq('id', invoiceId);
-      
+      await _supabase.from('purchase_invoices').update({
+        'status': 'confirmed',
+        'confirmed_date': DateTime.now().toUtc().toIso8601String(),
+        'supplier_invoice_number': supplierInvoiceNumber,
+        'supplier_invoice_date': supplierInvoiceDate.toIso8601String(),
+      }).eq('id', invoiceId);
+
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
     } catch (e) {
@@ -410,15 +400,17 @@ class PurchaseService extends ChangeNotifier {
         'status': 'received',
         'received_date': DateTime.now().toUtc().toIso8601String(),
       };
-      print('🔵 DEBUG - markInvoiceAsReceived: Updating invoice $invoiceId with data: $updateData');
-      
+      print(
+          '🔵 DEBUG - markInvoiceAsReceived: Updating invoice $invoiceId with data: $updateData');
+
       await _supabase
           .from('purchase_invoices')
           .update(updateData)
           .eq('id', invoiceId);
-      
-      print('✅ DEBUG - markInvoiceAsReceived: Successfully updated to received status');
-      
+
+      print(
+          '✅ DEBUG - markInvoiceAsReceived: Successfully updated to received status');
+
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
     } catch (e) {
@@ -456,11 +448,11 @@ class PurchaseService extends ChangeNotifier {
       };
 
       await _db.insert('purchase_payments', paymentData);
-      
+
       // Refresh caches
       await getPurchasePayments(forceRefresh: true);
       await getPurchaseInvoices(forceRefresh: true);
-      
+
       notifyListeners();
     } catch (e) {
       throw Exception('No se pudo registrar el pago: $e');
@@ -473,9 +465,8 @@ class PurchaseService extends ChangeNotifier {
     try {
       await _supabase
           .from('purchase_invoices')
-          .update({'status': 'draft'})
-          .eq('id', invoiceId);
-      
+          .update({'status': 'draft'}).eq('id', invoiceId);
+
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
     } catch (e) {
@@ -488,9 +479,8 @@ class PurchaseService extends ChangeNotifier {
     try {
       await _supabase
           .from('purchase_invoices')
-          .update({'status': 'sent'})
-          .eq('id', invoiceId);
-      
+          .update({'status': 'sent'}).eq('id', invoiceId);
+
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
     } catch (e) {
@@ -502,15 +492,16 @@ class PurchaseService extends ChangeNotifier {
   Future<void> revertInvoiceToConfirmed(String invoiceId) async {
     try {
       // DEBUG: Log the revert action
-      print('🔵 DEBUG - revertInvoiceToConfirmed: Reverting invoice $invoiceId from paid to confirmed');
-      
+      print(
+          '🔵 DEBUG - revertInvoiceToConfirmed: Reverting invoice $invoiceId from paid to confirmed');
+
       await _supabase
           .from('purchase_invoices')
-          .update({'status': 'confirmed'})
-          .eq('id', invoiceId);
-      
-      print('✅ DEBUG - revertInvoiceToConfirmed: Successfully reverted to confirmed status');
-      
+          .update({'status': 'confirmed'}).eq('id', invoiceId);
+
+      print(
+          '✅ DEBUG - revertInvoiceToConfirmed: Successfully reverted to confirmed status');
+
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
     } catch (e) {
@@ -531,9 +522,8 @@ class PurchaseService extends ChangeNotifier {
     try {
       await _supabase
           .from('purchase_invoices')
-          .update({'status': 'paid'})
-          .eq('id', invoiceId);
-      
+          .update({'status': 'paid'}).eq('id', invoiceId);
+
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
     } catch (e) {
@@ -551,9 +541,9 @@ class PurchaseService extends ChangeNotifier {
           .select('prepayment_model')
           .eq('id', invoiceId)
           .single();
-      
+
       final isPrepayment = invoiceData['prepayment_model'] == true;
-      
+
       // Get last payment
       final payments = await _supabase
           .from('purchase_payments')
@@ -568,30 +558,28 @@ class PurchaseService extends ChangeNotifier {
 
       final paymentId = payments.first['id'];
       await _db.delete('purchase_payments', paymentId);
-      
+
       // Check if there are remaining payments
       final remainingPayments = await _supabase
           .from('purchase_payments')
           .select()
           .eq('invoice_id', invoiceId);
-      
+
       // If no payments left, revert status based on model
       if (remainingPayments.isEmpty) {
         final newStatus = isPrepayment ? 'confirmed' : 'received';
         await _supabase
             .from('purchase_invoices')
-            .update({'status': newStatus})
-            .eq('id', invoiceId);
+            .update({'status': newStatus}).eq('id', invoiceId);
       }
-      
+
       // Refresh caches
       await getPurchasePayments(forceRefresh: true);
       await getPurchaseInvoices(forceRefresh: true);
-      
+
       notifyListeners();
     } catch (e) {
       throw Exception('No se pudo deshacer el pago: $e');
     }
   }
 }
-

@@ -50,7 +50,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     setState(() => _isProcessing = true);
 
     try {
-      final websiteService = Provider.of<WebsiteService>(context, listen: false);
+      final websiteService =
+          Provider.of<WebsiteService>(context, listen: false);
 
       // Create order data (database will generate id and orderNumber)
       final orderData = {
@@ -265,7 +266,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 24),
-
                   TextFormField(
                     controller: _addressController,
                     decoration: const InputDecoration(
@@ -300,20 +300,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 24),
-
                   RadioListTile<String>(
                     value: 'transfer',
                     groupValue: _paymentMethod,
-                    onChanged: (value) => setState(() => _paymentMethod = value!),
+                    onChanged: (value) =>
+                        setState(() => _paymentMethod = value!),
                     title: const Text('Transferencia Bancaria'),
-                    subtitle: const Text('Recibirás los datos para realizar la transferencia'),
+                    subtitle: const Text(
+                        'Recibirás los datos para realizar la transferencia'),
                     contentPadding: EdgeInsets.zero,
                   ),
-
                   RadioListTile<String>(
                     value: 'cash_on_delivery',
                     groupValue: _paymentMethod,
-                    onChanged: (value) => setState(() => _paymentMethod = value!),
+                    onChanged: (value) =>
+                        setState(() => _paymentMethod = value!),
                     title: const Text('Pago contra entrega'),
                     subtitle: const Text('Paga cuando recibas tu pedido'),
                     contentPadding: EdgeInsets.zero,
@@ -337,7 +338,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 16),
-
                   TextFormField(
                     controller: _notesController,
                     decoration: const InputDecoration(
@@ -390,7 +390,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                 item.product.imageUrl!,
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) {
-                                  return const Icon(Icons.image_not_supported, size: 24);
+                                  return const Icon(Icons.image_not_supported,
+                                      size: 24);
                                 },
                               ),
                             )
@@ -410,9 +411,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           const SizedBox(height: 4),
                           Text(
                             'Cantidad: ${item.quantity}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: PublicStoreTheme.textSecondary,
-                            ),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: PublicStoreTheme.textSecondary,
+                                    ),
                           ),
                         ],
                       ),
@@ -420,8 +422,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     Text(
                       ChileanUtils.formatCurrency(item.subtotal),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                   ],
                 ),
@@ -469,15 +471,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 Text(
                   'Total',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 Text(
                   ChileanUtils.formatCurrency(cart.total),
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: PublicStoreTheme.primaryBlue,
-                    fontWeight: FontWeight.bold,
-                  ),
+                        color: PublicStoreTheme.primaryBlue,
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
               ],
             ),
@@ -511,7 +513,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: _isProcessing ? null : () => context.go('/tienda/carrito'),
+                onPressed:
+                    _isProcessing ? null : () => context.go('/tienda/carrito'),
                 child: const Text('VOLVER AL CARRITO'),
               ),
             ),
@@ -524,7 +527,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               decoration: BoxDecoration(
                 color: PublicStoreTheme.info.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: PublicStoreTheme.info.withOpacity(0.3)),
+                border:
+                    Border.all(color: PublicStoreTheme.info.withOpacity(0.3)),
               ),
               child: Row(
                 children: [
@@ -538,8 +542,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     child: Text(
                       'Tus datos están protegidos y serán utilizados únicamente para procesar tu pedido.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: PublicStoreTheme.info,
-                      ),
+                            color: PublicStoreTheme.info,
+                          ),
                     ),
                   ),
                 ],
@@ -563,19 +567,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
         Text(
           label,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: isSecondary
-                ? PublicStoreTheme.textSecondary
-                : PublicStoreTheme.textPrimary,
-          ),
+                color: isSecondary
+                    ? PublicStoreTheme.textSecondary
+                    : PublicStoreTheme.textPrimary,
+              ),
         ),
         Text(
           value,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: isSecondary
-                ? PublicStoreTheme.textSecondary
-                : PublicStoreTheme.textPrimary,
-          ),
+                fontWeight: FontWeight.w600,
+                color: isSecondary
+                    ? PublicStoreTheme.textSecondary
+                    : PublicStoreTheme.textPrimary,
+              ),
         ),
       ],
     );

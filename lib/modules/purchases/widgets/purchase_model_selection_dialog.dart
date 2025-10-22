@@ -6,16 +6,18 @@ class PurchaseModelSelectionDialog extends StatefulWidget {
   const PurchaseModelSelectionDialog({super.key});
 
   @override
-  State<PurchaseModelSelectionDialog> createState() => _PurchaseModelSelectionDialogState();
+  State<PurchaseModelSelectionDialog> createState() =>
+      _PurchaseModelSelectionDialogState();
 }
 
-class _PurchaseModelSelectionDialogState extends State<PurchaseModelSelectionDialog> {
+class _PurchaseModelSelectionDialogState
+    extends State<PurchaseModelSelectionDialog> {
   String? _selectedModel;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return AlertDialog(
       title: const Text('Seleccionar Modelo de Pago'),
       content: SingleChildScrollView(
@@ -35,27 +37,29 @@ class _PurchaseModelSelectionDialogState extends State<PurchaseModelSelectionDia
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Standard Model Option
             _buildModelOption(
               value: 'standard',
               title: 'Pago Después de Recibir (Modelo Estándar)',
               flow: 'Flujo: Enviada → Confirmada → Recibida → Pagada',
-              description: 'El pago se registra DESPUÉS de recibir los productos',
+              description:
+                  'El pago se registra DESPUÉS de recibir los productos',
               idealFor: 'Ideal para: Proveedores locales, entregas contra pago',
               icon: Icons.local_shipping,
               color: Colors.blue,
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Prepayment Model Option
             _buildModelOption(
               value: 'prepayment',
               title: 'Pago Anticipado (Prepago)',
               flow: 'Flujo: Enviada → Confirmada → Pagada → Recibida',
               description: 'El pago se registra ANTES de recibir los productos',
-              idealFor: 'Ideal para: Importaciones, transferencias bancarias, pre-órdenes',
+              idealFor:
+                  'Ideal para: Importaciones, transferencias bancarias, pre-órdenes',
               icon: Icons.payment,
               color: Colors.orange,
             ),
@@ -68,9 +72,9 @@ class _PurchaseModelSelectionDialogState extends State<PurchaseModelSelectionDia
           child: const Text('Cancelar'),
         ),
         FilledButton(
-          onPressed: _selectedModel == null 
-            ? null 
-            : () => Navigator.pop(context, _selectedModel == 'prepayment'),
+          onPressed: _selectedModel == null
+              ? null
+              : () => Navigator.pop(context, _selectedModel == 'prepayment'),
           child: const Text('Continuar'),
         ),
       ],
@@ -87,7 +91,7 @@ class _PurchaseModelSelectionDialogState extends State<PurchaseModelSelectionDia
     required Color color,
   }) {
     final isSelected = _selectedModel == value;
-    
+
     return InkWell(
       onTap: () => setState(() => _selectedModel = value),
       borderRadius: BorderRadius.circular(8),

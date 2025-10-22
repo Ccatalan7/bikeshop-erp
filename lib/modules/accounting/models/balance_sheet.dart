@@ -73,17 +73,18 @@ class BalanceSheet extends FinancialReport {
 
   /// Current ratio (liquidity metric)
   /// Current Assets / Current Liabilities
-  double get currentRatio =>
-      totalCurrentLiabilities > 0
-          ? totalCurrentAssets / totalCurrentLiabilities
-          : 0;
+  double get currentRatio => totalCurrentLiabilities > 0
+      ? totalCurrentAssets / totalCurrentLiabilities
+      : 0;
 
   /// Quick ratio (acid test - excludes inventory)
   /// (Current Assets - Inventory) / Current Liabilities
   double get quickRatio {
     // Find inventory account
     final inventory = currentAssets.firstWhere(
-      (line) => line.code.startsWith('114') || line.name.toLowerCase().contains('inventario'),
+      (line) =>
+          line.code.startsWith('114') ||
+          line.name.toLowerCase().contains('inventario'),
       orElse: () => ReportLine.blank(),
     );
     final quickAssets = totalCurrentAssets - inventory.amount;
@@ -256,7 +257,8 @@ class BalanceSheet extends FinancialReport {
       'total_assets': totalAssets,
       'current_liabilities': currentLiabilities.map((l) => l.toJson()).toList(),
       'total_current_liabilities': totalCurrentLiabilities,
-      'long_term_liabilities': longTermLiabilities.map((l) => l.toJson()).toList(),
+      'long_term_liabilities':
+          longTermLiabilities.map((l) => l.toJson()).toList(),
       'total_long_term_liabilities': totalLongTermLiabilities,
       'total_liabilities': totalLiabilities,
       'equity': equity.map((l) => l.toJson()).toList(),

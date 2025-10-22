@@ -70,19 +70,22 @@ class _CategoryListPageState extends State<CategoryListPage> {
 
   void _applyFilters() {
     List<Category> filtered = _categories;
-    
+
     if (_searchTerm.isNotEmpty) {
       filtered = filtered
           .where((category) =>
               category.name.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-              (category.description?.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false))
+              (category.description
+                      ?.toLowerCase()
+                      .contains(_searchTerm.toLowerCase()) ??
+                  false))
           .toList();
     }
-    
+
     if (_showInactiveOnly) {
       filtered = filtered.where((category) => !category.isActive).toList();
     }
-    
+
     setState(() => _filteredCategories = filtered);
   }
 
@@ -103,8 +106,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(category.isActive 
-                ? 'Categoría desactivada' 
+            content: Text(category.isActive
+                ? 'Categoría desactivada'
                 : 'Categoría activada'),
             backgroundColor: Colors.green,
           ),
@@ -127,7 +130,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirmar eliminación'),
-        content: Text('¿Está seguro que desea eliminar la categoría "${category.name}"?'),
+        content: Text(
+            '¿Está seguro que desea eliminar la categoría "${category.name}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -196,14 +200,20 @@ class _CategoryListPageState extends State<CategoryListPage> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.view_list),
-                        onPressed: () => setState(() => _viewMode = CategoryViewMode.list),
-                        color: _viewMode == CategoryViewMode.list ? Colors.blue : Colors.grey,
+                        onPressed: () =>
+                            setState(() => _viewMode = CategoryViewMode.list),
+                        color: _viewMode == CategoryViewMode.list
+                            ? Colors.blue
+                            : Colors.grey,
                         tooltip: 'Vista de lista',
                       ),
                       IconButton(
                         icon: const Icon(Icons.grid_view),
-                        onPressed: () => setState(() => _viewMode = CategoryViewMode.cards),
-                        color: _viewMode == CategoryViewMode.cards ? Colors.blue : Colors.grey,
+                        onPressed: () =>
+                            setState(() => _viewMode = CategoryViewMode.cards),
+                        color: _viewMode == CategoryViewMode.cards
+                            ? Colors.blue
+                            : Colors.grey,
                         tooltip: 'Vista de tarjetas',
                       ),
                     ],
@@ -222,14 +232,14 @@ class _CategoryListPageState extends State<CategoryListPage> {
               ],
             ),
           ),
-          
+
           // Search
           SearchBarWidget(
             controller: _searchController,
             hintText: 'Buscar por nombre o descripción...',
             onChanged: _onSearchChanged,
           ),
-          
+
           // Filters
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -248,7 +258,7 @@ class _CategoryListPageState extends State<CategoryListPage> {
             ),
           ),
           const SizedBox(height: 16),
-          
+
           // Stats
           if (!_isLoading && _categories.isNotEmpty)
             Container(
@@ -263,23 +273,23 @@ class _CategoryListPageState extends State<CategoryListPage> {
                   _buildStatItem('Total', _categories.length.toString()),
                   const SizedBox(width: 24),
                   _buildStatItem(
-                    'Activas', 
+                    'Activas',
                     _categories.where((c) => c.isActive).length.toString(),
                   ),
                   const SizedBox(width: 24),
                   _buildStatItem(
-                    'Inactivas', 
+                    'Inactivas',
                     _categories.where((c) => !c.isActive).length.toString(),
                   ),
                 ],
               ),
             ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Categories List
           Expanded(
-            child: _isLoading 
+            child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _buildCategoriesList(),
           ),
@@ -377,8 +387,9 @@ class _CategoryListPageState extends State<CategoryListPage> {
   }
 
   Widget _buildCategoryListItem(Category category) {
-    final bool hasImage = category.imageUrl != null && category.imageUrl!.isNotEmpty;
-    
+    final bool hasImage =
+        category.imageUrl != null && category.imageUrl!.isNotEmpty;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -406,8 +417,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: category.isActive 
-                          ? Colors.blue.withOpacity(0.1) 
+                      color: category.isActive
+                          ? Colors.blue.withOpacity(0.1)
                           : Colors.grey.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -422,8 +433,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: category.isActive 
-                      ? Colors.blue.withOpacity(0.1) 
+                  color: category.isActive
+                      ? Colors.blue.withOpacity(0.1)
                       : Colors.grey.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -467,13 +478,15 @@ class _CategoryListPageState extends State<CategoryListPage> {
               ),
             ),
             const SizedBox(width: 8),
-            
+
             // Actions menu
             PopupMenuButton<String>(
               onSelected: (value) {
                 switch (value) {
                   case 'edit':
-                    context.push('/inventory/categories/${category.id}/edit').then((_) {
+                    context
+                        .push('/inventory/categories/${category.id}/edit')
+                        .then((_) {
                       _loadCategories();
                     });
                     break;
@@ -497,7 +510,9 @@ class _CategoryListPageState extends State<CategoryListPage> {
                 PopupMenuItem(
                   value: 'toggle',
                   child: ListTile(
-                    leading: Icon(category.isActive ? Icons.visibility_off : Icons.visibility),
+                    leading: Icon(category.isActive
+                        ? Icons.visibility_off
+                        : Icons.visibility),
                     title: Text(category.isActive ? 'Desactivar' : 'Activar'),
                     contentPadding: EdgeInsets.zero,
                   ),
@@ -506,7 +521,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
                   value: 'delete',
                   child: ListTile(
                     leading: Icon(Icons.delete, color: Colors.red),
-                    title: Text('Eliminar', style: TextStyle(color: Colors.red)),
+                    title:
+                        Text('Eliminar', style: TextStyle(color: Colors.red)),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
@@ -520,8 +536,9 @@ class _CategoryListPageState extends State<CategoryListPage> {
   }
 
   Widget _buildCategoryGridItem(Category category) {
-    final bool hasImage = category.imageUrl != null && category.imageUrl!.isNotEmpty;
-    
+    final bool hasImage =
+        category.imageUrl != null && category.imageUrl!.isNotEmpty;
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -546,8 +563,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
                         ),
                       ),
                       errorWidget: (context, url, error) => Container(
-                        color: category.isActive 
-                            ? Colors.blue.withOpacity(0.1) 
+                        color: category.isActive
+                            ? Colors.blue.withOpacity(0.1)
                             : Colors.grey.withOpacity(0.1),
                         child: Icon(
                           Icons.category,
@@ -557,8 +574,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
                       ),
                     )
                   : Container(
-                      color: category.isActive 
-                          ? Colors.blue.withOpacity(0.1) 
+                      color: category.isActive
+                          ? Colors.blue.withOpacity(0.1)
                           : Colors.grey.withOpacity(0.1),
                       child: Icon(
                         Icons.category,
@@ -593,7 +610,10 @@ class _CategoryListPageState extends State<CategoryListPage> {
                           onSelected: (value) {
                             switch (value) {
                               case 'edit':
-                                context.push('/inventory/categories/${category.id}/edit').then((_) {
+                                context
+                                    .push(
+                                        '/inventory/categories/${category.id}/edit')
+                                    .then((_) {
                                   _loadCategories();
                                 });
                                 break;
@@ -621,11 +641,14 @@ class _CategoryListPageState extends State<CategoryListPage> {
                               child: Row(
                                 children: [
                                   Icon(
-                                    category.isActive ? Icons.visibility_off : Icons.visibility, 
-                                    size: 20
-                                  ),
+                                      category.isActive
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      size: 20),
                                   const SizedBox(width: 8),
-                                  Text(category.isActive ? 'Desactivar' : 'Activar'),
+                                  Text(category.isActive
+                                      ? 'Desactivar'
+                                      : 'Activar'),
                                 ],
                               ),
                             ),
@@ -633,25 +656,31 @@ class _CategoryListPageState extends State<CategoryListPage> {
                               value: 'delete',
                               child: Row(
                                 children: [
-                                  Icon(Icons.delete, color: Colors.red, size: 20),
+                                  Icon(Icons.delete,
+                                      color: Colors.red, size: 20),
                                   SizedBox(width: 8),
-                                  Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                  Text('Eliminar',
+                                      style: TextStyle(color: Colors.red)),
                                 ],
                               ),
                             ),
                           ],
-                          child: Icon(Icons.more_vert, size: 20, color: Colors.grey[600]),
+                          child: Icon(Icons.more_vert,
+                              size: 20, color: Colors.grey[600]),
                         ),
                       ],
                     ),
-                    if (category.description != null && category.description!.isNotEmpty) ...[
+                    if (category.description != null &&
+                        category.description!.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Expanded(
                         child: Text(
                           category.description!,
                           style: TextStyle(
                             fontSize: 12,
-                            color: category.isActive ? Colors.grey[600] : Colors.grey,
+                            color: category.isActive
+                                ? Colors.grey[600]
+                                : Colors.grey,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -660,7 +689,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
                     ],
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: category.isActive ? Colors.green : Colors.grey,
                         borderRadius: BorderRadius.circular(8),

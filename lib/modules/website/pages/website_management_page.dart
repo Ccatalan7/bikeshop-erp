@@ -105,7 +105,8 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: theme.colorScheme.primary,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 16),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -114,12 +115,14 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                       // Open in new browser tab (for web)
                       final uri = Uri.parse('${Uri.base.origin}/tienda');
                       if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        await launchUrl(uri,
+                            mode: LaunchMode.externalApplication);
                       } else {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Usa Vista Previa para ver la tienda'),
+                              content:
+                                  Text('Usa Vista Previa para ver la tienda'),
                             ),
                           );
                         }
@@ -133,7 +136,8 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Usa Vista Previa para ver el sitio en acción'),
+                          content: Text(
+                              'Usa Vista Previa para ver el sitio en acción'),
                         ),
                       );
                     },

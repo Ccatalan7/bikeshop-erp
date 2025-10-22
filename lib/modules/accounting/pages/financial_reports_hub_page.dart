@@ -23,23 +23,23 @@ class FinancialReportsHubPage extends StatelessWidget {
               // Deployment info banner
               _buildDeploymentInfoBanner(context),
               const SizedBox(height: 24),
-              
+
               // Page header
               Text(
                 'Reportes Contables',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Informes financieros profesionales para análisis y auditoría',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
               ),
               const SizedBox(height: 32),
-              
+
               // Financial Statements section
               _buildSectionHeader(
                 context,
@@ -47,7 +47,7 @@ class FinancialReportsHubPage extends StatelessWidget {
                 'Reportes principales según IFRS',
               ),
               const SizedBox(height: 16),
-              
+
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -55,7 +55,8 @@ class FinancialReportsHubPage extends StatelessWidget {
                     child: _buildReportCard(
                       context,
                       title: 'Estado de Resultados',
-                      description: 'Ingresos, gastos y utilidad neta por período',
+                      description:
+                          'Ingresos, gastos y utilidad neta por período',
                       icon: Icons.trending_up,
                       color: Colors.green,
                       metrics: const [
@@ -92,9 +93,9 @@ class FinancialReportsHubPage extends StatelessWidget {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Supporting reports section
               _buildSectionHeader(
                 context,
@@ -102,7 +103,7 @@ class FinancialReportsHubPage extends StatelessWidget {
                 'Herramientas de análisis y auditoría',
               ),
               const SizedBox(height: 16),
-              
+
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -122,7 +123,8 @@ class FinancialReportsHubPage extends StatelessWidget {
                       onTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Balance de Comprobación disponible próximamente'),
+                            content: Text(
+                                'Balance de Comprobación disponible próximamente'),
                           ),
                         );
                       },
@@ -145,7 +147,8 @@ class FinancialReportsHubPage extends StatelessWidget {
                       onTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Libro Mayor disponible próximamente'),
+                            content:
+                                Text('Libro Mayor disponible próximamente'),
                           ),
                         );
                       },
@@ -153,9 +156,9 @@ class FinancialReportsHubPage extends StatelessWidget {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Info card
               _buildInfoCard(context),
             ],
@@ -165,22 +168,23 @@ class FinancialReportsHubPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String title, String subtitle) {
+  Widget _buildSectionHeader(
+      BuildContext context, String title, String subtitle) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+                fontWeight: FontWeight.bold,
+              ),
         ),
         const SizedBox(height: 4),
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.secondary,
-          ),
+                color: Theme.of(context).colorScheme.secondary,
+              ),
         ),
       ],
     );
@@ -231,9 +235,12 @@ class FinancialReportsHubPage extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 title,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                               ),
                             ),
                             if (isComingSoon)
@@ -260,58 +267,62 @@ class FinancialReportsHubPage extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           description,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.secondary,
-                          ),
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.secondary,
+                              ),
                         ),
                       ],
                     ),
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 20),
               const Divider(),
               const SizedBox(height: 12),
-              
+
               // Metrics list
               Text(
                 'Incluye:',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
               ),
               const SizedBox(height: 8),
-              
+
               ...metrics.map((metric) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      size: 16,
-                      color: color,
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          size: 16,
+                          color: color,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            metric,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        metric,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-              
+                  )),
+
               const SizedBox(height: 16),
-              
+
               // Action button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: onTap,
-                  icon: Icon(isComingSoon ? Icons.schedule : Icons.arrow_forward),
+                  icon:
+                      Icon(isComingSoon ? Icons.schedule : Icons.arrow_forward),
                   label: Text(isComingSoon ? 'Próximamente' : 'Ver Reporte'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isComingSoon ? Colors.grey : color,
@@ -346,17 +357,17 @@ class FinancialReportsHubPage extends StatelessWidget {
                   Text(
                     '⚠️ Requisito: Base de Datos Actualizada',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.amber.shade900,
-                    ),
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber.shade900,
+                        ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Si ves errores al abrir reportes, necesitas ejecutar el archivo supabase/sql/core_schema.sql en tu base de datos Supabase. '
                     'Ver archivo DEPLOY_FINANCIAL_REPORTS_SQL.md para instrucciones detalladas.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.amber.shade800,
-                    ),
+                          color: Colors.amber.shade800,
+                        ),
                   ),
                 ],
               ),
@@ -394,16 +405,16 @@ class FinancialReportsHubPage extends StatelessWidget {
                   Text(
                     'Reportes Auditables',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue.shade900,
-                    ),
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade900,
+                        ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Todos los reportes están diseñados siguiendo las normas IFRS y son aptos para auditoría contable en Chile. Los datos se calculan en tiempo real desde los asientos contables registrados.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.blue.shade800,
-                    ),
+                          color: Colors.blue.shade800,
+                        ),
                   ),
                 ],
               ),

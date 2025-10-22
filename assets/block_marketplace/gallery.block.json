@@ -1,0 +1,77 @@
+{
+  "type": "gallery",
+  "title": "Galería",
+  "description": "Muestra fotografías del taller, eventos o productos destacados.",
+  "usesCustomEditor": false,
+  "category": "Media",
+  "tags": ["galería", "fotos", "imágenes"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Galería",
+    "layout": "grid",
+    "images": [
+      {
+        "imageUrl": "https://images.unsplash.com/photo-1525104698733-6dba3c1c0059?auto=format&fit=crop&w=900&q=60",
+        "caption": "Nuestros mecánicos en acción"
+      },
+      {
+        "imageUrl": "https://images.unsplash.com/photo-1485962398705-ef6a13c41e8f?auto=format&fit=crop&w=900&q=60",
+        "caption": "Bicicletas listas para entregar"
+      },
+      {
+        "imageUrl": "https://images.unsplash.com/photo-1509395176047-4a66953fd231?auto=format&fit=crop&w=900&q=60",
+        "caption": "Clientes felices después del servicio"
+      }
+    ]
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título",
+      "type": "text",
+      "defaultValue": "Galería"
+    },
+    {
+      "key": "layout",
+      "label": "Diseño",
+      "type": "select",
+      "defaultValue": "grid",
+      "options": [
+        {"value": "grid", "label": "Cuadrícula"},
+        {"value": "masonry", "label": "Mosaico"}
+      ]
+    },
+    {
+      "key": "images",
+      "label": "Imágenes",
+      "type": "repeater",
+      "itemLabel": "Imagen",
+      "minItems": 1,
+      "itemFields": [
+        {
+          "key": "imageUrl",
+          "label": "URL de la imagen",
+          "type": "text"
+        },
+        {
+          "key": "caption",
+          "label": "Leyenda",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "images"]
+    },
+    {
+      "id": "layout",
+      "label": "Diseño",
+      "fields": ["layout"]
+    }
+  ]
+}

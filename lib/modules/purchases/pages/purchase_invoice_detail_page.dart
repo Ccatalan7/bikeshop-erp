@@ -21,7 +21,8 @@ class PurchaseInvoiceDetailPage extends StatefulWidget {
   });
 
   @override
-  State<PurchaseInvoiceDetailPage> createState() => _PurchaseInvoiceDetailPageState();
+  State<PurchaseInvoiceDetailPage> createState() =>
+      _PurchaseInvoiceDetailPageState();
 }
 
 class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
@@ -41,7 +42,8 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
   Future<void> _loadInvoice() async {
     setState(() => _isLoading = true);
     try {
-      final invoice = await _purchaseService.getPurchaseInvoice(widget.invoiceId);
+      final invoice =
+          await _purchaseService.getPurchaseInvoice(widget.invoiceId);
       if (mounted) {
         setState(() {
           _invoice = invoice;
@@ -259,18 +261,30 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
     // Different order for prepayment vs standard
     final steps = isPrepayment
         ? [
-            _TimelineStep('Borrador', _invoice!.createdAt, PurchaseInvoiceStatus.draft),
-            _TimelineStep('Enviada', _invoice!.sentDate, PurchaseInvoiceStatus.sent),
-            _TimelineStep('Confirmada', _invoice!.confirmedDate, PurchaseInvoiceStatus.confirmed),
-            _TimelineStep('Pagada', _invoice!.paidDate, PurchaseInvoiceStatus.paid, highlighted: true),
-            _TimelineStep('Recibida', _invoice!.receivedDate, PurchaseInvoiceStatus.received),
+            _TimelineStep(
+                'Borrador', _invoice!.createdAt, PurchaseInvoiceStatus.draft),
+            _TimelineStep(
+                'Enviada', _invoice!.sentDate, PurchaseInvoiceStatus.sent),
+            _TimelineStep('Confirmada', _invoice!.confirmedDate,
+                PurchaseInvoiceStatus.confirmed),
+            _TimelineStep(
+                'Pagada', _invoice!.paidDate, PurchaseInvoiceStatus.paid,
+                highlighted: true),
+            _TimelineStep('Recibida', _invoice!.receivedDate,
+                PurchaseInvoiceStatus.received),
           ]
         : [
-            _TimelineStep('Borrador', _invoice!.createdAt, PurchaseInvoiceStatus.draft),
-            _TimelineStep('Enviada', _invoice!.sentDate, PurchaseInvoiceStatus.sent),
-            _TimelineStep('Confirmada', _invoice!.confirmedDate, PurchaseInvoiceStatus.confirmed),
-            _TimelineStep('Recibida', _invoice!.receivedDate, PurchaseInvoiceStatus.received, highlighted: true),
-            _TimelineStep('Pagada', _invoice!.paidDate, PurchaseInvoiceStatus.paid),
+            _TimelineStep(
+                'Borrador', _invoice!.createdAt, PurchaseInvoiceStatus.draft),
+            _TimelineStep(
+                'Enviada', _invoice!.sentDate, PurchaseInvoiceStatus.sent),
+            _TimelineStep('Confirmada', _invoice!.confirmedDate,
+                PurchaseInvoiceStatus.confirmed),
+            _TimelineStep('Recibida', _invoice!.receivedDate,
+                PurchaseInvoiceStatus.received,
+                highlighted: true),
+            _TimelineStep(
+                'Pagada', _invoice!.paidDate, PurchaseInvoiceStatus.paid),
           ];
 
     return Card(
@@ -289,7 +303,7 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
               final step = entry.value;
               final isLast = index == steps.length - 1;
               final isActive = _isStatusReached(step.requiredStatus);
-              
+
               return _buildTimelineItem(step, isActive, !isLast);
             }),
           ],
@@ -303,8 +317,12 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
       PurchaseInvoiceStatus.draft,
       PurchaseInvoiceStatus.sent,
       PurchaseInvoiceStatus.confirmed,
-      _invoice!.prepaymentModel ? PurchaseInvoiceStatus.paid : PurchaseInvoiceStatus.received,
-      _invoice!.prepaymentModel ? PurchaseInvoiceStatus.received : PurchaseInvoiceStatus.paid,
+      _invoice!.prepaymentModel
+          ? PurchaseInvoiceStatus.paid
+          : PurchaseInvoiceStatus.received,
+      _invoice!.prepaymentModel
+          ? PurchaseInvoiceStatus.received
+          : PurchaseInvoiceStatus.paid,
     ];
 
     final currentIndex = statusOrder.indexOf(_invoice!.status);
@@ -312,7 +330,8 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
     return currentIndex >= targetIndex;
   }
 
-  Widget _buildTimelineItem(_TimelineStep step, bool isActive, bool showConnector) {
+  Widget _buildTimelineItem(
+      _TimelineStep step, bool isActive, bool showConnector) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -347,7 +366,8 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
               Text(
                 step.label,
                 style: TextStyle(
-                  fontWeight: step.highlighted ? FontWeight.bold : FontWeight.normal,
+                  fontWeight:
+                      step.highlighted ? FontWeight.bold : FontWeight.normal,
                   color: isActive ? Colors.black : Colors.grey,
                 ),
               ),
@@ -378,9 +398,11 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
             const SizedBox(height: 12),
             _buildDetailRow('Fecha', ChileanUtils.formatDate(_invoice!.date)),
             if (_invoice!.dueDate != null)
-              _buildDetailRow('Vencimiento', ChileanUtils.formatDate(_invoice!.dueDate!)),
+              _buildDetailRow(
+                  'Vencimiento', ChileanUtils.formatDate(_invoice!.dueDate!)),
             if (_invoice!.supplierInvoiceNumber != null)
-              _buildDetailRow('Nº Factura Proveedor', _invoice!.supplierInvoiceNumber!),
+              _buildDetailRow(
+                  'Nº Factura Proveedor', _invoice!.supplierInvoiceNumber!),
             if (_invoice!.reference != null)
               _buildDetailRow('Referencia', _invoice!.reference!),
             if (_invoice!.notes != null && _invoice!.notes!.isNotEmpty)
@@ -440,7 +462,8 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
                             if (item.productSku != null)
                               Text(
                                 'SKU: ${item.productSku}',
-                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.grey),
                               ),
                           ],
                         ),
@@ -513,7 +536,8 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
             icon: const Icon(Icons.edit),
             label: const Text('Editar'),
             onPressed: () async {
-              final edited = await context.push<bool>('/purchases/${_invoice!.id}/edit');
+              final edited =
+                  await context.push<bool>('/purchases/${_invoice!.id}/edit');
               if (edited == true) {
                 setState(() => _hasChanges = true);
                 await _loadInvoice();
@@ -677,8 +701,9 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
   }
 
   Future<void> _confirmInvoice() async {
-    final TextEditingController supplierNumberController = TextEditingController();
-    
+    final TextEditingController supplierNumberController =
+        TextEditingController();
+
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -698,7 +723,8 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
                     onPressed: () {
                       // Generate supplier invoice number
                       final now = DateTime.now();
-                      final autoNumber = 'FC-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+                      final autoNumber =
+                          'FC-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
                       setState(() {
                         supplierNumberController.text = autoNumber;
                       });
@@ -710,8 +736,8 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
               Text(
                 'Ingrese el número de factura del proveedor o genere uno automáticamente',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
               ),
             ],
           ),
@@ -725,7 +751,8 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
                 if (supplierNumberController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Por favor ingrese o genere un número de factura'),
+                      content: Text(
+                          'Por favor ingrese o genere un número de factura'),
                       backgroundColor: Colors.orange,
                     ),
                   );
@@ -801,19 +828,27 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
   }
 
   Future<void> _revertToDraft() async {
-    await _revertStatus(() => _purchaseService.revertInvoiceToDraft(_invoice!.id!), 'Volver a Borrador');
+    await _revertStatus(
+        () => _purchaseService.revertInvoiceToDraft(_invoice!.id!),
+        'Volver a Borrador');
   }
 
   Future<void> _revertToSent() async {
-    await _revertStatus(() => _purchaseService.revertInvoiceToSent(_invoice!.id!), 'Volver a Enviada');
+    await _revertStatus(
+        () => _purchaseService.revertInvoiceToSent(_invoice!.id!),
+        'Volver a Enviada');
   }
 
   Future<void> _revertToConfirmed() async {
-    await _revertStatus(() => _purchaseService.revertInvoiceToConfirmed(_invoice!.id!), 'Volver a Confirmada');
+    await _revertStatus(
+        () => _purchaseService.revertInvoiceToConfirmed(_invoice!.id!),
+        'Volver a Confirmada');
   }
 
   Future<void> _revertToPaid() async {
-    await _revertStatus(() => _purchaseService.revertInvoiceToPaid(_invoice!.id!), 'Volver a Pagada');
+    await _revertStatus(
+        () => _purchaseService.revertInvoiceToPaid(_invoice!.id!),
+        'Volver a Pagada');
   }
 
   Future<void> _undoPayment() async {
@@ -845,7 +880,8 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
     }
   }
 
-  Future<void> _revertStatus(Future<void> Function() action, String actionName) async {
+  Future<void> _revertStatus(
+      Future<void> Function() action, String actionName) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -906,5 +942,6 @@ class _TimelineStep {
   final PurchaseInvoiceStatus requiredStatus;
   final bool highlighted;
 
-  _TimelineStep(this.label, this.date, this.requiredStatus, {this.highlighted = false});
+  _TimelineStep(this.label, this.date, this.requiredStatus,
+      {this.highlighted = false});
 }

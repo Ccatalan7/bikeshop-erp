@@ -63,9 +63,17 @@ class _CustomerListPageState extends State<CustomerListPage> {
       } else {
         _filteredCustomers = _customers
             .where((customer) =>
-                customer.name.toLowerCase().contains(searchTerm.toLowerCase()) ||
-                (customer.rut.isNotEmpty && customer.rut.toLowerCase().contains(searchTerm.toLowerCase())) ||
-                (customer.email?.toLowerCase().contains(searchTerm.toLowerCase()) ?? false))
+                customer.name
+                    .toLowerCase()
+                    .contains(searchTerm.toLowerCase()) ||
+                (customer.rut.isNotEmpty &&
+                    customer.rut
+                        .toLowerCase()
+                        .contains(searchTerm.toLowerCase())) ||
+                (customer.email
+                        ?.toLowerCase()
+                        .contains(searchTerm.toLowerCase()) ??
+                    false))
             .toList();
       }
     });
@@ -95,9 +103,9 @@ class _CustomerListPageState extends State<CustomerListPage> {
                     customer.name,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  Text('RUT: ${customer.rut.isEmpty ? "Sin RUT" : customer.rut}'),
-                  if (customer.email != null)
-                    Text('Email: ${customer.email}'),
+                  Text(
+                      'RUT: ${customer.rut.isEmpty ? "Sin RUT" : customer.rut}'),
+                  if (customer.email != null) Text('Email: ${customer.email}'),
                 ],
               ),
             ),
@@ -134,12 +142,13 @@ class _CustomerListPageState extends State<CustomerListPage> {
         if (customer.id == null || customer.id!.isEmpty) {
           throw Exception('ID de cliente inválido');
         }
-        
+
         await _customerService.deleteCustomer(customer.id!);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Cliente "${customer.name}" eliminado exitosamente'),
+              content:
+                  Text('Cliente "${customer.name}" eliminado exitosamente'),
               backgroundColor: Colors.green,
             ),
           );
@@ -189,13 +198,13 @@ class _CustomerListPageState extends State<CustomerListPage> {
               ],
             ),
           ),
-          
+
           // Search
           SearchWidget(
             hintText: 'Buscar por nombre, RUT o email...',
             onSearchChanged: _onSearchChanged,
           ),
-          
+
           // Stats
           if (!_isLoading && _customers.isNotEmpty)
             Container(
@@ -209,20 +218,16 @@ class _CustomerListPageState extends State<CustomerListPage> {
                 children: [
                   _buildStatItem('Total', _customers.length.toString()),
                   const SizedBox(width: 24),
-                  _buildStatItem(
-                    'Activos', 
-                    _customers.where((c) => c.isActive).length.toString()
-                  ),
+                  _buildStatItem('Activos',
+                      _customers.where((c) => c.isActive).length.toString()),
                   const SizedBox(width: 24),
                   _buildStatItem(
-                    'Mostrando', 
-                    _filteredCustomers.length.toString()
-                  ),
+                      'Mostrando', _filteredCustomers.length.toString()),
                 ],
               ),
             ),
           const SizedBox(height: 16),
-          
+
           // Content
           Expanded(
             child: _isLoading
@@ -269,7 +274,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              _searchTerm.isEmpty 
+              _searchTerm.isEmpty
                   ? 'No hay clientes registrados'
                   : 'No se encontraron clientes',
               style: TextStyle(
@@ -327,7 +332,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
                 initials: customer.initials,
               ),
               const SizedBox(width: 16),
-              
+
               // Customer info
               Expanded(
                 child: Column(
@@ -416,7 +421,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
                   ],
                 ),
               ),
-              
+
               // Actions - 3-dot menu
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert),

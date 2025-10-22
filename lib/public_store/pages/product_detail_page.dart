@@ -34,16 +34,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     try {
       final inventoryService = context.read<InventoryService>();
-      
+
       // Load the product
       _product = await inventoryService.getProductById(widget.productId);
-      
+
       if (_product != null) {
         // Load related products (same category)
         final allProducts = await inventoryService.getProducts();
         _relatedProducts = allProducts
-            .where((p) => 
-                p.id != _product!.id && 
+            .where((p) =>
+                p.id != _product!.id &&
                 p.categoryId == _product!.categoryId &&
                 p.stockQuantity > 0)
             .take(4)
@@ -127,9 +127,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           children: [
             // Breadcrumb
             _buildBreadcrumb(),
-            
+
             const SizedBox(height: 32),
-            
+
             // Product Main Section
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,9 +139,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   flex: 5,
                   child: _buildImageGallery(),
                 ),
-                
+
                 const SizedBox(width: 48),
-                
+
                 // Product Info (Right)
                 Expanded(
                   flex: 4,
@@ -149,14 +149,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 64),
-            
+
             // Product Details Tabs
             _buildProductDetails(),
-            
+
             const SizedBox(height: 64),
-            
+
             // Related Products
             if (_relatedProducts.isNotEmpty) _buildRelatedProducts(),
           ],
@@ -173,8 +173,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           child: Text(
             'Inicio',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: PublicStoreTheme.primaryBlue,
-            ),
+                  color: PublicStoreTheme.primaryBlue,
+                ),
           ),
         ),
         const Padding(
@@ -186,8 +186,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           child: Text(
             'Productos',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: PublicStoreTheme.primaryBlue,
-            ),
+                  color: PublicStoreTheme.primaryBlue,
+                ),
           ),
         ),
         const Padding(
@@ -197,8 +197,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         Text(
           _product!.name,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: PublicStoreTheme.textSecondary,
-          ),
+                color: PublicStoreTheme.textSecondary,
+              ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -207,10 +207,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Widget _buildImageGallery() {
-    final images = _product!.imageUrls.isNotEmpty 
-        ? _product!.imageUrls 
-        : _product!.imageUrl != null 
-            ? [_product!.imageUrl!] 
+    final images = _product!.imageUrls.isNotEmpty
+        ? _product!.imageUrls
+        : _product!.imageUrl != null
+            ? [_product!.imageUrl!]
             : <String>[];
 
     if (images.isEmpty) {
@@ -257,7 +257,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ),
           ),
         ),
-        
+
         // Thumbnail Gallery
         if (images.length > 1) ...[
           const SizedBox(height: 16),
@@ -276,8 +276,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       width: 80,
                       decoration: BoxDecoration(
                         border: Border.all(
-                          color: isSelected 
-                              ? PublicStoreTheme.primaryBlue 
+                          color: isSelected
+                              ? PublicStoreTheme.primaryBlue
                               : PublicStoreTheme.border,
                           width: isSelected ? 3 : 1,
                         ),
@@ -319,73 +319,73 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               _product!.name,
               style: Theme.of(context).textTheme.displaySmall,
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             // Brand
             if (_product!.brand != null)
               Text(
                 _product!.brand!,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: PublicStoreTheme.textSecondary,
-                ),
+                      color: PublicStoreTheme.textSecondary,
+                    ),
               ),
-            
+
             const SizedBox(height: 16),
-            
+
             // SKU
             Row(
               children: [
                 Text(
                   'SKU: ',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: PublicStoreTheme.textMuted,
-                  ),
+                        color: PublicStoreTheme.textMuted,
+                      ),
                 ),
                 Text(
                   _product!.sku,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: PublicStoreTheme.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
+                        color: PublicStoreTheme.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 24),
-            
+
             // Price
             Text(
               ChileanUtils.formatCurrency(_product!.price),
               style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                color: PublicStoreTheme.primaryBlue,
-                fontWeight: FontWeight.bold,
-              ),
+                    color: PublicStoreTheme.primaryBlue,
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             Text(
               '+ IVA incluido',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: PublicStoreTheme.textMuted,
-              ),
+                    color: PublicStoreTheme.textMuted,
+                  ),
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Stock Status
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: _product!.stockQuantity > 0 
+                color: _product!.stockQuantity > 0
                     ? PublicStoreTheme.success.withOpacity(0.1)
                     : PublicStoreTheme.error.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: _product!.stockQuantity > 0 
+                  color: _product!.stockQuantity > 0
                       ? PublicStoreTheme.success
                       : PublicStoreTheme.error,
                 ),
@@ -393,32 +393,32 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               child: Row(
                 children: [
                   Icon(
-                    _product!.stockQuantity > 0 
+                    _product!.stockQuantity > 0
                         ? Icons.check_circle
                         : Icons.cancel,
-                    color: _product!.stockQuantity > 0 
+                    color: _product!.stockQuantity > 0
                         ? PublicStoreTheme.success
                         : PublicStoreTheme.error,
                     size: 20,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    _product!.stockQuantity > 0 
+                    _product!.stockQuantity > 0
                         ? 'En stock (${_product!.stockQuantity} disponibles)'
                         : 'Agotado',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: _product!.stockQuantity > 0 
-                          ? PublicStoreTheme.success
-                          : PublicStoreTheme.error,
-                      fontWeight: FontWeight.w600,
-                    ),
+                          color: _product!.stockQuantity > 0
+                              ? PublicStoreTheme.success
+                              : PublicStoreTheme.error,
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 32),
-            
+
             // Quantity Selector
             if (_product!.stockQuantity > 0) ...[
               Text(
@@ -429,7 +429,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               Row(
                 children: [
                   IconButton(
-                    onPressed: _quantity > 1 
+                    onPressed: _quantity > 1
                         ? () => setState(() => _quantity--)
                         : null,
                     icon: const Icon(Icons.remove),
@@ -450,7 +450,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ),
                   ),
                   IconButton(
-                    onPressed: _quantity < _product!.stockQuantity 
+                    onPressed: _quantity < _product!.stockQuantity
                         ? () => setState(() => _quantity++)
                         : null,
                     icon: const Icon(Icons.add),
@@ -464,27 +464,28 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Add to Cart Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: _addToCart,
                   icon: Icon(inCart ? Icons.check : Icons.shopping_cart),
-                  label: Text(inCart ? 'AGREGADO AL CARRITO' : 'AGREGAR AL CARRITO'),
+                  label: Text(
+                      inCart ? 'AGREGADO AL CARRITO' : 'AGREGAR AL CARRITO'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 20),
-                    backgroundColor: inCart 
-                        ? PublicStoreTheme.success 
+                    backgroundColor: inCart
+                        ? PublicStoreTheme.success
                         : PublicStoreTheme.primaryBlue,
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 12),
-              
+
               // View Cart Button
               if (inCart)
                 SizedBox(
@@ -495,11 +496,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ),
                 ),
             ],
-            
+
             const SizedBox(height: 32),
             const Divider(),
             const SizedBox(height: 24),
-            
+
             // Quick Info
             _buildInfoRow(Icons.local_shipping_outlined, 'Envío a todo Chile'),
             const SizedBox(height: 12),
@@ -538,7 +539,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           style: Theme.of(context).textTheme.headlineMedium,
         ),
         const SizedBox(height: 24),
-        
         Card(
           child: Padding(
             padding: const EdgeInsets.all(32),
@@ -558,7 +558,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ),
                   const SizedBox(height: 32),
                 ],
-                
+
                 // Specifications
                 if (_product!.specifications.isNotEmpty) ...[
                   Text(
@@ -576,10 +576,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             width: 200,
                             child: Text(
                               '${entry.key}:',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: PublicStoreTheme.textSecondary,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: PublicStoreTheme.textSecondary,
+                                  ),
                             ),
                           ),
                           Expanded(
@@ -593,16 +596,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     );
                   }).toList(),
                 ],
-                
+
                 // General Info
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 16),
-                
-                _buildDetailRow('Categoría', _product!.categoryName ?? 'Sin categoría'),
-                if (_product!.brand != null) _buildDetailRow('Marca', _product!.brand!),
-                if (_product!.model != null) _buildDetailRow('Modelo', _product!.model!),
-                if (_product!.weight > 0) 
+
+                _buildDetailRow(
+                    'Categoría', _product!.categoryName ?? 'Sin categoría'),
+                if (_product!.brand != null)
+                  _buildDetailRow('Marca', _product!.brand!),
+                if (_product!.model != null)
+                  _buildDetailRow('Modelo', _product!.model!),
+                if (_product!.weight > 0)
                   _buildDetailRow('Peso', '${_product!.weight} kg'),
               ],
             ),
@@ -622,9 +628,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             child: Text(
               '$label:',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: PublicStoreTheme.textSecondary,
-              ),
+                    fontWeight: FontWeight.w600,
+                    color: PublicStoreTheme.textSecondary,
+                  ),
             ),
           ),
           Expanded(
@@ -647,7 +653,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           style: Theme.of(context).textTheme.headlineMedium,
         ),
         const SizedBox(height: 24),
-        
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -720,7 +725,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       ),
               ),
             ),
-            
+
             // Info
             Padding(
               padding: const EdgeInsets.all(12),
@@ -737,9 +742,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   Text(
                     ChileanUtils.formatCurrency(product.price),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: PublicStoreTheme.primaryBlue,
-                      fontWeight: FontWeight.bold,
-                    ),
+                          color: PublicStoreTheme.primaryBlue,
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                 ],
               ),

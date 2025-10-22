@@ -39,12 +39,14 @@ class AuthService extends ChangeNotifier {
     _syncAuth(response.session);
     final user = response.user ?? _client.auth.currentUser;
     if (user == null) {
-      throw AuthException('No se pudo obtener el usuario después del inicio de sesión.');
+      throw AuthException(
+          'No se pudo obtener el usuario después del inicio de sesión.');
     }
     return user;
   }
 
-  Future<User> createUserWithEmailAndPassword(String email, String password) async {
+  Future<User> createUserWithEmailAndPassword(
+      String email, String password) async {
     final response = await _client.auth.signUp(
       email: email,
       password: password,
@@ -53,7 +55,8 @@ class AuthService extends ChangeNotifier {
     _syncAuth(response.session);
     final user = response.user ?? _client.auth.currentUser;
     if (user == null) {
-      throw AuthException('Revisa tu correo para confirmar la cuenta antes de iniciar sesión.');
+      throw AuthException(
+          'Revisa tu correo para confirmar la cuenta antes de iniciar sesión.');
     }
     return user;
   }
@@ -68,7 +71,8 @@ class AuthService extends ChangeNotifier {
       );
       return response;
     } catch (e) {
-      throw AuthException('Error al iniciar sesión con Google: ${e.toString()}');
+      throw AuthException(
+          'Error al iniciar sesión con Google: ${e.toString()}');
     }
   }
 

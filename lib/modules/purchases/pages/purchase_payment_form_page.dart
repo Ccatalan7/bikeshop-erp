@@ -22,7 +22,8 @@ class PurchasePaymentFormPage extends StatefulWidget {
   });
 
   @override
-  State<PurchasePaymentFormPage> createState() => _PurchasePaymentFormPageState();
+  State<PurchasePaymentFormPage> createState() =>
+      _PurchasePaymentFormPageState();
 }
 
 class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
@@ -95,18 +96,20 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
     }
 
     // Validate reference if required
-    if (_selectedPaymentMethod!.requiresReference && 
+    if (_selectedPaymentMethod!.requiresReference &&
         _referenceController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${_selectedPaymentMethod!.name} requiere número de referencia'),
+          content: Text(
+              '${_selectedPaymentMethod!.name} requiere número de referencia'),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    final amount = double.tryParse(_amountController.text.replaceAll('.', '').replaceAll(',', '.'));
+    final amount = double.tryParse(
+        _amountController.text.replaceAll('.', '').replaceAll(',', '.'));
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -148,15 +151,16 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
     try {
       // Create payment record - use correct column names from core_schema.sql
       final paymentData = {
-        'invoice_id': widget.invoiceId,  // Correct column name (not purchase_invoice_id)
+        'invoice_id':
+            widget.invoiceId, // Correct column name (not purchase_invoice_id)
         'date': _paymentDate.toIso8601String(),
         'amount': amount,
-        'payment_method_id': _selectedPaymentMethod!.id,  // UUID foreign key
-        'reference': _referenceController.text.trim().isEmpty 
-            ? null 
+        'payment_method_id': _selectedPaymentMethod!.id, // UUID foreign key
+        'reference': _referenceController.text.trim().isEmpty
+            ? null
             : _referenceController.text.trim(),
-        'notes': _notesController.text.trim().isEmpty 
-            ? null 
+        'notes': _notesController.text.trim().isEmpty
+            ? null
             : _notesController.text.trim(),
       };
 
@@ -176,7 +180,8 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Pago registrado: ${ChileanUtils.formatCurrency(amount)}'),
+            content:
+                Text('Pago registrado: ${ChileanUtils.formatCurrency(amount)}'),
             backgroundColor: Colors.green,
           ),
         );
@@ -188,7 +193,7 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
       print('Error type: ${e.runtimeType}');
       print('Error message: $e');
       print('========================');
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -265,8 +270,10 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
                 style: const TextStyle(color: Colors.grey),
               ),
             const Divider(height: 24),
-            _buildInfoRow('Total', ChileanUtils.formatCurrency(widget.invoice.total)),
-            _buildInfoRow('Pagado', ChileanUtils.formatCurrency(widget.invoice.paidAmount)),
+            _buildInfoRow(
+                'Total', ChileanUtils.formatCurrency(widget.invoice.total)),
+            _buildInfoRow('Pagado',
+                ChileanUtils.formatCurrency(widget.invoice.paidAmount)),
             _buildInfoRow(
               'Saldo',
               ChileanUtils.formatCurrency(widget.invoice.balance),
@@ -315,7 +322,7 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            
+
             // Payment Date
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -402,7 +409,8 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
                   labelText: 'Referencia *',
                   hintText: 'Ej: Transferencia #12345',
                   prefixIcon: const Icon(Icons.numbers),
-                  helperText: 'Campo requerido para ${_selectedPaymentMethod?.name}',
+                  helperText:
+                      'Campo requerido para ${_selectedPaymentMethod?.name}',
                   helperStyle: const TextStyle(color: Colors.red),
                 ),
                 maxLength: 100,

@@ -137,10 +137,11 @@ class Supplier {
 
   // Validation methods
   bool get hasValidRut => rut != null && ChileanUtils.isValidRut(rut!);
-  
+
   bool get hasValidEmail => email == null || ChileanUtils.isValidEmail(email!);
-  
-  bool get hasValidPhone => phone == null || ChileanUtils.isValidChileanPhone(phone!);
+
+  bool get hasValidPhone =>
+      phone == null || ChileanUtils.isValidChileanPhone(phone!);
 
   String get formattedRut => rut != null ? ChileanUtils.formatRut(rut!) : '';
 
@@ -192,7 +193,7 @@ enum PaymentTerms {
 
   const PaymentTerms(this.displayName);
   final String displayName;
-  
+
   int get days {
     switch (this) {
       case PaymentTerms.immediate:

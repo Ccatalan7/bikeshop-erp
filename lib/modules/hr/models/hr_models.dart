@@ -36,8 +36,12 @@ class Department {
       managerId: map['manager_id'],
       description: map['description'],
       active: map['active'] ?? true,
-      createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : DateTime.now(),
-      updatedAt: map['updated_at'] != null ? DateTime.parse(map['updated_at']) : DateTime.now(),
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'])
+          : DateTime.now(),
+      updatedAt: map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'])
+          : DateTime.now(),
     );
   }
 
@@ -81,6 +85,7 @@ class Department {
 // EMPLOYEE MODEL
 // ============================================================================
 enum EmploymentType { fullTime, partTime, contractor, intern }
+
 enum EmployeeStatus { active, inactive, onLeave, terminated }
 
 class Employee {
@@ -150,9 +155,14 @@ class Employee {
       email: map['email'],
       phone: map['phone'],
       rut: map['rut'],
-      birthDate: map['birth_date'] != null ? DateTime.parse(map['birth_date']) : null,
-      hireDate: map['hire_date'] != null ? DateTime.parse(map['hire_date']) : DateTime.now(),
-      terminationDate: map['termination_date'] != null ? DateTime.parse(map['termination_date']) : null,
+      birthDate:
+          map['birth_date'] != null ? DateTime.parse(map['birth_date']) : null,
+      hireDate: map['hire_date'] != null
+          ? DateTime.parse(map['hire_date'])
+          : DateTime.now(),
+      terminationDate: map['termination_date'] != null
+          ? DateTime.parse(map['termination_date'])
+          : null,
       departmentId: map['department_id'],
       jobTitle: map['job_title'] ?? '',
       employmentType: _employmentTypeFromString(map['employment_type']),
@@ -163,8 +173,12 @@ class Employee {
       emergencyContactName: map['emergency_contact_name'],
       emergencyContactPhone: map['emergency_contact_phone'],
       notes: map['notes'],
-      createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : DateTime.now(),
-      updatedAt: map['updated_at'] != null ? DateTime.parse(map['updated_at']) : DateTime.now(),
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'])
+          : DateTime.now(),
+      updatedAt: map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'])
+          : DateTime.now(),
     );
   }
 
@@ -178,9 +192,11 @@ class Employee {
       if (email != null) 'email': email,
       if (phone != null) 'phone': phone,
       if (rut != null) 'rut': rut,
-      if (birthDate != null) 'birth_date': birthDate!.toIso8601String().split('T')[0],
+      if (birthDate != null)
+        'birth_date': birthDate!.toIso8601String().split('T')[0],
       'hire_date': hireDate.toIso8601String().split('T')[0],
-      if (terminationDate != null) 'termination_date': terminationDate!.toIso8601String().split('T')[0],
+      if (terminationDate != null)
+        'termination_date': terminationDate!.toIso8601String().split('T')[0],
       if (departmentId != null) 'department_id': departmentId,
       'job_title': jobTitle,
       'employment_type': _employmentTypeToString(employmentType),
@@ -188,8 +204,10 @@ class Employee {
       if (photoUrl != null) 'photo_url': photoUrl,
       if (address != null) 'address': address,
       if (city != null) 'city': city,
-      if (emergencyContactName != null) 'emergency_contact_name': emergencyContactName,
-      if (emergencyContactPhone != null) 'emergency_contact_phone': emergencyContactPhone,
+      if (emergencyContactName != null)
+        'emergency_contact_name': emergencyContactName,
+      if (emergencyContactPhone != null)
+        'emergency_contact_phone': emergencyContactPhone,
       if (notes != null) 'notes': notes,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -293,7 +311,8 @@ class Employee {
       address: address ?? this.address,
       city: city ?? this.city,
       emergencyContactName: emergencyContactName ?? this.emergencyContactName,
-      emergencyContactPhone: emergencyContactPhone ?? this.emergencyContactPhone,
+      emergencyContactPhone:
+          emergencyContactPhone ?? this.emergencyContactPhone,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -376,8 +395,12 @@ class WorkSchedule {
       weeklyHours: (map['weekly_hours'] ?? 45.0).toDouble(),
       timezone: map['timezone'] ?? 'America/Santiago',
       active: map['active'] ?? true,
-      createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : DateTime.now(),
-      updatedAt: map['updated_at'] != null ? DateTime.parse(map['updated_at']) : DateTime.now(),
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'])
+          : DateTime.now(),
+      updatedAt: map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'])
+          : DateTime.now(),
     );
   }
 
@@ -390,13 +413,16 @@ class WorkSchedule {
       if (mondayEnd != null) 'monday_end': _timeToString(mondayEnd!),
       if (tuesdayStart != null) 'tuesday_start': _timeToString(tuesdayStart!),
       if (tuesdayEnd != null) 'tuesday_end': _timeToString(tuesdayEnd!),
-      if (wednesdayStart != null) 'wednesday_start': _timeToString(wednesdayStart!),
+      if (wednesdayStart != null)
+        'wednesday_start': _timeToString(wednesdayStart!),
       if (wednesdayEnd != null) 'wednesday_end': _timeToString(wednesdayEnd!),
-      if (thursdayStart != null) 'thursday_start': _timeToString(thursdayStart!),
+      if (thursdayStart != null)
+        'thursday_start': _timeToString(thursdayStart!),
       if (thursdayEnd != null) 'thursday_end': _timeToString(thursdayEnd!),
       if (fridayStart != null) 'friday_start': _timeToString(fridayStart!),
       if (fridayEnd != null) 'friday_end': _timeToString(fridayEnd!),
-      if (saturdayStart != null) 'saturday_start': _timeToString(saturdayStart!),
+      if (saturdayStart != null)
+        'saturday_start': _timeToString(saturdayStart!),
       if (saturdayEnd != null) 'saturday_end': _timeToString(saturdayEnd!),
       if (sundayStart != null) 'sunday_start': _timeToString(sundayStart!),
       if (sundayEnd != null) 'sunday_end': _timeToString(sundayEnd!),
@@ -424,7 +450,9 @@ class WorkSchedule {
 // EMPLOYEE CONTRACT MODEL
 // ============================================================================
 enum ContractType { indefinite, fixedTerm, projectBased, seasonal }
+
 enum ContractStatus { draft, active, expired, terminated }
+
 enum SalaryPeriod { monthly, biweekly, weekly, hourly }
 
 class EmployeeContract {
@@ -481,8 +509,12 @@ class EmployeeContract {
       departmentId: map['department_id'],
       status: _contractStatusFromString(map['status']),
       notes: map['notes'],
-      createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : DateTime.now(),
-      updatedAt: map['updated_at'] != null ? DateTime.parse(map['updated_at']) : DateTime.now(),
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'])
+          : DateTime.now(),
+      updatedAt: map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'])
+          : DateTime.now(),
     );
   }
 
@@ -610,8 +642,8 @@ class Attendance {
 
   // Computed
   bool get isOngoing => status == AttendanceStatus.ongoing && checkOut == null;
-  Duration get currentDuration => checkOut != null 
-      ? checkOut!.difference(checkIn) 
+  Duration get currentDuration => checkOut != null
+      ? checkOut!.difference(checkIn)
       : DateTime.now().difference(checkIn);
 
   Attendance({
@@ -638,7 +670,8 @@ class Attendance {
       id: map['id'],
       employeeId: map['employee_id'] ?? '',
       checkIn: DateTime.parse(map['check_in']),
-      checkOut: map['check_out'] != null ? DateTime.parse(map['check_out']) : null,
+      checkOut:
+          map['check_out'] != null ? DateTime.parse(map['check_out']) : null,
       workedHours: map['worked_hours']?.toDouble(),
       overtimeHours: map['overtime_hours']?.toDouble(),
       breakMinutes: map['break_minutes'] ?? 0,
@@ -647,9 +680,15 @@ class Attendance {
       notes: map['notes'],
       status: _statusFromString(map['status']),
       approvedBy: map['approved_by'],
-      approvedAt: map['approved_at'] != null ? DateTime.parse(map['approved_at']) : null,
-      createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : DateTime.now(),
-      updatedAt: map['updated_at'] != null ? DateTime.parse(map['updated_at']) : DateTime.now(),
+      approvedAt: map['approved_at'] != null
+          ? DateTime.parse(map['approved_at'])
+          : null,
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'])
+          : DateTime.now(),
+      updatedAt: map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'])
+          : DateTime.now(),
     );
   }
 

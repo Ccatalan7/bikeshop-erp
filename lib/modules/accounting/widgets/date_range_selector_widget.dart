@@ -19,7 +19,8 @@ class DateRangeSelectorWidget extends StatefulWidget {
   });
 
   @override
-  State<DateRangeSelectorWidget> createState() => _DateRangeSelectorWidgetState();
+  State<DateRangeSelectorWidget> createState() =>
+      _DateRangeSelectorWidgetState();
 }
 
 class _DateRangeSelectorWidgetState extends State<DateRangeSelectorWidget> {
@@ -48,11 +49,11 @@ class _DateRangeSelectorWidgetState extends State<DateRangeSelectorWidget> {
             Text(
               'Período del Reporte',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 16),
-            
+
             // Period preset dropdown
             DropdownButtonFormField<ReportPeriod>(
               value: _selectedPeriod,
@@ -81,9 +82,9 @@ class _DateRangeSelectorWidgetState extends State<DateRangeSelectorWidget> {
                 }
               },
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Custom date range (only if custom is selected)
             if (_selectedPeriod == ReportPeriod.custom) ...[
               Row(
@@ -108,10 +109,10 @@ class _DateRangeSelectorWidgetState extends State<DateRangeSelectorWidget> {
                       },
                     ),
                   ),
-                  
+
                   if (widget.showEndDate) ...[
                     const SizedBox(width: 16),
-                    
+
                     // End date
                     Expanded(
                       child: _buildDatePicker(
@@ -133,7 +134,7 @@ class _DateRangeSelectorWidgetState extends State<DateRangeSelectorWidget> {
                 ],
               ),
             ],
-            
+
             // Show selected range preview
             if (_selectedPeriod != ReportPeriod.custom) ...[
               const SizedBox(height: 12),
@@ -157,8 +158,10 @@ class _DateRangeSelectorWidgetState extends State<DateRangeSelectorWidget> {
                             ? '${_formatDate(_startDate)} - ${_formatDate(_endDate)}'
                             : _formatDate(_endDate),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        ),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
+                            ),
                       ),
                     ),
                   ],
@@ -186,7 +189,7 @@ class _DateRangeSelectorWidgetState extends State<DateRangeSelectorWidget> {
           lastDate: DateTime(2100),
           locale: const Locale('es', 'CL'),
         );
-        
+
         if (picked != null) {
           onDateSelected(picked);
         }

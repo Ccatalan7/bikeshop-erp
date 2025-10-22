@@ -26,7 +26,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       if (_selectedStatus != 'all' && order.status != _selectedStatus) {
         return false;
       }
-      if (_selectedPaymentStatus != 'all' && order.paymentStatus != _selectedPaymentStatus) {
+      if (_selectedPaymentStatus != 'all' &&
+          order.paymentStatus != _selectedPaymentStatus) {
         return false;
       }
       return true;
@@ -47,89 +48,96 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           ),
         ],
       ),
-        body: Column(
-          children: [
-            // Filters
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-              child: Row(
-                children: [
-                  const Text('Estado: '),
-                  const SizedBox(width: 8),
-                  DropdownButton<String>(
-                    value: _selectedStatus,
-                    items: const [
-                      DropdownMenuItem(value: 'all', child: Text('Todos')),
-                      DropdownMenuItem(value: 'pending', child: Text('Pendiente')),
-                      DropdownMenuItem(value: 'confirmed', child: Text('Confirmado')),
-                      DropdownMenuItem(value: 'processing', child: Text('En Proceso')),
-                      DropdownMenuItem(value: 'shipped', child: Text('Enviado')),
-                      DropdownMenuItem(value: 'delivered', child: Text('Entregado')),
-                      DropdownMenuItem(value: 'cancelled', child: Text('Cancelado')),
-                    ],
-                    onChanged: (value) {
-                      setState(() => _selectedStatus = value ?? 'all');
-                    },
-                  ),
-                  const SizedBox(width: 24),
-                  const Text('Pago: '),
-                  const SizedBox(width: 8),
-                  DropdownButton<String>(
-                    value: _selectedPaymentStatus,
-                    items: const [
-                      DropdownMenuItem(value: 'all', child: Text('Todos')),
-                      DropdownMenuItem(value: 'pending', child: Text('Pendiente')),
-                      DropdownMenuItem(value: 'paid', child: Text('Pagado')),
-                      DropdownMenuItem(value: 'failed', child: Text('Fallido')),
-                      DropdownMenuItem(value: 'refunded', child: Text('Reembolsado')),
-                    ],
-                    onChanged: (value) {
-                      setState(() => _selectedPaymentStatus = value ?? 'all');
-                    },
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${orders.length} pedidos',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ],
-              ),
+      body: Column(
+        children: [
+          // Filters
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+            child: Row(
+              children: [
+                const Text('Estado: '),
+                const SizedBox(width: 8),
+                DropdownButton<String>(
+                  value: _selectedStatus,
+                  items: const [
+                    DropdownMenuItem(value: 'all', child: Text('Todos')),
+                    DropdownMenuItem(
+                        value: 'pending', child: Text('Pendiente')),
+                    DropdownMenuItem(
+                        value: 'confirmed', child: Text('Confirmado')),
+                    DropdownMenuItem(
+                        value: 'processing', child: Text('En Proceso')),
+                    DropdownMenuItem(value: 'shipped', child: Text('Enviado')),
+                    DropdownMenuItem(
+                        value: 'delivered', child: Text('Entregado')),
+                    DropdownMenuItem(
+                        value: 'cancelled', child: Text('Cancelado')),
+                  ],
+                  onChanged: (value) {
+                    setState(() => _selectedStatus = value ?? 'all');
+                  },
+                ),
+                const SizedBox(width: 24),
+                const Text('Pago: '),
+                const SizedBox(width: 8),
+                DropdownButton<String>(
+                  value: _selectedPaymentStatus,
+                  items: const [
+                    DropdownMenuItem(value: 'all', child: Text('Todos')),
+                    DropdownMenuItem(
+                        value: 'pending', child: Text('Pendiente')),
+                    DropdownMenuItem(value: 'paid', child: Text('Pagado')),
+                    DropdownMenuItem(value: 'failed', child: Text('Fallido')),
+                    DropdownMenuItem(
+                        value: 'refunded', child: Text('Reembolsado')),
+                  ],
+                  onChanged: (value) {
+                    setState(() => _selectedPaymentStatus = value ?? 'all');
+                  },
+                ),
+                const Spacer(),
+                Text(
+                  '${orders.length} pedidos',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ],
             ),
+          ),
 
-            // Orders List
-            Expanded(
-              child: websiteService.isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : orders.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.shopping_bag_outlined,
-                                  size: 64, color: Colors.grey[400]),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No hay pedidos online',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey[600],
-                                ),
+          // Orders List
+          Expanded(
+            child: websiteService.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : orders.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.shopping_bag_outlined,
+                                size: 64, color: Colors.grey[400]),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No hay pedidos online',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey[600],
                               ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: orders.length,
-                          itemBuilder: (context, index) {
-                            final order = orders[index];
-                            return _buildOrderCard(context, order);
-                          },
+                            ),
+                          ],
                         ),
-            ),
-          ],
-        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: orders.length,
+                        itemBuilder: (context, index) {
+                          final order = orders[index];
+                          return _buildOrderCard(context, order);
+                        },
+                      ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -275,7 +283,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
               ],
             ),
 
-            if (order.customerNotes != null && order.customerNotes!.isNotEmpty) ...[
+            if (order.customerNotes != null &&
+                order.customerNotes!.isNotEmpty) ...[
               const Divider(height: 24),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,7 +310,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                 if (order.status == 'pending')
                   ElevatedButton.icon(
                     onPressed: () async {
-                      await websiteService.updateOrderStatus(order.id, 'confirmed');
+                      await websiteService.updateOrderStatus(
+                          order.id, 'confirmed');
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Pedido confirmado')),
@@ -317,7 +327,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                   ElevatedButton.icon(
                     onPressed: () async {
                       try {
-                        final invoiceId = await websiteService.processOrder(order.id);
+                        final invoiceId =
+                            await websiteService.processOrder(order.id);
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -360,7 +371,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                 PopupMenuButton<String>(
                   onSelected: (value) async {
                     if (value == 'cancel') {
-                      await websiteService.updateOrderStatus(order.id, 'cancelled');
+                      await websiteService.updateOrderStatus(
+                          order.id, 'cancelled');
                     }
                   },
                   itemBuilder: (context) => [

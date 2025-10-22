@@ -63,8 +63,9 @@ class Invoice {
         orElse: () => InvoiceStatus.draft,
       ),
       items: (json['items'] as List?)
-          ?.map((item) => InvoiceItem.fromJson(item))
-          .toList() ?? [],
+              ?.map((item) => InvoiceItem.fromJson(item))
+              .toList() ??
+          [],
       subtotal: (json['subtotal'] as num).toDouble(),
       ivaAmount: (json['iva_amount'] as num).toDouble(),
       discount: (json['discount'] as num?)?.toDouble() ?? 0.0,
@@ -161,10 +162,13 @@ class Invoice {
   }
 
   bool get isPaid => status == InvoiceStatus.paid;
-  bool get isOverdue => status == InvoiceStatus.sent && DateTime.now().isAfter(dueDate);
-  int get daysOverdue => isOverdue ? DateTime.now().difference(dueDate).inDays : 0;
-  
-  double get totalQuantity => items.fold(0.0, (sum, item) => sum + item.quantity);
+  bool get isOverdue =>
+      status == InvoiceStatus.sent && DateTime.now().isAfter(dueDate);
+  int get daysOverdue =>
+      isOverdue ? DateTime.now().difference(dueDate).inDays : 0;
+
+  double get totalQuantity =>
+      items.fold(0.0, (sum, item) => sum + item.quantity);
 
   @override
   String toString() {

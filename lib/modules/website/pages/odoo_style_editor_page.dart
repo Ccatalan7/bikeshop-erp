@@ -1,10 +1,13 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/constants/storage_constants.dart';
@@ -13,6 +16,9 @@ import '../../../shared/models/product.dart';
 import '../services/website_service.dart';
 import '../widgets/website_block_renderer.dart';
 import '../models/website_models.dart';
+import '../models/website_block_registry.dart';
+import '../models/website_block_definition.dart';
+import '../models/website_block_type.dart';
 // import '../services/website_service.dart';
 
 /// 🎨 ODOO-STYLE VISUAL EDITOR - PHASE 3
@@ -27,24 +33,10 @@ import '../models/website_models.dart';
 ///
 /// This is the ULTIMATE version! 🚀
 
-// Block types that can be added
-enum BlockType {
-  hero,
-  carousel,
-  products,
-  services,
-  about,
-  testimonials,
-  features,
-  cta,
-  gallery,
-  contact,
-}
-
 // Block data model
 class WebsiteBlock {
   final String id;
-  final BlockType type;
+  final WebsiteBlockType type;
   final Map<String, dynamic> data;
   bool isVisible;
 
@@ -57,7 +49,7 @@ class WebsiteBlock {
 
   WebsiteBlock copyWith({
     String? id,
-    BlockType? type,
+    WebsiteBlockType? type,
     Map<String, dynamic>? data,
     bool? isVisible,
   }) {
@@ -81,6 +73,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   // ============================================================================
   // STATE MANAGEMENT
   // ============================================================================
+
+  final Uuid _uuid = const Uuid();
 
   bool _isSaving = false;
   bool _hasChanges = false;
@@ -156,6 +150,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
   Future<void> _loadFromDatabase() async {
     try {
+      await WebsiteBlockRegistry.ensureInitialized();
+
       final websiteService = context.read<WebsiteService>();
       final inventoryService = context.read<InventoryService>();
 
@@ -175,10 +171,13 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       } else {
         // Convert database blocks to WebsiteBlock objects
         _blocks = loadedBlocks.map((blockData) {
+          final typeRaw = (blockData['block_type'] ?? 'hero').toString();
+          final dataRaw =
+              Map<String, dynamic>.from(blockData['block_data'] ?? {});
           return WebsiteBlock(
-            id: blockData['id'] ?? '',
-            type: _parseBlockType(blockData['block_type'] ?? 'hero'),
-            data: Map<String, dynamic>.from(blockData['block_data'] ?? {}),
+            id: blockData['id']?.toString() ?? _uuid.v4(),
+            type: _parseBlockType(typeRaw),
+            data: dataRaw,
             isVisible: blockData['is_visible'] ?? true,
           );
         }).toList();
@@ -203,94 +202,30 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     }
   }
 
-  BlockType _parseBlockType(String typeString) {
-    switch (typeString) {
-      case 'hero':
-        return BlockType.hero;
-      case 'carousel':
-        return BlockType.carousel;
-      case 'products':
-        return BlockType.products;
-      case 'services':
-        return BlockType.services;
-      case 'about':
-        return BlockType.about;
-      case 'testimonials':
-        return BlockType.testimonials;
-      case 'features':
-        return BlockType.features;
-      case 'cta':
-        return BlockType.cta;
-      case 'gallery':
-        return BlockType.gallery;
-      case 'contact':
-        return BlockType.contact;
-      default:
-        return BlockType.hero;
-    }
+  WebsiteBlockType _parseBlockType(String typeString) {
+    return parseWebsiteBlockType(typeString);
+  }
+
+  Map<String, dynamic> _cloneBlockData(Map<String, dynamic> data) {
+    return jsonDecode(jsonEncode(data)) as Map<String, dynamic>;
   }
 
   void _initializeDefaultBlocks() {
-    const uuid = Uuid();
-    _blocks = [
-      WebsiteBlock(
-        id: uuid.v4(),
-        type: BlockType.hero,
-        data: {
-          'title': 'SERVICIOS Y PRODUCTOS DE BICICLETA',
-          'subtitle': 'TODO LO QUE NECESITAS PARA TU BICICLETA EN VIÑA DEL MAR',
-          'ctaText': 'VER PRODUCTOS',
-          'alignment': 'center',
-          'showOverlay': true,
-          'overlayOpacity': 0.5,
-          'imageUrl': null,
-        },
-      ),
-      WebsiteBlock(
-        id: uuid.v4(),
-        type: BlockType.products,
-        data: {
-          'title': 'Productos Destacados',
-          'layout': 'grid',
-          'itemsPerRow': 3,
-        },
-      ),
-      WebsiteBlock(
-        id: uuid.v4(),
-        type: BlockType.services,
-        data: {
-          'title': 'Nuestros Servicios',
-          'services': [
-            {
-              'title': 'Venta de Bicicletas',
-              'icon': 'directions_bike',
-              'description': 'Amplio catálogo'
-            },
-            {
-              'title': 'Reparaciones',
-              'icon': 'build',
-              'description': 'Servicio técnico'
-            },
-            {
-              'title': 'Accesorios',
-              'icon': 'shopping_bag',
-              'description': 'Todo para tu bici'
-            },
-          ],
-        },
-      ),
-      WebsiteBlock(
-        id: uuid.v4(),
-        type: BlockType.about,
-        data: {
-          'title': 'Sobre Nosotros',
-          'content':
-              'Somos una tienda especializada en bicicletas con más de 10 años de experiencia.',
-          'imageUrl': null,
-          'imagePosition': 'right',
-        },
-      ),
+    final defaultTypes = [
+      WebsiteBlockType.hero,
+      WebsiteBlockType.products,
+      WebsiteBlockType.services,
+      WebsiteBlockType.about,
     ];
+
+    _blocks = defaultTypes.map((type) {
+      final definition = WebsiteBlockRegistry.definitionFor(type);
+      return WebsiteBlock(
+        id: _uuid.v4(),
+        type: type,
+        data: _cloneBlockData(definition.defaultData),
+      );
+    }).toList();
 
     if (_blocks.isNotEmpty) {
       _selectedBlockId = _blocks.first.id;
@@ -324,6 +259,26 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       _history.removeAt(0);
       _historyIndex--;
     }
+  }
+
+  void _updateBlockData(
+    WebsiteBlock block,
+    String key,
+    dynamic value,
+  ) {
+    setState(() {
+      if (value == null) {
+        block.data.remove(key);
+      } else {
+        block.data[key] = value;
+      }
+      if (key == 'buttonText') {
+        block.data['ctaText'] = value;
+      } else if (key == 'ctaText' && value == null) {
+        block.data.remove('buttonText');
+      }
+    });
+    _markAsChanged();
   }
 
   void _undo() {
@@ -445,10 +400,15 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     });
   }
 
-  void _addBlock(BlockType type) {
+  void _addBlock(WebsiteBlockType type) {
     final newBlock = _createBlockTemplate(type);
+
     setState(() {
-      _blocks.add(newBlock);
+      final insertIndex = _selectedBlockId != null
+          ? _blocks.indexWhere((b) => b.id == _selectedBlockId) + 1
+          : _blocks.length;
+      final boundedIndex = insertIndex.clamp(0, _blocks.length);
+      _blocks.insert(boundedIndex, newBlock);
       _selectedBlockId = newBlock.id;
       _activeTab = 'editar';
       _markAsChanged();
@@ -462,122 +422,13 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     );
   }
 
-  WebsiteBlock _createBlockTemplate(BlockType type) {
-    const uuid = Uuid();
-    final id = uuid.v4(); // Generate proper UUID
-
-    switch (type) {
-      case BlockType.hero:
-        return WebsiteBlock(
-          id: id,
-          type: type,
-          data: {
-            'title': 'Nuevo Título',
-            'subtitle': 'Nuevo subtítulo',
-            'ctaText': 'BOTÓN',
-            'alignment': 'center',
-            'showOverlay': true,
-            'overlayOpacity': 0.5,
-          },
-        );
-      case BlockType.carousel:
-        return WebsiteBlock(
-          id: id,
-          type: type,
-          data: {
-            'autoPlay': true,
-            'intervalSeconds': 5,
-            'animation': 'slide',
-            'showIndicators': true,
-            'showArrows': true,
-            'slides': [
-              {
-                'title': 'Destaca tus ofertas',
-                'subtitle': 'Promociones semanales para ciclistas',
-                'ctaText': 'Ver catálogo',
-                'ctaLink': '/tienda/productos',
-                'imageUrl': null,
-                'showOverlay': true,
-                'overlayOpacity': 0.55,
-              },
-            ],
-          },
-        );
-      case BlockType.products:
-        return WebsiteBlock(
-          id: id,
-          type: type,
-          data: {
-            'title': 'Productos',
-            'layout': 'grid',
-            'itemsPerRow': 3,
-          },
-        );
-      case BlockType.services:
-        return WebsiteBlock(
-          id: id,
-          type: type,
-          data: {
-            'title': 'Servicios',
-            'services': [],
-          },
-        );
-      case BlockType.about:
-        return WebsiteBlock(
-          id: id,
-          type: type,
-          data: {
-            'title': 'Sobre Nosotros',
-            'content': 'Contenido...',
-            'imagePosition': 'right',
-          },
-        );
-      case BlockType.testimonials:
-        return WebsiteBlock(
-          id: id,
-          type: type,
-          data: {
-            'title': 'Testimonios',
-            'testimonials': [],
-          },
-        );
-      case BlockType.features:
-        return WebsiteBlock(
-          id: id,
-          type: type,
-          data: {
-            'title': 'Características',
-            'features': [],
-          },
-        );
-      case BlockType.cta:
-        return WebsiteBlock(
-          id: id,
-          type: type,
-          data: {
-            'title': 'Llamado a la Acción',
-            'buttonText': 'COMENZAR',
-          },
-        );
-      case BlockType.gallery:
-        return WebsiteBlock(
-          id: id,
-          type: type,
-          data: {
-            'title': 'Galería',
-            'images': [],
-          },
-        );
-      case BlockType.contact:
-        return WebsiteBlock(
-          id: id,
-          type: type,
-          data: {
-            'title': 'Contacto',
-            'showForm': true,
-          },
-        );
-    }
+  WebsiteBlock _createBlockTemplate(WebsiteBlockType type) {
+    final definition = WebsiteBlockRegistry.definitionFor(type);
+    return WebsiteBlock(
+      id: _uuid.v4(),
+      type: type,
+      data: _cloneBlockData(definition.defaultData),
+    );
   }
 
   void _removeBlock(String blockId) {
@@ -617,7 +468,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   void _duplicateBlock(String blockId) {
     final block = _blocks.firstWhere((b) => b.id == blockId);
     final newBlock = block.copyWith(
-      id: '${block.type.name}_${DateTime.now().millisecondsSinceEpoch}',
+      id: _uuid.v4(),
     );
 
     setState(() {
@@ -661,54 +512,32 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     _moveBlock(index, _blocks.length - 1);
   }
 
-  String _getBlockTypeName(BlockType type) {
-    switch (type) {
-      case BlockType.hero:
-        return 'Hero / Banner';
-      case BlockType.carousel:
-        return 'Carrusel Banner';
-      case BlockType.products:
-        return 'Productos';
-      case BlockType.services:
-        return 'Servicios';
-      case BlockType.about:
-        return 'Sobre Nosotros';
-      case BlockType.testimonials:
-        return 'Testimonios';
-      case BlockType.features:
-        return 'Características';
-      case BlockType.cta:
-        return 'Llamado a la Acción';
-      case BlockType.gallery:
-        return 'Galería';
-      case BlockType.contact:
-        return 'Contacto';
+  void _toggleBlockVisibility(String blockId) {
+    final blockIndex = _blocks.indexWhere((b) => b.id == blockId);
+    if (blockIndex == -1) {
+      return;
     }
+
+    setState(() {
+      _blocks[blockIndex].isVisible = !_blocks[blockIndex].isVisible;
+      _markAsChanged();
+    });
+
+    final action = _blocks[blockIndex].isVisible ? 'mostrado' : 'ocultado';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✓ Bloque $action'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
-  IconData _getBlockTypeIcon(BlockType type) {
-    switch (type) {
-      case BlockType.hero:
-        return Icons.view_carousel;
-      case BlockType.carousel:
-        return Icons.slideshow;
-      case BlockType.products:
-        return Icons.shopping_bag;
-      case BlockType.services:
-        return Icons.room_service;
-      case BlockType.about:
-        return Icons.info;
-      case BlockType.testimonials:
-        return Icons.format_quote;
-      case BlockType.features:
-        return Icons.star;
-      case BlockType.cta:
-        return Icons.touch_app;
-      case BlockType.gallery:
-        return Icons.photo_library;
-      case BlockType.contact:
-        return Icons.contact_mail;
-    }
+  String _getBlockTypeName(WebsiteBlockType type) {
+    return WebsiteBlockRegistry.definitionFor(type).title;
+  }
+
+  IconData _getBlockTypeIcon(WebsiteBlockType type) {
+    return type.icon;
   }
 
   void _showColorPicker(Color currentColor, Function(Color) onColorChanged) {
@@ -751,7 +580,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     );
   }
 
-  Future<String?> _pickAndUploadImage({String folder = 'website/banners'}) async {
+  Future<String?> _pickAndUploadImage(
+      {String folder = 'website/banners'}) async {
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
@@ -1211,160 +1041,231 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   }
 
   Widget _buildClickablePreview(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: _blocks.asMap().entries.map((entry) {
-          final index = entry.key;
-          final block = entry.value;
-          final isSelected = block.id == _selectedBlockId;
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
+      itemCount: _blocks.length,
+      onReorder: (oldIndex, newIndex) {
+        setState(() {
+          if (newIndex > oldIndex) {
+            newIndex--;
+          }
+          final block = _blocks.removeAt(oldIndex);
+          _blocks.insert(newIndex, block);
+          _markAsChanged();
+        });
+      },
+      itemBuilder: (context, index) {
+        final block = _blocks[index];
+        final isSelected = block.id == _selectedBlockId;
 
-          return GestureDetector(
-            onTap: () => _selectBlock(block.id),
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: isSelected ? Colors.blue : Colors.transparent,
-                    width: 3,
-                  ),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: Colors.blue.withOpacity(0.3),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          ),
-                        ]
-                      : null,
+        return GestureDetector(
+          key: ValueKey(block.id),
+          onTap: () => _selectBlock(block.id),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: isSelected ? Colors.blue : Colors.transparent,
+                  width: 3,
                 ),
-                child: Stack(
-                  children: [
-                    _buildBlockPreview(block),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: Colors.blue.withOpacity(0.3),
+                          blurRadius: 10,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Stack(
+                children: [
+                  _buildBlockPreview(block),
 
-                    // Block actions overlay (shown on hover when selected)
-                    if (isSelected)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 8,
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Move to top
-                              if (index > 0)
-                                IconButton(
-                                  icon: const Icon(Icons.vertical_align_top,
-                                      color: Colors.white, size: 16),
-                                  onPressed: () => _moveBlockToTop(index),
-                                  tooltip: 'Mover al principio',
-                                ),
-
-                              // Move up
-                              if (index > 0)
-                                IconButton(
-                                  icon: const Icon(Icons.arrow_upward,
-                                      color: Colors.white, size: 16),
-                                  onPressed: () => _moveBlock(index, index - 1),
-                                  tooltip: 'Mover arriba',
-                                ),
-
-                              // Move down
-                              if (index < _blocks.length - 1)
-                                IconButton(
-                                  icon: const Icon(Icons.arrow_downward,
-                                      color: Colors.white, size: 16),
-                                  onPressed: () => _moveBlock(index, index + 1),
-                                  tooltip: 'Mover abajo',
-                                ),
-
-                              // Move to bottom
-                              if (index < _blocks.length - 1)
-                                IconButton(
-                                  icon: const Icon(Icons.vertical_align_bottom,
-                                      color: Colors.white, size: 16),
-                                  onPressed: () => _moveBlockToBottom(index),
-                                  tooltip: 'Mover al final',
-                                ),
-
-                              // Duplicate
-                              IconButton(
-                                icon: const Icon(Icons.content_copy,
+                  // Block actions overlay (shown on hover when selected)
+                  if (isSelected)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Drag handle
+                            ReorderableDragStartListener(
+                              index: index,
+                              child: IconButton(
+                                icon: const Icon(Icons.drag_indicator,
                                     color: Colors.white, size: 16),
-                                onPressed: () => _duplicateBlock(block.id),
-                                tooltip: 'Duplicar',
+                                onPressed: null,
+                                tooltip: 'Arrastrar para reordenar',
+                              ),
+                            ),
+
+                            // Visibility toggle
+                            IconButton(
+                              icon: Icon(
+                                block.isVisible
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                              onPressed: () => _toggleBlockVisibility(block.id),
+                              tooltip: block.isVisible
+                                  ? 'Ocultar bloque'
+                                  : 'Mostrar bloque',
+                            ),
+
+                            // Move to top
+                            if (index > 0)
+                              IconButton(
+                                icon: const Icon(Icons.vertical_align_top,
+                                    color: Colors.white, size: 16),
+                                onPressed: () => _moveBlockToTop(index),
+                                tooltip: 'Mover al principio',
                               ),
 
-                              // Delete
+                            // Move up
+                            if (index > 0)
                               IconButton(
-                                icon: const Icon(Icons.delete,
+                                icon: const Icon(Icons.arrow_upward,
                                     color: Colors.white, size: 16),
-                                onPressed: () => _removeBlock(block.id),
-                                tooltip: 'Eliminar',
+                                onPressed: () => _moveBlock(index, index - 1),
+                                tooltip: 'Mover arriba',
                               ),
-                            ],
-                          ),
+
+                            // Move down
+                            if (index < _blocks.length - 1)
+                              IconButton(
+                                icon: const Icon(Icons.arrow_downward,
+                                    color: Colors.white, size: 16),
+                                onPressed: () => _moveBlock(index, index + 1),
+                                tooltip: 'Mover abajo',
+                              ),
+
+                            // Move to bottom
+                            if (index < _blocks.length - 1)
+                              IconButton(
+                                icon: const Icon(Icons.vertical_align_bottom,
+                                    color: Colors.white, size: 16),
+                                onPressed: () => _moveBlockToBottom(index),
+                                tooltip: 'Mover al final',
+                              ),
+
+                            // Duplicate
+                            IconButton(
+                              icon: const Icon(Icons.content_copy,
+                                  color: Colors.white, size: 16),
+                              onPressed: () => _duplicateBlock(block.id),
+                              tooltip: 'Duplicar',
+                            ),
+
+                            // Delete
+                            IconButton(
+                              icon: const Icon(Icons.delete,
+                                  color: Colors.white, size: 16),
+                              onPressed: () => _removeBlock(block.id),
+                              tooltip: 'Eliminar',
+                            ),
+                          ],
                         ),
                       ),
+                    ),
 
-                    // Block label
-                    if (isSelected)
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(_getBlockTypeIcon(block.type),
-                                  color: Colors.white, size: 14),
-                              const SizedBox(width: 6),
-                              Text(
-                                _getBlockTypeName(block.type),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                  // Block label
+                  if (isSelected)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(_getBlockTypeIcon(block.type),
+                                color: Colors.white, size: 14),
+                            const SizedBox(width: 6),
+                            Text(
+                              _getBlockTypeName(block.type),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
-          );
-        }).toList(),
-      ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildBlockPreview(WebsiteBlock block) {
+    // Show placeholder for hidden blocks in editor
+    if (!block.isVisible) {
+      return Container(
+        padding: const EdgeInsets.all(32),
+        color: Colors.grey.shade200,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.visibility_off, size: 48, color: Colors.grey),
+              const SizedBox(height: 12),
+              Text(
+                'Bloque oculto: ${_getBlockTypeName(block.type)}',
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Este bloque no se mostrará en el sitio público',
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final blockType = block.type.name;
     final data = Map<String, dynamic>.from(block.data);
     final websiteService = context.read<WebsiteService>();
     final inventoryService = context.read<InventoryService>();
 
-    final previewFeaturedProducts = block.type == BlockType.products
+    final previewFeaturedProducts = block.type == WebsiteBlockType.products
         ? _resolveEditorFeaturedProducts(
             websiteService.featuredProducts,
             inventoryService.products,
@@ -1396,9 +1297,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     }
 
     final productMap = {for (final product in products) product.id: product};
-    final sortedEntries = entries
-        .where((entry) => entry.active)
-        .toList()
+    final sortedEntries = entries.where((entry) => entry.active).toList()
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
 
     final resolvedProducts = <Product>[];
@@ -1503,6 +1402,15 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   // ============================================================================
 
   Widget _buildAgregarTab(ThemeData theme) {
+    final definitions = WebsiteBlockRegistry.all();
+    final byCategory = <String, List<WebsiteBlockDefinition>>{};
+    for (final definition in definitions) {
+      final category = definition.category;
+      byCategory.putIfAbsent(category, () => []).add(definition);
+    }
+
+    final categories = byCategory.keys.toList()..sort();
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -1512,54 +1420,131 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
               theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
-        ...BlockType.values.map((type) {
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: theme.colorScheme.primaryContainer,
-                child: Icon(_getBlockTypeIcon(type),
-                    color: theme.colorScheme.primary),
-              ),
-              title: Text(
-                _getBlockTypeName(type),
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(_getBlockTypeDescription(type)),
-              trailing: ElevatedButton(
-                onPressed: () => _addBlock(type),
-                child: const Text('Añadir'),
-              ),
+        for (final category in categories) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              category,
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
-          );
-        }),
+          ),
+          ...byCategory[category]!
+              .map((definition) => _buildBlockDefinitionCard(definition, theme))
+              .toList(),
+          const SizedBox(height: 24),
+        ],
       ],
     );
   }
 
-  String _getBlockTypeDescription(BlockType type) {
-    switch (type) {
-      case BlockType.hero:
-        return 'Banner principal con imagen y CTA';
-      case BlockType.carousel:
-        return 'Carrusel de imágenes con CTA';
-      case BlockType.products:
-        return 'Catálogo de productos';
-      case BlockType.services:
-        return 'Lista de servicios';
-      case BlockType.about:
-        return 'Sección sobre nosotros';
-      case BlockType.testimonials:
-        return 'Testimonios de clientes';
-      case BlockType.features:
-        return 'Características destacadas';
-      case BlockType.cta:
-        return 'Llamado a la acción';
-      case BlockType.gallery:
-        return 'Galería de imágenes';
-      case BlockType.contact:
-        return 'Formulario de contacto';
-    }
+  Widget _buildBlockDefinitionCard(
+    WebsiteBlockDefinition definition,
+    ThemeData theme,
+  ) {
+    final tagChips = definition.tags
+        .map(
+          (tag) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            margin: const EdgeInsets.only(right: 6, top: 6),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              tag,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+        )
+        .toList();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  child: Icon(
+                    _getBlockTypeIcon(definition.type),
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        definition.title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        definition.description,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () => _addBlock(definition.type),
+                  child: const Text('Añadir'),
+                ),
+              ],
+            ),
+            if (definition.previewBadge != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Chip(
+                  label: Text(definition.previewBadge!),
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                  labelStyle: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                ),
+              ),
+            if (tagChips.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Wrap(children: tagChips),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Row(
+                children: [
+                  if (!definition.supportsResponsive)
+                    Tooltip(
+                      message: 'No admite overrides responsivos aún',
+                      child: Icon(
+                        Icons.devices_other_outlined,
+                        color: theme.colorScheme.error,
+                        size: 18,
+                      ),
+                    ),
+                  if (!definition.supportsResponsive) const SizedBox(width: 8),
+                  Text(
+                    'v${definition.version}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ============================================================================
@@ -1626,16 +1611,20 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   }
 
   List<Widget> _buildBlockEditControls(WebsiteBlock block, ThemeData theme) {
+    final definition = WebsiteBlockRegistry.definitionFor(block.type);
+    final schemaControls = _buildSchemaDrivenControls(block, definition, theme);
+    if (schemaControls.isNotEmpty) {
+      return schemaControls;
+    }
+
     switch (block.type) {
-      case BlockType.hero:
-        return _buildHeroEditControls(block, theme);
-      case BlockType.carousel:
+      case WebsiteBlockType.carousel:
         return _buildCarouselEditControls(block, theme);
-      case BlockType.products:
+      case WebsiteBlockType.products:
         return _buildProductsEditControls(block, theme);
-      case BlockType.services:
+      case WebsiteBlockType.services:
         return _buildServicesEditControls(block, theme);
-      case BlockType.about:
+      case WebsiteBlockType.about:
         return _buildAboutEditControls(block, theme);
       default:
         return [
@@ -1644,75 +1633,1278 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     }
   }
 
-  List<Widget> _buildHeroEditControls(WebsiteBlock block, ThemeData theme) {
-    return [
-      _buildTextField(
-        label: 'Título',
-        value: block.data['title'] ?? '',
-        onChanged: (value) {
-          block.data['title'] = value;
-          setState(() => _markAsChanged());
-        },
+  List<Widget> _buildSchemaDrivenControls(
+    WebsiteBlock block,
+    WebsiteBlockDefinition definition,
+    ThemeData theme,
+  ) {
+    if (definition.fields.isEmpty) {
+      return const [];
+    }
+
+    final fieldMap = {
+      for (final field in definition.fields) field.key: field,
+    };
+
+    final sections = definition.controlSections.isNotEmpty
+        ? definition.controlSections
+        : [
+            WebsiteBlockControlSection(
+              id: 'general',
+              label: 'Contenido',
+              fieldKeys: definition.fields.map((f) => f.key).toList(),
+            ),
+          ];
+
+    final widgets = <Widget>[];
+    for (final section in sections) {
+      final sectionFields = section.fieldKeys
+          .map((key) => fieldMap[key])
+          .whereType<WebsiteBlockFieldSchema>()
+          .toList();
+
+      if (sectionFields.isEmpty) {
+        continue;
+      }
+
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            section.label,
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+
+      if (section.description != null && section.description!.isNotEmpty) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              section.description!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        );
+      }
+
+      for (final field in sectionFields) {
+        widgets.addAll(
+          _buildFieldControls(block, definition, field, theme),
+        );
+        widgets.add(const SizedBox(height: 16));
+      }
+
+      widgets.add(const Divider(height: 32));
+    }
+
+    if (widgets.isNotEmpty) {
+      widgets.removeLast();
+    }
+
+    return widgets;
+  }
+
+  List<Widget> _buildFieldControls(
+    WebsiteBlock block,
+    WebsiteBlockDefinition definition,
+    WebsiteBlockFieldSchema field,
+    ThemeData theme,
+  ) {
+    final currentValue = block.data[field.key] ?? field.defaultValue;
+
+    if (field.key == 'overlayOpacity' && block.data['showOverlay'] == false) {
+      return [
+        Text(
+          'Activa el overlay para ajustar la opacidad',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ];
+    }
+
+    switch (field.type) {
+      case WebsiteBlockFieldType.text:
+      case WebsiteBlockFieldType.richtext:
+        return [
+          _buildSchemaTextField(
+            label: field.label,
+            value: currentValue?.toString() ?? '',
+            maxLines: field.type == WebsiteBlockFieldType.richtext ? 4 : 1,
+            onChanged: (value) => _updateBlockData(block, field.key, value),
+          ),
+        ];
+      case WebsiteBlockFieldType.textarea:
+        return [
+          _buildSchemaTextField(
+            label: field.label,
+            value: currentValue?.toString() ?? '',
+            maxLines: 5,
+            onChanged: (value) => _updateBlockData(block, field.key, value),
+          ),
+        ];
+      case WebsiteBlockFieldType.number:
+        return [
+          _buildNumberField(
+            block: block,
+            field: field,
+            value: currentValue,
+            theme: theme,
+          ),
+        ];
+      case WebsiteBlockFieldType.toggle:
+        final value =
+            currentValue is bool ? currentValue : currentValue == 'true';
+        return [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(field.label),
+            value: value,
+            onChanged: (newValue) =>
+                _updateBlockData(block, field.key, newValue),
+          ),
+        ];
+      case WebsiteBlockFieldType.select:
+        final options = field.options;
+        final value = currentValue?.toString();
+        return [
+          DropdownButtonFormField<String>(
+            decoration: InputDecoration(
+              labelText: field.label,
+              border: const OutlineInputBorder(),
+            ),
+            value:
+                options.any((option) => option.value == value) ? value : null,
+            items: options
+                .map(
+                  (option) => DropdownMenuItem<String>(
+                    value: option.value,
+                    child: Text(option.label),
+                  ),
+                )
+                .toList(),
+            onChanged: (selected) {
+              if (selected == null) return;
+              _updateBlockData(block, field.key, selected);
+            },
+          ),
+        ];
+      case WebsiteBlockFieldType.color:
+        return [
+          _buildColorField(
+            block: block,
+            field: field,
+            value: currentValue?.toString(),
+            theme: theme,
+          ),
+        ];
+      case WebsiteBlockFieldType.image:
+        return [
+          _buildImageField(
+            block: block,
+            field: field,
+            value: currentValue?.toString(),
+            theme: theme,
+          ),
+        ];
+      case WebsiteBlockFieldType.chips:
+        return [
+          _buildChipsField(
+            block: block,
+            field: field,
+            value: currentValue,
+            theme: theme,
+          ),
+        ];
+      case WebsiteBlockFieldType.repeater:
+        return [
+          _buildRepeaterField(
+            block: block,
+            field: field,
+            theme: theme,
+          ),
+        ];
+    }
+  }
+
+  Widget _buildRepeaterField({
+    required WebsiteBlock block,
+    required WebsiteBlockFieldSchema field,
+    required ThemeData theme,
+  }) {
+    final itemFields = field.itemFields;
+    if (itemFields.isEmpty) {
+      return const Text(
+          'Configura `itemFields` en el esquema para editar esta lista.');
+    }
+
+    final items = _ensureListOfMaps(block.data[field.key]);
+    final itemLabel = field.itemLabel ?? 'Elemento';
+    final minItems = field.minItems ?? 0;
+    final maxItems = field.maxItems;
+    final canAddMore = maxItems == null || items.length < maxItems;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'No hay ${itemLabel.toLowerCase()}s aún.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ...items.asMap().entries.map(
+              (entry) => _buildRepeaterItemCard(
+                block: block,
+                listKey: field.key,
+                items: items,
+                index: entry.key,
+                itemLabel: itemLabel,
+                itemFields: itemFields,
+                theme: theme,
+                minItems: minItems,
+              ),
+            ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: canAddMore
+              ? () {
+                  final newItem = _buildDefaultRepeaterItem(itemFields);
+                  setState(() {
+                    items.add(newItem);
+                    block.data[field.key] = items;
+                  });
+                  _markAsChanged();
+                }
+              : null,
+          icon: const Icon(Icons.add),
+          label: Text(canAddMore
+              ? 'Añadir ${itemLabel.toLowerCase()}'
+              : 'Límite alcanzado'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRepeaterItemCard({
+    required WebsiteBlock block,
+    required String listKey,
+    required List<Map<String, dynamic>> items,
+    required int index,
+    required String itemLabel,
+    required List<WebsiteBlockFieldSchema> itemFields,
+    required ThemeData theme,
+    required int minItems,
+  }) {
+    final total = items.length;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  '$itemLabel ${index + 1}',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                IconButton(
+                  tooltip: 'Mover arriba',
+                  icon: const Icon(Icons.arrow_upward),
+                  onPressed: index == 0
+                      ? null
+                      : () {
+                          setState(() {
+                            final moved = items.removeAt(index);
+                            items.insert(index - 1, moved);
+                            block.data[listKey] = items;
+                          });
+                          _markAsChanged();
+                        },
+                ),
+                IconButton(
+                  tooltip: 'Mover abajo',
+                  icon: const Icon(Icons.arrow_downward),
+                  onPressed: index >= total - 1
+                      ? null
+                      : () {
+                          setState(() {
+                            final moved = items.removeAt(index);
+                            items.insert(index + 1, moved);
+                            block.data[listKey] = items;
+                          });
+                          _markAsChanged();
+                        },
+                ),
+                IconButton(
+                  tooltip: 'Eliminar',
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: total <= minItems
+                      ? null
+                      : () {
+                          setState(() {
+                            items.removeAt(index);
+                            block.data[listKey] = items;
+                          });
+                          _markAsChanged();
+                        },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ..._buildNestedFieldControls(
+              block: block,
+              listKey: listKey,
+              items: items,
+              index: index,
+              itemFields: itemFields,
+              theme: theme,
+            ),
+          ],
+        ),
       ),
-      const SizedBox(height: 16),
-      _buildTextField(
-        label: 'Subtítulo',
-        value: block.data['subtitle'] ?? '',
-        maxLines: 2,
-        onChanged: (value) {
-          block.data['subtitle'] = value;
-          setState(() => _markAsChanged());
-        },
-      ),
-      const SizedBox(height: 16),
-      _buildTextField(
-        label: 'Texto del Botón',
-        value: block.data['ctaText'] ?? '',
-        onChanged: (value) {
-          block.data['ctaText'] = value;
-          setState(() => _markAsChanged());
-        },
-      ),
-      const SizedBox(height: 16),
-      Row(
+    );
+  }
+
+  List<Widget> _buildNestedFieldControls({
+    required WebsiteBlock block,
+    required String listKey,
+    required List<Map<String, dynamic>> items,
+    required int index,
+    required List<WebsiteBlockFieldSchema> itemFields,
+    required ThemeData theme,
+  }) {
+    final item = items[index];
+    final widgets = <Widget>[];
+
+    for (final field in itemFields) {
+      final value = item[field.key];
+      switch (field.type) {
+        case WebsiteBlockFieldType.text:
+        case WebsiteBlockFieldType.richtext:
+          widgets.add(
+            _buildSchemaTextField(
+              label: field.label,
+              value: value?.toString() ?? '',
+              maxLines: field.type == WebsiteBlockFieldType.richtext ? 4 : 1,
+              onChanged: (newValue) => _updateRepeaterItem(
+                block: block,
+                listKey: listKey,
+                items: items,
+                index: index,
+                fieldKey: field.key,
+                value: newValue,
+              ),
+            ),
+          );
+          break;
+        case WebsiteBlockFieldType.textarea:
+          widgets.add(
+            _buildSchemaTextField(
+              label: field.label,
+              value: value?.toString() ?? '',
+              maxLines: 5,
+              onChanged: (newValue) => _updateRepeaterItem(
+                block: block,
+                listKey: listKey,
+                items: items,
+                index: index,
+                fieldKey: field.key,
+                value: newValue,
+              ),
+            ),
+          );
+          break;
+        case WebsiteBlockFieldType.select:
+          widgets.add(
+            DropdownButtonFormField<String>(
+              decoration: InputDecoration(
+                labelText: field.label,
+                border: const OutlineInputBorder(),
+              ),
+              value: _resolveSelectValue(field, value?.toString()),
+              items: field.options
+                  .map(
+                    (option) => DropdownMenuItem<String>(
+                      value: option.value,
+                      child: Text(option.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (newValue) {
+                if (newValue == null) return;
+                _updateRepeaterItem(
+                  block: block,
+                  listKey: listKey,
+                  items: items,
+                  index: index,
+                  fieldKey: field.key,
+                  value: newValue,
+                );
+              },
+            ),
+          );
+          break;
+        case WebsiteBlockFieldType.number:
+          widgets.add(
+            _buildNestedNumberField(
+              block: block,
+              listKey: listKey,
+              items: items,
+              index: index,
+              field: field,
+              theme: theme,
+            ),
+          );
+          break;
+        case WebsiteBlockFieldType.toggle:
+        case WebsiteBlockFieldType.color:
+        case WebsiteBlockFieldType.repeater:
+          widgets.add(
+            Text(
+              'El campo "${field.label}" aún no soporta edición dentro de listas.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          );
+          break;
+        case WebsiteBlockFieldType.image:
+          widgets.add(
+            _buildNestedImageField(
+              block: block,
+              listKey: listKey,
+              items: items,
+              index: index,
+              field: field,
+              theme: theme,
+            ),
+          );
+          break;
+        case WebsiteBlockFieldType.chips:
+          widgets.add(
+            _buildNestedChipsField(
+              block: block,
+              listKey: listKey,
+              items: items,
+              index: index,
+              field: field,
+              theme: theme,
+            ),
+          );
+          break;
+      }
+
+      widgets.add(const SizedBox(height: 12));
+    }
+
+    if (widgets.isNotEmpty) {
+      widgets.removeLast();
+    }
+
+    return widgets;
+  }
+
+  String? _resolveSelectValue(
+    WebsiteBlockFieldSchema field,
+    String? currentValue,
+  ) {
+    if (field.options.isEmpty) {
+      return null;
+    }
+
+    if (currentValue == null) {
+      return field.options.first.value;
+    }
+
+    final hasValue =
+        field.options.any((option) => option.value == currentValue);
+    if (hasValue) {
+      return currentValue;
+    }
+
+    return field.options.first.value;
+  }
+
+  List<Map<String, dynamic>> _ensureListOfMaps(dynamic raw) {
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+    return <Map<String, dynamic>>[];
+  }
+
+  List<String> _ensureStringList(dynamic raw) {
+    if (raw is List) {
+      return raw
+          .where((item) => item != null)
+          .map((item) => item.toString())
+          .toList();
+    }
+    if (raw is String && raw.isNotEmpty) {
+      return [raw];
+    }
+    return <String>[];
+  }
+
+  Map<String, dynamic> _buildDefaultRepeaterItem(
+    List<WebsiteBlockFieldSchema> fields,
+  ) {
+    final map = <String, dynamic>{};
+    for (final field in fields) {
+      if (field.defaultValue != null) {
+        map[field.key] = field.defaultValue;
+        continue;
+      }
+
+      switch (field.type) {
+        case WebsiteBlockFieldType.toggle:
+          map[field.key] = false;
+          break;
+        case WebsiteBlockFieldType.number:
+          map[field.key] = field.min ?? 0;
+          break;
+        case WebsiteBlockFieldType.select:
+          if (field.options.isNotEmpty) {
+            map[field.key] = field.options.first.value;
+          }
+          break;
+        case WebsiteBlockFieldType.color:
+          map[field.key] = '#000000';
+          break;
+        case WebsiteBlockFieldType.image:
+          map[field.key] = null;
+          break;
+        case WebsiteBlockFieldType.text:
+        case WebsiteBlockFieldType.textarea:
+        case WebsiteBlockFieldType.richtext:
+          map[field.key] = '';
+          break;
+        case WebsiteBlockFieldType.chips:
+          map[field.key] = <String>[];
+          break;
+        case WebsiteBlockFieldType.repeater:
+          map[field.key] = '';
+          break;
+      }
+    }
+    return map;
+  }
+
+  void _updateRepeaterItem({
+    required WebsiteBlock block,
+    required String listKey,
+    required List<Map<String, dynamic>> items,
+    required int index,
+    required String fieldKey,
+    required dynamic value,
+  }) {
+    setState(() {
+      if (value == null) {
+        items[index].remove(fieldKey);
+      } else {
+        items[index][fieldKey] = value;
+      }
+      block.data[listKey] = items;
+    });
+    _markAsChanged();
+  }
+
+  Widget _buildChipsField({
+    required WebsiteBlock block,
+    required WebsiteBlockFieldSchema field,
+    required dynamic value,
+    required ThemeData theme,
+  }) {
+    final chips = _ensureStringList(value);
+    final minItems = field.minItems ?? 0;
+    final maxItems = field.maxItems;
+    String pendingValue = '';
+
+    void addChip(
+        String rawValue, void Function(void Function()) setLocalState) {
+      final trimmed = rawValue.trim();
+      if (trimmed.isEmpty) {
+        return;
+      }
+      if (maxItems != null && chips.length >= maxItems) {
+        return;
+      }
+      final updated = List<String>.from(chips)..add(trimmed);
+      _updateBlockData(block, field.key, updated);
+      setLocalState(() {
+        chips
+          ..clear()
+          ..addAll(updated);
+        pendingValue = '';
+      });
+    }
+
+    void removeChip(
+        int chipIndex, void Function(void Function()) setLocalState) {
+      if (chips.length <= minItems ||
+          chipIndex < 0 ||
+          chipIndex >= chips.length) {
+        return;
+      }
+      final updated = List<String>.from(chips)..removeAt(chipIndex);
+      _updateBlockData(block, field.key, updated);
+      setLocalState(() {
+        chips
+          ..clear()
+          ..addAll(updated);
+      });
+    }
+
+    return StatefulBuilder(
+      builder: (context, setLocalState) {
+        final canAddMore = maxItems == null || chips.length < maxItems;
+        final controller = TextEditingController(text: pendingValue)
+          ..selection = TextSelection.collapsed(offset: pendingValue.length);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InputDecorator(
+              decoration: InputDecoration(
+                labelText: field.label,
+                helperText: field.helpText,
+                border: const OutlineInputBorder(),
+              ),
+              child: chips.isEmpty
+                  ? Text(
+                      'Agrega elementos con el campo inferior.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  : Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (var i = 0; i < chips.length; i++)
+                          InputChip(
+                            label: Text(chips[i]),
+                            onDeleted: chips.length <= minItems
+                                ? null
+                                : () => removeChip(i, setLocalState),
+                          ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: 'Nuevo elemento',
+                hintText: 'Escribe y presiona Enter para agregar',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  tooltip: 'Agregar',
+                  icon: const Icon(Icons.add),
+                  onPressed: canAddMore && pendingValue.trim().isNotEmpty
+                      ? () => addChip(pendingValue, setLocalState)
+                      : null,
+                ),
+              ),
+              onChanged: (text) => setLocalState(() {
+                pendingValue = text;
+              }),
+              onSubmitted: (text) => addChip(text, setLocalState),
+              enabled: canAddMore,
+            ),
+            if (!canAddMore)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Has alcanzado el máximo de elementos ($maxItems).',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildNestedChipsField({
+    required WebsiteBlock block,
+    required String listKey,
+    required List<Map<String, dynamic>> items,
+    required int index,
+    required WebsiteBlockFieldSchema field,
+    required ThemeData theme,
+  }) {
+    final chips = _ensureStringList(items[index][field.key]);
+    final minItems = field.minItems ?? 0;
+    final maxItems = field.maxItems;
+    String pendingValue = '';
+
+    void updateChips(
+        List<String> updated, void Function(void Function()) setLocalState) {
+      _updateRepeaterItem(
+        block: block,
+        listKey: listKey,
+        items: items,
+        index: index,
+        fieldKey: field.key,
+        value: updated,
+      );
+      setLocalState(() {
+        chips
+          ..clear()
+          ..addAll(updated);
+        pendingValue = '';
+      });
+    }
+
+    return StatefulBuilder(
+      builder: (context, setLocalState) {
+        final canAddMore = maxItems == null || chips.length < maxItems;
+        final controller = TextEditingController(text: pendingValue)
+          ..selection = TextSelection.collapsed(offset: pendingValue.length);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InputDecorator(
+              decoration: InputDecoration(
+                labelText: field.label,
+                helperText: field.helpText,
+                border: const OutlineInputBorder(),
+              ),
+              child: chips.isEmpty
+                  ? Text(
+                      'Agrega elementos con el campo inferior.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  : Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (var i = 0; i < chips.length; i++)
+                          InputChip(
+                            label: Text(chips[i]),
+                            onDeleted: chips.length <= minItems
+                                ? null
+                                : () {
+                                    final updated = List<String>.from(chips)
+                                      ..removeAt(i);
+                                    updateChips(updated, setLocalState);
+                                  },
+                          ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: 'Nuevo elemento',
+                hintText: 'Escribe y presiona Enter para agregar',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  tooltip: 'Agregar',
+                  icon: const Icon(Icons.add),
+                  onPressed: canAddMore && pendingValue.trim().isNotEmpty
+                      ? () {
+                          final updated = List<String>.from(chips)
+                            ..add(pendingValue.trim());
+                          updateChips(updated, setLocalState);
+                        }
+                      : null,
+                ),
+              ),
+              onChanged: (text) => setLocalState(() {
+                pendingValue = text;
+              }),
+              onSubmitted: (text) {
+                final trimmed = text.trim();
+                if (trimmed.isEmpty || !canAddMore) {
+                  return;
+                }
+                final updated = List<String>.from(chips)..add(trimmed);
+                updateChips(updated, setLocalState);
+              },
+              enabled: canAddMore,
+            ),
+            if (!canAddMore)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Has alcanzado el máximo de elementos ($maxItems).',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildNestedImageField({
+    required WebsiteBlock block,
+    required String listKey,
+    required List<Map<String, dynamic>> items,
+    required int index,
+    required WebsiteBlockFieldSchema field,
+    required ThemeData theme,
+  }) {
+    final imageUrl = items[index][field.key]?.toString();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          field.label,
+          style: theme.textTheme.titleSmall,
+        ),
+        const SizedBox(height: 8),
+        if (imageUrl != null && imageUrl.isNotEmpty) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              imageUrl,
+              height: 120,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                height: 120,
+                color: theme.colorScheme.surfaceContainerHighest,
+                child: Center(
+                  child: Icon(
+                    Icons.broken_image,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final newUrl =
+                        await _pickAndUploadImage(folder: 'website/gallery');
+                    if (newUrl != null) {
+                      _updateRepeaterItem(
+                        block: block,
+                        listKey: listKey,
+                        items: items,
+                        index: index,
+                        fieldKey: field.key,
+                        value: newUrl,
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.image),
+                  label: const Text('Cambiar'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () {
+                  _updateRepeaterItem(
+                    block: block,
+                    listKey: listKey,
+                    items: items,
+                    index: index,
+                    fieldKey: field.key,
+                    value: null,
+                  );
+                },
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Eliminar'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: theme.colorScheme.error,
+                ),
+              ),
+            ],
+          ),
+        ] else ...[
+          OutlinedButton.icon(
+            onPressed: () async {
+              final newUrl =
+                  await _pickAndUploadImage(folder: 'website/gallery');
+              if (newUrl != null) {
+                _updateRepeaterItem(
+                  block: block,
+                  listKey: listKey,
+                  items: items,
+                  index: index,
+                  fieldKey: field.key,
+                  value: newUrl,
+                );
+              }
+            },
+            icon: const Icon(Icons.add_photo_alternate),
+            label: const Text('Seleccionar imagen'),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildNestedNumberField({
+    required WebsiteBlock block,
+    required String listKey,
+    required List<Map<String, dynamic>> items,
+    required int index,
+    required WebsiteBlockFieldSchema field,
+    required ThemeData theme,
+  }) {
+    final min = field.min?.toDouble();
+    final max = field.max?.toDouble();
+    final step = field.step?.toDouble();
+    final rawValue = items[index][field.key];
+
+    double value = _parseNumericValue(rawValue) ??
+        (field.defaultValue is num
+            ? (field.defaultValue as num).toDouble()
+            : (min ?? 0));
+
+    if (min != null) {
+      value = math.max(value, min);
+    }
+    if (max != null) {
+      value = math.min(value, max);
+    }
+
+    if (min != null && max != null) {
+      final sliderValue = value.clamp(min, max);
+      final label = _formatNumberLabel(sliderValue, step);
+      int? divisions;
+      if (step != null && step > 0) {
+        final rawDivisions = ((max - min) / step).round();
+        if (rawDivisions > 0) {
+          divisions = rawDivisions;
+        }
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Mostrar Overlay'),
-          const Spacer(),
-          Switch(
-            value: block.data['showOverlay'] ?? true,
-            onChanged: (value) {
-              setState(() {
-                block.data['showOverlay'] = value;
-                _markAsChanged();
-              });
+          Text('${field.label}: $label'),
+          Slider(
+            value: sliderValue,
+            min: min,
+            max: max,
+            divisions: divisions,
+            label: label,
+            onChanged: (newValue) {
+              final normalised = _normaliseNumericValue(newValue, step: step);
+              _updateRepeaterItem(
+                block: block,
+                listKey: listKey,
+                items: items,
+                index: index,
+                fieldKey: field.key,
+                value: normalised,
+              );
             },
           ),
         ],
+      );
+    }
+
+    final displayValue = _formatNumberLabel(value, step);
+    final controller = TextEditingController(text: displayValue)
+      ..selection = TextSelection.collapsed(offset: displayValue.length);
+
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: field.label,
+        border: const OutlineInputBorder(),
       ),
-      const SizedBox(height: 16),
-      if (block.data['showOverlay'] == true) ...[
-        Text(
-            'Opacidad del Overlay: ${(block.data['overlayOpacity'] ?? 0.5).toStringAsFixed(1)}'),
-        Slider(
-          value: block.data['overlayOpacity'] ?? 0.5,
-          min: 0.0,
-          max: 1.0,
-          divisions: 10,
-          onChanged: (value) {
-            setState(() {
-              block.data['overlayOpacity'] = value;
-              _markAsChanged();
-            });
-          },
+      keyboardType: TextInputType.number,
+      onChanged: (newValue) {
+        final parsed = _parseNumericValue(newValue);
+        if (parsed == null) {
+          return;
+        }
+        final normalised = _normaliseNumericValue(parsed, step: step);
+        _updateRepeaterItem(
+          block: block,
+          listKey: listKey,
+          items: items,
+          index: index,
+          fieldKey: field.key,
+          value: normalised,
+        );
+      },
+    );
+  }
+
+  Widget _buildSchemaTextField({
+    required String label,
+    required String value,
+    required ValueChanged<String> onChanged,
+    int maxLines = 1,
+  }) {
+    final controller = TextEditingController(text: value)
+      ..selection = TextSelection.collapsed(offset: value.length);
+
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+      maxLines: maxLines,
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildNumberField({
+    required WebsiteBlock block,
+    required WebsiteBlockFieldSchema field,
+    required dynamic value,
+    required ThemeData theme,
+  }) {
+    final min = field.min?.toDouble();
+    final max = field.max?.toDouble();
+    final step = field.step?.toDouble();
+    final parsedValue = _parseNumericValue(value) ?? 0;
+
+    if (min != null && max != null) {
+      final clamped = parsedValue.clamp(min, max);
+      final label = _formatNumberLabel(clamped, step);
+      int? divisions;
+      if (step != null && step > 0) {
+        divisions = ((max - min) / step).round();
+        if (divisions <= 0) {
+          divisions = null;
+        }
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('${field.label}: $label'),
+          Slider(
+            value: clamped,
+            min: min,
+            max: max,
+            divisions: divisions,
+            label: label,
+            onChanged: (newValue) {
+              final normalised = _normaliseNumericValue(newValue, step: step);
+              _updateBlockData(block, field.key, normalised);
+            },
+          ),
+        ],
+      );
+    }
+
+    final displayValue = _formatNumberLabel(parsedValue, step);
+    final controller = TextEditingController(text: displayValue)
+      ..selection = TextSelection.collapsed(offset: displayValue.length);
+
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: field.label,
+        border: const OutlineInputBorder(),
+      ),
+      keyboardType: TextInputType.number,
+      onChanged: (newValue) {
+        final parsed = _parseNumericValue(newValue);
+        if (parsed != null) {
+          final normalised = _normaliseNumericValue(parsed, step: step);
+          _updateBlockData(block, field.key, normalised);
+        }
+      },
+    );
+  }
+
+  Widget _buildColorField({
+    required WebsiteBlock block,
+    required WebsiteBlockFieldSchema field,
+    required String? value,
+    required ThemeData theme,
+  }) {
+    final parsedColor = value != null ? _tryParseColor(value) : null;
+    final color = parsedColor ?? theme.colorScheme.primary;
+    final displayValue = value ?? _colorToHex(color);
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(field.label),
+      subtitle: Text(displayValue),
+      trailing: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: theme.dividerColor),
         ),
-        const SizedBox(height: 16),
-      ],
-      ElevatedButton.icon(
-        onPressed: _pickImage,
-        icon: const Icon(Icons.image),
-        label: const Text('Cambiar Imagen de Fondo'),
       ),
-    ];
+      onTap: () => _showColorPicker(
+        color,
+        (selected) => _updateBlockData(block, field.key, _colorToHex(selected)),
+      ),
+    );
+  }
+
+  Widget _buildImageField({
+    required WebsiteBlock block,
+    required WebsiteBlockFieldSchema field,
+    required String? value,
+    required ThemeData theme,
+  }) {
+    final hasImage = value != null && value.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(field.label, style: theme.textTheme.bodyMedium),
+        const SizedBox(height: 8),
+        Container(
+          height: 160,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceVariant,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.dividerColor),
+          ),
+          child: hasImage
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    value,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Center(
+                      child: Icon(Icons.broken_image,
+                          color: theme.colorScheme.error),
+                    ),
+                  ),
+                )
+              : Center(
+                  child: Icon(Icons.image_outlined,
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            ElevatedButton.icon(
+              onPressed: () async {
+                final imageUrl = await _pickAndUploadImage(
+                  folder: 'website/${block.type.name}',
+                );
+                if (imageUrl != null) {
+                  _updateBlockData(block, field.key, imageUrl);
+                }
+              },
+              icon: const Icon(Icons.image),
+              label: Text(hasImage ? 'Cambiar imagen' : 'Seleccionar imagen'),
+            ),
+            const SizedBox(width: 12),
+            if (hasImage)
+              TextButton(
+                onPressed: () => _updateBlockData(block, field.key, null),
+                child: const Text('Quitar'),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  double? _parseNumericValue(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value.replaceAll(',', '.'));
+    }
+    return null;
+  }
+
+  num _normaliseNumericValue(double value, {double? step}) {
+    if (step == null) {
+      return value % 1 == 0
+          ? value.round()
+          : double.parse(value.toStringAsFixed(2));
+    }
+
+    final decimals = _resolveDecimalPlaces(step);
+    if (decimals <= 0) {
+      return value.round();
+    }
+
+    final factor = math.pow(10, decimals) as double;
+    return (value * factor).round() / factor;
+  }
+
+  String _formatNumberLabel(double value, double? step) {
+    if (step == null) {
+      return value % 1 == 0
+          ? value.round().toString()
+          : value.toStringAsFixed(2);
+    }
+
+    final decimals = _resolveDecimalPlaces(step);
+    if (decimals <= 0) {
+      return value.round().toString();
+    }
+
+    return value.toStringAsFixed(decimals);
+  }
+
+  int _resolveDecimalPlaces(double? step) {
+    if (step == null || step >= 1) {
+      return 0;
+    }
+
+    final stepString = step.toString();
+    if (!stepString.contains('.')) {
+      return 0;
+    }
+
+    final parts = stepString.split('.');
+    if (parts.length < 2) {
+      return 0;
+    }
+
+    var decimals = parts.last.length;
+    if (decimals == 0) {
+      decimals = 1;
+    }
+    if (decimals > 4) {
+      decimals = 4;
+    }
+    return decimals;
+  }
+
+  String _colorToHex(Color color) {
+    return '#'
+            '${color.red.toRadixString(16).padLeft(2, '0')}'
+            '${color.green.toRadixString(16).padLeft(2, '0')}'
+            '${color.blue.toRadixString(16).padLeft(2, '0')}'
+        .toUpperCase();
   }
 
   List<Widget> _buildCarouselEditControls(WebsiteBlock block, ThemeData theme) {
@@ -2007,7 +3199,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
               },
             ),
             if (showOverlay) ...[
-              Text('Opacidad del overlay: ${overlayOpacity.toStringAsFixed(1)}'),
+              Text(
+                  'Opacidad del overlay: ${overlayOpacity.toStringAsFixed(1)}'),
               Slider(
                 value: overlayOpacity,
                 min: 0,

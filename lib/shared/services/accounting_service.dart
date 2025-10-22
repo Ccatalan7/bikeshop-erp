@@ -42,7 +42,7 @@ class JournalLine {
 
 class AccountingService extends ChangeNotifier {
   final List<JournalEntry> _journalEntries = [];
-  
+
   List<JournalEntry> get journalEntries => List.unmodifiable(_journalEntries);
 
   // Tax rate for Chile (IVA)
@@ -57,10 +57,12 @@ class AccountingService extends ChangeNotifier {
     required String paymentAccountCode,
     required String paymentAccountName,
   }) async {
-    if (kDebugMode) print('AccountingService: Creating POS journal entry for transaction $transactionId');
+    if (kDebugMode)
+      print(
+          'AccountingService: Creating POS journal entry for transaction $transactionId');
 
     final entryId = 'JE-POS-${DateTime.now().millisecondsSinceEpoch}';
-    
+
     final lines = <JournalLine>[
       // Debit: Cash/Bank (payment method)
       JournalLine(
@@ -115,7 +117,8 @@ class AccountingService extends ChangeNotifier {
     );
 
     if (!entry.isBalanced) {
-      throw Exception('Journal entry is not balanced: Debits=${entry.totalDebits}, Credits=${entry.totalCredits}');
+      throw Exception(
+          'Journal entry is not balanced: Debits=${entry.totalDebits}, Credits=${entry.totalCredits}');
     }
 
     _journalEntries.add(entry);

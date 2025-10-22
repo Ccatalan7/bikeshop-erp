@@ -18,7 +18,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
   bool _isLoading = true;
-  
+
   String _searchQuery = '';
   String? _selectedCategoryId;
   double _minPrice = 0;
@@ -37,13 +37,15 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
     try {
       final inventoryService = context.read<InventoryService>();
       _allProducts = await inventoryService.getProducts();
-      
+
       // Calculate price range
       if (_allProducts.isNotEmpty) {
-        _minPrice = _allProducts.map((p) => p.price).reduce((a, b) => a < b ? a : b);
-        _maxPrice = _allProducts.map((p) => p.price).reduce((a, b) => a > b ? a : b);
+        _minPrice =
+            _allProducts.map((p) => p.price).reduce((a, b) => a < b ? a : b);
+        _maxPrice =
+            _allProducts.map((p) => p.price).reduce((a, b) => a > b ? a : b);
       }
-      
+
       _applyFilters();
     } catch (e) {
       debugPrint('[ProductCatalogPage] Error loading products: $e');
@@ -68,7 +70,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
         }
 
         // Category filter
-        if (_selectedCategoryId != null && product.categoryId != _selectedCategoryId) {
+        if (_selectedCategoryId != null &&
+            product.categoryId != _selectedCategoryId) {
           return false;
         }
 
@@ -115,9 +118,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
             width: 280,
             child: _buildFilters(),
           ),
-          
+
           const SizedBox(width: 32),
-          
+
           // Main Content
           Expanded(
             child: Column(
@@ -146,7 +149,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 24),
-            
+
             // Search
             TextField(
               decoration: const InputDecoration(
@@ -159,11 +162,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
                 _applyFilters();
               },
             ),
-            
+
             const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 24),
-            
+
             // Categories
             Text(
               'Categorías',
@@ -171,11 +174,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
             ),
             const SizedBox(height: 16),
             _buildCategoryFilters(),
-            
+
             const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 24),
-            
+
             // Price Range
             Text(
               'Rango de Precio',
@@ -185,15 +188,17 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
             Text(
               '${ChileanUtils.formatCurrency(_minPrice)} - ${ChileanUtils.formatCurrency(_maxPrice)}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: PublicStoreTheme.textSecondary,
-              ),
+                    color: PublicStoreTheme.textSecondary,
+                  ),
             ),
             const SizedBox(height: 8),
             RangeSlider(
               values: RangeValues(_minPrice, _maxPrice),
               min: 0,
-              max: _allProducts.isNotEmpty 
-                  ? _allProducts.map((p) => p.price).reduce((a, b) => a > b ? a : b)
+              max: _allProducts.isNotEmpty
+                  ? _allProducts
+                      .map((p) => p.price)
+                      .reduce((a, b) => a > b ? a : b)
                   : 1000000,
               divisions: 20,
               labels: RangeLabels(
@@ -208,9 +213,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
                 _applyFilters();
               },
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Reset Filters
             SizedBox(
               width: double.infinity,
@@ -220,8 +225,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
                     _searchQuery = '';
                     _selectedCategoryId = null;
                     _minPrice = 0;
-                    _maxPrice = _allProducts.isNotEmpty 
-                        ? _allProducts.map((p) => p.price).reduce((a, b) => a > b ? a : b)
+                    _maxPrice = _allProducts.isNotEmpty
+                        ? _allProducts
+                            .map((p) => p.price)
+                            .reduce((a, b) => a > b ? a : b)
                         : 1000000;
                   });
                   _applyFilters();
@@ -238,7 +245,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   Widget _buildCategoryFilters() {
     final categories = _allProducts
         .where((p) => p.categoryId != null)
-        .map((p) => {'id': p.categoryId!, 'name': p.categoryName ?? 'Sin categoría'})
+        .map((p) =>
+            {'id': p.categoryId!, 'name': p.categoryName ?? 'Sin categoría'})
         .toSet()
         .toList();
 
@@ -246,8 +254,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
       return Text(
         'No hay categorías disponibles',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: PublicStoreTheme.textMuted,
-        ),
+              color: PublicStoreTheme.textMuted,
+            ),
       );
     }
 
@@ -264,10 +272,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
           contentPadding: EdgeInsets.zero,
         ),
         ...categories.map((category) {
-          final count = _allProducts
-              .where((p) => p.categoryId == category['id'])
-              .length;
-          
+          final count =
+              _allProducts.where((p) => p.categoryId == category['id']).length;
+
           return RadioListTile<String>(
             title: Text('${category['name']} ($count)'),
             value: category['id'] as String,
@@ -298,12 +305,12 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
             Text(
               '${_filteredProducts.length} productos encontrados',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: PublicStoreTheme.textSecondary,
-              ),
+                    color: PublicStoreTheme.textSecondary,
+                  ),
             ),
           ],
         ),
-        
+
         // Sort Dropdown
         SizedBox(
           width: 200,
@@ -315,8 +322,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
             ),
             items: const [
               DropdownMenuItem(value: 'name', child: Text('Nombre')),
-              DropdownMenuItem(value: 'price_asc', child: Text('Precio: Menor a Mayor')),
-              DropdownMenuItem(value: 'price_desc', child: Text('Precio: Mayor a Menor')),
+              DropdownMenuItem(
+                  value: 'price_asc', child: Text('Precio: Menor a Mayor')),
+              DropdownMenuItem(
+                  value: 'price_desc', child: Text('Precio: Mayor a Menor')),
               DropdownMenuItem(value: 'newest', child: Text('Más Recientes')),
             ],
             onChanged: (value) {
@@ -347,15 +356,15 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
               Text(
                 'No se encontraron productos',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: PublicStoreTheme.textSecondary,
-                ),
+                      color: PublicStoreTheme.textSecondary,
+                    ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Intenta ajustar los filtros de búsqueda',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: PublicStoreTheme.textMuted,
-                ),
+                      color: PublicStoreTheme.textMuted,
+                    ),
               ),
             ],
           ),
@@ -430,28 +439,30 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
                             ),
                           ),
                   ),
-                  
+
                   // Stock Badge
                   if (product.stockQuantity == 0)
                     Positioned(
                       top: 8,
                       right: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: PublicStoreTheme.error,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           'Agotado',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                         ),
                       ),
                     ),
-                  
+
                   // In Cart Badge
                   if (inCart)
                     Positioned(
@@ -473,7 +484,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
                 ],
               ),
             ),
-            
+
             // Product Info
             Expanded(
               child: Padding(
@@ -492,16 +503,16 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
                       Text(
                         product.brand!,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: PublicStoreTheme.textMuted,
-                        ),
+                              color: PublicStoreTheme.textMuted,
+                            ),
                       ),
                     const Spacer(),
                     Text(
                       ChileanUtils.formatCurrency(product.price),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: PublicStoreTheme.primaryBlue,
-                        fontWeight: FontWeight.bold,
-                      ),
+                            color: PublicStoreTheme.primaryBlue,
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -510,15 +521,21 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
                           child: product.stockQuantity > 0
                               ? Text(
                                   'Stock: ${product.stockQuantity}',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: PublicStoreTheme.success,
-                                  ),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: PublicStoreTheme.success,
+                                      ),
                                 )
                               : Text(
                                   'Sin stock',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: PublicStoreTheme.error,
-                                  ),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: PublicStoreTheme.error,
+                                      ),
                                 ),
                         ),
                         Icon(

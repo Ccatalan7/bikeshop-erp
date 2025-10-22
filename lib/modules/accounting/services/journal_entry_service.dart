@@ -31,7 +31,7 @@ class JournalEntryService extends ChangeNotifier {
     try {
       debugPrint('🔍 Loading journal entries with limit: $limit');
       final startTime = DateTime.now();
-      
+
       // Load only recent entries with limit and ordering
       final entryDocs = await _databaseService.select(
         'journal_entries',
@@ -39,9 +39,11 @@ class JournalEntryService extends ChangeNotifier {
         descending: true,
         limit: limit,
       );
-      
-      final entriesLoadTime = DateTime.now().difference(startTime).inMilliseconds;
-      debugPrint('✅ Loaded ${entryDocs.length} entries in ${entriesLoadTime}ms');
+
+      final entriesLoadTime =
+          DateTime.now().difference(startTime).inMilliseconds;
+      debugPrint(
+          '✅ Loaded ${entryDocs.length} entries in ${entriesLoadTime}ms');
 
       if (entryDocs.isEmpty) {
         _journalEntries.clear();
@@ -56,7 +58,7 @@ class JournalEntryService extends ChangeNotifier {
           .where((id) => id != null)
           .cast<String>()
           .toList();
-      
+
       debugPrint('🔍 Loading lines for ${entryIds.length} entries');
       final linesStartTime = DateTime.now();
 
@@ -66,8 +68,9 @@ class JournalEntryService extends ChangeNotifier {
         where: 'entry_id', // Correct column name from core_schema.sql
         whereIn: entryIds,
       );
-      
-      final linesLoadTime = DateTime.now().difference(linesStartTime).inMilliseconds;
+
+      final linesLoadTime =
+          DateTime.now().difference(linesStartTime).inMilliseconds;
       debugPrint('✅ Loaded ${lineDocs.length} lines in ${linesLoadTime}ms');
 
       final linesByEntry = <String, List<JournalLine>>{};
@@ -94,10 +97,10 @@ class JournalEntryService extends ChangeNotifier {
 
       _isLoaded = true;
       _syncNextEntryNumber();
-      
+
       final totalTime = DateTime.now().difference(startTime).inMilliseconds;
       debugPrint('✅ TOTAL: Loaded ${entries.length} entries in ${totalTime}ms');
-      
+
       notifyListeners();
     } catch (e) {
       debugPrint('❌ Error loading journal entries: $e');
@@ -476,7 +479,8 @@ class JournalEntryService extends ChangeNotifier {
   Future<void> deleteEntry(String entryId) async {
     await ensureLoaded();
 
-    final entryIndex = _journalEntries.indexWhere((entry) => entry.id == entryId);
+    final entryIndex =
+        _journalEntries.indexWhere((entry) => entry.id == entryId);
     if (entryIndex == -1) {
       throw Exception('Journal entry not found');
     }

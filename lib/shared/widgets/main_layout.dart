@@ -192,9 +192,9 @@ class MainLayout extends StatelessWidget {
   final Widget? child;
   final Widget? body;
   final String? title;
-  
+
   const MainLayout({
-    super.key, 
+    super.key,
     this.child,
     this.body,
     this.title,
@@ -205,7 +205,7 @@ class MainLayout extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final showSidebar = screenWidth > 768; // Show sidebar on larger screens
     final navigationService = Provider.of<NavigationService>(context);
-    
+
     if (showSidebar) {
       // Desktop layout with collapsible sidebar
       return Scaffold(
@@ -252,8 +252,8 @@ class MainLayout extends StatelessWidget {
                         // Toggle drawer button
                         IconButton(
                           icon: Icon(
-                            navigationService.isDrawerVisible 
-                                ? Icons.menu_open 
+                            navigationService.isDrawerVisible
+                                ? Icons.menu_open
                                 : Icons.menu,
                           ),
                           tooltip: navigationService.isDrawerVisible
@@ -267,9 +267,12 @@ class MainLayout extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
                             title ?? 'Vinabike ERP',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                         ),
                         const Spacer(),
@@ -488,23 +491,27 @@ class _AppSidebarState extends State<AppSidebar> {
                                 child: SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
                                 ),
                               ),
-                              errorWidget: (context, url, error) => _buildDefaultHeader(context, theme, appearanceService),
+                              errorWidget: (context, url, error) =>
+                                  _buildDefaultHeader(
+                                      context, theme, appearanceService),
                             ),
                           ),
                         )
                       else
                         // Show default header with icon and text
-                        ..._buildDefaultHeaderWidgets(context, theme, appearanceService),
+                        ..._buildDefaultHeaderWidgets(
+                            context, theme, appearanceService),
                     ],
                   ),
                 );
               },
             ),
           ),
-          
+
           // Navigation Menu
           Expanded(
             child: ListView(
@@ -519,12 +526,12 @@ class _AppSidebarState extends State<AppSidebar> {
                   route: '/dashboard',
                   currentLocation: currentLocation,
                 ),
-                
+
                 const SizedBox(height: 8),
-                
+
                 // Core Modules Section
                 _buildSectionDivider(context),
-                
+
                 ExpandableMenuItem(
                   icon: Icons.account_balance_outlined,
                   activeIcon: Icons.account_balance,
@@ -532,7 +539,8 @@ class _AppSidebarState extends State<AppSidebar> {
                   currentLocation: currentLocation,
                   subItems: _accountingMenuItems,
                   isExpanded: _expandedSection == _accountingSectionKey,
-                  onExpansionChanged: (expand) => _handleExpansionChange(_accountingSectionKey, expand),
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_accountingSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -542,7 +550,8 @@ class _AppSidebarState extends State<AppSidebar> {
                   currentLocation: currentLocation,
                   subItems: _customersMenuItems,
                   isExpanded: _expandedSection == _customersSectionKey,
-                  onExpansionChanged: (expand) => _handleExpansionChange(_customersSectionKey, expand),
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_customersSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -552,7 +561,8 @@ class _AppSidebarState extends State<AppSidebar> {
                   currentLocation: currentLocation,
                   subItems: _workshopMenuItems,
                   isExpanded: _expandedSection == _workshopSectionKey,
-                  onExpansionChanged: (expand) => _handleExpansionChange(_workshopSectionKey, expand),
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_workshopSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -562,7 +572,8 @@ class _AppSidebarState extends State<AppSidebar> {
                   currentLocation: currentLocation,
                   subItems: _inventoryMenuItems,
                   isExpanded: _expandedSection == _inventorySectionKey,
-                  onExpansionChanged: (expand) => _handleExpansionChange(_inventorySectionKey, expand),
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_inventorySectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -572,7 +583,8 @@ class _AppSidebarState extends State<AppSidebar> {
                   currentLocation: currentLocation,
                   subItems: _salesMenuItems,
                   isExpanded: _expandedSection == _salesSectionKey,
-                  onExpansionChanged: (expand) => _handleExpansionChange(_salesSectionKey, expand),
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_salesSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -582,7 +594,8 @@ class _AppSidebarState extends State<AppSidebar> {
                   currentLocation: currentLocation,
                   subItems: _purchasesMenuItems,
                   isExpanded: _expandedSection == _purchasesSectionKey,
-                  onExpansionChanged: (expand) => _handleExpansionChange(_purchasesSectionKey, expand),
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_purchasesSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -592,7 +605,8 @@ class _AppSidebarState extends State<AppSidebar> {
                   currentLocation: currentLocation,
                   subItems: _posMenuItems,
                   isExpanded: _expandedSection == _posSectionKey,
-                  onExpansionChanged: (expand) => _handleExpansionChange(_posSectionKey, expand),
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_posSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -602,12 +616,13 @@ class _AppSidebarState extends State<AppSidebar> {
                   currentLocation: currentLocation,
                   subItems: _hrMenuItems,
                   isExpanded: _expandedSection == _hrSectionKey,
-                  onExpansionChanged: (expand) => _handleExpansionChange(_hrSectionKey, expand),
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_hrSectionKey, expand),
                 ),
-                
+
                 const SizedBox(height: 8),
                 _buildSectionDivider(context),
-                
+
                 // Additional Modules (Disabled for now)
                 _buildSidebarItem(
                   context,
@@ -618,7 +633,7 @@ class _AppSidebarState extends State<AppSidebar> {
                   currentLocation: currentLocation,
                   enabled: false,
                 ),
-                
+
                 _buildSidebarItem(
                   context,
                   icon: Icons.analytics_outlined,
@@ -631,7 +646,7 @@ class _AppSidebarState extends State<AppSidebar> {
               ],
             ),
           ),
-          
+
           // Bottom section
           Container(
             padding: const EdgeInsets.all(16),
@@ -677,7 +692,7 @@ class _AppSidebarState extends State<AppSidebar> {
   }) {
     final isSelected = currentLocation.startsWith(route);
     final theme = Theme.of(context);
-    
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: Material(
@@ -705,8 +720,8 @@ class _AppSidebarState extends State<AppSidebar> {
                   isSelected ? activeIcon : icon,
                   size: 20,
                   color: enabled
-                      ? (isSelected 
-                          ? theme.primaryColor 
+                      ? (isSelected
+                          ? theme.primaryColor
                           : theme.colorScheme.onSurface.withOpacity(0.7))
                       : theme.disabledColor,
                 ),
@@ -715,10 +730,11 @@ class _AppSidebarState extends State<AppSidebar> {
                   child: Text(
                     title,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
                       color: enabled
-                          ? (isSelected 
-                              ? theme.primaryColor 
+                          ? (isSelected
+                              ? theme.primaryColor
                               : theme.colorScheme.onSurface)
                           : theme.disabledColor,
                     ),
@@ -734,8 +750,8 @@ class _AppSidebarState extends State<AppSidebar> {
 
   // Helper method to build default header widgets
   List<Widget> _buildDefaultHeaderWidgets(
-    BuildContext context, 
-    ThemeData theme, 
+    BuildContext context,
+    ThemeData theme,
     AppearanceService appearanceService,
   ) {
     return [
@@ -778,8 +794,8 @@ class _AppSidebarState extends State<AppSidebar> {
 
   // Helper method to build default header as a single widget
   Widget _buildDefaultHeader(
-    BuildContext context, 
-    ThemeData theme, 
+    BuildContext context,
+    ThemeData theme,
     AppearanceService appearanceService,
   ) {
     return Row(
@@ -801,7 +817,7 @@ class AppDrawer extends StatelessWidget {
       // Not in GoRouter context
       currentLocation = '';
     }
-    
+
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
@@ -837,7 +853,9 @@ class AppDrawer extends StatelessWidget {
                                 color: Colors.white,
                               ),
                             ),
-                            errorWidget: (context, url, error) => _buildDefaultDrawerHeader(context, appearanceService),
+                            errorWidget: (context, url, error) =>
+                                _buildDefaultDrawerHeader(
+                                    context, appearanceService),
                           ),
                         )
                       : _buildDefaultDrawerHeader(context, appearanceService),
@@ -845,7 +863,7 @@ class AppDrawer extends StatelessWidget {
               },
             ),
           ),
-          
+
           // Dashboard
           _buildDrawerItem(
             context,
@@ -854,12 +872,12 @@ class AppDrawer extends StatelessWidget {
             route: '/dashboard',
             currentLocation: currentLocation,
           ),
-          
+
           const Divider(),
-          
+
           // Core Modules
           _buildSectionHeader(context, 'MÓDULOS PRINCIPALES'),
-          
+
           _buildDrawerExpandableItem(
             context,
             icon: Icons.account_balance,
@@ -923,12 +941,12 @@ class AppDrawer extends StatelessWidget {
             subItems: _hrMenuItems,
             currentLocation: currentLocation,
           ),
-          
+
           const Divider(),
-          
+
           // Secondary Modules
           _buildSectionHeader(context, 'OTROS MÓDULOS'),
-          
+
           _buildDrawerItem(
             context,
             icon: Icons.build,
@@ -937,7 +955,7 @@ class AppDrawer extends StatelessWidget {
             currentLocation: currentLocation,
             enabled: false,
           ),
-          
+
           _buildDrawerItem(
             context,
             icon: Icons.analytics,
@@ -946,9 +964,9 @@ class AppDrawer extends StatelessWidget {
             currentLocation: currentLocation,
             enabled: false,
           ),
-          
+
           const Divider(),
-          
+
           // Settings
           _buildDrawerItem(
             context,
@@ -969,9 +987,9 @@ class AppDrawer extends StatelessWidget {
       child: Text(
         title,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontWeight: FontWeight.bold,
-          color: Theme.of(context).colorScheme.primary,
-        ),
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.primary,
+            ),
       ),
     );
   }
@@ -1064,7 +1082,7 @@ class AppDrawer extends StatelessWidget {
     bool enabled = true,
   }) {
     final isSelected = currentLocation.startsWith(route);
-    
+
     return ListTile(
       leading: Icon(
         icon,
@@ -1094,7 +1112,8 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildDefaultDrawerHeader(BuildContext context, AppearanceService appearanceService) {
+  Widget _buildDefaultDrawerHeader(
+      BuildContext context, AppearanceService appearanceService) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,

@@ -40,7 +40,7 @@ class PaymentMethodSelector extends StatelessWidget {
           itemBuilder: (context, index) {
             final method = paymentMethods[index];
             final isSelected = selectedMethod?.id == method.id;
-            
+
             return InkWell(
               onTap: () => onMethodSelected?.call(method),
               borderRadius: BorderRadius.circular(12),
@@ -83,11 +83,11 @@ class PaymentMethodSelector extends StatelessWidget {
             );
           },
         ),
-        
+
         // Amount input (without duplicate label - controlled by parent page)
         if (showAmountInput && selectedMethod != null) ...[
           const SizedBox(height: 16),
-          
+
           TextFormField(
             initialValue: amount?.toStringAsFixed(0),
             keyboardType: TextInputType.number,
@@ -108,7 +108,7 @@ class PaymentMethodSelector extends StatelessWidget {
               }
             },
           ),
-          
+
           // Change calculation for cash payments
           if (selectedMethod!.requiresChange && amount != null) ...[
             const SizedBox(height: 8),

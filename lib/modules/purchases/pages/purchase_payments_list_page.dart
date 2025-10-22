@@ -9,7 +9,8 @@ class PurchasePaymentsListPage extends StatefulWidget {
   const PurchasePaymentsListPage({super.key});
 
   @override
-  State<PurchasePaymentsListPage> createState() => _PurchasePaymentsListPageState();
+  State<PurchasePaymentsListPage> createState() =>
+      _PurchasePaymentsListPageState();
 }
 
 class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
@@ -37,7 +38,8 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
     setState(() => _isLoading = true);
     try {
       final purchaseService = context.read<PurchaseService>();
-      final payments = await purchaseService.getPurchasePayments(forceRefresh: refresh);
+      final payments =
+          await purchaseService.getPurchasePayments(forceRefresh: refresh);
       setState(() {
         _payments = payments;
         _filtered = payments;
@@ -81,7 +83,7 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
   Color _getPaymentMethodColor(String paymentMethodId) {
     final method = _paymentMethodService.getPaymentMethodById(paymentMethodId);
     if (method == null) return Colors.grey;
-    
+
     switch (method.code.toLowerCase()) {
       case 'cash':
         return Colors.green;
@@ -200,7 +202,8 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                               margin: const EdgeInsets.only(bottom: 12),
                               child: ListTile(
                                 leading: CircleAvatar(
-                                  backgroundColor: _getPaymentMethodColor(payment.paymentMethodId),
+                                  backgroundColor: _getPaymentMethodColor(
+                                      payment.paymentMethodId),
                                   child: const Icon(
                                     Icons.payments,
                                     color: Colors.white,
@@ -223,15 +226,18 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: _getPaymentMethodColor(payment.paymentMethodId)
+                                        color: _getPaymentMethodColor(
+                                                payment.paymentMethodId)
                                             .withOpacity(0.15),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
-                                        _getPaymentMethodName(payment.paymentMethodId),
+                                        _getPaymentMethodName(
+                                            payment.paymentMethodId),
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: _getPaymentMethodColor(payment.paymentMethodId),
+                                          color: _getPaymentMethodColor(
+                                              payment.paymentMethodId),
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -242,7 +248,8 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     if (payment.supplierName != null)
-                                      Text('Proveedor: ${payment.supplierName}'),
+                                      Text(
+                                          'Proveedor: ${payment.supplierName}'),
                                     Text(
                                       'Fecha: ${ChileanUtils.formatDate(payment.date)}',
                                     ),
@@ -271,7 +278,8 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      ChileanUtils.formatCurrency(payment.amount),
+                                      ChileanUtils.formatCurrency(
+                                          payment.amount),
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16,

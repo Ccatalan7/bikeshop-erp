@@ -25,16 +25,16 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+
   bool _isActive = true;
   String? _imageUrl;
   Uint8List? _selectedImageBytes;
   String? _selectedImageName;
-  
+
   bool _isLoading = false;
   bool _isSaving = false;
   Category? _existingCategory;
-  
+
   late CategoryService _categoryService;
 
   @override
@@ -43,7 +43,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
     _categoryService = CategoryService(
       Provider.of<DatabaseService>(context, listen: false),
     );
-    
+
     if (widget.categoryId != null) {
       _loadCategory();
     }
@@ -59,7 +59,8 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
   Future<void> _loadCategory() async {
     setState(() => _isLoading = true);
     try {
-      final category = await _categoryService.getCategoryById(widget.categoryId!);
+      final category =
+          await _categoryService.getCategoryById(widget.categoryId!);
       if (category != null) {
         setState(() {
           _existingCategory = category;
@@ -111,7 +112,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
 
     try {
       String? finalImageUrl = _imageUrl;
-      
+
       // Upload new image if selected
       if (_selectedImageBytes != null && _selectedImageName != null) {
         final uploadUrl = await ImageService.uploadBytes(
@@ -122,7 +123,8 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
         );
 
         if (uploadUrl == null) {
-          throw Exception('No se pudo subir la imagen de la categoría. Intenta nuevamente.');
+          throw Exception(
+              'No se pudo subir la imagen de la categoría. Intenta nuevamente.');
         }
 
         finalImageUrl = uploadUrl;
@@ -131,8 +133,8 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
       final category = Category(
         id: _existingCategory?.id,
         name: _nameController.text.trim(),
-        description: _descriptionController.text.trim().isEmpty 
-            ? null 
+        description: _descriptionController.text.trim().isEmpty
+            ? null
             : _descriptionController.text.trim(),
         imageUrl: finalImageUrl,
         isActive: _isActive,
@@ -147,7 +149,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_existingCategory != null 
+            content: Text(_existingCategory != null
                 ? 'Categoría actualizada exitosamente'
                 : 'Categoría creada exitosamente'),
             backgroundColor: Colors.green,
@@ -195,7 +197,9 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _existingCategory != null ? 'Editar Categoría' : 'Nueva Categoría',
+                    _existingCategory != null
+                        ? 'Editar Categoría'
+                        : 'Nueva Categoría',
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -211,7 +215,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
               ],
             ),
           ),
-          
+
           // Form content
           Expanded(
             child: SingleChildScrollView(
@@ -230,7 +234,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Name
                     TextFormField(
                       controller: _nameController,
@@ -249,9 +253,9 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                         return null;
                       },
                     ),
-                    
+
                     const SizedBox(height: 16),
-                    
+
                     // Description
                     TextFormField(
                       controller: _descriptionController,
@@ -263,9 +267,9 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                         alignLabelWithHint: true,
                       ),
                     ),
-                    
+
                     const SizedBox(height: 24),
-                    
+
                     // Image Section
                     const Text(
                       'Imagen',
@@ -275,7 +279,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Image picker
                     Container(
                       height: 200,
@@ -286,9 +290,9 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                       ),
                       child: _buildImagePicker(),
                     ),
-                    
+
                     const SizedBox(height: 24),
-                    
+
                     // Status
                     const Text(
                       'Estado',
@@ -298,10 +302,10 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     SwitchListTile(
                       title: const Text('Categoría Activa'),
-                      subtitle: Text(_isActive 
+                      subtitle: Text(_isActive
                           ? 'La categoría está disponible para su uso'
                           : 'La categoría está oculta y no se puede usar'),
                       value: _isActive,
@@ -354,7 +358,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
         ],
       );
     }
-    
+
     if (_imageUrl != null && _imageUrl!.isNotEmpty) {
       return Stack(
         children: [
@@ -388,7 +392,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
         ],
       );
     }
-    
+
     return InkWell(
       onTap: _pickImage,
       borderRadius: BorderRadius.circular(8),

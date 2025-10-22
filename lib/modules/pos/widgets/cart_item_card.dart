@@ -54,9 +54,9 @@ class CartItemCard extends StatelessWidget {
                       size: 24,
                     ),
             ),
-            
+
             const SizedBox(width: 12),
-            
+
             // Product details
             Expanded(
               child: Column(
@@ -71,7 +71,7 @@ class CartItemCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  
+
                   // SKU
                   Text(
                     item.product.sku,
@@ -79,9 +79,9 @@ class CartItemCard extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  
+
                   const SizedBox(height: 4),
-                  
+
                   // Price per unit
                   Text(
                     '\$${item.unitPrice.toStringAsFixed(0)} c/u',
@@ -92,9 +92,9 @@ class CartItemCard extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(width: 12),
-            
+
             // Quantity controls and total
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -118,7 +118,6 @@ class CartItemCard extends StatelessWidget {
                           padding: EdgeInsets.zero,
                         ),
                       ),
-                      
                       Container(
                         width: 40,
                         alignment: Alignment.center,
@@ -129,7 +128,6 @@ class CartItemCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      
                       IconButton(
                         onPressed: item.product.stockQuantity > item.quantity
                             ? () => onQuantityChanged?.call(item.quantity + 1)
@@ -148,9 +146,9 @@ class CartItemCard extends StatelessWidget {
                     'Qty: ${item.quantity}',
                     style: theme.textTheme.bodyMedium,
                   ),
-                
+
                 const SizedBox(height: 8),
-                
+
                 // Discount (if any)
                 if (item.discount > 0)
                   Text(
@@ -160,18 +158,17 @@ class CartItemCard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                
+
                 // Subtotal
                 Text(
                   '\$${item.subtotal.toStringAsFixed(0)}',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
-                    decoration: item.discount > 0 
-                        ? TextDecoration.lineThrough 
-                        : null,
+                    decoration:
+                        item.discount > 0 ? TextDecoration.lineThrough : null,
                   ),
                 ),
-                
+
                 // Total (after discount)
                 if (item.discount > 0)
                   Text(
@@ -183,7 +180,7 @@ class CartItemCard extends StatelessWidget {
                   ),
               ],
             ),
-            
+
             // Remove button
             if (showControls)
               IconButton(

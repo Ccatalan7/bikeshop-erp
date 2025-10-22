@@ -223,9 +223,7 @@ class _BannersManagementPageState extends State<BannersManagementPage> {
                     Text(
                       banner.active ? 'Activo' : 'Inactivo',
                       style: TextStyle(
-                        color: banner.active
-                            ? Colors.green
-                            : Colors.grey[600],
+                        color: banner.active ? Colors.green : Colors.grey[600],
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -401,11 +399,15 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.banner?.title ?? '');
-    _subtitleController = TextEditingController(text: widget.banner?.subtitle ?? '');
-    _imageUrlController = TextEditingController(text: widget.banner?.imageUrl ?? '');
+    _subtitleController =
+        TextEditingController(text: widget.banner?.subtitle ?? '');
+    _imageUrlController =
+        TextEditingController(text: widget.banner?.imageUrl ?? '');
     _linkController = TextEditingController(text: widget.banner?.link ?? '');
-    _ctaTextController = TextEditingController(text: widget.banner?.ctaText ?? '');
-    _ctaLinkController = TextEditingController(text: widget.banner?.ctaLink ?? '');
+    _ctaTextController =
+        TextEditingController(text: widget.banner?.ctaText ?? '');
+    _ctaLinkController =
+        TextEditingController(text: widget.banner?.ctaLink ?? '');
     _active = widget.banner?.active ?? true;
   }
 
@@ -465,7 +467,8 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
                   decoration: const InputDecoration(
                     labelText: 'URL de Imagen *',
                     hintText: 'https://...',
-                    helperText: 'Por ahora ingresa una URL. Próximamente: subir archivo',
+                    helperText:
+                        'Por ahora ingresa una URL. Próximamente: subir archivo',
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -512,7 +515,8 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
                 // Active toggle
                 SwitchListTile(
                   title: const Text('Banner activo'),
-                  subtitle: const Text('Solo banners activos se muestran en el sitio'),
+                  subtitle: const Text(
+                      'Solo banners activos se muestran en el sitio'),
                   value: _active,
                   onChanged: (value) {
                     setState(() => _active = value);
@@ -549,9 +553,10 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
 
     try {
       final service = context.read<WebsiteService>();
-      
+
       final banner = WebsiteBanner(
-        id: widget.banner?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        id: widget.banner?.id ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
         title: _titleController.text.trim(),
         subtitle: _subtitleController.text.trim().isEmpty
             ? null

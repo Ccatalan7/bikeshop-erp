@@ -1,0 +1,17 @@
+{
+  "type": "products",
+  "title": "Productos Destacados",
+  "description": "Lista productos seleccionados desde tu inventario.",
+  "usesCustomEditor": true,
+  "category": "Catálogo",
+  "tags": ["productos", "tienda", "destacados"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Productos Destacados",
+    "layout": "grid",
+    "showPrice": true,
+    "showStock": false,
+    "productIds": []
+  }
+}

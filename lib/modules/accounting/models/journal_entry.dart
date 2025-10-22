@@ -33,8 +33,11 @@ class JournalEntry {
     return JournalEntry(
       id: json['id']?.toString(),
       entryNumber: json['entry_number'] as String,
-      date: _parseDate(json['entry_date'] ?? json['date']), // Support both column names
-      description: json['notes'] ?? json['description'] ?? '', // Support both column names
+      date: _parseDate(
+          json['entry_date'] ?? json['date']), // Support both column names
+      description: json['notes'] ??
+          json['description'] ??
+          '', // Support both column names
       type: JournalEntryType.values.firstWhere(
         (e) => e.name == (json['entry_type'] ?? json['type']),
         orElse: () => JournalEntryType.manual,
@@ -42,8 +45,9 @@ class JournalEntry {
       sourceModule: json['source_module'] as String?,
       sourceReference: json['source_reference'] as String?,
       lines: (json['lines'] as List?)
-          ?.map((line) => JournalLine.fromJson(line))
-          .toList() ?? [],
+              ?.map((line) => JournalLine.fromJson(line))
+              .toList() ??
+          [],
       status: JournalEntryStatus.values.firstWhere(
         (e) => e.name == json['status'],
         orElse: () => JournalEntryStatus.draft,
@@ -139,13 +143,16 @@ class JournalLine {
   factory JournalLine.fromJson(Map<String, dynamic> json) {
     return JournalLine(
       id: json['id']?.toString(),
-      journalEntryId: json['journal_entry_id']?.toString() ?? json['entry_id']?.toString(),
+      journalEntryId:
+          json['journal_entry_id']?.toString() ?? json['entry_id']?.toString(),
       accountId: json['account_id']?.toString() ?? '',
       accountCode: json['account_code']?.toString() ?? '',
       accountName: json['account_name']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
-      debitAmount: _parseDouble(json['debit_amount'] ?? json['debit']) ?? 0.0, // Check debit_amount first
-      creditAmount: _parseDouble(json['credit_amount'] ?? json['credit']) ?? 0.0, // Check credit_amount first
+      debitAmount: _parseDouble(json['debit_amount'] ?? json['debit']) ??
+          0.0, // Check debit_amount first
+      creditAmount: _parseDouble(json['credit_amount'] ?? json['credit']) ??
+          0.0, // Check credit_amount first
       createdAt: _parseNullableDate(json['created_at']),
     );
   }

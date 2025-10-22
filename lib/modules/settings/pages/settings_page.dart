@@ -191,9 +191,11 @@ class SettingsPage extends StatelessWidget {
                     context: context,
                     applicationName: 'Vinabike ERP',
                     applicationVersion: '1.0.0',
-                    applicationIcon: const Icon(Icons.directions_bike, size: 48),
+                    applicationIcon:
+                        const Icon(Icons.directions_bike, size: 48),
                     children: [
-                      const Text('Sistema ERP completo para gestión de bikeshop'),
+                      const Text(
+                          'Sistema ERP completo para gestión de bikeshop'),
                       const SizedBox(height: 8),
                       const Text('Incluye: Contabilidad, Inventario, Ventas, '
                           'Compras, POS, CRM, Mantención, RR.HH. y más.'),
@@ -222,7 +224,8 @@ class SettingsPage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
           child: Row(
             children: [
-              Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+              Icon(icon,
+                  size: 20, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 8),
               Text(
                 title,

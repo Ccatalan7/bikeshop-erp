@@ -22,11 +22,11 @@ class JournalEntryFormPage extends StatefulWidget {
 class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
   final _formKey = GlobalKey<FormState>();
   late AccountingService _accountingService;
-  
+
   // Form controllers
   final _dateController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+
   // State
   DateTime _selectedDate = DateTime.now();
   JournalEntryType _selectedType = JournalEntryType.manual;
@@ -34,10 +34,10 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
   bool _isLoading = false;
   bool _isSaving = false;
   String? _error;
-  
+
   // Account cache
   List<Account> _accounts = [];
-  
+
   // Formatting
   final DateFormat _dateFormat = ChileanUtils.dateFormat;
   final NumberFormat _currencyFormat = ChileanUtils.currencyFormat;
@@ -47,11 +47,11 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
     super.initState();
     _accountingService = Provider.of<AccountingService>(context, listen: false);
     _dateController.text = _dateFormat.format(_selectedDate);
-    
+
     // Add initial empty lines
     _addEmptyLine();
     _addEmptyLine();
-    
+
     // Delay the load to avoid setState during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAccounts();
@@ -70,7 +70,7 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
 
   Future<void> _loadAccounts() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final accounts = await _accountingService.getAccounts();
       setState(() {
@@ -120,7 +120,7 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
       locale: const Locale('es', 'CL'),
     );
-    
+
     if (date != null) {
       setState(() {
         _selectedDate = date;
@@ -131,11 +131,12 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
 
   Future<void> _saveJournalEntry() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     if (!_isBalanced) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('El asiento contable debe estar balanceado (Debe = Haber)'),
+          content:
+              Text('El asiento contable debe estar balanceado (Debe = Haber)'),
           backgroundColor: Colors.red,
         ),
       );
@@ -143,9 +144,9 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
     }
 
     // Validate that all lines have accounts and amounts
-    final validLines = _lines.where((line) => 
-      line.selectedAccount != null && line.totalAmount > 0
-    ).toList();
+    final validLines = _lines
+        .where((line) => line.selectedAccount != null && line.totalAmount > 0)
+        .toList();
 
     if (validLines.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -160,17 +161,19 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
     setState(() => _isSaving = true);
 
     try {
-      final journalLines = validLines.map((lineForm) => JournalLine(
-        accountId: lineForm.selectedAccount!.id!,
-        accountCode: lineForm.selectedAccount!.code,
-        accountName: lineForm.selectedAccount!.name,
-        description: lineForm.descriptionController.text.trim().isEmpty 
-            ? _descriptionController.text 
-            : lineForm.descriptionController.text,
-        debitAmount: lineForm.debitAmount,
-        creditAmount: lineForm.creditAmount,
-        createdAt: DateTime.now(),
-      )).toList();
+      final journalLines = validLines
+          .map((lineForm) => JournalLine(
+                accountId: lineForm.selectedAccount!.id!,
+                accountCode: lineForm.selectedAccount!.code,
+                accountName: lineForm.selectedAccount!.name,
+                description: lineForm.descriptionController.text.trim().isEmpty
+                    ? _descriptionController.text
+                    : lineForm.descriptionController.text,
+                debitAmount: lineForm.debitAmount,
+                creditAmount: lineForm.creditAmount,
+                createdAt: DateTime.now(),
+              ))
+          .toList();
 
       await _accountingService.createJournalEntry(
         date: _selectedDate,
@@ -235,7 +238,8 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                     decoration: BoxDecoration(
                       color: Theme.of(context).cardColor,
                       border: Border(
-                        bottom: BorderSide(color: Theme.of(context).dividerColor),
+                        bottom:
+                            BorderSide(color: Theme.of(context).dividerColor),
                       ),
                     ),
                     child: Column(
@@ -254,8 +258,8 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                                   ),
                                 ),
                                 readOnly: true,
-                                validator: (value) => value?.isEmpty == true 
-                                    ? 'La fecha es requerida' 
+                                validator: (value) => value?.isEmpty == true
+                                    ? 'La fecha es requerida'
                                     : null,
                               ),
                             ),
@@ -267,12 +271,15 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                                   border: OutlineInputBorder(),
                                 ),
                                 value: _selectedType,
-                                items: JournalEntryType.values.map((type) =>
-                                  DropdownMenuItem<JournalEntryType>(
-                                    value: type,
-                                    child: Text(type.displayName),
-                                  ),
-                                ).toList(),
+                                items: JournalEntryType.values
+                                    .map(
+                                      (type) =>
+                                          DropdownMenuItem<JournalEntryType>(
+                                        value: type,
+                                        child: Text(type.displayName),
+                                      ),
+                                    )
+                                    .toList(),
                                 onChanged: (value) {
                                   if (value != null) {
                                     setState(() => _selectedType = value);
@@ -291,14 +298,14 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                             hintText: 'Descripción del asiento contable',
                           ),
                           maxLines: 2,
-                          validator: (value) => value?.trim().isEmpty == true 
-                              ? 'La descripción es requerida' 
+                          validator: (value) => value?.trim().isEmpty == true
+                              ? 'La descripción es requerida'
                               : null,
                         ),
                       ],
                     ),
                   ),
-                  
+
                   // Lines section
                   Expanded(
                     child: Column(
@@ -309,33 +316,45 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                           decoration: BoxDecoration(
                             color: Theme.of(context).colorScheme.surface,
                             border: Border(
-                              bottom: BorderSide(color: Theme.of(context).dividerColor),
+                              bottom: BorderSide(
+                                  color: Theme.of(context).dividerColor),
                             ),
                           ),
                           child: Row(
                             children: [
                               const Expanded(
                                 flex: 3,
-                                child: Text('Cuenta', style: TextStyle(fontWeight: FontWeight.bold)),
+                                child: Text('Cuenta',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
                               ),
                               const Expanded(
                                 flex: 3,
-                                child: Text('Descripción', style: TextStyle(fontWeight: FontWeight.bold)),
+                                child: Text('Descripción',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold)),
                               ),
                               const Expanded(
                                 flex: 2,
-                                child: Text('Debe', style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.right),
+                                child: Text('Debe',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                    textAlign: TextAlign.right),
                               ),
                               const SizedBox(width: 16),
                               const Expanded(
                                 flex: 2,
-                                child: Text('Haber', style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.right),
+                                child: Text('Haber',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                    textAlign: TextAlign.right),
                               ),
-                              const SizedBox(width: 48), // Space for delete button
+                              const SizedBox(
+                                  width: 48), // Space for delete button
                             ],
                           ),
                         ),
-                        
+
                         // Lines list
                         Expanded(
                           child: ListView.builder(
@@ -346,19 +365,22 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                                 margin: const EdgeInsets.only(bottom: 16),
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: Theme.of(context).dividerColor),
+                                  border: Border.all(
+                                      color: Theme.of(context).dividerColor),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
                                   children: [
                                     Expanded(
                                       flex: 3,
-                                      child: _lines[index].buildAccountSelector(),
+                                      child:
+                                          _lines[index].buildAccountSelector(),
                                     ),
                                     const SizedBox(width: 16),
                                     Expanded(
                                       flex: 3,
-                                      child: _lines[index].buildDescriptionField(),
+                                      child:
+                                          _lines[index].buildDescriptionField(),
                                     ),
                                     const SizedBox(width: 16),
                                     Expanded(
@@ -372,8 +394,9 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                                     ),
                                     const SizedBox(width: 8),
                                     IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.red),
-                                      onPressed: _lines.length > 2 
+                                      icon: const Icon(Icons.delete,
+                                          color: Colors.red),
+                                      onPressed: _lines.length > 2
                                           ? () => _removeLine(index)
                                           : null,
                                     ),
@@ -386,7 +409,7 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                       ],
                     ),
                   ),
-                  
+
                   // Footer with totals and actions
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -402,7 +425,7 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: _isBalanced 
+                            color: _isBalanced
                                 ? Colors.green.withOpacity(0.1)
                                 : Colors.red.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
@@ -419,27 +442,32 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                _isBalanced ? 'Asiento balanceado' : 'Asiento desbalanceado',
+                                _isBalanced
+                                    ? 'Asiento balanceado'
+                                    : 'Asiento desbalanceado',
                                 style: TextStyle(
-                                  color: _isBalanced ? Colors.green : Colors.red,
+                                  color:
+                                      _isBalanced ? Colors.green : Colors.red,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               const Spacer(),
                               Text(
                                 'Debe: ${_currencyFormat.format(_totalDebits)}',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(width: 32),
                               Text(
                                 'Haber: ${_currencyFormat.format(_totalCredits)}',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 16),
-                        
+
                         // Actions
                         Row(
                           children: [
@@ -457,7 +485,9 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                             ),
                             const SizedBox(width: 16),
                             AppButton(
-                              text: _isSaving ? 'Guardando...' : 'Guardar Asiento',
+                              text: _isSaving
+                                  ? 'Guardando...'
+                                  : 'Guardar Asiento',
                               onPressed: _isSaving ? null : _saveJournalEntry,
                               icon: _isSaving ? null : Icons.save,
                             ),
@@ -480,7 +510,7 @@ class JournalLineForm {
   final TextEditingController debitController = TextEditingController();
   final TextEditingController creditController = TextEditingController();
   final TextEditingController accountSearchController = TextEditingController();
-  
+
   bool _showAccountDropdown = false;
   List<Account> _filteredAccounts = [];
 
@@ -517,17 +547,20 @@ class JournalLineForm {
             labelText: 'Cuenta *',
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
-              icon: Icon(_showAccountDropdown ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
+              icon: Icon(_showAccountDropdown
+                  ? Icons.keyboard_arrow_up
+                  : Icons.keyboard_arrow_down),
               onPressed: () {
                 _showAccountDropdown = !_showAccountDropdown;
               },
             ),
           ),
           onChanged: (value) {
-            _filteredAccounts = accounts.where((account) =>
-              account.code.toLowerCase().contains(value.toLowerCase()) ||
-              account.name.toLowerCase().contains(value.toLowerCase())
-            ).toList();
+            _filteredAccounts = accounts
+                .where((account) =>
+                    account.code.toLowerCase().contains(value.toLowerCase()) ||
+                    account.name.toLowerCase().contains(value.toLowerCase()))
+                .toList();
           },
           onTap: () {
             _showAccountDropdown = true;
@@ -554,7 +587,8 @@ class JournalLineForm {
                   subtitle: Text(account.type.displayName),
                   onTap: () {
                     selectedAccount = account;
-                    accountSearchController.text = '${account.code} - ${account.name}';
+                    accountSearchController.text =
+                        '${account.code} - ${account.name}';
                     _showAccountDropdown = false;
                   },
                 );

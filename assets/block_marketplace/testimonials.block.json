@@ -1,0 +1,78 @@
+{
+  "type": "testimonials",
+  "title": "Testimonios",
+  "description": "Destaca comentarios de clientes para generar confianza.",
+  "usesCustomEditor": false,
+  "category": "Social",
+  "tags": ["testimonios", "opiniones", "reviews"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Lo que dicen nuestros clientes",
+    "testimonials": [
+      {
+        "name": "Carolina M.",
+        "role": "Ciclista urbana",
+        "comment": "Me ayudaron a dejar mi bicicleta como nueva y fueron súper rápidos.",
+        "rating": 5
+      },
+      {
+        "name": "Luis P.",
+        "role": "Mountain biker",
+        "comment": "Excelente servicio y atención. Siempre tienen repuestos de calidad.",
+        "rating": 5
+      }
+    ]
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título",
+      "type": "text",
+      "group": "content"
+    },
+    {
+      "key": "testimonials",
+      "label": "Testimonios",
+      "type": "repeater",
+      "itemLabel": "Testimonio",
+      "minItems": 1,
+      "itemFields": [
+        {
+          "key": "name",
+          "label": "Nombre",
+          "type": "text",
+          "defaultValue": "Nombre"
+        },
+        {
+          "key": "role",
+          "label": "Rol",
+          "type": "text",
+          "defaultValue": "Cliente"
+        },
+        {
+          "key": "comment",
+          "label": "Comentario",
+          "type": "textarea",
+          "defaultValue": "Escribe el testimonio"
+        },
+        {
+          "key": "rating",
+          "label": "Valoración",
+          "type": "number",
+          "min": 1,
+          "max": 5,
+          "step": 1,
+          "defaultValue": 5
+        }
+      ]
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "testimonials"]
+    }
+  ]
+}

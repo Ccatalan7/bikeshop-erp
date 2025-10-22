@@ -9,7 +9,7 @@ import '../services/accounting_service.dart';
 
 class AccountFormPage extends StatefulWidget {
   final String? accountId;
-  
+
   const AccountFormPage({super.key, this.accountId});
 
   @override
@@ -21,7 +21,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
   final _codeController = TextEditingController();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+
   bool _isSaving = false;
   bool _isLoading = true;
   AccountType _selectedType = AccountType.asset;
@@ -50,14 +50,15 @@ class _AccountFormPageState extends State<AccountFormPage> {
 
     try {
       final accountingService = context.read<AccountingService>();
-      
+
       // Load all accounts for parent selection
       _allAccounts = await accountingService.getAccounts();
 
       // If editing, load existing account
       if (widget.accountId != null) {
-        _existingAccount = await accountingService.getAccountById(widget.accountId!);
-        
+        _existingAccount =
+            await accountingService.getAccountById(widget.accountId!);
+
         if (_existingAccount != null) {
           _codeController.text = _existingAccount!.code;
           _nameController.text = _existingAccount!.name;
@@ -134,8 +135,8 @@ class _AccountFormPageState extends State<AccountFormPage> {
         name: _nameController.text.trim(),
         type: _selectedType,
         category: _selectedCategory,
-        description: _descriptionController.text.trim().isEmpty 
-            ? null 
+        description: _descriptionController.text.trim().isEmpty
+            ? null
             : _descriptionController.text.trim(),
         parentId: _selectedParentId,
         isActive: _isActive,
@@ -153,7 +154,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              widget.accountId != null 
+              widget.accountId != null
                   ? 'Cuenta actualizada exitosamente'
                   : 'Cuenta creada exitosamente',
             ),
@@ -196,7 +197,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
                   ),
                   Expanded(
                     child: Text(
-                      widget.accountId != null 
+                      widget.accountId != null
                           ? 'Editar Cuenta'
                           : 'Nueva Cuenta',
                       style: const TextStyle(
@@ -214,7 +215,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
                 ],
               ),
             ),
-            
+
             // Form Content
             Expanded(
               child: _isLoading
@@ -293,7 +294,8 @@ class _AccountFormPageState extends State<AccountFormPage> {
                                     setState(() {
                                       _selectedType = value;
                                       // Reset category to first valid one
-                                      final validCategories = _getCategoriesForType(value);
+                                      final validCategories =
+                                          _getCategoriesForType(value);
                                       _selectedCategory = validCategories.first;
                                     });
                                   }
@@ -310,7 +312,8 @@ class _AccountFormPageState extends State<AccountFormPage> {
                                   prefixIcon: Icon(Icons.folder),
                                   helperText: 'Categoría específica',
                                 ),
-                                items: _getCategoriesForType(_selectedType).map((category) {
+                                items: _getCategoriesForType(_selectedType)
+                                    .map((category) {
                                   return DropdownMenuItem(
                                     value: category,
                                     child: Text(category.displayName),
@@ -331,7 +334,8 @@ class _AccountFormPageState extends State<AccountFormPage> {
                                   labelText: 'Cuenta Padre (Opcional)',
                                   border: OutlineInputBorder(),
                                   prefixIcon: Icon(Icons.account_tree),
-                                  helperText: 'Seleccione una cuenta padre si aplica',
+                                  helperText:
+                                      'Seleccione una cuenta padre si aplica',
                                 ),
                                 items: [
                                   const DropdownMenuItem<String?>(
@@ -339,11 +343,15 @@ class _AccountFormPageState extends State<AccountFormPage> {
                                     child: Text('Sin cuenta padre'),
                                   ),
                                   ..._allAccounts
-                                      .where((a) => a.id != widget.accountId) // Don't allow self as parent
+                                      .where((a) =>
+                                          a.id !=
+                                          widget
+                                              .accountId) // Don't allow self as parent
                                       .map((account) {
                                     return DropdownMenuItem<String?>(
                                       value: account.id,
-                                      child: Text('${account.code} - ${account.name}'),
+                                      child: Text(
+                                          '${account.code} - ${account.name}'),
                                     );
                                   }).toList(),
                                 ],
@@ -358,12 +366,14 @@ class _AccountFormPageState extends State<AccountFormPage> {
                                 controller: _descriptionController,
                                 decoration: const InputDecoration(
                                   labelText: 'Descripción (Opcional)',
-                                  hintText: 'Información adicional sobre la cuenta',
+                                  hintText:
+                                      'Información adicional sobre la cuenta',
                                   border: OutlineInputBorder(),
                                   prefixIcon: Icon(Icons.description),
                                 ),
                                 maxLines: 3,
-                                textCapitalization: TextCapitalization.sentences,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
                               ),
                               const SizedBox(height: 16),
 
@@ -375,7 +385,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
                                 },
                                 title: const Text('Cuenta Activa'),
                                 subtitle: Text(
-                                  _isActive 
+                                  _isActive
                                       ? 'La cuenta puede ser usada en transacciones'
                                       : 'La cuenta está desactivada',
                                 ),
@@ -392,11 +402,13 @@ class _AccountFormPageState extends State<AccountFormPage> {
                                 child: Padding(
                                   padding: const EdgeInsets.all(16.0),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
-                                          Icon(Icons.info, color: Colors.blue.shade700),
+                                          Icon(Icons.info,
+                                              color: Colors.blue.shade700),
                                           const SizedBox(width: 8),
                                           Text(
                                             'Información',

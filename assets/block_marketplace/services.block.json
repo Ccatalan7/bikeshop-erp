@@ -1,0 +1,79 @@
+{
+  "type": "services",
+  "title": "Servicios",
+  "description": "Describe servicios clave con iconos y llamadas a la acción.",
+  "usesCustomEditor": false,
+  "category": "Contenido",
+  "tags": ["servicios", "beneficios"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Nuestros Servicios",
+    "services": [
+      {
+        "icon": "build",
+        "title": "Mantención completa",
+        "description": "Ajuste integral, limpieza y calibración profesional."
+      },
+      {
+        "icon": "support_agent",
+        "title": "Asesoría personalizada",
+        "description": "Te ayudamos a elegir la bicicleta ideal según tu objetivo."
+      },
+      {
+        "icon": "shopping_bag",
+        "title": "Venta de repuestos",
+        "description": "Stock permanente de componentes y accesorios de calidad."
+      }
+    ]
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título de la sección",
+      "type": "text",
+      "group": "content"
+    },
+    {
+      "key": "services",
+      "label": "Servicios",
+      "type": "repeater",
+      "itemLabel": "Servicio",
+      "minItems": 1,
+      "itemFields": [
+        {
+          "key": "icon",
+          "label": "Ícono",
+          "type": "select",
+          "defaultValue": "build",
+          "options": [
+            {"value": "build", "label": "Herramientas"},
+            {"value": "support_agent", "label": "Soporte"},
+            {"value": "shopping_bag", "label": "Tienda"},
+            {"value": "directions_bike", "label": "Bicicleta"},
+            {"value": "favorite", "label": "Favorito"}
+          ]
+        },
+        {
+          "key": "title",
+          "label": "Título",
+          "type": "text",
+          "defaultValue": "Servicio"
+        },
+        {
+          "key": "description",
+          "label": "Descripción",
+          "type": "textarea",
+          "defaultValue": "Describe el servicio"
+        }
+      ]
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "services"]
+    }
+  ]
+}

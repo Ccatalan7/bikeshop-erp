@@ -23,7 +23,7 @@ class BikeFormDialog extends StatefulWidget {
 
 class _BikeFormDialogState extends State<BikeFormDialog> {
   final _formKey = GlobalKey<FormState>();
-  
+
   // Controllers
   late TextEditingController _brandController;
   late TextEditingController _modelController;
@@ -33,32 +33,34 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   late TextEditingController _frameSizeController;
   late TextEditingController _wheelSizeController;
   late TextEditingController _notesController;
-  
+
   BikeType _selectedType = BikeType.mountain;
   DateTime? _purchaseDate;
   DateTime? _warrantyUntil;
-  
+
   // Image handling
   List<String> _imageUrls = [];
   List<({Uint8List bytes, String name})> _newImages = [];
   bool _isUploadingImage = false;
-  
+
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize controllers with existing bike data if editing
     _brandController = TextEditingController(text: widget.bike?.brand);
     _modelController = TextEditingController(text: widget.bike?.model);
-    _yearController = TextEditingController(text: widget.bike?.year?.toString() ?? '');
-    _serialNumberController = TextEditingController(text: widget.bike?.serialNumber);
+    _yearController =
+        TextEditingController(text: widget.bike?.year?.toString() ?? '');
+    _serialNumberController =
+        TextEditingController(text: widget.bike?.serialNumber);
     _colorController = TextEditingController(text: widget.bike?.color);
     _frameSizeController = TextEditingController(text: widget.bike?.frameSize);
     _wheelSizeController = TextEditingController(text: widget.bike?.wheelSize);
     _notesController = TextEditingController(text: widget.bike?.notes);
-    
+
     if (widget.bike != null) {
       _selectedType = widget.bike!.bikeType ?? BikeType.mountain;
       _purchaseDate = widget.bike!.purchaseDate;
@@ -83,14 +85,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Future<void> _selectDate(BuildContext context, bool isPurchaseDate) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: isPurchaseDate 
+      initialDate: isPurchaseDate
           ? (_purchaseDate ?? DateTime.now())
           : (_warrantyUntil ?? DateTime.now().add(const Duration(days: 365))),
       firstDate: DateTime(2000),
       lastDate: DateTime(2030),
       // Removed locale parameter - it can cause freezes on web
     );
-    
+
     if (picked != null && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -127,7 +129,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       setState(() {
         _isUploadingImage = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al seleccionar imagen: $e')),
@@ -156,28 +158,29 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     });
 
     try {
-      final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
-      
+      final bikeshopService =
+          Provider.of<BikeshopService>(context, listen: false);
+
       // Upload new images to Supabase Storage
       List<String> uploadedUrls = List.from(_imageUrls);
-      
+
       if (_newImages.isNotEmpty) {
         setState(() {
           _isUploadingImage = true;
         });
-        
+
         for (var imageData in _newImages) {
           try {
             final timestamp = DateTime.now().millisecondsSinceEpoch;
             final fileName = 'bike_${widget.customerId}_$timestamp.jpg';
-            
+
             final url = await ImageService.uploadBytes(
               bytes: imageData.bytes,
               fileName: fileName,
               bucket: 'bike-images',
               folder: widget.customerId,
             );
-            
+
             if (url != null) {
               uploadedUrls.add(url);
             }
@@ -186,12 +189,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             // Continue with other images even if one fails
           }
         }
-        
+
         setState(() {
           _isUploadingImage = false;
         });
       }
-      
+
       final bike = Bike(
         id: widget.bike?.id,
         customerId: widget.customerId,
@@ -199,13 +202,23 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         model: _modelController.text.trim(),
         year: int.tryParse(_yearController.text.trim()),
         bikeType: _selectedType,
-        serialNumber: _serialNumberController.text.trim().isEmpty ? null : _serialNumberController.text.trim(),
-        color: _colorController.text.trim().isEmpty ? null : _colorController.text.trim(),
-        frameSize: _frameSizeController.text.trim().isEmpty ? null : _frameSizeController.text.trim(),
-        wheelSize: _wheelSizeController.text.trim().isEmpty ? null : _wheelSizeController.text.trim(),
+        serialNumber: _serialNumberController.text.trim().isEmpty
+            ? null
+            : _serialNumberController.text.trim(),
+        color: _colorController.text.trim().isEmpty
+            ? null
+            : _colorController.text.trim(),
+        frameSize: _frameSizeController.text.trim().isEmpty
+            ? null
+            : _frameSizeController.text.trim(),
+        wheelSize: _wheelSizeController.text.trim().isEmpty
+            ? null
+            : _wheelSizeController.text.trim(),
         purchaseDate: _purchaseDate,
         warrantyUntil: _warrantyUntil,
-        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+        notes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
         imageUrls: uploadedUrls,
       );
 
@@ -222,7 +235,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         Navigator.of(context).pop(savedBike); // Return the saved bike
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.bike == null ? 'Bicicleta creada exitosamente' : 'Bicicleta actualizada exitosamente'),
+            content: Text(widget.bike == null
+                ? 'Bicicleta creada exitosamente'
+                : 'Bicicleta actualizada exitosamente'),
             backgroundColor: Colors.green,
           ),
         );
@@ -232,7 +247,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _isSaving = false;
         _isUploadingImage = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -249,7 +264,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirmar eliminación'),
-        content: Text('¿Está seguro que desea eliminar la bicicleta "${_brandController.text} ${_modelController.text}"?\n\nEsta acción no se puede deshacer.'),
+        content: Text(
+            '¿Está seguro que desea eliminar la bicicleta "${_brandController.text} ${_modelController.text}"?\n\nEsta acción no se puede deshacer.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -266,11 +282,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
     if (confirm == true && widget.bike?.id != null) {
       setState(() => _isSaving = true);
-      
+
       try {
-        final bikeshopService = Provider.of<BikeshopService>(context, listen: false);
+        final bikeshopService =
+            Provider.of<BikeshopService>(context, listen: false);
         await bikeshopService.deleteBike(widget.bike!.id!);
-        
+
         if (mounted) {
           Navigator.of(context).pop(null); // Return null to indicate deletion
           ScaffoldMessenger.of(context).showSnackBar(
@@ -282,7 +299,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         }
       } catch (e) {
         setState(() => _isSaving = false);
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -298,7 +315,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.bike != null;
-    
+
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
@@ -338,7 +355,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                 ],
               ),
             ),
-            
+
             // Form
             Expanded(
               child: SingleChildScrollView(
@@ -389,7 +406,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Type & Year
                       Row(
                         children: [
@@ -430,7 +447,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                               validator: (value) {
                                 if (value != null && value.isNotEmpty) {
                                   final year = int.tryParse(value);
-                                  if (year == null || year < 1900 || year > DateTime.now().year + 1) {
+                                  if (year == null ||
+                                      year < 1900 ||
+                                      year > DateTime.now().year + 1) {
                                     return 'Año inválido';
                                   }
                                 }
@@ -441,7 +460,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Serial Number & Color
                       Row(
                         children: [
@@ -471,7 +490,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Frame Size & Wheel Size
                       Row(
                         children: [
@@ -501,7 +520,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Purchase Date & Warranty
                       Row(
                         children: [
@@ -516,10 +535,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                 ),
                                 child: Text(
                                   _purchaseDate != null
-                                      ? DateFormat('dd/MM/yyyy').format(_purchaseDate!)
+                                      ? DateFormat('dd/MM/yyyy')
+                                          .format(_purchaseDate!)
                                       : 'Seleccionar fecha',
                                   style: TextStyle(
-                                    color: _purchaseDate != null ? null : Colors.grey,
+                                    color: _purchaseDate != null
+                                        ? null
+                                        : Colors.grey,
                                   ),
                                 ),
                               ),
@@ -537,10 +559,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                 ),
                                 child: Text(
                                   _warrantyUntil != null
-                                      ? DateFormat('dd/MM/yyyy').format(_warrantyUntil!)
+                                      ? DateFormat('dd/MM/yyyy')
+                                          .format(_warrantyUntil!)
                                       : 'Seleccionar fecha',
                                   style: TextStyle(
-                                    color: _warrantyUntil != null ? null : Colors.grey,
+                                    color: _warrantyUntil != null
+                                        ? null
+                                        : Colors.grey,
                                   ),
                                 ),
                               ),
@@ -549,7 +574,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Images Section
                       const Text(
                         'Fotos de la Bicicleta',
@@ -559,7 +584,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      
+
                       // Image Grid
                       if (_imageUrls.isNotEmpty || _newImages.isNotEmpty)
                         Container(
@@ -583,7 +608,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                       height: 120,
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.grey[300]!),
+                                        border: Border.all(
+                                            color: Colors.grey[300]!),
                                         image: DecorationImage(
                                           image: NetworkImage(url),
                                           fit: BoxFit.cover,
@@ -612,7 +638,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                   ],
                                 );
                               }),
-                              
+
                               // New images (not yet uploaded)
                               ..._newImages.asMap().entries.map((entry) {
                                 final index = entry.key;
@@ -624,7 +650,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                       height: 120,
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.blue[300]!, width: 2),
+                                        border: Border.all(
+                                            color: Colors.blue[300]!, width: 2),
                                         image: DecorationImage(
                                           image: MemoryImage(imageData.bytes),
                                           fit: BoxFit.cover,
@@ -654,10 +681,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                       bottom: 4,
                                       left: 4,
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: Colors.blue,
-                                          borderRadius: BorderRadius.circular(4),
+                                          borderRadius:
+                                              BorderRadius.circular(4),
                                         ),
                                         child: const Text(
                                           'NUEVA',
@@ -676,30 +705,33 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                           ),
                         ),
                       const SizedBox(height: 12),
-                      
+
                       // Add Image Button
                       OutlinedButton.icon(
                         onPressed: _isUploadingImage ? null : _pickImage,
-                        icon: _isUploadingImage 
+                        icon: _isUploadingImage
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.add_photo_alternate),
-                        label: Text(_isUploadingImage ? 'Subiendo...' : 'Agregar Foto'),
+                        label: Text(
+                            _isUploadingImage ? 'Subiendo...' : 'Agregar Foto'),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 48),
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Notes
                       TextFormField(
                         controller: _notesController,
                         decoration: const InputDecoration(
                           labelText: 'Notas',
-                          hintText: 'Información adicional sobre la bicicleta...',
+                          hintText:
+                              'Información adicional sobre la bicicleta...',
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.note),
                         ),
@@ -710,7 +742,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                 ),
               ),
             ),
-            
+
             // Actions
             Container(
               padding: const EdgeInsets.all(16),
@@ -726,7 +758,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                     TextButton.icon(
                       onPressed: _isSaving ? null : _confirmDelete,
                       icon: const Icon(Icons.delete, color: Colors.red),
-                      label: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+                      label: const Text('Eliminar',
+                          style: TextStyle(color: Colors.red)),
                     )
                   else
                     const SizedBox.shrink(),
@@ -734,7 +767,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                   Row(
                     children: [
                       TextButton(
-                        onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+                        onPressed: _isSaving
+                            ? null
+                            : () => Navigator.of(context).pop(),
                         child: const Text('Cancelar'),
                       ),
                       const SizedBox(width: 12),
@@ -744,12 +779,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white),
                               )
                             : const Icon(Icons.save),
                         label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
                         ),
                       ),
                     ],

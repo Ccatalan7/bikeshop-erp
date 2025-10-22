@@ -15,19 +15,20 @@ class BikeshopClientsListPage extends StatefulWidget {
   const BikeshopClientsListPage({super.key});
 
   @override
-  State<BikeshopClientsListPage> createState() => _BikeshopClientsListPageState();
+  State<BikeshopClientsListPage> createState() =>
+      _BikeshopClientsListPageState();
 }
 
 class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
   late CustomerService _customerService;
   late BikeshopService _bikeshopService;
-  
+
   List<Customer> _customers = [];
   List<Customer> _filteredCustomers = [];
   Map<String, List<Bike>> _customerBikes = {};
   Map<String, List<MechanicJob>> _customerJobs = {};
   Map<String, MechanicJob?> _latestJobs = {}; // Latest job per customer
-  
+
   bool _isLoading = true;
   String _searchTerm = '';
   JobStatus? _filterStatus;
@@ -46,38 +47,38 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
     try {
       // Load customers
       final customers = await _customerService.getCustomers();
-      
+
       // Load all bikes and jobs
       final allBikes = await _bikeshopService.getBikes();
       final allJobs = await _bikeshopService.getJobs(includeCompleted: false);
-      
+
       // Group bikes by customer
       final bikesByCustomer = <String, List<Bike>>{};
       for (final bike in allBikes) {
         bikesByCustomer.putIfAbsent(bike.customerId, () => []).add(bike);
       }
-      
+
       // Group jobs by customer and find latest
       final jobsByCustomer = <String, List<MechanicJob>>{};
       final latestJobByCustomer = <String, MechanicJob?>{};
-      
+
       for (final job in allJobs) {
         jobsByCustomer.putIfAbsent(job.customerId, () => []).add(job);
-        
+
         // Track latest job per customer
         final current = latestJobByCustomer[job.customerId];
         if (current == null || job.arrivalDate.isAfter(current.arrivalDate)) {
           latestJobByCustomer[job.customerId] = job;
         }
       }
-      
+
       // Only show customers with bikes or jobs
       final bikeshopCustomers = customers.where((c) {
         final hasBikes = bikesByCustomer[c.id]?.isNotEmpty ?? false;
         final hasJobs = jobsByCustomer[c.id]?.isNotEmpty ?? false;
         return hasBikes || hasJobs;
       }).toList();
-      
+
       setState(() {
         _customers = bikeshopCustomers;
         _filteredCustomers = bikeshopCustomers;
@@ -108,25 +109,34 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
 
   void _applyFilters() {
     var filtered = _customers;
-    
+
     // Apply search
     if (_searchTerm.isNotEmpty) {
       filtered = filtered.where((customer) {
-        final matchesName = customer.name.toLowerCase().contains(_searchTerm.toLowerCase());
-        final matchesPhone = customer.phone?.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false;
-        
+        final matchesName =
+            customer.name.toLowerCase().contains(_searchTerm.toLowerCase());
+        final matchesPhone =
+            customer.phone?.toLowerCase().contains(_searchTerm.toLowerCase()) ??
+                false;
+
         // Also search in bike brands/models
         final bikes = _customerBikes[customer.id] ?? [];
         final matchesBike = bikes.any((bike) =>
-          (bike.brand?.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false) ||
-          (bike.model?.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false) ||
-          (bike.serialNumber?.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false)
-        );
-        
+            (bike.brand
+                    ?.toLowerCase()
+                    .contains(_searchTerm.toLowerCase()) ??
+                false) ||
+            (bike.model?.toLowerCase().contains(_searchTerm.toLowerCase()) ??
+                false) ||
+            (bike.serialNumber
+                    ?.toLowerCase()
+                    .contains(_searchTerm.toLowerCase()) ??
+                false));
+
         return matchesName || matchesPhone || matchesBike;
       }).toList();
     }
-    
+
     // Apply status filter
     if (_filterStatus != null) {
       filtered = filtered.where((customer) {
@@ -134,7 +144,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
         return jobs.any((job) => job.status == _filterStatus);
       }).toList();
     }
-    
+
     setState(() {
       _filteredCustomers = filtered;
     });
@@ -169,13 +179,13 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
               ],
             ),
           ),
-          
+
           // Search
           SearchWidget(
             hintText: 'Buscar por cliente, teléfono, o bicicleta...',
             onSearchChanged: _onSearchChanged,
           ),
-          
+
           // Filters
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -191,12 +201,13 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                   const SizedBox(width: 8),
                   _buildFilterChip('En Curso', JobStatus.enCurso),
                   const SizedBox(width: 8),
-                  _buildFilterChip('Esperando Repuestos', JobStatus.esperandoRepuestos),
+                  _buildFilterChip(
+                      'Esperando Repuestos', JobStatus.esperandoRepuestos),
                 ],
               ),
             ),
           ),
-          
+
           // Stats
           if (!_isLoading && _customers.isNotEmpty)
             Container(
@@ -210,19 +221,26 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStatItem('Clientes', _customers.length.toString(), Icons.people),
                   _buildStatItem(
-                    'Bicicletas', 
-                    _customerBikes.values.expand((bikes) => bikes).length.toString(),
+                      'Clientes', _customers.length.toString(), Icons.people),
+                  _buildStatItem(
+                    'Bicicletas',
+                    _customerBikes.values
+                        .expand((bikes) => bikes)
+                        .length
+                        .toString(),
                     Icons.pedal_bike,
                   ),
                   _buildStatItem(
-                    'Trabajos Activos', 
-                    _customerJobs.values.expand((jobs) => jobs).length.toString(),
+                    'Trabajos Activos',
+                    _customerJobs.values
+                        .expand((jobs) => jobs)
+                        .length
+                        .toString(),
                     Icons.build,
                   ),
                   _buildStatItem(
-                    'Mostrando', 
+                    'Mostrando',
                     _filteredCustomers.length.toString(),
                     Icons.filter_list,
                   ),
@@ -230,7 +248,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
               ),
             ),
           const SizedBox(height: 16),
-          
+
           // Content
           Expanded(
             child: _isLoading
@@ -300,7 +318,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              _searchTerm.isEmpty 
+              _searchTerm.isEmpty
                   ? 'No hay clientes con bicicletas o trabajos'
                   : 'No se encontraron clientes',
               style: TextStyle(
@@ -330,15 +348,15 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
         final bikes = _customerBikes[customer.id] ?? [];
         final jobs = _customerJobs[customer.id] ?? [];
         final latestJob = _latestJobs[customer.id];
-        
+
         return _buildCustomerCard(customer, bikes, jobs, latestJob);
       },
     );
   }
 
   Widget _buildCustomerCard(
-    Customer customer, 
-    List<Bike> bikes, 
+    Customer customer,
+    List<Bike> bikes,
     List<MechanicJob> jobs,
     MechanicJob? latestJob,
   ) {
@@ -371,7 +389,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  
+
                   // Customer info
                   Expanded(
                     child: Column(
@@ -387,7 +405,8 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                         if (customer.phone != null)
                           Row(
                             children: [
-                              Icon(Icons.phone, size: 14, color: Colors.grey[600]),
+                              Icon(Icons.phone,
+                                  size: 14, color: Colors.grey[600]),
                               const SizedBox(width: 4),
                               Text(
                                 customer.phone!,
@@ -401,15 +420,14 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                       ],
                     ),
                   ),
-                  
+
                   // Latest job status badge
-                  if (latestJob != null)
-                    _buildStatusBadge(latestJob.status),
+                  if (latestJob != null) _buildStatusBadge(latestJob.status),
                 ],
               ),
-              
+
               const Divider(height: 24),
-              
+
               // Bikes summary
               Row(
                 children: [
@@ -440,7 +458,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                 ],
               ),
               const SizedBox(height: 8),
-              
+
               // Latest job info
               if (latestJob != null) ...[
                 Row(
@@ -449,7 +467,9 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        latestJob.clientRequest ?? latestJob.diagnosis ?? 'Sin descripción',
+                        latestJob.clientRequest ??
+                            latestJob.diagnosis ??
+                            'Sin descripción',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey[700],
@@ -463,7 +483,8 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(Icons.calendar_today, size: 14, color: Colors.grey[500]),
+                    Icon(Icons.calendar_today,
+                        size: 14, color: Colors.grey[500]),
                     const SizedBox(width: 4),
                     Text(
                       'Ingreso: ${_formatDate(latestJob.arrivalDate)}',
@@ -477,27 +498,33 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                       Icon(
                         latestJob.isOverdue ? Icons.warning : Icons.schedule,
                         size: 14,
-                        color: latestJob.isOverdue ? Colors.red : Colors.grey[500],
+                        color:
+                            latestJob.isOverdue ? Colors.red : Colors.grey[500],
                       ),
                       const SizedBox(width: 4),
                       Text(
                         'Plazo: ${_formatDate(latestJob.deadline!)}',
                         style: TextStyle(
                           fontSize: 12,
-                          color: latestJob.isOverdue ? Colors.red : Colors.grey[600],
-                          fontWeight: latestJob.isOverdue ? FontWeight.bold : FontWeight.normal,
+                          color: latestJob.isOverdue
+                              ? Colors.red
+                              : Colors.grey[600],
+                          fontWeight: latestJob.isOverdue
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                         ),
                       ),
                     ],
                   ],
                 ),
               ],
-              
+
               // Active jobs count
               if (jobs.length > 1) ...[
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.orange[50],
                     borderRadius: BorderRadius.circular(4),
@@ -548,7 +575,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
         color = Colors.red;
         break;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(

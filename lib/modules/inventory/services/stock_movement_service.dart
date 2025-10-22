@@ -33,9 +33,7 @@ class StockMovementService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      var query = Supabase.instance.client
-          .from(_tableName)
-          .select();
+      var query = Supabase.instance.client.from(_tableName).select();
 
       if (productId != null) {
         query = query.eq('product_id', productId);
@@ -56,7 +54,7 @@ class StockMovementService extends ChangeNotifier {
       final response = await query
           .order('date', ascending: false)
           .order('created_at', ascending: false);
-      
+
       final List<dynamic> data = response as List<dynamic>;
 
       _movements = await _enrichMovements(data);
@@ -67,7 +65,8 @@ class StockMovementService extends ChangeNotifier {
         _movements = _movements.where((movement) {
           return movement.productName.toLowerCase().contains(lowerQuery) ||
               movement.productSku.toLowerCase().contains(lowerQuery) ||
-              (movement.reference?.toLowerCase().contains(lowerQuery) ?? false) ||
+              (movement.reference?.toLowerCase().contains(lowerQuery) ??
+                  false) ||
               (movement.notes?.toLowerCase().contains(lowerQuery) ?? false);
         }).toList();
       }
@@ -180,8 +179,11 @@ class StockMovementService extends ChangeNotifier {
         'date': DateTime.now().toIso8601String(),
       };
 
-      final response =
-          await Supabase.instance.client.from(_tableName).insert(movementData).select().single();
+      final response = await Supabase.instance.client
+          .from(_tableName)
+          .insert(movementData)
+          .select()
+          .single();
 
       // Update product inventory
       await Supabase.instance.client.from('products').update({

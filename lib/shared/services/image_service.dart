@@ -19,16 +19,19 @@ class ImageService {
   static String _sanitizeFileName(String fileName) {
     // Remove or replace problematic characters
     String sanitized = fileName
-        .replaceAll(RegExp(r'[^\w\s\-\.]'), '_')  // Replace special chars with underscore
-        .replaceAll(RegExp(r'\s+'), '_')           // Replace spaces with underscore
-        .replaceAll(RegExp(r'_+'), '_')            // Replace multiple underscores with single
-        .replaceAll(RegExp(r'^_+|_+$'), '');       // Trim leading/trailing underscores
-    
+        .replaceAll(RegExp(r'[^\w\s\-\.]'),
+            '_') // Replace special chars with underscore
+        .replaceAll(RegExp(r'\s+'), '_') // Replace spaces with underscore
+        .replaceAll(
+            RegExp(r'_+'), '_') // Replace multiple underscores with single
+        .replaceAll(
+            RegExp(r'^_+|_+$'), ''); // Trim leading/trailing underscores
+
     // Ensure we have a valid extension
     if (!sanitized.contains('.')) {
       sanitized = '$sanitized.png';
     }
-    
+
     return sanitized;
   }
 
@@ -41,7 +44,8 @@ class ImageService {
   }) async {
     try {
       final sanitizedFileName = _sanitizeFileName(fileName);
-      final uniqueFileName = '${DateTime.now().millisecondsSinceEpoch}_$sanitizedFileName';
+      final uniqueFileName =
+          '${DateTime.now().millisecondsSinceEpoch}_$sanitizedFileName';
       final normalizedFolder = _normalizePath(folder);
       final segments = <String>[];
       if (normalizedFolder.isNotEmpty) {
@@ -72,7 +76,7 @@ class ImageService {
   static Future<({Uint8List bytes, String name})?> pickImage() async {
     return ImageServicePlatform.pickImagePlatform();
   }
-  
+
   // Widget for displaying cached network images with fallback
   static Widget buildCachedImage({
     required String? imageUrl,
@@ -84,7 +88,7 @@ class ImageService {
     bool isCircular = false,
   }) {
     Widget imageWidget;
-    
+
     if (imageUrl == null || imageUrl.isEmpty) {
       imageWidget = errorWidget ?? _buildDefaultPlaceholder();
     } else {
@@ -93,18 +97,20 @@ class ImageService {
         width: width,
         height: height,
         fit: fit,
-        placeholder: (context, url) => placeholder ?? _buildLoadingPlaceholder(),
-        errorWidget: (context, url, error) => errorWidget ?? _buildDefaultPlaceholder(),
+        placeholder: (context, url) =>
+            placeholder ?? _buildLoadingPlaceholder(),
+        errorWidget: (context, url, error) =>
+            errorWidget ?? _buildDefaultPlaceholder(),
       );
     }
-    
+
     if (isCircular) {
       return ClipOval(child: imageWidget);
     }
-    
+
     return imageWidget;
   }
-  
+
   // Default placeholder for missing images
   static Widget _buildDefaultPlaceholder() {
     return Container(
@@ -116,7 +122,7 @@ class ImageService {
       ),
     );
   }
-  
+
   // Loading placeholder
   static Widget _buildLoadingPlaceholder() {
     return Container(
@@ -126,7 +132,7 @@ class ImageService {
       ),
     );
   }
-  
+
   // Product image widget
   static Widget buildProductImage({
     required String? imageUrl,
@@ -136,7 +142,7 @@ class ImageService {
     // Handle infinite size for error widget
     final iconSize = size.isFinite ? size * 0.5 : 50.0;
     final containerSize = size.isFinite ? size : null;
-    
+
     return buildCachedImage(
       imageUrl: imageUrl,
       width: containerSize,
@@ -156,7 +162,7 @@ class ImageService {
       ),
     );
   }
-  
+
   // Avatar image widget for customers/employees
   static Widget buildAvatarImage({
     required String? imageUrl,
@@ -177,7 +183,7 @@ class ImageService {
         ),
       );
     }
-    
+
     return buildCachedImage(
       imageUrl: imageUrl,
       width: radius * 2,
@@ -194,14 +200,15 @@ class ImageService {
       ),
     );
   }
-  
+
   // Delete image from storage
   static Future<bool> deleteImage(String imageUrl, String bucket) async {
     try {
       final objectPath = _extractObjectPath(imageUrl, bucket);
       if (objectPath == null) {
         if (kDebugMode) {
-          debugPrint('[ImageService] Unable to determine object path for $imageUrl');
+          debugPrint(
+              '[ImageService] Unable to determine object path for $imageUrl');
         }
         return false;
       }

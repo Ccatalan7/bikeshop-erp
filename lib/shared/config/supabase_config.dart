@@ -19,6 +19,5 @@ class SupabaseConfig {
   );
 
   /// Indicates whether both URL and anon key look configured.
-  static bool get isConfigured =>
-    url.isNotEmpty && anonKey.isNotEmpty;
+  static bool get isConfigured => url.isNotEmpty && anonKey.isNotEmpty;
 }

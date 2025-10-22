@@ -33,8 +33,8 @@ class AppearanceSettingsPage extends StatelessWidget {
                       Text(
                         'Logo de la Empresa',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
                     ],
                   ),
@@ -42,11 +42,14 @@ class AppearanceSettingsPage extends StatelessWidget {
                   Text(
                     'Sube el logo de tu empresa que aparecerá en el encabezado del sistema',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                    ),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.7),
+                        ),
                   ),
                   const SizedBox(height: 24),
-                  
+
                   // Current Logo Preview
                   Consumer<AppearanceService>(
                     builder: (context, appearanceService, _) {
@@ -54,16 +57,24 @@ class AppearanceSettingsPage extends StatelessWidget {
                         width: double.infinity,
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primaryContainer
+                              .withOpacity(0.3),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withOpacity(0.3),
                           ),
                         ),
                         child: Column(
                           children: [
                             Text(
-                              appearanceService.hasCustomLogo ? 'Logo Actual' : 'Sin Logo Personalizado',
+                              appearanceService.hasCustomLogo
+                                  ? 'Logo Actual'
+                                  : 'Sin Logo Personalizado',
                               style: Theme.of(context).textTheme.labelLarge,
                             ),
                             const SizedBox(height: 16),
@@ -91,7 +102,8 @@ class AppearanceSettingsPage extends StatelessWidget {
                                   placeholder: (context, url) => const Center(
                                     child: CircularProgressIndicator(),
                                   ),
-                                  errorWidget: (context, url, error) => const Icon(
+                                  errorWidget: (context, url, error) =>
+                                      const Icon(
                                     Icons.error_outline,
                                     size: 48,
                                     color: Colors.red,
@@ -114,7 +126,10 @@ class AppearanceSettingsPage extends StatelessWidget {
                                 child: Icon(
                                   Icons.image_not_supported_outlined,
                                   size: 48,
-                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withOpacity(0.3),
                                 ),
                               ),
                           ],
@@ -122,9 +137,9 @@ class AppearanceSettingsPage extends StatelessWidget {
                       );
                     },
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Upload and Remove Buttons
                   Consumer<AppearanceService>(
                     builder: (context, appearanceService, _) {
@@ -133,10 +148,13 @@ class AppearanceSettingsPage extends StatelessWidget {
                           Expanded(
                             child: ElevatedButton.icon(
                               onPressed: () async {
-                                await _handleLogoUpload(context, appearanceService);
+                                await _handleLogoUpload(
+                                    context, appearanceService);
                               },
                               icon: const Icon(Icons.upload_file),
-                              label: Text(appearanceService.hasCustomLogo ? 'Cambiar Logo' : 'Subir Logo'),
+                              label: Text(appearanceService.hasCustomLogo
+                                  ? 'Cambiar Logo'
+                                  : 'Subir Logo'),
                               style: ElevatedButton.styleFrom(
                                 padding: const EdgeInsets.all(16),
                               ),
@@ -145,7 +163,8 @@ class AppearanceSettingsPage extends StatelessWidget {
                           if (appearanceService.hasCustomLogo) ...[
                             const SizedBox(width: 12),
                             Tooltip(
-                              message: 'Refrescar logo para ver la última versión',
+                              message:
+                                  'Refrescar logo para ver la última versión',
                               child: OutlinedButton.icon(
                                 onPressed: () {
                                   appearanceService.refreshLogo();
@@ -167,7 +186,8 @@ class AppearanceSettingsPage extends StatelessWidget {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () async {
-                                  await _handleLogoRemove(context, appearanceService);
+                                  await _handleLogoRemove(
+                                      context, appearanceService);
                                 },
                                 icon: const Icon(Icons.delete_outline),
                                 label: const Text('Eliminar'),
@@ -186,12 +206,15 @@ class AppearanceSettingsPage extends StatelessWidget {
               ),
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Info Card
           Card(
-            color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.3),
+            color: Theme.of(context)
+                .colorScheme
+                .secondaryContainer
+                .withOpacity(0.3),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -218,11 +241,12 @@ class AppearanceSettingsPage extends StatelessWidget {
     );
   }
 
-  Future<void> _handleLogoUpload(BuildContext context, AppearanceService appearanceService) async {
+  Future<void> _handleLogoUpload(
+      BuildContext context, AppearanceService appearanceService) async {
     try {
       // Pick image
       final result = await ImageService.pickImage();
-      
+
       if (result == null) {
         return; // User cancelled
       }
@@ -266,10 +290,10 @@ class AppearanceSettingsPage extends StatelessWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      
+
       // Close loading dialog if open
       Navigator.pop(context);
-      
+
       // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -281,7 +305,8 @@ class AppearanceSettingsPage extends StatelessWidget {
     }
   }
 
-  Future<void> _handleLogoRemove(BuildContext context, AppearanceService appearanceService) async {
+  Future<void> _handleLogoRemove(
+      BuildContext context, AppearanceService appearanceService) async {
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,

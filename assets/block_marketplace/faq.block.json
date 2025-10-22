@@ -1,0 +1,68 @@
+{
+  "type": "faq",
+  "title": "Preguntas Frecuentes",
+  "description": "Listado de dudas habituales con respuestas claras y editables.",
+  "usesCustomEditor": false,
+  "category": "Contenido",
+  "tags": ["faq", "preguntas", "soporte"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Preguntas Frecuentes",
+    "subtitle": "Respondemos lo que más nos consultan",
+    "items": [
+      {
+        "question": "¿Cuánto se demora una mantención?",
+        "answer": "Depende del nivel de servicio, pero normalmente entre 24 y 48 horas."
+      },
+      {
+        "question": "¿Trabajan con bicicletas eléctricas?",
+        "answer": "Sí, contamos con técnicos certificados en e-bikes."
+      }
+    ]
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título principal",
+      "type": "text",
+      "defaultValue": "Preguntas Frecuentes",
+      "group": "content"
+    },
+    {
+      "key": "subtitle",
+      "label": "Subtítulo",
+      "type": "textarea",
+      "defaultValue": "Respondemos lo que más nos consultan",
+      "group": "content"
+    },
+    {
+      "key": "items",
+      "label": "Preguntas",
+      "type": "repeater",
+      "itemLabel": "Pregunta",
+      "minItems": 1,
+      "itemFields": [
+        {
+          "key": "question",
+          "label": "Pregunta",
+          "type": "text",
+          "defaultValue": "Nueva pregunta"
+        },
+        {
+          "key": "answer",
+          "label": "Respuesta",
+          "type": "textarea",
+          "defaultValue": "Escribe la respuesta"
+        }
+      ]
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "subtitle", "items"]
+    }
+  ]
+}

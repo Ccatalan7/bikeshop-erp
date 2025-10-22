@@ -146,7 +146,7 @@ class AppRouter {
         // PUBLIC STORE ROUTES (Customer-facing, No Auth Required)
         // Accessible at /tienda/* for customers
         // ========================================
-        
+
         // Public Store Home
         GoRoute(
           path: '/tienda',
@@ -175,7 +175,8 @@ class AppRouter {
             return _buildPageWithNoTransition(
               context,
               state,
-              PublicStoreWrapper(child: ProductDetailPage(productId: productId)),
+              PublicStoreWrapper(
+                  child: ProductDetailPage(productId: productId)),
             );
           },
         ),
@@ -208,7 +209,8 @@ class AppRouter {
             return _buildPageWithNoTransition(
               context,
               state,
-              PublicStoreWrapper(child: OrderConfirmationPage(orderId: orderId)),
+              PublicStoreWrapper(
+                  child: OrderConfirmationPage(orderId: orderId)),
             );
           },
         ),
@@ -226,7 +228,7 @@ class AppRouter {
         // ========================================
         // ADMIN/ERP ROUTES (Auth Required)
         // ========================================
-        
+
         // Authentication
         GoRoute(
           path: '/login',

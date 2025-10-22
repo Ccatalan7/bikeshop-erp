@@ -1,0 +1,102 @@
+{
+  "type": "footer",
+  "title": "Footer",
+  "description": "Cierra la página con datos de contacto, links rápidos y redes sociales.",
+  "usesCustomEditor": false,
+  "category": "Navegación",
+  "tags": ["footer", "navegación", "links"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "companyName": "Vinabike",
+    "copyright": "© 2025 Vinabike. Todos los derechos reservados.",
+    "columns": [
+      {
+        "title": "Contacto",
+        "items": [
+          {"label": "+56 9 1234 5678", "link": "tel:+56912345678"},
+          {"label": "contacto@vinabike.cl", "link": "mailto:contacto@vinabike.cl"},
+          {"label": "Santiago, Chile", "link": ""}
+        ]
+      },
+      {
+        "title": "Servicios",
+        "items": [
+          {"label": "Mantenciones", "link": "/servicios"},
+          {"label": "Bike fitting", "link": "/servicios"},
+          {"label": "Venta de repuestos", "link": "/productos"}
+        ]
+      },
+      {
+        "title": "Redes sociales",
+        "items": [
+          {"label": "Instagram", "link": "https://instagram.com"},
+          {"label": "Strava", "link": "https://strava.com"},
+          {"label": "Facebook", "link": "https://facebook.com"}
+        ]
+      }
+    ]
+  },
+  "fields": [
+    {
+      "key": "companyName",
+      "label": "Nombre de la empresa",
+      "type": "text",
+      "defaultValue": "Vinabike"
+    },
+    {
+      "key": "copyright",
+      "label": "Texto de copyright",
+      "type": "text",
+      "defaultValue": "© 2025 Vinabike. Todos los derechos reservados."
+    },
+    {
+      "key": "columns",
+      "label": "Columnas",
+      "type": "repeater",
+      "itemLabel": "Columna",
+      "minItems": 1,
+      "maxItems": 4,
+      "itemFields": [
+        {
+          "key": "title",
+          "label": "Título de la columna",
+          "type": "text",
+          "defaultValue": "Sección"
+        },
+        {
+          "key": "items",
+          "label": "Enlaces",
+          "type": "repeater",
+          "itemLabel": "Enlace",
+          "itemFields": [
+            {
+              "key": "label",
+              "label": "Texto",
+              "type": "text",
+              "defaultValue": "Link"
+            },
+            {
+              "key": "link",
+              "label": "URL",
+              "type": "text",
+              "defaultValue": ""
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "branding",
+      "label": "Marca",
+      "fields": ["companyName", "copyright"]
+    },
+    {
+      "id": "columns",
+      "label": "Columnas de enlaces",
+      "fields": ["columns"]
+    }
+  ]
+}

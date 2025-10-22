@@ -21,12 +21,12 @@ class PegasListPage extends StatefulWidget {
 class _PegasListPageState extends State<PegasListPage> {
   late BikeshopService _bikeshopService;
   late CustomerService _customerService;
-  
+
   List<MechanicJob> _jobs = [];
   List<MechanicJob> _filteredJobs = [];
   Map<String, Customer> _customers = {};
   Map<String, Bike> _bikes = {};
-  
+
   bool _isLoading = true;
   String _searchTerm = '';
   JobStatus? _filterStatus;
@@ -46,10 +46,11 @@ class _PegasListPageState extends State<PegasListPage> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final jobs = await _bikeshopService.getJobs(includeCompleted: _showCompleted);
+      final jobs =
+          await _bikeshopService.getJobs(includeCompleted: _showCompleted);
       final customers = await _customerService.getCustomers();
       final bikes = await _bikeshopService.getBikes();
-      
+
       // Create lookup maps
       final customerMap = <String, Customer>{};
       for (final customer in customers) {
@@ -57,14 +58,14 @@ class _PegasListPageState extends State<PegasListPage> {
           customerMap[customer.id!] = customer;
         }
       }
-      
+
       final bikeMap = <String, Bike>{};
       for (final bike in bikes) {
         if (bike.id != null) {
           bikeMap[bike.id!] = bike;
         }
       }
-      
+
       setState(() {
         _jobs = jobs;
         _filteredJobs = jobs;
@@ -72,7 +73,7 @@ class _PegasListPageState extends State<PegasListPage> {
         _bikes = bikeMap;
         _isLoading = false;
       });
-      
+
       _applyFiltersAndSort();
     } catch (e) {
       setState(() => _isLoading = false);
@@ -96,34 +97,50 @@ class _PegasListPageState extends State<PegasListPage> {
 
   void _applyFiltersAndSort() {
     var filtered = _jobs;
-    
+
     // Apply search
     if (_searchTerm.isNotEmpty) {
       filtered = filtered.where((job) {
-        final matchesJobNumber = job.jobNumber.toLowerCase().contains(_searchTerm.toLowerCase());
-        final matchesRequest = job.clientRequest?.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false;
-        final matchesDiagnosis = job.diagnosis?.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false;
-        
+        final matchesJobNumber =
+            job.jobNumber.toLowerCase().contains(_searchTerm.toLowerCase());
+        final matchesRequest = job.clientRequest
+                ?.toLowerCase()
+                .contains(_searchTerm.toLowerCase()) ??
+            false;
+        final matchesDiagnosis =
+            job.diagnosis?.toLowerCase().contains(_searchTerm.toLowerCase()) ??
+                false;
+
         final customer = _customers[job.customerId];
-        final matchesCustomer = customer?.name.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false;
-        
+        final matchesCustomer =
+            customer?.name.toLowerCase().contains(_searchTerm.toLowerCase()) ??
+                false;
+
         final bike = _bikes[job.bikeId];
-        final matchesBike = bike?.displayName.toLowerCase().contains(_searchTerm.toLowerCase()) ?? false;
-        
-        return matchesJobNumber || matchesRequest || matchesDiagnosis || matchesCustomer || matchesBike;
+        final matchesBike = bike?.displayName
+                .toLowerCase()
+                .contains(_searchTerm.toLowerCase()) ??
+            false;
+
+        return matchesJobNumber ||
+            matchesRequest ||
+            matchesDiagnosis ||
+            matchesCustomer ||
+            matchesBike;
       }).toList();
     }
-    
+
     // Apply status filter
     if (_filterStatus != null) {
       filtered = filtered.where((job) => job.status == _filterStatus).toList();
     }
-    
+
     // Apply priority filter
     if (_filterPriority != null) {
-      filtered = filtered.where((job) => job.priority == _filterPriority).toList();
+      filtered =
+          filtered.where((job) => job.priority == _filterPriority).toList();
     }
-    
+
     // Apply sort
     filtered.sort((a, b) {
       switch (_sortBy) {
@@ -141,7 +158,7 @@ class _PegasListPageState extends State<PegasListPage> {
           return b.arrivalDate.compareTo(a.arrivalDate);
       }
     });
-    
+
     setState(() {
       _filteredJobs = filtered;
     });
@@ -174,7 +191,7 @@ class _PegasListPageState extends State<PegasListPage> {
   @override
   Widget build(BuildContext context) {
     final stats = _calculateStats();
-    
+
     return MainLayout(
       child: Column(
         children: [
@@ -202,13 +219,13 @@ class _PegasListPageState extends State<PegasListPage> {
               ],
             ),
           ),
-          
+
           // Search
           SearchWidget(
             hintText: 'Buscar por trabajo, cliente, o bicicleta...',
             onSearchChanged: _onSearchChanged,
           ),
-          
+
           // Filters and controls
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -221,15 +238,21 @@ class _PegasListPageState extends State<PegasListPage> {
                     children: [
                       _buildFilterChip('Todos', null, isStatus: true),
                       const SizedBox(width: 8),
-                      _buildFilterChip('Pendiente', JobStatus.pendiente, isStatus: true),
+                      _buildFilterChip('Pendiente', JobStatus.pendiente,
+                          isStatus: true),
                       const SizedBox(width: 8),
-                      _buildFilterChip('Diagnóstico', JobStatus.diagnostico, isStatus: true),
+                      _buildFilterChip('Diagnóstico', JobStatus.diagnostico,
+                          isStatus: true),
                       const SizedBox(width: 8),
-                      _buildFilterChip('En Curso', JobStatus.enCurso, isStatus: true),
+                      _buildFilterChip('En Curso', JobStatus.enCurso,
+                          isStatus: true),
                       const SizedBox(width: 8),
-                      _buildFilterChip('Esperando Repuestos', JobStatus.esperandoRepuestos, isStatus: true),
+                      _buildFilterChip(
+                          'Esperando Repuestos', JobStatus.esperandoRepuestos,
+                          isStatus: true),
                       const SizedBox(width: 8),
-                      _buildFilterChip('Finalizado', JobStatus.finalizado, isStatus: true),
+                      _buildFilterChip('Finalizado', JobStatus.finalizado,
+                          isStatus: true),
                     ],
                   ),
                 ),
@@ -242,14 +265,18 @@ class _PegasListPageState extends State<PegasListPage> {
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            const Text('Prioridad: ', style: TextStyle(fontSize: 13)),
+                            const Text('Prioridad: ',
+                                style: TextStyle(fontSize: 13)),
                             _buildFilterChip('Todas', null, isStatus: false),
                             const SizedBox(width: 8),
-                            _buildFilterChip('Urgente', JobPriority.urgente, isStatus: false),
+                            _buildFilterChip('Urgente', JobPriority.urgente,
+                                isStatus: false),
                             const SizedBox(width: 8),
-                            _buildFilterChip('Alta', JobPriority.alta, isStatus: false),
+                            _buildFilterChip('Alta', JobPriority.alta,
+                                isStatus: false),
                             const SizedBox(width: 8),
-                            _buildFilterChip('Normal', JobPriority.normal, isStatus: false),
+                            _buildFilterChip('Normal', JobPriority.normal,
+                                isStatus: false),
                           ],
                         ),
                       ),
@@ -259,10 +286,15 @@ class _PegasListPageState extends State<PegasListPage> {
                     DropdownButton<String>(
                       value: _sortBy,
                       items: const [
-                        DropdownMenuItem(value: 'arrival_date', child: Text('Fecha Ingreso')),
-                        DropdownMenuItem(value: 'deadline', child: Text('Plazo')),
-                        DropdownMenuItem(value: 'priority', child: Text('Prioridad')),
-                        DropdownMenuItem(value: 'status', child: Text('Estado')),
+                        DropdownMenuItem(
+                            value: 'arrival_date',
+                            child: Text('Fecha Ingreso')),
+                        DropdownMenuItem(
+                            value: 'deadline', child: Text('Plazo')),
+                        DropdownMenuItem(
+                            value: 'priority', child: Text('Prioridad')),
+                        DropdownMenuItem(
+                            value: 'status', child: Text('Estado')),
                       ],
                       onChanged: (value) {
                         setState(() {
@@ -288,7 +320,7 @@ class _PegasListPageState extends State<PegasListPage> {
               ],
             ),
           ),
-          
+
           // Stats
           if (!_isLoading)
             Container(
@@ -304,16 +336,24 @@ class _PegasListPageState extends State<PegasListPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStatItem('Total', stats['total'].toString(), Icons.view_list),
-                  _buildStatItem('Urgente', stats['urgente'].toString(), Icons.priority_high, color: Colors.red),
-                  _buildStatItem('En Curso', stats['en_curso'].toString(), Icons.build, color: Colors.green),
-                  _buildStatItem('Atrasados', stats['overdue'].toString(), Icons.warning, color: Colors.orange),
-                  _buildStatItem('Mostrando', _filteredJobs.length.toString(), Icons.filter_list),
+                  _buildStatItem(
+                      'Total', stats['total'].toString(), Icons.view_list),
+                  _buildStatItem('Urgente', stats['urgente'].toString(),
+                      Icons.priority_high,
+                      color: Colors.red),
+                  _buildStatItem(
+                      'En Curso', stats['en_curso'].toString(), Icons.build,
+                      color: Colors.green),
+                  _buildStatItem(
+                      'Atrasados', stats['overdue'].toString(), Icons.warning,
+                      color: Colors.orange),
+                  _buildStatItem('Mostrando', _filteredJobs.length.toString(),
+                      Icons.filter_list),
                 ],
               ),
             ),
           const SizedBox(height: 16),
-          
+
           // Content
           Expanded(
             child: _isLoading
@@ -325,11 +365,11 @@ class _PegasListPageState extends State<PegasListPage> {
     );
   }
 
-  Widget _buildFilterChip(String label, dynamic value, {required bool isStatus}) {
-    final isSelected = isStatus 
-        ? _filterStatus == value
-        : _filterPriority == value;
-    
+  Widget _buildFilterChip(String label, dynamic value,
+      {required bool isStatus}) {
+    final isSelected =
+        isStatus ? _filterStatus == value : _filterPriority == value;
+
     Color? chipColor;
     if (isSelected && !isStatus && value is JobPriority) {
       switch (value) {
@@ -343,7 +383,7 @@ class _PegasListPageState extends State<PegasListPage> {
           chipColor = Colors.blue[100];
       }
     }
-    
+
     return FilterChip(
       label: Text(label),
       selected: isSelected,
@@ -362,7 +402,8 @@ class _PegasListPageState extends State<PegasListPage> {
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon, {Color? color}) {
+  Widget _buildStatItem(String label, String value, IconData icon,
+      {Color? color}) {
     final effectiveColor = color ?? Colors.blue;
     return Column(
       children: [
@@ -414,7 +455,7 @@ class _PegasListPageState extends State<PegasListPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              _searchTerm.isEmpty 
+              _searchTerm.isEmpty
                   ? 'No hay trabajos registrados'
                   : 'No se encontraron trabajos',
               style: TextStyle(
@@ -443,7 +484,7 @@ class _PegasListPageState extends State<PegasListPage> {
         final job = _filteredJobs[index];
         final customer = _customers[job.customerId];
         final bike = _bikes[job.bikeId];
-        
+
         return _buildJobCard(job, customer, bike);
       },
     );
@@ -496,7 +537,7 @@ class _PegasListPageState extends State<PegasListPage> {
                       ],
                     ),
                   ),
-                  
+
                   // Status badge with quick actions
                   PopupMenuButton<JobStatus>(
                     child: _buildStatusBadge(job.status),
@@ -511,9 +552,9 @@ class _PegasListPageState extends State<PegasListPage> {
                   ),
                 ],
               ),
-              
+
               const Divider(height: 20),
-              
+
               // Bike info
               if (bike != null)
                 Row(
@@ -530,9 +571,9 @@ class _PegasListPageState extends State<PegasListPage> {
                     ),
                   ],
                 ),
-              
+
               const SizedBox(height: 8),
-              
+
               // Client request / diagnosis
               if (job.clientRequest != null || job.diagnosis != null)
                 Row(
@@ -552,9 +593,9 @@ class _PegasListPageState extends State<PegasListPage> {
                     ),
                   ],
                 ),
-              
+
               const SizedBox(height: 12),
-              
+
               // Bottom row - dates and costs
               Row(
                 children: [
@@ -565,11 +606,13 @@ class _PegasListPageState extends State<PegasListPage> {
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.login, size: 14, color: Colors.grey[500]),
+                            Icon(Icons.login,
+                                size: 14, color: Colors.grey[500]),
                             const SizedBox(width: 4),
                             Text(
                               _formatDate(job.arrivalDate),
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey[600]),
                             ),
                           ],
                         ),
@@ -580,15 +623,21 @@ class _PegasListPageState extends State<PegasListPage> {
                               Icon(
                                 job.isOverdue ? Icons.warning : Icons.event,
                                 size: 14,
-                                color: job.isOverdue ? Colors.red : Colors.grey[500],
+                                color: job.isOverdue
+                                    ? Colors.red
+                                    : Colors.grey[500],
                               ),
                               const SizedBox(width: 4),
                               Text(
                                 _formatDate(job.deadline!),
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: job.isOverdue ? Colors.red : Colors.grey[600],
-                                  fontWeight: job.isOverdue ? FontWeight.bold : FontWeight.normal,
+                                  color: job.isOverdue
+                                      ? Colors.red
+                                      : Colors.grey[600],
+                                  fontWeight: job.isOverdue
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                 ),
                               ),
                               if (job.isOverdue) ...[
@@ -608,11 +657,12 @@ class _PegasListPageState extends State<PegasListPage> {
                       ],
                     ),
                   ),
-                  
+
                   // Cost
                   if (job.totalCost > 0)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: Colors.green[50],
                         borderRadius: BorderRadius.circular(8),
@@ -629,7 +679,7 @@ class _PegasListPageState extends State<PegasListPage> {
                     ),
                 ],
               ),
-              
+
               // Assigned technician
               if (job.assignedTechnicianName != null) ...[
                 const SizedBox(height: 8),
@@ -679,7 +729,7 @@ class _PegasListPageState extends State<PegasListPage> {
         color = Colors.red;
         break;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -726,7 +776,7 @@ class _PegasListPageState extends State<PegasListPage> {
         icon = Icons.arrow_downward;
         break;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(

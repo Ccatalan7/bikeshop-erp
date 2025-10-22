@@ -291,9 +291,10 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
   void _showPaymentDetails(Payment payment) {
     final paymentMethodService = context.read<PaymentMethodService>();
-    final paymentMethod = paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
+    final paymentMethod =
+        paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
     final methodName = paymentMethod?.name ?? 'Desconocido';
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -304,12 +305,14 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildDetailRow('Monto', ChileanUtils.formatCurrency(payment.amount)),
+              _buildDetailRow(
+                  'Monto', ChileanUtils.formatCurrency(payment.amount)),
               const SizedBox(height: 12),
               _buildDetailRow('Método', methodName),
               const SizedBox(height: 12),
               _buildDetailRow('Fecha', ChileanUtils.formatDate(payment.date)),
-              if (payment.reference != null && payment.reference!.isNotEmpty) ...[
+              if (payment.reference != null &&
+                  payment.reference!.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 _buildDetailRow('Referencia', payment.reference!),
               ],
@@ -739,10 +742,12 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                 separatorBuilder: (_, __) => const Divider(height: 16),
                 itemBuilder: (context, index) {
                   final payment = payments[index];
-                  final paymentMethodService = context.read<PaymentMethodService>();
-                  final paymentMethod = paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
+                  final paymentMethodService =
+                      context.read<PaymentMethodService>();
+                  final paymentMethod = paymentMethodService
+                      .getPaymentMethodById(payment.paymentMethodId);
                   final methodName = paymentMethod?.name ?? 'Desconocido';
-                  
+
                   return InkWell(
                     onTap: () => _showPaymentDetails(payment),
                     borderRadius: BorderRadius.circular(8),

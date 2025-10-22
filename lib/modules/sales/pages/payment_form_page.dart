@@ -72,7 +72,9 @@ class _PaymentsPageState extends State<PaymentsPage> {
                 : payments.isEmpty
                     ? _buildEmptyState()
                     : RefreshIndicator(
-                        onRefresh: () => context.read<SalesService>().loadPayments(forceRefresh: true),
+                        onRefresh: () => context
+                            .read<SalesService>()
+                            .loadPayments(forceRefresh: true),
                         child: ListView.builder(
                           padding: const EdgeInsets.all(16),
                           itemCount: payments.length,
@@ -92,13 +94,16 @@ class _PaymentsPageState extends State<PaymentsPage> {
     if (term.isEmpty) return payments;
     final query = term.toLowerCase();
     final paymentMethodService = context.read<PaymentMethodService>();
-    
+
     return payments.where((payment) {
       final reference = payment.reference?.toLowerCase() ?? '';
       final amount = payment.amount.toStringAsFixed(0);
-      final paymentMethod = paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
+      final paymentMethod =
+          paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
       final method = paymentMethod?.name.toLowerCase() ?? '';
-      return reference.contains(query) || amount.contains(query) || method.contains(query);
+      return reference.contains(query) ||
+          amount.contains(query) ||
+          method.contains(query);
     }).toList();
   }
 
@@ -111,7 +116,10 @@ class _PaymentsPageState extends State<PaymentsPage> {
           const SizedBox(height: 16),
           Text(
             'Aún no hay pagos registrados',
-            style: TextStyle(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.w500),
+            style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 8),
           Text(
@@ -126,9 +134,10 @@ class _PaymentsPageState extends State<PaymentsPage> {
 
   Widget _buildPaymentTile(Payment payment) {
     final paymentMethodService = context.read<PaymentMethodService>();
-    final paymentMethod = paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
+    final paymentMethod =
+        paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
     final methodName = paymentMethod?.name ?? 'Desconocido';
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
@@ -142,7 +151,8 @@ class _PaymentsPageState extends State<PaymentsPage> {
               ChileanUtils.formatCurrency(payment.amount),
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            if (payment.invoiceReference != null && payment.invoiceReference!.isNotEmpty) ...[
+            if (payment.invoiceReference != null &&
+                payment.invoiceReference!.isNotEmpty) ...[
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

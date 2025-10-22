@@ -45,9 +45,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
           websiteService.banners.where((banner) => banner.active).toList();
 
       await websiteService.loadFeaturedProducts();
-      final featuredEntries = websiteService.featuredProducts
-          .where((fp) => fp.active)
-          .toList();
+      final featuredEntries =
+          websiteService.featuredProducts.where((fp) => fp.active).toList();
 
       _featuredProducts = await _fetchFeaturedProducts(featuredEntries);
     } catch (error) {
@@ -89,7 +88,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
       }
 
       final orderedProducts = <Product>[];
-      for (final entry in featuredEntries..sort((a, b) => a.orderIndex.compareTo(b.orderIndex))) {
+      for (final entry in featuredEntries
+        ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex))) {
         final product = productsById[entry.productId];
         if (product != null) {
           orderedProducts.add(product);

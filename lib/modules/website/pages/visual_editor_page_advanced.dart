@@ -8,20 +8,21 @@ import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
 
 /// 🎨 ADVANCED VISUAL WEBSITE EDITOR - PHASE 2
-/// 
+///
 /// Professional split-screen editor with ALL the awesome features!
 class AdvancedVisualEditorPage extends StatefulWidget {
   const AdvancedVisualEditorPage({super.key});
 
   @override
-  State<AdvancedVisualEditorPage> createState() => _AdvancedVisualEditorPageState();
+  State<AdvancedVisualEditorPage> createState() =>
+      _AdvancedVisualEditorPageState();
 }
 
 // History entry for undo/redo
 class EditorHistory {
   final Map<String, dynamic> state;
   final DateTime timestamp;
-  
+
   EditorHistory(this.state, this.timestamp);
 }
 
@@ -29,21 +30,21 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
   // ============================================================================
   // STATE MANAGEMENT
   // ============================================================================
-  
+
   bool _isSaving = false;
   bool _hasChanges = false;
   bool _autoSaveEnabled = true;
   Timer? _autoSaveTimer;
-  
+
   // Undo/Redo
   final List<EditorHistory> _history = [];
   int _historyIndex = -1;
   final int _maxHistory = 50;
-  
+
   // Preview mode
   String _previewMode = 'desktop'; // desktop, tablet, mobile
   double _previewZoom = 1.0;
-  
+
   // Hero Section
   final _heroTitleController = TextEditingController();
   final _heroSubtitleController = TextEditingController();
@@ -52,42 +53,42 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
   String _heroAlignment = 'center'; // left, center, right
   bool _heroShowOverlay = true;
   double _heroOverlayOpacity = 0.5;
-  
+
   // Theme Colors
   Color _primaryColor = const Color(0xFF2E7D32);
   Color _accentColor = const Color(0xFFFF6F00);
   Color _backgroundColor = Colors.white;
   Color _textColor = Colors.black87;
-  
+
   // Typography
   String _headingFont = 'Roboto';
   String _bodyFont = 'Roboto';
   double _headingSize = 48.0;
   double _bodySize = 16.0;
-  
+
   // Layout & Spacing
   double _sectionSpacing = 64.0;
   double _containerPadding = 24.0;
   String _maxWidth = '1200'; // px
-  
+
   // Products Section
   bool _showProductsSection = true;
   String _productsTitle = 'Productos Destacados';
   int _productsPerRow = 3;
   String _productsLayout = 'grid'; // grid, carousel, list
-  
+
   // Services Section
   bool _showServicesSection = true;
   String _servicesTitle = 'Nuestros Servicios';
   final List<Map<String, String>> _services = [];
-  
+
   // About Section
   bool _showAboutSection = true;
   String _aboutTitle = 'Sobre Nosotros';
   final _aboutContentController = TextEditingController();
   String? _aboutImageUrl;
   String _aboutImagePosition = 'right'; // left, right
-  
+
   // Contact Info
   final _contactPhoneController = TextEditingController();
   final _contactEmailController = TextEditingController();
@@ -95,25 +96,26 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
   final _contactWhatsappController = TextEditingController();
   final _contactInstagramController = TextEditingController();
   final _contactFacebookController = TextEditingController();
-  
+
   // Footer
   bool _showSocialLinks = true;
   bool _showNewsletter = true;
   Color _footerColor = const Color(0xFF212121);
-  
+
   // UI State
-  String _selectedSection = 'hero'; // hero, colors, typography, layout, products, services, about, contact, footer
-  
+  String _selectedSection =
+      'hero'; // hero, colors, typography, layout, products, services, about, contact, footer
+
   // Search
   final _searchController = TextEditingController();
   String _searchQuery = '';
-  
+
   @override
   void initState() {
     super.initState();
     _loadCurrentSettings();
     _startAutoSave();
-    
+
     // Track changes for all controllers
     _heroTitleController.addListener(_markAsChanged);
     _heroSubtitleController.addListener(_markAsChanged);
@@ -128,20 +130,20 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text.toLowerCase());
     });
-    
+
     // Save initial state to history
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _saveToHistory();
     });
   }
-  
+
   void _markAsChanged() {
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
       _saveToHistory();
     }
   }
-  
+
   void _startAutoSave() {
     _autoSaveTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_autoSaveEnabled && _hasChanges && !_isSaving) {
@@ -149,26 +151,26 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       }
     });
   }
-  
+
   void _saveToHistory() {
     final state = _captureCurrentState();
-    
+
     // Remove any history after current index (when undoing then making new change)
     if (_historyIndex < _history.length - 1) {
       _history.removeRange(_historyIndex + 1, _history.length);
     }
-    
+
     // Add new state
     _history.add(EditorHistory(state, DateTime.now()));
     _historyIndex = _history.length - 1;
-    
+
     // Keep history size limited
     if (_history.length > _maxHistory) {
       _history.removeAt(0);
       _historyIndex--;
     }
   }
-  
+
   Map<String, dynamic> _captureCurrentState() {
     return {
       'heroTitle': _heroTitleController.text,
@@ -211,7 +213,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       'footerColor': _footerColor.value,
     };
   }
-  
+
   void _restoreState(Map<String, dynamic> state) {
     setState(() {
       _heroTitleController.text = state['heroTitle'] ?? '';
@@ -254,7 +256,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       _footerColor = Color(state['footerColor'] ?? 0xFF212121);
     });
   }
-  
+
   void _undo() {
     if (_historyIndex > 0) {
       setState(() {
@@ -264,7 +266,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       });
     }
   }
-  
+
   void _redo() {
     if (_historyIndex < _history.length - 1) {
       setState(() {
@@ -274,59 +276,74 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       });
     }
   }
-  
+
   Future<void> _loadCurrentSettings() async {
     // TODO: Load from database via WebsiteService
     setState(() {
       _heroTitleController.text = 'SERVICIOS Y PRODUCTOS DE BICICLETA';
-      _heroSubtitleController.text = 'TODO LO QUE NECESITAS PARA TU BICICLETA EN VIÑA DEL MAR';
+      _heroSubtitleController.text =
+          'TODO LO QUE NECESITAS PARA TU BICICLETA EN VIÑA DEL MAR';
       _heroCTATextController.text = 'VER PRODUCTOS';
       _contactPhoneController.text = '+56 9 XXXX XXXX';
       _contactEmailController.text = 'info@vinabike.cl';
-      _contactAddressController.text = 'Álvarez 32, Local 17\nViña del Mar, Chile';
+      _contactAddressController.text =
+          'Álvarez 32, Local 17\nViña del Mar, Chile';
       _contactWhatsappController.text = '+56912345678';
       _contactInstagramController.text = '@vinabike';
       _contactFacebookController.text = 'VinabikeCL';
-      _aboutContentController.text = 'Somos una tienda especializada en bicicletas y accesorios con más de 10 años de experiencia en Viña del Mar.';
-      
+      _aboutContentController.text =
+          'Somos una tienda especializada en bicicletas y accesorios con más de 10 años de experiencia en Viña del Mar.';
+
       // Initialize services
       _services.addAll([
-        {'title': 'Venta de Bicicletas', 'icon': 'directions_bike', 'description': 'Amplio catálogo de bicicletas'},
-        {'title': 'Reparaciones', 'icon': 'build', 'description': 'Servicio técnico especializado'},
-        {'title': 'Accesorios', 'icon': 'shopping_bag', 'description': 'Todo para tu bicicleta'},
+        {
+          'title': 'Venta de Bicicletas',
+          'icon': 'directions_bike',
+          'description': 'Amplio catálogo de bicicletas'
+        },
+        {
+          'title': 'Reparaciones',
+          'icon': 'build',
+          'description': 'Servicio técnico especializado'
+        },
+        {
+          'title': 'Accesorios',
+          'icon': 'shopping_bag',
+          'description': 'Todo para tu bicicleta'
+        },
       ]);
     });
   }
-  
+
   Future<void> _saveChanges({bool showNotification = true}) async {
     setState(() => _isSaving = true);
-    
+
     try {
       final websiteService = context.read<WebsiteService>();
-      
+
       // Save all sections
       await websiteService.updateHeroSection(
         title: _heroTitleController.text,
         subtitle: _heroSubtitleController.text,
         imageUrl: _heroImageUrl,
       );
-      
+
       await websiteService.updateThemeColors(
         primaryColor: _primaryColor.value,
         accentColor: _accentColor.value,
       );
-      
+
       await websiteService.updateContactInfo(
         phone: _contactPhoneController.text,
         email: _contactEmailController.text,
         address: _contactAddressController.text,
       );
-      
+
       setState(() {
         _hasChanges = false;
         _isSaving = false;
       });
-      
+
       if (mounted && showNotification) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -334,7 +351,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
               children: [
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 8),
-                Text('✅ Cambios guardados ${_autoSaveEnabled ? "(auto-save activo)" : ""}'),
+                Text(
+                    '✅ Cambios guardados ${_autoSaveEnabled ? "(auto-save activo)" : ""}'),
               ],
             ),
             backgroundColor: Colors.green,
@@ -345,7 +363,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       }
     } catch (e) {
       setState(() => _isSaving = false);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -356,7 +374,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       }
     }
   }
-  
+
   Future<void> _pickImage(String section) async {
     try {
       final ImagePicker picker = ImagePicker();
@@ -366,7 +384,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         maxHeight: 1080,
         imageQuality: 85,
       );
-      
+
       if (image != null) {
         // TODO: Upload to Supabase Storage
         setState(() {
@@ -377,10 +395,11 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           }
           _markAsChanged();
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('📷 Imagen seleccionada. Implementar subida a Supabase Storage.'),
+            content: Text(
+                '📷 Imagen seleccionada. Implementar subida a Supabase Storage.'),
             backgroundColor: Colors.blue,
           ),
         );
@@ -394,13 +413,14 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       );
     }
   }
-  
-  void _showColorPicker(BuildContext context, Color currentColor, Function(Color) onColorChanged) {
+
+  void _showColorPicker(BuildContext context, Color currentColor,
+      Function(Color) onColorChanged) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         Color pickerColor = currentColor;
-        
+
         return AlertDialog(
           title: const Text('Seleccionar Color'),
           content: SingleChildScrollView(
@@ -436,7 +456,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       },
     );
   }
-  
+
   @override
   void dispose() {
     _autoSaveTimer?.cancel();
@@ -457,7 +477,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return MainLayout(
       child: Scaffold(
         backgroundColor: theme.colorScheme.surfaceContainerLowest,
@@ -469,7 +489,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
               flex: 3,
               child: _buildPreviewPanel(theme),
             ),
-            
+
             // RIGHT: Edit Panel
             SizedBox(
               width: 420,
@@ -480,7 +500,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   PreferredSizeWidget _buildAppBar(ThemeData theme) {
     return AppBar(
       title: Row(
@@ -537,9 +557,9 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           onPressed: _historyIndex < _history.length - 1 ? _redo : null,
           tooltip: 'Rehacer (Ctrl+Y)',
         ),
-        
+
         const VerticalDivider(),
-        
+
         // Auto-save toggle
         Tooltip(
           message: 'Auto-guardado cada 30s',
@@ -549,16 +569,18 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
               setState(() => _autoSaveEnabled = value);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(value ? '💾 Auto-guardado activado' : 'Auto-guardado desactivado'),
+                  content: Text(value
+                      ? '💾 Auto-guardado activado'
+                      : 'Auto-guardado desactivado'),
                   duration: const Duration(seconds: 1),
                 ),
               );
             },
           ),
         ),
-        
+
         const SizedBox(width: 8),
-        
+
         // Preview button
         TextButton.icon(
           onPressed: () => context.go('/tienda'),
@@ -566,20 +588,22 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           label: const Text('Vista Previa'),
         ),
         const SizedBox(width: 8),
-        
+
         // Save button
         ElevatedButton.icon(
           onPressed: _hasChanges && !_isSaving ? () => _saveChanges() : null,
-          icon: _isSaving 
-            ? const SizedBox(
-                width: 16, 
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              )
-            : const Icon(Icons.save),
+          icon: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.save),
           label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: _hasChanges ? theme.colorScheme.primary : Colors.grey,
+            backgroundColor:
+                _hasChanges ? theme.colorScheme.primary : Colors.grey,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           ),
@@ -588,7 +612,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ],
     );
   }
-  
+
   Widget _buildPreviewPanel(ThemeData theme) {
     return Container(
       color: theme.colorScheme.surfaceContainerLow,
@@ -596,7 +620,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         children: [
           // Preview toolbar
           _buildPreviewToolbar(theme),
-          
+
           // Preview content
           Expanded(
             child: _buildResponsivePreview(theme),
@@ -605,7 +629,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   Widget _buildPreviewToolbar(ThemeData theme) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -626,7 +650,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
             ),
           ),
           const Spacer(),
-          
+
           // Device selector
           SegmentedButton<String>(
             segments: const [
@@ -651,14 +675,15 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
               setState(() => _previewMode = newSelection.first);
             },
           ),
-          
+
           const SizedBox(width: 16),
-          
+
           // Zoom controls
           IconButton(
             icon: const Icon(Icons.zoom_out, size: 20),
             onPressed: () {
-              setState(() => _previewZoom = (_previewZoom - 0.1).clamp(0.5, 2.0));
+              setState(
+                  () => _previewZoom = (_previewZoom - 0.1).clamp(0.5, 2.0));
             },
             tooltip: 'Alejar',
           ),
@@ -666,7 +691,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           IconButton(
             icon: const Icon(Icons.zoom_in, size: 20),
             onPressed: () {
-              setState(() => _previewZoom = (_previewZoom + 0.1).clamp(0.5, 2.0));
+              setState(
+                  () => _previewZoom = (_previewZoom + 0.1).clamp(0.5, 2.0));
             },
             tooltip: 'Acercar',
           ),
@@ -684,7 +710,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   Widget _buildResponsivePreview(ThemeData theme) {
     double previewWidth;
     switch (_previewMode) {
@@ -697,7 +723,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       default:
         previewWidth = double.infinity;
     }
-    
+
     return Center(
       child: Transform.scale(
         scale: _previewZoom,
@@ -706,7 +732,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           margin: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: _backgroundColor,
-            borderRadius: BorderRadius.circular(_previewMode != 'desktop' ? 12 : 8),
+            borderRadius:
+                BorderRadius.circular(_previewMode != 'desktop' ? 12 : 8),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.1),
@@ -716,44 +743,56 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(_previewMode != 'desktop' ? 12 : 8),
+            borderRadius:
+                BorderRadius.circular(_previewMode != 'desktop' ? 12 : 8),
             child: _buildLivePreview(context),
           ),
         ),
       ),
     );
   }
-  
+
   Widget _buildLivePreview(BuildContext context) {
     return SingleChildScrollView(
       child: Column(
         children: [
           // Mock Header
           _buildPreviewHeader(),
-          
+
           // Hero Section
-          if (_selectedSection == 'hero' || _searchQuery.isEmpty || 'hero banner principal'.contains(_searchQuery))
+          if (_selectedSection == 'hero' ||
+              _searchQuery.isEmpty ||
+              'hero banner principal'.contains(_searchQuery))
             _buildPreviewHero(),
-          
+
           // Products Section
-          if (_showProductsSection && (_selectedSection == 'products' || _searchQuery.isEmpty || 'productos'.contains(_searchQuery)))
+          if (_showProductsSection &&
+              (_selectedSection == 'products' ||
+                  _searchQuery.isEmpty ||
+                  'productos'.contains(_searchQuery)))
             _buildPreviewProducts(),
-          
+
           // Services Section
-          if (_showServicesSection && (_selectedSection == 'services' || _searchQuery.isEmpty || 'servicios'.contains(_searchQuery)))
+          if (_showServicesSection &&
+              (_selectedSection == 'services' ||
+                  _searchQuery.isEmpty ||
+                  'servicios'.contains(_searchQuery)))
             _buildPreviewServices(),
-          
+
           // About Section
-          if (_showAboutSection && (_selectedSection == 'about' || _searchQuery.isEmpty || 'nosotros sobre'.contains(_searchQuery)))
+          if (_showAboutSection &&
+              (_selectedSection == 'about' ||
+                  _searchQuery.isEmpty ||
+                  'nosotros sobre'.contains(_searchQuery)))
             _buildPreviewAbout(),
-          
+
           // Mock Footer
           _buildPreviewFooter(),
         ],
       ),
     );
   }
-  
+
   Widget _buildPreviewHeader() {
     return Container(
       padding: EdgeInsets.all(_containerPadding),
@@ -782,7 +821,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   Widget _buildPreviewHero() {
     return Container(
       height: _previewMode == 'mobile' ? 300 : 500,
@@ -791,8 +830,10 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            _primaryColor.withOpacity(_heroShowOverlay ? _heroOverlayOpacity : 0.8),
-            _accentColor.withOpacity(_heroShowOverlay ? _heroOverlayOpacity : 0.6),
+            _primaryColor
+                .withOpacity(_heroShowOverlay ? _heroOverlayOpacity : 0.8),
+            _accentColor
+                .withOpacity(_heroShowOverlay ? _heroOverlayOpacity : 0.6),
           ],
         ),
       ),
@@ -801,16 +842,16 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           padding: EdgeInsets.all(_containerPadding * 1.5),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: _heroAlignment == 'left' 
-              ? CrossAxisAlignment.start 
-              : _heroAlignment == 'right'
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.center,
+            crossAxisAlignment: _heroAlignment == 'left'
+                ? CrossAxisAlignment.start
+                : _heroAlignment == 'right'
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.center,
             children: [
               Text(
-                _heroTitleController.text.isEmpty 
-                  ? 'TU TÍTULO AQUÍ'
-                  : _heroTitleController.text,
+                _heroTitleController.text.isEmpty
+                    ? 'TU TÍTULO AQUÍ'
+                    : _heroTitleController.text,
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: _headingSize,
@@ -823,17 +864,17 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                     ),
                   ],
                 ),
-                textAlign: _heroAlignment == 'left' 
-                  ? TextAlign.left 
-                  : _heroAlignment == 'right'
-                    ? TextAlign.right
-                    : TextAlign.center,
+                textAlign: _heroAlignment == 'left'
+                    ? TextAlign.left
+                    : _heroAlignment == 'right'
+                        ? TextAlign.right
+                        : TextAlign.center,
               ),
               SizedBox(height: _sectionSpacing / 4),
               Text(
                 _heroSubtitleController.text.isEmpty
-                  ? 'Tu subtítulo aquí'
-                  : _heroSubtitleController.text,
+                    ? 'Tu subtítulo aquí'
+                    : _heroSubtitleController.text,
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: _bodySize * 1.25,
@@ -845,11 +886,11 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                     ),
                   ],
                 ),
-                textAlign: _heroAlignment == 'left' 
-                  ? TextAlign.left 
-                  : _heroAlignment == 'right'
-                    ? TextAlign.right
-                    : TextAlign.center,
+                textAlign: _heroAlignment == 'left'
+                    ? TextAlign.left
+                    : _heroAlignment == 'right'
+                        ? TextAlign.right
+                        : TextAlign.center,
               ),
               SizedBox(height: _sectionSpacing / 2),
               ElevatedButton(
@@ -863,9 +904,9 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                   ),
                 ),
                 child: Text(
-                  _heroCTATextController.text.isEmpty 
-                    ? 'BOTÓN CTA'
-                    : _heroCTATextController.text,
+                  _heroCTATextController.text.isEmpty
+                      ? 'BOTÓN CTA'
+                      : _heroCTATextController.text,
                   style: TextStyle(fontFamily: _bodyFont),
                 ),
               ),
@@ -875,7 +916,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   Widget _buildPreviewProducts() {
     return Padding(
       padding: EdgeInsets.all(_sectionSpacing),
@@ -892,29 +933,35 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           ),
           SizedBox(height: _sectionSpacing / 2),
           _productsLayout == 'grid'
-            ? GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: _previewMode == 'mobile' ? 1 : _previewMode == 'tablet' ? 2 : _productsPerRow,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                children: List.generate(
-                  _previewMode == 'mobile' ? 2 : 3,
-                  (index) => Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(8),
+              ? GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: _previewMode == 'mobile'
+                      ? 1
+                      : _previewMode == 'tablet'
+                          ? 2
+                          : _productsPerRow,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  children: List.generate(
+                    _previewMode == 'mobile' ? 2 : 3,
+                    (index) => Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Center(child: Text('Producto')),
                     ),
-                    child: const Center(child: Text('Producto')),
                   ),
-                ),
-              )
-            : const SizedBox(height: 200, child: Center(child: Text('Vista Carousel/List'))),
+                )
+              : const SizedBox(
+                  height: 200,
+                  child: Center(child: Text('Vista Carousel/List'))),
         ],
       ),
     );
   }
-  
+
   Widget _buildPreviewServices() {
     return Container(
       padding: EdgeInsets.all(_sectionSpacing),
@@ -977,7 +1024,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   Widget _buildPreviewAbout() {
     return Padding(
       padding: EdgeInsets.all(_sectionSpacing),
@@ -995,7 +1042,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           SizedBox(height: _sectionSpacing / 2),
           Row(
             children: [
-              if (_aboutImagePosition == 'left' && _previewMode != 'mobile') ...[
+              if (_aboutImagePosition == 'left' &&
+                  _previewMode != 'mobile') ...[
                 Expanded(
                   child: Container(
                     height: 200,
@@ -1012,8 +1060,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                 flex: 2,
                 child: Text(
                   _aboutContentController.text.isEmpty
-                    ? 'Escribe sobre tu negocio aquí...'
-                    : _aboutContentController.text,
+                      ? 'Escribe sobre tu negocio aquí...'
+                      : _aboutContentController.text,
                   style: TextStyle(
                     fontSize: _bodySize,
                     fontFamily: _bodyFont,
@@ -1021,7 +1069,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                   ),
                 ),
               ),
-              if (_aboutImagePosition == 'right' && _previewMode != 'mobile') ...[
+              if (_aboutImagePosition == 'right' &&
+                  _previewMode != 'mobile') ...[
                 const SizedBox(width: 24),
                 Expanded(
                   child: Container(
@@ -1040,7 +1089,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   Widget _buildPreviewFooter() {
     return Container(
       padding: EdgeInsets.all(_containerPadding * 1.5),
@@ -1089,16 +1138,28 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _contactPhoneController.text.isEmpty ? 'Teléfono' : _contactPhoneController.text,
-                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontFamily: _bodyFont),
+                        _contactPhoneController.text.isEmpty
+                            ? 'Teléfono'
+                            : _contactPhoneController.text,
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontFamily: _bodyFont),
                       ),
                       Text(
-                        _contactEmailController.text.isEmpty ? 'Email' : _contactEmailController.text,
-                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontFamily: _bodyFont),
+                        _contactEmailController.text.isEmpty
+                            ? 'Email'
+                            : _contactEmailController.text,
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontFamily: _bodyFont),
                       ),
                       Text(
-                        _contactAddressController.text.isEmpty ? 'Dirección' : _contactAddressController.text,
-                        style: TextStyle(color: Colors.white.withOpacity(0.7), fontFamily: _bodyFont),
+                        _contactAddressController.text.isEmpty
+                            ? 'Dirección'
+                            : _contactAddressController.text,
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontFamily: _bodyFont),
                         maxLines: 2,
                       ),
                     ],
@@ -1122,17 +1183,20 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                           children: [
                             if (_contactWhatsappController.text.isNotEmpty)
                               IconButton(
-                                icon: const Icon(Icons.phone, color: Colors.white70),
+                                icon: const Icon(Icons.phone,
+                                    color: Colors.white70),
                                 onPressed: () {},
                               ),
                             if (_contactInstagramController.text.isNotEmpty)
                               IconButton(
-                                icon: const Icon(Icons.camera_alt, color: Colors.white70),
+                                icon: const Icon(Icons.camera_alt,
+                                    color: Colors.white70),
                                 onPressed: () {},
                               ),
                             if (_contactFacebookController.text.isNotEmpty)
                               IconButton(
-                                icon: const Icon(Icons.facebook, color: Colors.white70),
+                                icon: const Icon(Icons.facebook,
+                                    color: Colors.white70),
                                 onPressed: () {},
                               ),
                           ],
@@ -1158,20 +1222,24 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   IconData _getIconData(String iconName) {
     switch (iconName) {
-      case 'directions_bike': return Icons.directions_bike;
-      case 'build': return Icons.build;
-      case 'shopping_bag': return Icons.shopping_bag;
-      default: return Icons.star;
+      case 'directions_bike':
+        return Icons.directions_bike;
+      case 'build':
+        return Icons.build;
+      case 'shopping_bag':
+        return Icons.shopping_bag;
+      default:
+        return Icons.star;
     }
   }
-  
+
   // ============================================================================
   // EDIT PANEL - RIGHT SIDE
   // ============================================================================
-  
+
   Widget _buildEditPanel(ThemeData theme) {
     return Container(
       decoration: BoxDecoration(
@@ -1210,25 +1278,25 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
               ],
             ),
           ),
-          
+
           // Search bar
           _buildSearchBar(theme),
-          
+
           // Section selector
           _buildSectionSelector(theme),
-          
+
           // Edit controls
           Expanded(
             child: _buildEditControls(theme),
           ),
-          
+
           // Quick actions
           _buildQuickActions(theme),
         ],
       ),
     );
   }
-  
+
   Widget _buildSearchBar(ThemeData theme) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -1241,23 +1309,24 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           hintText: 'Buscar sección...',
           prefixIcon: const Icon(Icons.search, size: 20),
           suffixIcon: _searchQuery.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear, size: 20),
-                onPressed: () {
-                  _searchController.clear();
-                },
-              )
-            : null,
+              ? IconButton(
+                  icon: const Icon(Icons.clear, size: 20),
+                  onPressed: () {
+                    _searchController.clear();
+                  },
+                )
+              : null,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           isDense: true,
         ),
       ),
     );
   }
-  
+
   Widget _buildSectionSelector(ThemeData theme) {
     final sections = [
       {'id': 'hero', 'label': 'Hero/Banner', 'icon': Icons.view_carousel},
@@ -1270,14 +1339,15 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       {'id': 'contact', 'label': 'Contacto', 'icon': Icons.contact_mail},
       {'id': 'footer', 'label': 'Footer', 'icon': Icons.web},
     ];
-    
+
     // Filter by search
     final filteredSections = _searchQuery.isEmpty
-      ? sections
-      : sections.where((s) => 
-          (s['label'] as String).toLowerCase().contains(_searchQuery)
-        ).toList();
-    
+        ? sections
+        : sections
+            .where((s) =>
+                (s['label'] as String).toLowerCase().contains(_searchQuery))
+            .toList();
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1312,10 +1382,10 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   Widget _buildSectionChip(String section, String label, IconData icon) {
     final isSelected = _selectedSection == section;
-    
+
     return FilterChip(
       selected: isSelected,
       label: Row(
@@ -1334,7 +1404,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
-  
+
   Widget _buildEditControls(ThemeData theme) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1343,7 +1413,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         children: [
           if (_selectedSection == 'hero') ..._buildHeroControls(theme),
           if (_selectedSection == 'colors') ..._buildColorControls(theme),
-          if (_selectedSection == 'typography') ..._buildTypographyControls(theme),
+          if (_selectedSection == 'typography')
+            ..._buildTypographyControls(theme),
           if (_selectedSection == 'layout') ..._buildLayoutControls(theme),
           if (_selectedSection == 'products') ..._buildProductsControls(theme),
           if (_selectedSection == 'services') ..._buildServicesControls(theme),
@@ -1354,15 +1425,15 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   // HERO SECTION CONTROLS
   List<Widget> _buildHeroControls(ThemeData theme) {
     return [
-      _buildSectionHeader(theme, '🎯 Sección Hero / Banner Principal', 
-        'La primera impresión de tu sitio web'),
-      
+      _buildSectionHeader(theme, '🎯 Sección Hero / Banner Principal',
+          'La primera impresión de tu sitio web'),
+
       const SizedBox(height: 16),
-      
+
       // Title
       TextField(
         controller: _heroTitleController,
@@ -1375,7 +1446,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         maxLines: 2,
       ),
       const SizedBox(height: 12),
-      
+
       // Subtitle
       TextField(
         controller: _heroSubtitleController,
@@ -1388,7 +1459,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         maxLines: 2,
       ),
       const SizedBox(height: 12),
-      
+
       // CTA Text
       TextField(
         controller: _heroCTATextController,
@@ -1400,7 +1471,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         ),
       ),
       const SizedBox(height: 16),
-      
+
       // Alignment
       _buildDropdown(
         theme,
@@ -1419,7 +1490,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         },
       ),
       const SizedBox(height: 16),
-      
+
       // Show Overlay
       SwitchListTile(
         title: const Text('Mostrar Overlay (Filtro Oscuro)'),
@@ -1432,7 +1503,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           });
         },
       ),
-      
+
       // Overlay Opacity
       if (_heroShowOverlay) ...[
         const SizedBox(height: 8),
@@ -1451,9 +1522,9 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           },
         ),
       ],
-      
+
       const SizedBox(height: 16),
-      
+
       // Image upload
       OutlinedButton.icon(
         onPressed: () => _pickImage('hero'),
@@ -1463,19 +1534,20 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           minimumSize: const Size(double.infinity, 48),
         ),
       ),
-      
-      _buildTipBox('💡 Tip: Usa títulos cortos y llamativos. El subtítulo debe explicar tu propuesta de valor.'),
+
+      _buildTipBox(
+          '💡 Tip: Usa títulos cortos y llamativos. El subtítulo debe explicar tu propuesta de valor.'),
     ];
   }
-  
+
   // COLOR CONTROLS
   List<Widget> _buildColorControls(ThemeData theme) {
     return [
-      _buildSectionHeader(theme, '🎨 Colores del Tema', 
-        'Define la identidad visual de tu marca'),
-      
+      _buildSectionHeader(theme, '🎨 Colores del Tema',
+          'Define la identidad visual de tu marca'),
+
       const SizedBox(height: 16),
-      
+
       // Primary Color
       _buildAdvancedColorPicker(
         theme,
@@ -1489,7 +1561,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         },
       ),
       const SizedBox(height: 16),
-      
+
       // Accent Color
       _buildAdvancedColorPicker(
         theme,
@@ -1503,7 +1575,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         },
       ),
       const SizedBox(height: 16),
-      
+
       // Background Color
       _buildAdvancedColorPicker(
         theme,
@@ -1517,7 +1589,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         },
       ),
       const SizedBox(height: 16),
-      
+
       // Text Color
       _buildAdvancedColorPicker(
         theme,
@@ -1530,11 +1602,11 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           });
         },
       ),
-      
+
       const SizedBox(height: 24),
       const Divider(),
       const SizedBox(height: 16),
-      
+
       // Presets
       Text(
         'Paletas Predefinidas',
@@ -1547,31 +1619,31 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         spacing: 8,
         runSpacing: 8,
         children: [
-          _buildColorPreset('Verde Naturaleza', 
-            const Color(0xFF2E7D32), const Color(0xFF66BB6A), Colors.white, Colors.black87),
-          _buildColorPreset('Azul Profesional', 
-            const Color(0xFF1976D2), const Color(0xFF42A5F5), Colors.white, Colors.black87),
-          _buildColorPreset('Naranja Energía', 
-            const Color(0xFFFF6F00), const Color(0xFFFF9800), Colors.white, Colors.black87),
-          _buildColorPreset('Rosa Moderno', 
-            const Color(0xFFD81B60), const Color(0xFFEC407A), Colors.white, Colors.black87),
-          _buildColorPreset('Morado Elegante', 
-            const Color(0xFF8E24AA), const Color(0xFFAB47BC), Colors.white, Colors.black87),
-          _buildColorPreset('Oscuro', 
-            const Color(0xFF212121), const Color(0xFF424242), const Color(0xFF121212), Colors.white),
+          _buildColorPreset('Verde Naturaleza', const Color(0xFF2E7D32),
+              const Color(0xFF66BB6A), Colors.white, Colors.black87),
+          _buildColorPreset('Azul Profesional', const Color(0xFF1976D2),
+              const Color(0xFF42A5F5), Colors.white, Colors.black87),
+          _buildColorPreset('Naranja Energía', const Color(0xFFFF6F00),
+              const Color(0xFFFF9800), Colors.white, Colors.black87),
+          _buildColorPreset('Rosa Moderno', const Color(0xFFD81B60),
+              const Color(0xFFEC407A), Colors.white, Colors.black87),
+          _buildColorPreset('Morado Elegante', const Color(0xFF8E24AA),
+              const Color(0xFFAB47BC), Colors.white, Colors.black87),
+          _buildColorPreset('Oscuro', const Color(0xFF212121),
+              const Color(0xFF424242), const Color(0xFF121212), Colors.white),
         ],
       ),
     ];
   }
-  
+
   // TYPOGRAPHY CONTROLS
   List<Widget> _buildTypographyControls(ThemeData theme) {
     return [
-      _buildSectionHeader(theme, '✍️ Tipografía', 
-        'Define el estilo de tus textos'),
-      
+      _buildSectionHeader(
+          theme, '✍️ Tipografía', 'Define el estilo de tus textos'),
+
       const SizedBox(height: 16),
-      
+
       // Heading Font
       _buildDropdown(
         theme,
@@ -1592,7 +1664,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         },
       ),
       const SizedBox(height: 16),
-      
+
       // Body Font
       _buildDropdown(
         theme,
@@ -1613,7 +1685,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         },
       ),
       const SizedBox(height: 16),
-      
+
       // Heading Size
       Text('Tamaño de Títulos: ${_headingSize.toInt()}px'),
       Slider(
@@ -1630,7 +1702,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         },
       ),
       const SizedBox(height: 16),
-      
+
       // Body Size
       Text('Tamaño de Texto: ${_bodySize.toInt()}px'),
       Slider(
@@ -1646,19 +1718,20 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           });
         },
       ),
-      
-      _buildTipBox('💡 Tip: Mantén buena legibilidad. Texto muy pequeño cansa la vista.'),
+
+      _buildTipBox(
+          '💡 Tip: Mantén buena legibilidad. Texto muy pequeño cansa la vista.'),
     ];
   }
-  
+
   // LAYOUT CONTROLS
   List<Widget> _buildLayoutControls(ThemeData theme) {
     return [
-      _buildSectionHeader(theme, '📐 Diseño y Espaciado', 
-        'Controla el espacio entre elementos'),
-      
+      _buildSectionHeader(theme, '📐 Diseño y Espaciado',
+          'Controla el espacio entre elementos'),
+
       const SizedBox(height: 16),
-      
+
       // Max Width
       _buildDropdown(
         theme,
@@ -1678,7 +1751,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         },
       ),
       const SizedBox(height: 16),
-      
+
       // Section Spacing
       Text('Espacio Entre Secciones: ${_sectionSpacing.toInt()}px'),
       Slider(
@@ -1695,7 +1768,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         },
       ),
       const SizedBox(height: 16),
-      
+
       // Container Padding
       Text('Padding de Contenedores: ${_containerPadding.toInt()}px'),
       Slider(
@@ -1711,19 +1784,19 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           });
         },
       ),
-      
+
       _buildTipBox('💡 Tip: Más espacio = diseño más "respirado" y moderno.'),
     ];
   }
-  
+
   // PRODUCTS CONTROLS
   List<Widget> _buildProductsControls(ThemeData theme) {
     return [
-      _buildSectionHeader(theme, '🛍️ Sección de Productos', 
-        'Personaliza cómo se muestran tus productos'),
-      
+      _buildSectionHeader(theme, '🛍️ Sección de Productos',
+          'Personaliza cómo se muestran tus productos'),
+
       const SizedBox(height: 16),
-      
+
       // Show/Hide
       SwitchListTile(
         title: const Text('Mostrar Sección'),
@@ -1735,10 +1808,10 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           });
         },
       ),
-      
+
       if (_showProductsSection) ...[
         const SizedBox(height: 16),
-        
+
         // Title
         TextFormField(
           initialValue: _productsTitle,
@@ -1753,7 +1826,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           },
         ),
         const SizedBox(height: 16),
-        
+
         // Layout
         _buildDropdown(
           theme,
@@ -1772,7 +1845,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           },
         ),
         const SizedBox(height: 16),
-        
+
         // Products per row
         if (_productsLayout == 'grid') ...[
           Text('Productos por Fila: $_productsPerRow'),
@@ -1793,15 +1866,15 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ],
     ];
   }
-  
+
   // SERVICES CONTROLS
   List<Widget> _buildServicesControls(ThemeData theme) {
     return [
-      _buildSectionHeader(theme, '🔧 Sección de Servicios', 
-        'Destaca lo que ofreces'),
-      
+      _buildSectionHeader(
+          theme, '🔧 Sección de Servicios', 'Destaca lo que ofreces'),
+
       const SizedBox(height: 16),
-      
+
       // Show/Hide
       SwitchListTile(
         title: const Text('Mostrar Sección'),
@@ -1813,10 +1886,10 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           });
         },
       ),
-      
+
       if (_showServicesSection) ...[
         const SizedBox(height: 16),
-        
+
         // Title
         TextFormField(
           initialValue: _servicesTitle,
@@ -1831,7 +1904,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           },
         ),
         const SizedBox(height: 16),
-        
+
         // Services list
         Text(
           'Servicios (${_services.length})',
@@ -1853,7 +1926,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                 onPressed: () {
                   // TODO: Edit service dialog
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Editar servicio - Próximamente')),
+                    const SnackBar(
+                        content: Text('Editar servicio - Próximamente')),
                   );
                 },
               ),
@@ -1874,15 +1948,15 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ],
     ];
   }
-  
+
   // ABOUT CONTROLS
   List<Widget> _buildAboutControls(ThemeData theme) {
     return [
-      _buildSectionHeader(theme, 'ℹ️ Sección Sobre Nosotros', 
-        'Cuenta tu historia'),
-      
+      _buildSectionHeader(
+          theme, 'ℹ️ Sección Sobre Nosotros', 'Cuenta tu historia'),
+
       const SizedBox(height: 16),
-      
+
       // Show/Hide
       SwitchListTile(
         title: const Text('Mostrar Sección'),
@@ -1894,10 +1968,10 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           });
         },
       ),
-      
+
       if (_showAboutSection) ...[
         const SizedBox(height: 16),
-        
+
         // Title
         TextFormField(
           initialValue: _aboutTitle,
@@ -1912,7 +1986,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           },
         ),
         const SizedBox(height: 16),
-        
+
         // Content
         TextField(
           controller: _aboutContentController,
@@ -1925,7 +1999,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           maxLines: 5,
         ),
         const SizedBox(height: 16),
-        
+
         // Image Position
         _buildDropdown(
           theme,
@@ -1943,7 +2017,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           },
         ),
         const SizedBox(height: 16),
-        
+
         // Image upload
         OutlinedButton.icon(
           onPressed: () => _pickImage('about'),
@@ -1956,15 +2030,15 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ],
     ];
   }
-  
+
   // CONTACT CONTROLS
   List<Widget> _buildContactControls(ThemeData theme) {
     return [
-      _buildSectionHeader(theme, '📞 Información de Contacto', 
-        'Aparece en el footer de todas las páginas'),
-      
+      _buildSectionHeader(theme, '📞 Información de Contacto',
+          'Aparece en el footer de todas las páginas'),
+
       const SizedBox(height: 16),
-      
+
       // Phone
       TextField(
         controller: _contactPhoneController,
@@ -1976,7 +2050,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         ),
       ),
       const SizedBox(height: 12),
-      
+
       // Email
       TextField(
         controller: _contactEmailController,
@@ -1989,7 +2063,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         keyboardType: TextInputType.emailAddress,
       ),
       const SizedBox(height: 12),
-      
+
       // Address
       TextField(
         controller: _contactAddressController,
@@ -2002,10 +2076,10 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         maxLines: 2,
       ),
       const SizedBox(height: 16),
-      
+
       const Divider(),
       const SizedBox(height: 16),
-      
+
       Text(
         'Redes Sociales',
         style: theme.textTheme.titleSmall?.copyWith(
@@ -2013,7 +2087,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         ),
       ),
       const SizedBox(height: 12),
-      
+
       // WhatsApp
       TextField(
         controller: _contactWhatsappController,
@@ -2025,7 +2099,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         ),
       ),
       const SizedBox(height: 12),
-      
+
       // Instagram
       TextField(
         controller: _contactInstagramController,
@@ -2037,7 +2111,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         ),
       ),
       const SizedBox(height: 12),
-      
+
       // Facebook
       TextField(
         controller: _contactFacebookController,
@@ -2050,15 +2124,15 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     ];
   }
-  
+
   // FOOTER CONTROLS
   List<Widget> _buildFooterControls(ThemeData theme) {
     return [
-      _buildSectionHeader(theme, '🌐 Footer (Pie de Página)', 
-        'Personaliza el footer'),
-      
+      _buildSectionHeader(
+          theme, '🌐 Footer (Pie de Página)', 'Personaliza el footer'),
+
       const SizedBox(height: 16),
-      
+
       // Footer Color
       _buildAdvancedColorPicker(
         theme,
@@ -2072,7 +2146,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         },
       ),
       const SizedBox(height: 16),
-      
+
       // Show Social Links
       SwitchListTile(
         title: const Text('Mostrar Redes Sociales'),
@@ -2084,7 +2158,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           });
         },
       ),
-      
+
       // Show Newsletter
       SwitchListTile(
         title: const Text('Mostrar Suscripción a Newsletter'),
@@ -2099,11 +2173,11 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     ];
   }
-  
+
   // ============================================================================
   // HELPER WIDGETS
   // ============================================================================
-  
+
   Widget _buildSectionHeader(ThemeData theme, String title, String subtitle) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2124,7 +2198,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ],
     );
   }
-  
+
   Widget _buildDropdown(
     ThemeData theme, {
     required String label,
@@ -2147,7 +2221,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       onChanged: onChanged,
     );
   }
-  
+
   Widget _buildAdvancedColorPicker(
     ThemeData theme, {
     required String label,
@@ -2192,7 +2266,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(4),
@@ -2213,8 +2288,9 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ],
     );
   }
-  
-  Widget _buildColorPreset(String name, Color primary, Color accent, Color bg, Color text) {
+
+  Widget _buildColorPreset(
+      String name, Color primary, Color accent, Color bg, Color text) {
     return Tooltip(
       message: name,
       child: InkWell(
@@ -2251,7 +2327,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   Widget _buildTipBox(String text) {
     return Container(
       margin: const EdgeInsets.only(top: 16),
@@ -2279,7 +2355,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   Widget _buildQuickActions(ThemeData theme) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -2314,7 +2390,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                               Navigator.pop(context);
                               _loadCurrentSettings();
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('✅ Valores reseteados')),
+                                const SnackBar(
+                                    content: Text('✅ Valores reseteados')),
                               );
                             },
                             style: ElevatedButton.styleFrom(
@@ -2337,7 +2414,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                     // Export/Import settings
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('📤 Exportar configuración - Próximamente'),
+                        content:
+                            Text('📤 Exportar configuración - Próximamente'),
                       ),
                     );
                   },
@@ -2351,7 +2429,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
       ),
     );
   }
-  
+
   void _showUnsavedChangesDialog() {
     showDialog(
       context: context,
@@ -2387,4 +2465,3 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
     );
   }
 }
-

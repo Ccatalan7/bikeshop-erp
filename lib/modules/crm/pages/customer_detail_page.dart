@@ -13,7 +13,7 @@ import '../../bikeshop/services/bikeshop_service.dart';
 
 class CustomerDetailPage extends StatefulWidget {
   final String customerId;
-  
+
   const CustomerDetailPage({super.key, required this.customerId});
 
   @override
@@ -41,10 +41,13 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
   Future<void> _loadCustomerData() async {
     setState(() => _isLoading = true);
     try {
-      final customer = await _customerService.getCustomerById(widget.customerId);
-      final loyalty = await _customerService.getCustomerLoyalty(widget.customerId);
-      final bikeHistory = await _customerService.getCustomerBikeHistory(widget.customerId);
-      
+      final customer =
+          await _customerService.getCustomerById(widget.customerId);
+      final loyalty =
+          await _customerService.getCustomerLoyalty(widget.customerId);
+      final bikeHistory =
+          await _customerService.getCustomerBikeHistory(widget.customerId);
+
       setState(() {
         _customer = customer;
         _loyalty = loyalty;
@@ -130,7 +133,9 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     icon: Icons.edit,
                     type: ButtonType.outline,
                     onPressed: () {
-                      context.push('/clientes/${widget.customerId}/editar').then((_) {
+                      context
+                          .push('/clientes/${widget.customerId}/editar')
+                          .then((_) {
                         _loadCustomerData();
                       });
                     },
@@ -138,7 +143,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 ],
               ),
               const SizedBox(height: 16),
-              
+
               // Customer info
               Row(
                 children: [
@@ -210,7 +215,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
             ],
           ),
         ),
-        
+
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
@@ -226,22 +231,23 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                   if (_customer!.address != null)
                     _buildInfoRow(Icons.home, 'Dirección', _customer!.address!),
                   if (_customer!.region != null)
-                    _buildInfoRow(Icons.location_on, 'Región', _customer!.region!),
+                    _buildInfoRow(
+                        Icons.location_on, 'Región', _customer!.region!),
                 ]),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Loyalty Information
                 if (_loyalty != null) ...[
                   _buildLoyaltySection(),
                   const SizedBox(height: 24),
                 ],
-                
+
                 // Bike History
                 _buildBikeHistorySection(),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Customer Stats
                 _buildCustomerStats(),
               ],
@@ -254,7 +260,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
 
   Widget _buildSection(String title, List<Widget> children) {
     if (children.isEmpty) return const SizedBox.shrink();
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -333,7 +339,8 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                       width: 60,
                       height: 60,
                       decoration: BoxDecoration(
-                        color: _getLoyaltyColor(_loyalty!.tier).withOpacity(0.1),
+                        color:
+                            _getLoyaltyColor(_loyalty!.tier).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(30),
                       ),
                       child: Icon(
@@ -610,7 +617,8 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                       child: _buildStatItem(
                         'Total Invertido',
                         ChileanUtils.formatCurrency(
-                          _bikeHistory.fold(0.0, (sum, bike) => sum + bike.purchaseAmount),
+                          _bikeHistory.fold(
+                              0.0, (sum, bike) => sum + bike.purchaseAmount),
                         ),
                         Icons.attach_money,
                       ),
@@ -719,7 +727,8 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               final points = int.tryParse(controller.text);
               if (points != null && points > 0) {
                 try {
-                  await _customerService.addLoyaltyPoints(widget.customerId, points);
+                  await _customerService.addLoyaltyPoints(
+                      widget.customerId, points);
                   _loadCustomerData();
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -776,7 +785,8 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               final points = int.tryParse(controller.text);
               if (points != null && points > 0) {
                 try {
-                  await _customerService.redeemLoyaltyPoints(widget.customerId, points);
+                  await _customerService.redeemLoyaltyPoints(
+                      widget.customerId, points);
                   _loadCustomerData();
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -852,7 +862,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     if (confirmed == true && bike.id != null) {
       try {
         await _bikeshopService.deleteBike(bike.id!);
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -860,7 +870,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               backgroundColor: Colors.green,
             ),
           );
-          
+
           // Refresh the bike list automatically
           _loadCustomerData();
         }

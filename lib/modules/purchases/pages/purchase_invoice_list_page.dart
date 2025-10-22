@@ -14,7 +14,8 @@ class PurchaseInvoiceListPage extends StatefulWidget {
   const PurchaseInvoiceListPage({super.key});
 
   @override
-  State<PurchaseInvoiceListPage> createState() => _PurchaseInvoiceListPageState();
+  State<PurchaseInvoiceListPage> createState() =>
+      _PurchaseInvoiceListPageState();
 }
 
 class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
@@ -53,7 +54,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   Future<void> _loadInvoices({bool refresh = false}) async {
     setState(() => _isLoading = true);
     try {
-      final invoices = await _purchaseService.getPurchaseInvoices(forceRefresh: refresh);
+      final invoices =
+          await _purchaseService.getPurchaseInvoices(forceRefresh: refresh);
       setState(() {
         _invoices = invoices;
         _filtered = invoices;
@@ -76,10 +78,13 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     final filtered = _invoices.where((invoice) {
       final matchesSearch = query.isEmpty ||
           invoice.invoiceNumber.toLowerCase().contains(query.toLowerCase()) ||
-          (invoice.supplierName?.toLowerCase().contains(query.toLowerCase()) ?? false) ||
-          (invoice.supplierRut?.toLowerCase().contains(query.toLowerCase()) ?? false);
+          (invoice.supplierName?.toLowerCase().contains(query.toLowerCase()) ??
+              false) ||
+          (invoice.supplierRut?.toLowerCase().contains(query.toLowerCase()) ??
+              false);
 
-      final matchesStatus = _selectedStatus == 'all' || invoice.status.name == _selectedStatus;
+      final matchesStatus =
+          _selectedStatus == 'all' || invoice.status.name == _selectedStatus;
 
       return matchesSearch && matchesStatus;
     }).toList();
@@ -144,8 +149,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   icon: Icons.add,
                   onPressed: () async {
                     // Show model selection dialog
-                    final isPrepayment = await showPurchaseModelSelectionDialog(context);
-                    
+                    final isPrepayment =
+                        await showPurchaseModelSelectionDialog(context);
+
                     if (isPrepayment != null && mounted) {
                       // Navigate to form with model selection
                       final created = await context.push<bool>(
@@ -183,12 +189,16 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       },
                       items: const [
                         DropdownMenuItem(value: 'all', child: Text('Todos')),
-                        DropdownMenuItem(value: 'draft', child: Text('Borrador')),
+                        DropdownMenuItem(
+                            value: 'draft', child: Text('Borrador')),
                         DropdownMenuItem(value: 'sent', child: Text('Enviada')),
-                        DropdownMenuItem(value: 'confirmed', child: Text('Confirmada')),
-                        DropdownMenuItem(value: 'received', child: Text('Recibida')),
+                        DropdownMenuItem(
+                            value: 'confirmed', child: Text('Confirmada')),
+                        DropdownMenuItem(
+                            value: 'received', child: Text('Recibida')),
                         DropdownMenuItem(value: 'paid', child: Text('Pagada')),
-                        DropdownMenuItem(value: 'cancelled', child: Text('Anulada')),
+                        DropdownMenuItem(
+                            value: 'cancelled', child: Text('Anulada')),
                       ],
                     ),
                     const Spacer(),
@@ -210,8 +220,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                     ? _EmptyState(
                         onCreate: () async {
                           // Show model selection dialog
-                          final isPrepayment = await showPurchaseModelSelectionDialog(context);
-                          
+                          final isPrepayment =
+                              await showPurchaseModelSelectionDialog(context);
+
                           if (isPrepayment != null && mounted) {
                             // Navigate to form with model selection
                             final created = await context.push<bool>(
@@ -239,10 +250,11 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         itemBuilder: (context, index) {
           final invoice = _filtered[index];
           final isDraft = invoice.status == PurchaseInvoiceStatus.draft;
-          
+
           return Dismissible(
             key: Key(invoice.id ?? invoice.invoiceNumber),
-            direction: isDraft ? DismissDirection.endToStart : DismissDirection.none,
+            direction:
+                isDraft ? DismissDirection.endToStart : DismissDirection.none,
             background: Container(
               alignment: Alignment.centerRight,
               padding: const EdgeInsets.only(right: 20),
@@ -251,7 +263,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             ),
             confirmDismiss: (direction) async {
               if (!isDraft) return false;
-              
+
               return await showDialog<bool>(
                 context: context,
                 builder: (context) => AlertDialog(
@@ -273,7 +285,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                     ),
                     ElevatedButton(
                       onPressed: () => Navigator.of(context).pop(true),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      style:
+                          ElevatedButton.styleFrom(backgroundColor: Colors.red),
                       child: const Text('Eliminar'),
                     ),
                   ],
@@ -316,15 +329,18 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (invoice.supplierName != null && invoice.supplierName!.isNotEmpty)
+                    if (invoice.supplierName != null &&
+                        invoice.supplierName!.isNotEmpty)
                       Text(invoice.supplierName!),
                     Text('Fecha: ${ChileanUtils.formatDate(invoice.date)}'),
-                    Text('Total: ${ChileanUtils.formatCurrency(invoice.total)}'),
+                    Text(
+                        'Total: ${ChileanUtils.formatCurrency(invoice.total)}'),
                     // Show model indicator
                     if (invoice.prepaymentModel)
                       Row(
                         children: [
-                          Icon(Icons.payment, size: 12, color: Colors.orange[700]),
+                          Icon(Icons.payment,
+                              size: 12, color: Colors.orange[700]),
                           const SizedBox(width: 4),
                           Text(
                             'Prepago',
@@ -341,11 +357,13 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                         padding: EdgeInsets.only(top: 4.0),
                         child: Row(
                           children: [
-                            Icon(Icons.swipe_left, size: 14, color: Colors.grey),
+                            Icon(Icons.swipe_left,
+                                size: 14, color: Colors.grey),
                             SizedBox(width: 4),
                             Text(
                               'Desliza para eliminar',
-                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                              style:
+                                  TextStyle(fontSize: 11, color: Colors.grey),
                             ),
                           ],
                         ),
@@ -356,7 +374,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: _statusColor(invoice.status).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(12),
@@ -375,7 +394,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   ],
                 ),
                 onTap: () async {
-                  final refreshed = await context.push<bool>('/purchases/${invoice.id}/detail');
+                  final refreshed = await context
+                      .push<bool>('/purchases/${invoice.id}/detail');
                   if (refreshed == true) {
                     _loadInvoices(refresh: true);
                   }

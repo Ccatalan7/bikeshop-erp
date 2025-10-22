@@ -69,12 +69,12 @@ class Customer {
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
-    
+
     // Only include id if it's not null (for updates)
     if (id != null) {
       json['id'] = id;
     }
-    
+
     return json;
   }
 

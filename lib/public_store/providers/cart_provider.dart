@@ -32,7 +32,8 @@ class CartProvider with ChangeNotifier {
 
   void addProduct(Product product, {int quantity = 1}) {
     // Check if product already in cart
-    final existingIndex = _items.indexWhere((item) => item.product.id == product.id);
+    final existingIndex =
+        _items.indexWhere((item) => item.product.id == product.id);
 
     if (existingIndex >= 0) {
       // Increase quantity

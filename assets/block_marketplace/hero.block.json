@@ -1,0 +1,98 @@
+{
+  "type": "hero",
+  "title": "Hero / Banner",
+  "description": "Encabezado destacado con imagen de fondo, título, subtítulo y botón.",
+  "usesCustomEditor": true,
+  "category": "Hero",
+  "tags": ["header", "banner", "hero"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "title": "Tu tienda de bicicletas favorita",
+    "subtitle": "Reparamos, equipamos y acompañamos tu próxima aventura",
+    "buttonText": "Ver Catálogo",
+    "ctaText": "Ver Catálogo",
+    "backgroundImage": null,
+    "overlayColor": "#000000",
+    "overlayOpacity": 0.35,
+    "showOverlay": true,
+    "alignment": "center"
+  },
+  "fields": [
+    {
+      "key": "title",
+      "label": "Título principal",
+      "type": "text",
+      "group": "content"
+    },
+    {
+      "key": "subtitle",
+      "label": "Subtítulo",
+      "type": "textarea",
+      "group": "content"
+    },
+    {
+      "key": "buttonText",
+      "label": "Texto del botón",
+      "type": "text",
+      "group": "content"
+    },
+    {
+      "key": "backgroundImage",
+      "label": "Imagen de fondo",
+      "type": "image",
+      "group": "media"
+    },
+    {
+      "key": "overlayColor",
+      "label": "Color de overlay",
+      "type": "color",
+      "group": "media"
+    },
+    {
+      "key": "overlayOpacity",
+      "label": "Opacidad de overlay",
+      "type": "number",
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "group": "media"
+    },
+    {
+      "key": "showOverlay",
+      "label": "Mostrar overlay",
+      "type": "toggle",
+      "defaultValue": true,
+      "group": "media"
+    },
+    {
+      "key": "alignment",
+      "label": "Alineación",
+      "type": "select",
+      "options": [
+        {"value": "left", "label": "Izquierda"},
+        {"value": "center", "label": "Centrada"},
+        {"value": "right", "label": "Derecha"}
+      ],
+      "defaultValue": "center",
+      "group": "layout"
+    }
+  ],
+  "controlSections": [
+    {
+      "id": "content",
+      "label": "Contenido",
+      "fields": ["title", "subtitle", "buttonText"]
+    },
+    {
+      "id": "media",
+      "label": "Medios",
+      "fields": ["backgroundImage", "overlayColor", "showOverlay", "overlayOpacity"]
+    },
+    {
+      "id": "layout",
+      "label": "Diseño",
+      "fields": ["alignment"]
+    }
+  ]
+}

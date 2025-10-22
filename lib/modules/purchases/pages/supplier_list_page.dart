@@ -71,8 +71,10 @@ class _SupplierListPageState extends State<SupplierListPage> {
       _filteredSuppliers = _suppliers.where((supplier) {
         final matchesSearch = query.isEmpty ||
             supplier.name.toLowerCase().contains(query.toLowerCase()) ||
-            (supplier.rut?.toLowerCase().contains(query.toLowerCase()) ?? false) ||
-            (supplier.email?.toLowerCase().contains(query.toLowerCase()) ?? false);
+            (supplier.rut?.toLowerCase().contains(query.toLowerCase()) ??
+                false) ||
+            (supplier.email?.toLowerCase().contains(query.toLowerCase()) ??
+                false);
 
         final matchesFilter = _selectedFilter == 'all' ||
             (_selectedFilter == 'active' && supplier.isActive) ||
@@ -112,14 +114,20 @@ class _SupplierListPageState extends State<SupplierListPage> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.view_list),
-                        onPressed: () => setState(() => _viewMode = SupplierViewMode.list),
-                        color: _viewMode == SupplierViewMode.list ? Colors.blue : Colors.grey,
+                        onPressed: () =>
+                            setState(() => _viewMode = SupplierViewMode.list),
+                        color: _viewMode == SupplierViewMode.list
+                            ? Colors.blue
+                            : Colors.grey,
                         tooltip: 'Vista de lista',
                       ),
                       IconButton(
                         icon: const Icon(Icons.grid_view),
-                        onPressed: () => setState(() => _viewMode = SupplierViewMode.cards),
-                        color: _viewMode == SupplierViewMode.cards ? Colors.blue : Colors.grey,
+                        onPressed: () =>
+                            setState(() => _viewMode = SupplierViewMode.cards),
+                        color: _viewMode == SupplierViewMode.cards
+                            ? Colors.blue
+                            : Colors.grey,
                         tooltip: 'Vista de tarjetas',
                       ),
                     ],
@@ -130,7 +138,8 @@ class _SupplierListPageState extends State<SupplierListPage> {
                   text: 'Nuevo Proveedor',
                   icon: Icons.add,
                   onPressed: () async {
-                    final created = await context.push<bool>('/purchases/suppliers/new');
+                    final created =
+                        await context.push<bool>('/purchases/suppliers/new');
                     if (created == true) {
                       _loadSuppliers();
                     }
@@ -162,8 +171,10 @@ class _SupplierListPageState extends State<SupplierListPage> {
                       },
                       items: const [
                         DropdownMenuItem(value: 'all', child: Text('Todos')),
-                        DropdownMenuItem(value: 'active', child: Text('Activos')),
-                        DropdownMenuItem(value: 'inactive', child: Text('Inactivos')),
+                        DropdownMenuItem(
+                            value: 'active', child: Text('Activos')),
+                        DropdownMenuItem(
+                            value: 'inactive', child: Text('Inactivos')),
                       ],
                     ),
                   ],
@@ -220,7 +231,8 @@ class _SupplierListPageState extends State<SupplierListPage> {
               text: 'Agregar Proveedor',
               icon: Icons.add,
               onPressed: () async {
-                final created = await context.push<bool>('/purchases/suppliers/new');
+                final created =
+                    await context.push<bool>('/purchases/suppliers/new');
                 if (created == true) {
                   _loadSuppliers();
                 }
@@ -344,7 +356,9 @@ class _SupplierListPageState extends State<SupplierListPage> {
             PopupMenuButton<String>(
               onSelected: (value) {
                 if (value == 'edit') {
-                  context.push('/purchases/suppliers/${supplier.id}/edit').then((updated) {
+                  context
+                      .push('/purchases/suppliers/${supplier.id}/edit')
+                      .then((updated) {
                     if (updated == true) {
                       _loadSuppliers();
                     }
@@ -385,7 +399,8 @@ class _SupplierListPageState extends State<SupplierListPage> {
               Row(
                 children: [
                   CircleAvatar(
-                    backgroundColor: supplier.isActive ? Colors.green : Colors.grey,
+                    backgroundColor:
+                        supplier.isActive ? Colors.green : Colors.grey,
                     child: Text(
                       supplier.name.substring(0, 1).toUpperCase(),
                       style: const TextStyle(
@@ -398,7 +413,9 @@ class _SupplierListPageState extends State<SupplierListPage> {
                   PopupMenuButton<String>(
                     onSelected: (value) {
                       if (value == 'edit') {
-                        context.push('/purchases/suppliers/${supplier.id}/edit').then((updated) {
+                        context
+                            .push('/purchases/suppliers/${supplier.id}/edit')
+                            .then((updated) {
                           if (updated == true) {
                             _loadSuppliers();
                           }
@@ -417,7 +434,8 @@ class _SupplierListPageState extends State<SupplierListPage> {
                         ),
                       ),
                     ],
-                    child: Icon(Icons.more_vert, size: 20, color: Colors.grey[600]),
+                    child: Icon(Icons.more_vert,
+                        size: 20, color: Colors.grey[600]),
                   ),
                 ],
               ),

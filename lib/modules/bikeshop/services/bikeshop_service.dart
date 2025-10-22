@@ -17,19 +17,21 @@ class BikeshopService extends ChangeNotifier {
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
         // Search by brand, model, serial number
-        final brandResults = await _db.searchRecords('bikes', 'brand', searchTerm);
-        final modelResults = await _db.searchRecords('bikes', 'model', searchTerm);
-        final serialResults = await _db.searchRecords('bikes', 'serial_number', searchTerm);
+        final brandResults =
+            await _db.searchRecords('bikes', 'brand', searchTerm);
+        final modelResults =
+            await _db.searchRecords('bikes', 'model', searchTerm);
+        final serialResults =
+            await _db.searchRecords('bikes', 'serial_number', searchTerm);
 
         // Combine and deduplicate results
         final Set<String> ids = {};
-        data = [...brandResults, ...modelResults, ...serialResults]
-            .where((item) {
-              final id = item['id']?.toString();
-              if (id == null) return true;
-              return ids.add(id);
-            })
-            .toList();
+        data =
+            [...brandResults, ...modelResults, ...serialResults].where((item) {
+          final id = item['id']?.toString();
+          if (id == null) return true;
+          return ids.add(id);
+        }).toList();
       } else if (customerId != null && customerId.isNotEmpty) {
         data = await _db.select('bikes', where: 'customer_id=$customerId');
       } else {
@@ -130,7 +132,8 @@ class BikeshopService extends ChangeNotifier {
         data = data.where((job) {
           final jobNumber = job['job_number']?.toString().toLowerCase() ?? '';
           final diagnosis = job['diagnosis']?.toString().toLowerCase() ?? '';
-          final clientRequest = job['client_request']?.toString().toLowerCase() ?? '';
+          final clientRequest =
+              job['client_request']?.toString().toLowerCase() ?? '';
           return jobNumber.contains(searchLower) ||
               diagnosis.contains(searchLower) ||
               clientRequest.contains(searchLower);
@@ -212,7 +215,8 @@ class BikeshopService extends ChangeNotifier {
 
   Future<List<MechanicJobItem>> getJobItems(String jobId) async {
     try {
-      final data = await _db.select('mechanic_job_items', where: 'job_id=$jobId');
+      final data =
+          await _db.select('mechanic_job_items', where: 'job_id=$jobId');
       return data.map((json) => MechanicJobItem.fromJson(json)).toList();
     } catch (e) {
       if (kDebugMode) print('Error fetching job items: $e');
@@ -236,7 +240,8 @@ class BikeshopService extends ChangeNotifier {
       if (item.id == null || item.id!.isEmpty) {
         throw Exception('ID de ítem inválido');
       }
-      final data = await _db.update('mechanic_job_items', item.id!, item.toJson());
+      final data =
+          await _db.update('mechanic_job_items', item.id!, item.toJson());
       notifyListeners();
       return MechanicJobItem.fromJson(data);
     } catch (e) {
@@ -262,7 +267,8 @@ class BikeshopService extends ChangeNotifier {
 
   Future<List<MechanicJobLabor>> getJobLabor(String jobId) async {
     try {
-      final data = await _db.select('mechanic_job_labor', where: 'job_id=$jobId');
+      final data =
+          await _db.select('mechanic_job_labor', where: 'job_id=$jobId');
       return data.map((json) => MechanicJobLabor.fromJson(json)).toList();
     } catch (e) {
       if (kDebugMode) print('Error fetching job labor: $e');
@@ -286,7 +292,8 @@ class BikeshopService extends ChangeNotifier {
       if (labor.id == null || labor.id!.isEmpty) {
         throw Exception('ID de mano de obra inválido');
       }
-      final data = await _db.update('mechanic_job_labor', labor.id!, labor.toJson());
+      final data =
+          await _db.update('mechanic_job_labor', labor.id!, labor.toJson());
       notifyListeners();
       return MechanicJobLabor.fromJson(data);
     } catch (e) {
@@ -327,7 +334,8 @@ class BikeshopService extends ChangeNotifier {
 
   // Timeline events are created automatically by database triggers,
   // but we can also create manual events if needed
-  Future<MechanicJobTimeline> createTimelineEvent(MechanicJobTimeline event) async {
+  Future<MechanicJobTimeline> createTimelineEvent(
+      MechanicJobTimeline event) async {
     try {
       final data = await _db.insert('mechanic_job_timeline', event.toJson());
       notifyListeners();
@@ -387,7 +395,8 @@ class BikeshopService extends ChangeNotifier {
       if (package.id == null || package.id!.isEmpty) {
         throw Exception('ID de paquete de servicio inválido');
       }
-      final data = await _db.update('service_packages', package.id!, package.toJson());
+      final data =
+          await _db.update('service_packages', package.id!, package.toJson());
       notifyListeners();
       return ServicePackage.fromJson(data);
     } catch (e) {
@@ -434,7 +443,8 @@ class BikeshopService extends ChangeNotifier {
   }
 
   /// Get all bikes and jobs for a customer (for logbook view)
-  Future<Map<String, dynamic>> getCustomerBikeshopData(String customerId) async {
+  Future<Map<String, dynamic>> getCustomerBikeshopData(
+      String customerId) async {
     try {
       final bikes = await getBikes(customerId: customerId);
       final jobs = await getJobs(customerId: customerId);
@@ -468,13 +478,15 @@ class BikeshopService extends ChangeNotifier {
       // Create items from package
       for (final item in package.items) {
         final productId = item['product_id']?.toString();
-        final quantity = double.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
-        
+        final quantity =
+            double.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
+
         if (productId != null) {
           // Fetch product details
           final productData = await _db.selectById('products', productId);
           if (productData != null) {
-            final unitPrice = double.tryParse(productData['price']?.toString() ?? '0') ?? 0;
+            final unitPrice =
+                double.tryParse(productData['price']?.toString() ?? '0') ?? 0;
             final jobItem = MechanicJobItem(
               jobId: jobId,
               productId: productId,
@@ -513,14 +525,19 @@ class BikeshopService extends ChangeNotifier {
   Future<Map<String, int>> getDashboardStats() async {
     try {
       final allJobs = await getJobs(includeCompleted: true);
-      
+
       return {
         'total': allJobs.length,
-        'pendiente': allJobs.where((j) => j.status == JobStatus.pendiente).length,
+        'pendiente':
+            allJobs.where((j) => j.status == JobStatus.pendiente).length,
         'en_curso': allJobs.where((j) => j.status == JobStatus.enCurso).length,
-        'esperando_repuestos': allJobs.where((j) => j.status == JobStatus.esperandoRepuestos).length,
-        'finalizado': allJobs.where((j) => j.status == JobStatus.finalizado).length,
-        'entregado': allJobs.where((j) => j.status == JobStatus.entregado).length,
+        'esperando_repuestos': allJobs
+            .where((j) => j.status == JobStatus.esperandoRepuestos)
+            .length,
+        'finalizado':
+            allJobs.where((j) => j.status == JobStatus.finalizado).length,
+        'entregado':
+            allJobs.where((j) => j.status == JobStatus.entregado).length,
         'overdue': allJobs.where((j) => j.isOverdue && j.isActive).length,
       };
     } catch (e) {
@@ -534,21 +551,22 @@ class BikeshopService extends ChangeNotifier {
   Future<String?> createInvoiceFromJob(String jobId) async {
     try {
       if (jobId.isEmpty) return null;
-      
+
       // Call the database function to create invoice
       // This will include all job items, labor costs, and calculate IVA
       final result = await _db.rpc(
         'create_invoice_from_mechanic_job',
         params: {'p_job_id': jobId},
       );
-      
+
       if (result != null) {
         notifyListeners();
         if (kDebugMode) print('✅ Invoice created from job: $result');
         return result.toString();
       }
-      
-      if (kDebugMode) print('⚠️ Invoice creation returned null for job: $jobId');
+
+      if (kDebugMode)
+        print('⚠️ Invoice creation returned null for job: $jobId');
       return null;
     } catch (e) {
       if (kDebugMode) print('❌ Error creating invoice from job: $e');
@@ -562,13 +580,13 @@ class BikeshopService extends ChangeNotifier {
   Future<void> syncJobToInvoice(String jobId) async {
     try {
       if (jobId.isEmpty) return;
-      
+
       // Call the database function to sync job to invoice
       await _db.rpc(
         'sync_job_to_invoice',
         params: {'p_job_id': jobId},
       );
-      
+
       notifyListeners();
       if (kDebugMode) print('✅ Job synced to invoice: $jobId');
     } catch (e) {

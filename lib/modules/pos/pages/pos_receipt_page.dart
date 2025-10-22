@@ -6,7 +6,7 @@ import '../widgets/receipt_preview.dart';
 
 class POSReceiptPage extends StatefulWidget {
   final POSTransaction transaction;
-  
+
   const POSReceiptPage({
     super.key,
     required this.transaction,
@@ -34,7 +34,7 @@ class _POSReceiptPageState extends State<POSReceiptPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Column(
       children: [
         // Header with title and actions
@@ -61,7 +61,7 @@ class _POSReceiptPageState extends State<POSReceiptPage> {
             ],
           ),
         ),
-        
+
         // Content area
         Expanded(
           child: SingleChildScrollView(
@@ -101,15 +101,15 @@ class _POSReceiptPageState extends State<POSReceiptPage> {
                     ],
                   ),
                 ),
-                
+
                 // Receipt preview
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16),
                   child: ReceiptPreview(transaction: widget.transaction),
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Action buttons
                 Padding(
                   padding: const EdgeInsets.all(16),
@@ -127,9 +127,9 @@ class _POSReceiptPageState extends State<POSReceiptPage> {
                           ),
                         ),
                       ),
-                      
+
                       const SizedBox(height: 12),
-                      
+
                       // New sale button
                       SizedBox(
                         width: double.infinity,

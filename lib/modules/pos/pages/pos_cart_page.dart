@@ -15,7 +15,7 @@ class POSCartPage extends StatefulWidget {
 class _POSCartPageState extends State<POSCartPage> {
   void _proceedToPayment() {
     final posService = Provider.of<POSService>(context, listen: false);
-    
+
     if (posService.hasItemsInCart) {
       context.push('/pos/payment');
     }
@@ -24,7 +24,7 @@ class _POSCartPageState extends State<POSCartPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Column(
       children: [
         // Header with title and actions
@@ -53,10 +53,12 @@ class _POSCartPageState extends State<POSCartPage> {
                               context: context,
                               builder: (context) => AlertDialog(
                                 title: const Text('Limpiar Carrito'),
-                                content: const Text('¿Está seguro que desea limpiar el carrito?'),
+                                content: const Text(
+                                    '¿Está seguro que desea limpiar el carrito?'),
                                 actions: [
                                   TextButton(
-                                    onPressed: () => Navigator.of(context).pop(),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
                                     child: const Text('Cancelar'),
                                   ),
                                   FilledButton(
@@ -79,7 +81,7 @@ class _POSCartPageState extends State<POSCartPage> {
             ],
           ),
         ),
-        
+
         // Content area
         Expanded(
           child: Consumer<POSService>(
@@ -131,16 +133,16 @@ class _POSCartPageState extends State<POSCartPage> {
                         return CartItemCard(
                           item: item,
                           onRemove: () => posService.removeFromCart(item.id),
-                          onQuantityChanged: (newQuantity) =>
-                              posService.updateCartItemQuantity(item.id, newQuantity),
-                          onDiscountChanged: (discount) =>
-                              posService.updateCartItemDiscount(item.id, discount),
+                          onQuantityChanged: (newQuantity) => posService
+                              .updateCartItemQuantity(item.id, newQuantity),
+                          onDiscountChanged: (discount) => posService
+                              .updateCartItemDiscount(item.id, discount),
                           showControls: true,
                         );
                       },
                     ),
                   ),
-                  
+
                   // Cart summary
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -169,7 +171,7 @@ class _POSCartPageState extends State<POSCartPage> {
                             ),
                           ],
                         ),
-                        
+
                         // Discount
                         if (posService.cartDiscountAmount > 0)
                           Row(
@@ -187,7 +189,7 @@ class _POSCartPageState extends State<POSCartPage> {
                               ),
                             ],
                           ),
-                        
+
                         // Tax
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -202,9 +204,9 @@ class _POSCartPageState extends State<POSCartPage> {
                             ),
                           ],
                         ),
-                        
+
                         const Divider(),
-                        
+
                         // Total
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -224,9 +226,9 @@ class _POSCartPageState extends State<POSCartPage> {
                             ),
                           ],
                         ),
-                        
+
                         const SizedBox(height: 16),
-                        
+
                         // Checkout button
                         SizedBox(
                           width: double.infinity,

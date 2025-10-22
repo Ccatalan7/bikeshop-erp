@@ -23,7 +23,7 @@ enum ProductViewMode { table, cards }
 class ProductListPage extends StatefulWidget {
   final String? initialCategoryId;
   final String? initialSupplierId;
-  
+
   const ProductListPage({
     super.key,
     this.initialCategoryId,
@@ -62,12 +62,13 @@ class _ProductListPageState extends State<ProductListPage> {
     _inventoryService = inventory_services.InventoryService(database);
     _categoryService = CategoryService(database);
     _purchaseService = PurchaseService(database);
-    
+
     // Don't set initial category/supplier until categories are loaded
     _loadCategories().then((_) {
       // After categories load, validate and set the initial category filter
       if (widget.initialCategoryId != null && mounted) {
-        final categoryExists = _categories.any((c) => c.id == widget.initialCategoryId);
+        final categoryExists =
+            _categories.any((c) => c.id == widget.initialCategoryId);
         if (categoryExists) {
           setState(() {
             _selectedCategoryId = widget.initialCategoryId;
@@ -75,7 +76,7 @@ class _ProductListPageState extends State<ProductListPage> {
           _applyFilters();
         }
       }
-      
+
       // Set initial supplier filter if provided
       if (widget.initialSupplierId != null && mounted) {
         setState(() {
@@ -84,7 +85,7 @@ class _ProductListPageState extends State<ProductListPage> {
         _applyFilters();
       }
     });
-    
+
     _loadSuppliers();
     _loadProducts();
   }
@@ -635,7 +636,8 @@ class _ProductListPageState extends State<ProductListPage> {
                           icon: Icons.category_outlined,
                           label: categoryName,
                         ),
-                      if (product.supplierName != null && product.supplierName!.isNotEmpty)
+                      if (product.supplierName != null &&
+                          product.supplierName!.isNotEmpty)
                         _buildInfoPill(
                           theme,
                           icon: Icons.business_outlined,
@@ -791,7 +793,8 @@ class _ProductListPageState extends State<ProductListPage> {
                       ),
                     ),
                   ],
-                  if (product.supplierName != null && product.supplierName!.isNotEmpty) ...[
+                  if (product.supplierName != null &&
+                      product.supplierName!.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -876,8 +879,9 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildEmptyState(ThemeData theme) {
-    final hasFilters =
-        _searchTerm.isNotEmpty || _showLowStockOnly || _selectedCategoryId != null;
+    final hasFilters = _searchTerm.isNotEmpty ||
+        _showLowStockOnly ||
+        _selectedCategoryId != null;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -1004,8 +1008,7 @@ class _ProductListPageState extends State<ProductListPage> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon,
-              size: 14, color: theme.colorScheme.onSurfaceVariant),
+          Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(width: 6),
           Text(
             label,
@@ -1033,7 +1036,8 @@ class _ProductListPageState extends State<ProductListPage> {
     if (product.categoryId == null) return null;
     final category = _categories.firstWhere(
       (c) => c.id == product.categoryId,
-      orElse: () => Category(id: product.categoryId!, name: 'Categoría sin nombre'),
+      orElse: () =>
+          Category(id: product.categoryId!, name: 'Categoría sin nombre'),
     );
     return category.name;
   }

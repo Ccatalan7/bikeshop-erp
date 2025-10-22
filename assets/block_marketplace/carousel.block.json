@@ -1,0 +1,26 @@
+{
+  "type": "carousel",
+  "title": "Carrusel Hero",
+  "description": "Presenta varias diapositivas con título, subtítulo y botón.",
+  "usesCustomEditor": true,
+  "category": "Hero",
+  "tags": ["carrusel", "hero", "destacado"],
+  "version": 1,
+  "supportsResponsive": true,
+  "defaultData": {
+    "slides": [
+      {
+        "title": "Servicio técnico certificado",
+        "subtitle": "Agendamos y ejecutamos mantenciones completas",
+        "buttonText": "Agendar ahora",
+        "imageUrl": null
+      },
+      {
+        "title": "Bicicletas urbanas",
+        "subtitle": "Modelos livianos para moverte por la ciudad",
+        "buttonText": "Ver bicicletas",
+        "imageUrl": null
+      }
+    ]
+  }
+}

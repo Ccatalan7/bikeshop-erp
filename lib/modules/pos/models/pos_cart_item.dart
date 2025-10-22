@@ -67,12 +67,15 @@ class POSCartItem {
   double get totalMargin => total - totalCost;
 
   @override
-  String toString() => 'POSCartItem(product: ${product.name}, qty: $quantity, total: \$${total.toStringAsFixed(0)})';
+  String toString() =>
+      'POSCartItem(product: ${product.name}, qty: $quantity, total: \$${total.toStringAsFixed(0)})';
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is POSCartItem && runtimeType == other.runtimeType && id == other.id;
+      other is POSCartItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
 
   @override
   int get hashCode => id.hashCode;

@@ -23,7 +23,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
   IncomeStatement? _statement;
   bool _isLoading = false;
   String? _errorMessage;
-  
+
   late DateRange _dateRange;
   late ReportPeriod _selectedPeriod;
   final NumberFormat _currencyFormat = NumberFormat.currency(
@@ -60,16 +60,17 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
       });
     } catch (e) {
       String errorMsg = 'Error al generar el reporte: $e';
-      
+
       // Check if it's a function not found error
-      if (e.toString().contains('function') && 
-          (e.toString().contains('does not exist') || e.toString().contains('not found'))) {
+      if (e.toString().contains('function') &&
+          (e.toString().contains('does not exist') ||
+              e.toString().contains('not found'))) {
         errorMsg = 'La función de base de datos no existe.\n\n'
-                  'Por favor, ejecuta el archivo:\n'
-                  'supabase/sql/core_schema.sql\n\n'
-                  'en tu base de datos Supabase para crear las funciones necesarias.';
+            'Por favor, ejecuta el archivo:\n'
+            'supabase/sql/core_schema.sql\n\n'
+            'en tu base de datos Supabase para crear las funciones necesarias.';
       }
-      
+
       setState(() {
         _errorMessage = errorMsg;
         _isLoading = false;
@@ -98,14 +99,14 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
               icon: const Icon(Icons.refresh),
               tooltip: 'Actualizar',
             ),
-            
+
             // Export button (future feature)
             IconButton(
               onPressed: _statement != null ? _showExportMenu : null,
               icon: const Icon(Icons.download),
               tooltip: 'Exportar',
             ),
-            
+
             const SizedBox(width: 8),
           ],
         ),
@@ -121,7 +122,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
                 showEndDate: true,
               ),
             ),
-            
+
             // Report content
             Expanded(
               child: _buildContent(),
@@ -191,18 +192,19 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
             subtitle: _statement!.subtitle,
             generatedAt: _statement!.generatedAt,
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Key metrics cards
           _buildMetricsCards(),
-          
+
           const SizedBox(height: 24),
-          
+
           // Report lines with horizontal scroll if needed
           LayoutBuilder(
             builder: (context, constraints) {
-              final contentWidth = constraints.maxWidth > 1200 ? 1200.0 : constraints.maxWidth;
+              final contentWidth =
+                  constraints.maxWidth > 1200 ? 1200.0 : constraints.maxWidth;
               return SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Container(
@@ -225,7 +227,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
               );
             },
           ),
-          
+
           const SizedBox(height: 32),
         ],
       ),
@@ -296,8 +298,8 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
                   child: Text(
                     title,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.secondary,
-                    ),
+                          color: Theme.of(context).colorScheme.secondary,
+                        ),
                   ),
                 ),
               ],
@@ -306,9 +308,9 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
             Text(
               amount,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -337,7 +339,9 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
                   Navigator.pop(context);
                   // TODO: Implement PDF export
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Exportación PDF disponible próximamente')),
+                    const SnackBar(
+                        content:
+                            Text('Exportación PDF disponible próximamente')),
                   );
                 },
               ),
@@ -349,7 +353,9 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
                   Navigator.pop(context);
                   // TODO: Implement Excel export
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Exportación Excel disponible próximamente')),
+                    const SnackBar(
+                        content:
+                            Text('Exportación Excel disponible próximamente')),
                   );
                 },
               ),

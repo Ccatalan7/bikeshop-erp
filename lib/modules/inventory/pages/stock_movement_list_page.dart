@@ -18,7 +18,7 @@ class StockMovementListPage extends StatefulWidget {
 class _StockMovementListPageState extends State<StockMovementListPage> {
   final TextEditingController _searchController = TextEditingController();
   late StockMovementService _service;
-  
+
   String? _selectedType;
   DateTime? _startDate;
   DateTime? _endDate;
@@ -194,7 +194,8 @@ class _StockMovementListPageState extends State<StockMovementListPage> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+      String label, String value, IconData icon, Color color) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -250,14 +251,19 @@ class _StockMovementListPageState extends State<StockMovementListPage> {
           // Movement type filter
           DropdownButton<String>(
             value: _selectedType,
-            hint: const Text('Tipo de movimiento', style: TextStyle(fontSize: 13)),
+            hint: const Text('Tipo de movimiento',
+                style: TextStyle(fontSize: 13)),
             underline: const SizedBox(),
             items: [
               const DropdownMenuItem(value: null, child: Text('Todos')),
-              const DropdownMenuItem(value: 'sales_invoice', child: Text('Venta')),
-              const DropdownMenuItem(value: 'purchase_invoice', child: Text('Compra')),
-              const DropdownMenuItem(value: 'adjustment', child: Text('Ajuste')),
-              const DropdownMenuItem(value: 'transfer', child: Text('Transferencia')),
+              const DropdownMenuItem(
+                  value: 'sales_invoice', child: Text('Venta')),
+              const DropdownMenuItem(
+                  value: 'purchase_invoice', child: Text('Compra')),
+              const DropdownMenuItem(
+                  value: 'adjustment', child: Text('Ajuste')),
+              const DropdownMenuItem(
+                  value: 'transfer', child: Text('Transferencia')),
             ],
             onChanged: (value) {
               setState(() => _selectedType = value);
@@ -426,7 +432,7 @@ class _StockMovementListPageState extends State<StockMovementListPage> {
 
   void _showMovementDetails(StockMovement movement) {
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

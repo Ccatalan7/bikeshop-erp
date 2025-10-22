@@ -29,7 +29,7 @@ class ErrorReportingService {
     if (stackTrace != null) {
       print('🔴 [STACK TRACE] $stackTrace');
     }
-    
+
     if (kDebugMode) {
       debugPrint('[GlobalError] $message');
       if (stackTrace != null) {
