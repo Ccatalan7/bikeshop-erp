@@ -45,6 +45,7 @@ class Product {
   final double weight; // in kg
   final bool trackStock;
   final bool isActive;
+  final bool isPublished;
   final ProductType productType; // Product or Service
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -96,6 +97,7 @@ class Product {
     this.weight = 0.0,
     this.trackStock = true,
     this.isActive = true,
+    this.isPublished = true,
     this.productType = ProductType.product,
     required this.createdAt,
     required this.updatedAt,
@@ -160,6 +162,9 @@ class Product {
       weight: (json['weight'] as num?)?.toDouble() ?? 0.0,
       trackStock: json['track_stock'] as bool? ?? true,
       isActive: json['is_active'] as bool? ?? true,
+      isPublished: json['is_published'] as bool? ??
+          json['show_on_website'] as bool? ??
+          (json['published'] as bool? ?? true),
       productType: ProductType.values.firstWhere(
         (t) => t.name == json['product_type'],
         orElse: () => ProductType.product,
@@ -170,7 +175,7 @@ class Product {
   }
 
   Map<String, dynamic> toJson() {
-    return {
+    final json = <String, dynamic>{
       'id': id,
       'name': name,
       'sku': sku,
@@ -217,10 +222,16 @@ class Product {
       'weight': weight,
       'track_stock': trackStock,
       'is_active': isActive,
+      'is_published': isPublished,
+      'show_on_website': isPublished,
       'product_type': productType.name,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
+
+    json.removeWhere((_, value) => value == null);
+
+    return json;
   }
 
   Product copyWith({
@@ -270,6 +281,7 @@ class Product {
     double? weight,
     bool? trackStock,
     bool? isActive,
+    bool? isPublished,
     ProductType? productType,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -321,6 +333,7 @@ class Product {
       weight: weight ?? this.weight,
       trackStock: trackStock ?? this.trackStock,
       isActive: isActive ?? this.isActive,
+      isPublished: isPublished ?? this.isPublished,
       productType: productType ?? this.productType,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

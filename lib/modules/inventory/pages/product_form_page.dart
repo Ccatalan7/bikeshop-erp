@@ -52,6 +52,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   List<category_models.Category> _categories = [];
   List<Supplier> _suppliers = [];
   bool _isActive = true;
+  bool _isPublished = true;
   ProductType _selectedProductType = ProductType.product;
 
   String? _imageUrl;
@@ -162,6 +163,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         _selectedSupplierId = product.supplierId;
         _selectedProductType = product.productType;
         _isActive = product.isActive;
+        _isPublished = product.isPublished;
         _imageUrl = product.imageUrl;
         _additionalImages
           ..clear()
@@ -340,31 +342,83 @@ class _ProductFormPageState extends State<ProductFormPage> {
       // --- SAFEGUARD ---
       // Ensure only valid strings are passed to the model.
       final safeAdditionalImages =
-          _additionalImages.whereType<String>().toList();
+          _additionalImages.whereType<String>().toList(growable: false);
 
-      final product = Product(
-        id: _existingProduct?.id,
-        name: _nameController.text.trim(),
-        sku: _skuController.text.trim(),
-        description: _descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim(),
+      final name = _nameController.text.trim();
+      final sku = _skuController.text.trim();
+      final rawDescription = _descriptionController.text.trim();
+      final rawBrand = _brandController.text.trim();
+      final rawModel = _modelController.text.trim();
+      final price =
+          double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0;
+      final cost =
+          double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0;
+      final inventoryQty =
+          int.tryParse(_inventoryQtyController.text.trim()) ?? 0;
+      final minStockLevel = int.tryParse(_minStockController.text.trim()) ?? 1;
+      final maxStockLevel = _existingProduct?.maxStockLevel ?? 100;
+
+      String? selectedCategoryName;
+      for (final category in _categories) {
+        if (category.id == _selectedCategoryId) {
+          selectedCategoryName = category.name;
+          break;
+        }
+      }
+
+      String? selectedSupplierName;
+      for (final supplier in _suppliers) {
+        if (supplier.id == _selectedSupplierId) {
+          selectedSupplierName = supplier.name;
+          break;
+        }
+      }
+
+      final baseProduct = _existingProduct ??
+          Product(
+            id: null,
+            name: name,
+            sku: sku,
+            description: rawDescription.isEmpty ? null : rawDescription,
+            categoryId: _selectedCategoryId,
+            categoryName: selectedCategoryName,
+            supplierId: _selectedSupplierId,
+            supplierName: selectedSupplierName,
+            brand: rawBrand.isEmpty ? null : rawBrand,
+            model: rawModel.isEmpty ? null : rawModel,
+            price: price,
+            cost: cost,
+            inventoryQty: inventoryQty,
+            minStockLevel: minStockLevel,
+            maxStockLevel: maxStockLevel,
+            imageUrl: finalImageUrl,
+            additionalImages: safeAdditionalImages,
+            isActive: _isActive,
+            isPublished: _isPublished,
+            productType: _selectedProductType,
+          );
+
+      final product = baseProduct.copyWith(
+        name: name,
+        sku: sku,
+        description: rawDescription.isEmpty ? null : rawDescription,
         categoryId: _selectedCategoryId,
+        categoryName: selectedCategoryName ?? baseProduct.categoryName,
         supplierId: _selectedSupplierId,
-        brand: _brandController.text.trim().isEmpty
-            ? null
-            : _brandController.text.trim(),
-        model: _modelController.text.trim().isEmpty
-            ? null
-            : _modelController.text.trim(),
-        price: double.parse(_priceController.text.replaceAll(',', '.')),
-        cost: double.parse(_costController.text.replaceAll(',', '.')),
-        inventoryQty: int.tryParse(_inventoryQtyController.text) ?? 0,
-        minStockLevel: int.tryParse(_minStockController.text) ?? 1,
+        supplierName: selectedSupplierName ?? baseProduct.supplierName,
+        brand: rawBrand.isEmpty ? null : rawBrand,
+        model: rawModel.isEmpty ? null : rawModel,
+        price: price,
+        cost: cost,
+        inventoryQty: inventoryQty,
+        minStockLevel: minStockLevel,
+        maxStockLevel: maxStockLevel,
         imageUrl: finalImageUrl,
         additionalImages: safeAdditionalImages,
         isActive: _isActive,
+        isPublished: _isPublished,
         productType: _selectedProductType,
+        updatedAt: DateTime.now(),
       );
 
       if (_existingProduct != null) {
@@ -975,7 +1029,26 @@ class _ProductFormPageState extends State<ProductFormPage> {
           'Los productos inactivos no aparecen en el POS ni en catálogos públicos.',
         ),
         value: _isActive,
-        onChanged: (value) => setState(() => _isActive = value),
+        onChanged: (value) {
+          setState(() {
+            _isActive = value;
+            if (!_isActive) {
+              _isPublished = false;
+            }
+          });
+        },
+      ),
+      const SizedBox(height: 8),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Publicado en la tienda online'),
+        subtitle: const Text(
+          'Controla si este producto se muestra en la web y en el catálogo público.',
+        ),
+        value: _isActive ? _isPublished : false,
+        onChanged: _isActive
+            ? (value) => setState(() => _isPublished = value)
+            : null,
       ),
     ];
   }

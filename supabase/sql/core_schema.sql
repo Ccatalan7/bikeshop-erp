@@ -320,6 +320,10 @@ begin
     alter table products add column tax_rate numeric(5,2);
   end if;
 
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'is_published') then
+    alter table products add column is_published boolean not null default true;
+  end if;
+
   -- Add tags array
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'tags') then
     alter table products add column tags text[] not null default array[]::text[];

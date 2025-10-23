@@ -30,6 +30,8 @@ class _ProductImportPageState extends State<ProductImportPage> {
   bool _isImporting = false;
   bool _isDownloadingCsvTemplate = false;
   bool _isDownloadingExcelTemplate = false;
+  bool _isExportingCsv = false;
+  bool _isExportingExcel = false;
   bool _allowUpdates = true;
   bool _createMissingSuppliers = true;
   ProductImportSummary? _summary;
@@ -171,6 +173,22 @@ class _ProductImportPageState extends State<ProductImportPage> {
                   onPressed: _isDownloadingExcelTemplate
                       ? null
                       : _downloadTemplateExcel,
+                ),
+                AppButton(
+                  text: 'Exportar catálogo CSV',
+                  icon: Icons.table_view_outlined,
+                  type: ButtonType.outline,
+                  isLoading: _isExportingCsv,
+                  onPressed:
+                      _isExportingCsv ? null : () => _exportProductsCsv(),
+                ),
+                AppButton(
+                  text: 'Exportar catálogo Excel',
+                  icon: Icons.system_update_alt_outlined,
+                  type: ButtonType.outline,
+                  isLoading: _isExportingExcel,
+                  onPressed:
+                      _isExportingExcel ? null : () => _exportProductsExcel(),
                 ),
               ],
             ),
@@ -773,6 +791,48 @@ class _ProductImportPageState extends State<ProductImportPage> {
     }
   }
 
+  Future<void> _exportProductsCsv() async {
+    setState(() => _isExportingCsv = true);
+    try {
+      final bytes = await _importService.exportProductsCsv();
+      await FileSaver.instance.saveFile(
+        name: 'productos_${_timestampString()}',
+        bytes: bytes,
+        ext: 'csv',
+        mimeType: MimeType.text,
+      );
+      _showSnack(message: 'Catálogo exportado en CSV.');
+    } catch (error) {
+      _showSnack(message: 'No se pudo exportar el catálogo en CSV: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isExportingCsv = false);
+      }
+    }
+  }
+
+  Future<void> _exportProductsExcel() async {
+    setState(() => _isExportingExcel = true);
+    try {
+      final bytes = await _importService.exportProductsExcel();
+      await FileSaver.instance.saveFile(
+        name: 'productos_${_timestampString()}',
+        bytes: bytes,
+        ext: 'xlsx',
+        mimeType: MimeType.other,
+        customMimeType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      _showSnack(message: 'Catálogo exportado en Excel.');
+    } catch (error) {
+      _showSnack(message: 'No se pudo exportar el catálogo en Excel: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isExportingExcel = false);
+      }
+    }
+  }
+
   void _refreshInventoryCaches() {
     try {
       final inventory = context.read<shared_inventory.InventoryService>();
@@ -787,6 +847,13 @@ class _ProductImportPageState extends State<ProductImportPage> {
       SnackBar(content: Text(message)),
     );
   }
+
+  String _timestampString() {
+    final now = DateTime.now();
+    return '${now.year}${_twoDigits(now.month)}${_twoDigits(now.day)}_${_twoDigits(now.hour)}${_twoDigits(now.minute)}';
+  }
+
+  String _twoDigits(int value) => value.toString().padLeft(2, '0');
 
   void _updateMapping(String header, String? newValue) {
     setState(() {

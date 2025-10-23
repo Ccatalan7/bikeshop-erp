@@ -43,6 +43,7 @@ class Product {
   final String costCurrency;
   final double? taxRate;
   final bool isActive;
+  final bool isPublished;
   final ProductType productType;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -90,6 +91,7 @@ class Product {
     this.costCurrency = 'CLP',
     this.taxRate,
     this.isActive = true,
+    this.isPublished = true,
     this.productType = ProductType.product,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -148,6 +150,10 @@ class Product {
       taxRate:
           json['tax_rate'] is num ? (json['tax_rate'] as num).toDouble() : null,
       isActive: json['is_active'] ?? true,
+      isPublished: json['is_published'] ??
+          json['show_on_website'] ??
+          json['published'] ??
+          true,
       productType: _parseProductType(json['product_type']),
       createdAt: json['created_at'] is String
           ? DateTime.parse(json['created_at'])
@@ -191,6 +197,7 @@ class Product {
       'price': price,
       'cost': cost,
       'inventory_qty': inventoryQty,
+      'stock_quantity': inventoryQty,
       'min_stock_level': minStockLevel,
       'max_stock_level': maxStockLevel,
       'image_url': imageUrl,
@@ -211,10 +218,14 @@ class Product {
       'cost_currency': costCurrency,
       'tax_rate': taxRate,
       'is_active': isActive,
+      'is_published': isPublished,
+      'show_on_website': isPublished,
       'product_type': productType.name,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
+
+    json.removeWhere((_, value) => value == null);
 
     // Only include id if it's not null (for updates)
     if (id != null) {
@@ -267,6 +278,7 @@ class Product {
     String? costCurrency,
     double? taxRate,
     bool? isActive,
+    bool? isPublished,
     ProductType? productType,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -314,6 +326,7 @@ class Product {
       costCurrency: costCurrency ?? this.costCurrency,
       taxRate: taxRate ?? this.taxRate,
       isActive: isActive ?? this.isActive,
+      isPublished: isPublished ?? this.isPublished,
       productType: productType ?? this.productType,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

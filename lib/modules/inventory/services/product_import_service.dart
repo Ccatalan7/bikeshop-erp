@@ -4,8 +4,11 @@ import 'dart:typed_data';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:flutter/foundation.dart';
+import 'package:mime/mime.dart';
 
+import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/image_service.dart';
 
 class ProductImportService {
   ProductImportService(this._db);
@@ -70,6 +73,41 @@ class ProductImportService {
       aliases: ['brand', 'marca'],
     ),
     const ProductImportFieldDefinition(
+      key: 'image_url',
+      label: 'Imagen principal (URL)',
+      isRecommended: true,
+      sampleValue: 'https://example.com/imagenes/mtb.jpg',
+      aliases: ['image', 'image url', 'imagen'],
+    ),
+    const ProductImportFieldDefinition(
+      key: 'image_urls',
+      label: 'Galería de imágenes (URLs separadas por coma)',
+      isRecommended: true,
+      sampleValue:
+          'https://example.com/imagenes/mtb-1.jpg, https://example.com/imagenes/mtb-2.jpg',
+      aliases: ['imagenes', 'images', 'gallery', 'image gallery'],
+    ),
+    const ProductImportFieldDefinition(
+      key: 'image_base64',
+      label: 'Imagen principal (Base64)',
+      isRecommended: true,
+      sampleValue: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA',
+      aliases: ['image base64', 'imagen base64', 'imagen64'],
+    ),
+    const ProductImportFieldDefinition(
+      key: 'image_gallery_base64',
+      label: 'Galería de imágenes (Base64 separadas por coma)',
+      isRecommended: true,
+      sampleValue:
+          'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ, data:image/png;base64,iVBORw0KGgoAAAANSUhEUg',
+      aliases: [
+        'imagenes base64',
+        'images base64',
+        'gallery base64',
+        'imagen galeria base64',
+      ],
+    ),
+    const ProductImportFieldDefinition(
       key: 'inventory_qty',
       label: 'Stock disponible',
       type: ProductImportFieldType.integer,
@@ -101,6 +139,21 @@ class ProductImportService {
       sampleValue: '19',
       aliases: ['iva', 'tax', 'tax rate', 'impuesto'],
     ),
+    const ProductImportFieldDefinition(
+      key: 'is_published',
+      label: 'Publicado en tienda',
+      type: ProductImportFieldType.boolean,
+      isRecommended: true,
+      sampleValue: 'TRUE',
+      aliases: [
+        'is_published',
+        'published',
+        'publicado',
+        'publicado_en_tienda',
+        'show_on_website',
+        'mostrar_en_web',
+      ],
+    ),
   ];
 
   static const Map<String, String> _accentMap = {
@@ -126,8 +179,7 @@ class ProductImportService {
       .toList(growable: false);
 
   Future<Uint8List> buildTemplateBytes({bool includeOptional = false}) async {
-    final structure =
-        _buildTemplateStructure(includeOptional: includeOptional);
+    final structure = _buildTemplateStructure(includeOptional: includeOptional);
     const converter = ListToCsvConverter();
     final csv = converter.convert([
       structure.headers,
@@ -139,8 +191,7 @@ class ProductImportService {
   Future<Uint8List> buildTemplateExcelBytes({
     bool includeOptional = false,
   }) async {
-    final structure =
-        _buildTemplateStructure(includeOptional: includeOptional);
+    final structure = _buildTemplateStructure(includeOptional: includeOptional);
     final excel = Excel.createExcel();
     const sheetName = 'Productos';
     final sheet = excel[sheetName];
@@ -154,6 +205,39 @@ class ProductImportService {
     if (encoded == null) {
       throw ProductImportException(
         'No se pudo generar la plantilla en formato Excel.',
+      );
+    }
+    return Uint8List.fromList(encoded);
+  }
+
+  Future<Uint8List> exportProductsCsv({bool includeOptional = true}) async {
+    final dataset = await _buildExportDataset(includeOptional: includeOptional);
+    const converter = ListToCsvConverter();
+    final rows = <List<String>>[
+      dataset.headers,
+      ...dataset.rows,
+    ];
+    final csv = converter.convert(rows);
+    return Uint8List.fromList(utf8.encode(csv));
+  }
+
+  Future<Uint8List> exportProductsExcel({bool includeOptional = true}) async {
+    final dataset = await _buildExportDataset(includeOptional: includeOptional);
+    final excel = Excel.createExcel();
+    const sheetName = 'Productos';
+    final sheet = excel[sheetName];
+    sheet.appendRow(_toTextRow(dataset.headers));
+    for (final row in dataset.rows) {
+      sheet.appendRow(_toTextRow(row));
+    }
+    final defaultSheet = excel.getDefaultSheet();
+    if (defaultSheet != null && defaultSheet != sheetName) {
+      excel.delete(defaultSheet);
+    }
+    final encoded = excel.encode();
+    if (encoded == null) {
+      throw ProductImportException(
+        'No se pudo generar el archivo Excel de exportación.',
       );
     }
     return Uint8List.fromList(encoded);
@@ -342,6 +426,29 @@ class ProductImportService {
     final cost = _parseDecimal(valueFor('cost')) ?? 0;
     final rawTaxRate = _parseDecimal(valueFor('tax_rate'));
     final taxRate = _normalizeTaxRate(rawTaxRate);
+    final directImageUrl = valueFor('image_url');
+    final directGalleryInputs = _parseList(valueFor('image_urls'));
+    final primaryBase64 = valueFor('image_base64');
+    final base64GalleryInputs = _parseList(valueFor('image_gallery_base64'));
+
+    final combinedGalleryInputs = <String>[];
+    if (directGalleryInputs != null) {
+      combinedGalleryInputs.addAll(directGalleryInputs);
+    }
+    if (base64GalleryInputs != null) {
+      combinedGalleryInputs.addAll(base64GalleryInputs);
+    }
+
+    final primaryCandidate = (primaryBase64 != null && primaryBase64.isNotEmpty)
+        ? primaryBase64
+        : directImageUrl;
+
+    if (primaryBase64 != null &&
+        primaryBase64.isNotEmpty &&
+        directImageUrl != null &&
+        directImageUrl.isNotEmpty) {
+      combinedGalleryInputs.add(directImageUrl);
+    }
 
     final payload = <String, dynamic>{
       'sku': sku,
@@ -358,7 +465,27 @@ class ProductImportService {
       'tax_rate': taxRate,
       'track_stock': true,
       'is_active': true,
+      'is_published': true,
+      'show_on_website': true,
     };
+
+    final images = await _processImages(
+      sku: sku,
+      primaryInput: primaryCandidate,
+      galleryInputs:
+          combinedGalleryInputs.isEmpty ? null : combinedGalleryInputs,
+    );
+
+    if (images.primary != null) {
+      payload['image_url'] = images.primary;
+    }
+
+    final hadGalleryInput = combinedGalleryInputs.isNotEmpty;
+    if (images.gallery != null) {
+      payload['image_urls'] = images.gallery;
+    } else if (hadGalleryInput) {
+      payload['image_urls'] = <String>[];
+    }
 
     final supplierId = await _resolveSupplierId(
       explicitId: valueFor('supplier_id'),
@@ -369,6 +496,14 @@ class ProductImportService {
 
     if (supplierId != null) {
       payload['supplier_id'] = supplierId;
+      payload['supplier_name'] = valueFor('supplier_name');
+    }
+
+    final publishedRaw = valueFor('is_published') ?? valueFor('published');
+    final parsedPublished = _parseBool(publishedRaw);
+    if (parsedPublished != null) {
+      payload['is_published'] = parsedPublished;
+      payload['show_on_website'] = parsedPublished;
     }
 
     payload.removeWhere((_, value) => value == null);
@@ -502,6 +637,52 @@ class ProductImportService {
     return decimal?.round();
   }
 
+  bool? _parseBool(String? value) {
+    if (value == null) return null;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+
+    final normalized = _normalize(trimmed);
+    if (normalized.isEmpty) return null;
+
+    const trueValues = {
+      '1',
+      'true',
+      'si',
+      'sí',
+      'activo',
+      'yes',
+      'on',
+    };
+
+    const falseValues = {
+      '0',
+      'false',
+      'no',
+      'inactivo',
+      'off',
+    };
+
+    if (trueValues.contains(normalized)) return true;
+    if (falseValues.contains(normalized)) return false;
+    return null;
+  }
+
+  List<String>? _parseList(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final trimmed = value.trim();
+    if (trimmed.startsWith('data:')) {
+      return [trimmed];
+    }
+    final separator = trimmed.contains(';') ? ';' : ',';
+    final items = trimmed
+        .split(separator)
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    return items.isEmpty ? null : items;
+  }
+
   double? _normalizeTaxRate(double? value) {
     if (value == null) return null;
     if (value > 1) {
@@ -521,6 +702,174 @@ class ProductImportService {
   }
 
   String _normalizeHeader(String header) => header.trim();
+
+  Future<_ImageProcessingResult> _processImages({
+    required String sku,
+    String? primaryInput,
+    List<String>? galleryInputs,
+  }) async {
+    String? primaryUrl;
+    final galleryUrls = <String>[];
+    final seenGallery = <String>{};
+
+    Future<String?> resolve(String? raw, bool isPrimary, int index) async {
+      if (raw == null) return null;
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) return null;
+
+      if (_looksLikeRemoteUrl(trimmed)) {
+        return trimmed;
+      }
+
+      final decoded = _tryDecodeBase64(trimmed);
+      if (decoded == null) {
+        throw ProductImportRowException(
+          'La imagen proporcionada para el SKU $sku no es una URL ni un valor base64 válido.',
+        );
+      }
+
+      final folder = isPrimary
+          ? StorageFolders.productMain
+          : StorageFolders.productGallery;
+      final sanitizedSku = _sanitizeForFileName(sku);
+      final suffix = isPrimary ? 'main' : 'gallery_${index + 1}';
+      final extension = decoded.extension;
+      final fileName = '${sanitizedSku}_$suffix.$extension';
+
+      try {
+        final uploadedUrl = await ImageService.uploadBytes(
+          bytes: decoded.bytes,
+          fileName: fileName,
+          bucket: StorageConfig.defaultBucket,
+          folder: folder,
+          contentType: decoded.mimeType,
+        );
+
+        if (uploadedUrl == null || uploadedUrl.isEmpty) {
+          throw ProductImportRowException(
+            'No se pudo obtener la URL pública para la imagen del SKU $sku.',
+          );
+        }
+
+        return uploadedUrl;
+      } catch (error) {
+        throw ProductImportRowException(
+          'Error al subir la imagen para el SKU $sku: $error',
+        );
+      }
+    }
+
+    primaryUrl = await resolve(primaryInput, true, 0);
+
+    if (galleryInputs != null && galleryInputs.isNotEmpty) {
+      for (var i = 0; i < galleryInputs.length; i++) {
+        final resolved = await resolve(galleryInputs[i], false, i);
+        if (resolved != null &&
+            resolved.isNotEmpty &&
+            seenGallery.add(resolved)) {
+          galleryUrls.add(resolved);
+        }
+      }
+    }
+
+    if (primaryUrl == null && galleryUrls.isNotEmpty) {
+      primaryUrl = galleryUrls.first;
+    }
+
+    final filteredGallery = galleryUrls
+        .where((url) => primaryUrl == null || url != primaryUrl)
+        .toList(growable: false);
+
+    return _ImageProcessingResult(
+      primary: primaryUrl,
+      gallery: filteredGallery.isEmpty ? null : filteredGallery,
+    );
+  }
+
+  _DecodedImage? _tryDecodeBase64(String input) {
+    var data = input.trim();
+    String? declaredMime;
+
+    if (data.startsWith('data:')) {
+      final commaIndex = data.indexOf(',');
+      if (commaIndex == -1) {
+        return null;
+      }
+      final header = data.substring(5, commaIndex); // remove 'data:'
+      final headerParts = header.split(';');
+      if (headerParts.isNotEmpty && headerParts.first.isNotEmpty) {
+        declaredMime = headerParts.first;
+      }
+      data = data.substring(commaIndex + 1);
+    }
+
+    final normalized = data.replaceAll(RegExp(r'\s+'), '');
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    try {
+      final bytes = base64Decode(normalized);
+      final mimeType = declaredMime ??
+          lookupMimeType('', headerBytes: bytes) ??
+          'image/jpeg';
+      final extension = _extensionFromMime(mimeType);
+      return _DecodedImage(
+        bytes: bytes,
+        extension: extension,
+        mimeType: mimeType,
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
+  String _extensionFromMime(String? mimeType) {
+    if (mimeType == null) {
+      return 'jpg';
+    }
+
+    switch (mimeType.toLowerCase()) {
+      case 'image/png':
+        return 'png';
+      case 'image/jpeg':
+      case 'image/jpg':
+        return 'jpg';
+      case 'image/gif':
+        return 'gif';
+      case 'image/webp':
+        return 'webp';
+    }
+
+    if (mimeType.startsWith('image/')) {
+      final parts = mimeType.split('/');
+      if (parts.length == 2 && parts[1].isNotEmpty) {
+        return parts[1];
+      }
+    }
+
+    return 'jpg';
+  }
+
+  String _sanitizeForFileName(String input) {
+    final sanitized = input
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    return sanitized.isEmpty ? 'producto' : sanitized;
+  }
+
+  bool _looksLikeRemoteUrl(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null) {
+      return false;
+    }
+    if (uri.hasScheme) {
+      return uri.scheme == 'http' || uri.scheme == 'https';
+    }
+    return value.contains('/storage/v1/object/');
+  }
 
   String? _guessCategory(String? categoryName) {
     if (categoryName == null) return null;
@@ -543,11 +892,185 @@ class ProductImportService {
             .toList(growable: false);
 
     final headers = fields.map((field) => field.label).toList(growable: false);
-    final sampleRow = fields
-        .map((field) => field.sampleValue ?? '')
-        .toList(growable: false);
+    final sampleRow =
+        fields.map((field) => field.sampleValue ?? '').toList(growable: false);
 
     return _TemplateStructure(headers: headers, sampleRow: sampleRow);
+  }
+
+  Future<_ExportDataset> _buildExportDataset({
+    required bool includeOptional,
+  }) async {
+    final fields = includeOptional
+        ? _fieldDefinitions
+        : _fieldDefinitions
+            .where((field) => field.required || field.isRecommended)
+            .toList(growable: false);
+    final headers = fields.map((field) => field.label).toList(growable: false);
+
+    final products = await _db.select('products');
+    if (products.isEmpty) {
+      return _ExportDataset(headers: headers, rows: const []);
+    }
+
+    products.sort((a, b) {
+      final nameA = (a['name']?.toString() ?? '').toLowerCase();
+      final nameB = (b['name']?.toString() ?? '').toLowerCase();
+      return nameA.compareTo(nameB);
+    });
+
+    final supplierNames = await _loadSupplierNames(products);
+    final rows = <List<String>>[];
+
+    for (final product in products) {
+      final row = <String>[];
+      for (final field in fields) {
+        row.add(
+          _valueForExport(
+            field.key,
+            product,
+            supplierNames,
+          ),
+        );
+      }
+      rows.add(row);
+    }
+
+    return _ExportDataset(headers: headers, rows: rows);
+  }
+
+  Future<Map<String, String>> _loadSupplierNames(
+    List<Map<String, dynamic>> products,
+  ) async {
+    final ids = products
+        .map((product) => product['supplier_id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (ids.isEmpty) {
+      return const {};
+    }
+
+    try {
+      final rows = await _db.select(
+        'suppliers',
+        where: 'id',
+        whereIn: ids.toList(),
+      );
+      final map = <String, String>{};
+      for (final row in rows) {
+        final id = row['id']?.toString();
+        final name = row['name']?.toString();
+        if (id != null && name != null) {
+          map[id] = name;
+        }
+      }
+      return map;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  String _valueForExport(
+    String key,
+    Map<String, dynamic> product,
+    Map<String, String> supplierNames,
+  ) {
+    switch (key) {
+      case 'sku':
+      case 'name':
+      case 'brand':
+        return product[key]?.toString() ?? '';
+      case 'category_name':
+        final categoryName = product['category_name'];
+        if (categoryName != null && categoryName.toString().isNotEmpty) {
+          return categoryName.toString();
+        }
+        final category = product['category'];
+        return category?.toString() ?? '';
+      case 'supplier_name':
+        final supplierId = product['supplier_id']?.toString();
+        if (supplierId != null && supplierId.isNotEmpty) {
+          final lookup = supplierNames[supplierId];
+          if (lookup != null && lookup.isNotEmpty) {
+            return lookup;
+          }
+        }
+        final fallback = product['supplier_name'] ??
+            product['supplier'] ??
+            product['supplier_display_name'];
+        return fallback?.toString() ?? '';
+      case 'image_url':
+        return product['image_url']?.toString() ?? '';
+      case 'image_urls':
+        return _stringifyList(product['image_urls']);
+      case 'image_base64':
+      case 'image_gallery_base64':
+        return '';
+      case 'inventory_qty':
+        final qty = product['inventory_qty'] ?? product['stock_quantity'];
+        if (qty == null) return '';
+        if (qty is num) {
+          return qty.toInt().toString();
+        }
+        return qty.toString();
+      case 'price':
+      case 'cost':
+        final value = product[key];
+        if (value == null) return '';
+        if (value is num) {
+          return _trimZeros(value.toStringAsFixed(2));
+        }
+        return value.toString();
+      case 'tax_rate':
+        final value = product['tax_rate'];
+        if (value == null) return '';
+        if (value is num) {
+          final percent = value > 1 ? value : value * 100;
+          return _trimZeros(percent.toStringAsFixed(2));
+        }
+        return value.toString();
+      case 'is_published':
+        final published = product['is_published'] ?? product['published'];
+        if (published is bool) {
+          return published ? 'TRUE' : 'FALSE';
+        }
+        if (published == null) return '';
+        return published.toString();
+      default:
+        final raw = product[key];
+        if (raw == null) return '';
+        if (raw is List) {
+          return _stringifyList(raw);
+        }
+        return raw.toString();
+    }
+  }
+
+  String _stringifyList(dynamic value) {
+    if (value == null) return '';
+    if (value is List) {
+      return value
+          .whereType<String>()
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .join(', ');
+    }
+    return value.toString();
+  }
+
+  String _trimZeros(String value) {
+    if (!value.contains('.')) {
+      return value;
+    }
+    var result = value;
+    while (result.endsWith('0')) {
+      result = result.substring(0, result.length - 1);
+    }
+    if (result.endsWith('.')) {
+      result = result.substring(0, result.length - 1);
+    }
+    return result;
   }
 
   static const Map<String, String> _categoryHints = {
@@ -666,4 +1189,36 @@ class _TemplateStructure {
 
   final List<String> headers;
   final List<String> sampleRow;
+}
+
+class _ExportDataset {
+  const _ExportDataset({
+    required this.headers,
+    required this.rows,
+  });
+
+  final List<String> headers;
+  final List<List<String>> rows;
+}
+
+class _ImageProcessingResult {
+  const _ImageProcessingResult({
+    this.primary,
+    this.gallery,
+  });
+
+  final String? primary;
+  final List<String>? gallery;
+}
+
+class _DecodedImage {
+  const _DecodedImage({
+    required this.bytes,
+    required this.extension,
+    required this.mimeType,
+  });
+
+  final Uint8List bytes;
+  final String extension;
+  final String mimeType;
 }

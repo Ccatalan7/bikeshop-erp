@@ -3,9 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:mime/mime.dart';
-
-import '../constants/storage_constants.dart';
 import 'error_reporting_service.dart';
 
 // Conditional import: use web implementation on web, mobile on other platforms
@@ -41,6 +38,7 @@ class ImageService {
     required String fileName,
     required String bucket,
     required String folder,
+    String? contentType,
   }) async {
     try {
       final sanitizedFileName = _sanitizeFileName(fileName);
@@ -59,7 +57,7 @@ class ImageService {
       final options = FileOptions(
         cacheControl: '3600',
         upsert: true,
-        contentType: 'image/jpeg', // Hardcoded - avoid lookupMimeType
+        contentType: contentType ?? 'image/jpeg',
       );
 
       await storageFile.uploadBinary(objectPath, bytes, fileOptions: options);
@@ -230,10 +228,6 @@ class ImageService {
         .map((segment) => segment.trim())
         .where((segment) => segment.isNotEmpty)
         .join('/');
-  }
-
-  static String? _inferContentType(String fileName) {
-    return lookupMimeType(fileName);
   }
 
   static String? _extractObjectPath(String imageUrl, String bucket) {

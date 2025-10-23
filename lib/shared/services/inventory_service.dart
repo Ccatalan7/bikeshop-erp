@@ -314,6 +314,9 @@ class InventoryService extends ChangeNotifier {
       weight: (json['weight'] as num?)?.toDouble() ?? 0.0,
       trackStock: json['track_stock'] as bool? ?? true,
       isActive: json['is_active'] as bool? ?? true,
+      isPublished: json['is_published'] as bool? ??
+          json['show_on_website'] as bool? ??
+          true,
       productType: ProductType.values.firstWhere(
         (t) => t.name == productTypeValue,
         orElse: () => ProductType.product,
