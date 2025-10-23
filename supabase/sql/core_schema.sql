@@ -3759,9 +3759,7 @@ begin
 
   if TG_OP = 'INSERT' then
     perform public.recalculate_expense_totals(NEW.id);
-    if v_new_posted then
-      perform public.create_expense_journal_entry(NEW.id);
-    end if;
+    -- Journal entry will be created by expense_lines trigger after lines are inserted
     return NEW;
 
   elsif TG_OP = 'UPDATE' then
@@ -3843,6 +3841,63 @@ begin
     create trigger trg_expense_payments_change
       after insert or update or delete on public.expense_payments
       for each row execute procedure public.handle_expense_payment_change();
+  end if;
+end;
+$$;
+
+-- ================================================
+-- Trigger for expense_lines changes
+-- ================================================
+create or replace function public.handle_expense_line_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expense_id uuid;
+  v_posting_status text;
+begin
+  -- Get the expense_id from the relevant row
+  if TG_OP = 'DELETE' then
+    v_expense_id := OLD.expense_id;
+  else
+    v_expense_id := NEW.expense_id;
+  end if;
+
+  -- Check if parent expense is posted
+  select posting_status into v_posting_status
+    from public.expenses
+   where id = v_expense_id;
+
+  -- If posted, regenerate journal entry
+  if lower(coalesce(v_posting_status, 'draft')) = 'posted' then
+    perform public.delete_expense_journal_entry(v_expense_id);
+    perform public.create_expense_journal_entry(v_expense_id);
+  end if;
+
+  -- Recalculate expense totals
+  perform public.recalculate_expense_totals(v_expense_id);
+
+  if TG_OP = 'DELETE' then
+    return OLD;
+  else
+    return NEW;
+  end if;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_trigger
+     where tgname = 'trg_expense_lines_change'
+       and tgrelid = 'public.expense_lines'::regclass
+  ) then
+    create trigger trg_expense_lines_change
+      after insert or update or delete on public.expense_lines
+      for each row execute procedure public.handle_expense_line_change();
   end if;
 end;
 $$;
