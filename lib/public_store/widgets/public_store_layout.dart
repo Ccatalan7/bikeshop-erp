@@ -261,18 +261,27 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        storeName.isNotEmpty
-                            ? storeName.toUpperCase()
-                            : 'VINABIKE',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
-                            ?.copyWith(
-                              color: primaryColor,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1,
-                            ),
+                      SizedBox(
+                        height: 48,
+                        child: Image.asset(
+                          'assets/images/vinabike_logo.png',
+                          fit: BoxFit.contain,
+                          semanticLabel:
+                              storeName.isNotEmpty ? storeName : 'Vinabike',
+                          errorBuilder: (context, error, stackTrace) => Text(
+                            storeName.isNotEmpty
+                                ? storeName.toUpperCase()
+                                : 'VINABIKE',
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineMedium
+                                ?.copyWith(
+                                  color: primaryColor,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1,
+                                ),
+                          ),
+                        ),
                       ),
                       if (storeDescription.isNotEmpty)
                         Text(
