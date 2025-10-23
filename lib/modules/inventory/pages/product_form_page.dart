@@ -17,8 +17,10 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/models/supplier.dart';
 import '../../purchases/services/purchase_service.dart';
 import '../models/category_models.dart' as category_models;
+import '../models/brand_models.dart';
 import '../models/inventory_models.dart';
 import '../services/category_service.dart';
+import '../services/brand_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
 
 class ProductFormPage extends StatefulWidget {
@@ -36,6 +38,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   late inventory_services.InventoryService _inventoryService;
   late CategoryService _categoryService;
   late PurchaseService _purchaseService;
+  late BrandService _brandService;
 
   final _nameController = TextEditingController();
   final _skuController = TextEditingController();
@@ -51,6 +54,10 @@ class _ProductFormPageState extends State<ProductFormPage> {
   String? _selectedSupplierId;
   List<category_models.Category> _categories = [];
   List<Supplier> _suppliers = [];
+  List<ProductBrand> _brands = [];
+  bool _isLoadingBrands = false;
+  String? _selectedBrandId;
+  ProductBrand? _selectedBrand;
   bool _isActive = true;
   bool _isPublished = true;
   ProductType _selectedProductType = ProductType.product;
@@ -78,6 +85,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
     _inventoryService = inventory_services.InventoryService(database);
     _categoryService = CategoryService(database);
     _purchaseService = PurchaseService(database);
+    _brandService = BrandService(database);
 
     _inventoryQtyController.text = '0';
     _minStockController.text = '1';
@@ -85,6 +93,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
     _priceController.addListener(_onPricingChanged);
     _costController.addListener(_onPricingChanged);
 
+    _loadBrands();
     _loadCategories();
     _loadSuppliers();
 
@@ -144,6 +153,270 @@ class _ProductFormPageState extends State<ProductFormPage> {
     }
   }
 
+  Future<void> _loadBrands() async {
+    if (!mounted) return;
+    setState(() => _isLoadingBrands = true);
+    try {
+      final brands = await _brandService.getBrands();
+      if (!mounted) return;
+      final matched = _matchBrandSelection(brands);
+      setState(() {
+        _brands = brands;
+        _selectedBrand = matched;
+        if (matched != null) {
+          _selectedBrandId = matched.id;
+          _brandController.text = matched.name;
+        }
+        _isLoadingBrands = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingBrands = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error cargando marcas: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _ensureBrandsLoaded() async {
+    if (_brands.isEmpty && !_isLoadingBrands) {
+      await _loadBrands();
+    }
+  }
+
+  ProductBrand? _matchBrandSelection([List<ProductBrand>? source]) {
+    final list = source ?? _brands;
+    if (_selectedBrandId != null) {
+      for (final brand in list) {
+        if (brand.id == _selectedBrandId) {
+          return brand;
+        }
+      }
+    }
+
+    final text = _brandController.text.trim();
+    if (text.isNotEmpty) {
+      final needle = text.toLowerCase();
+      for (final brand in list) {
+        if (brand.name.toLowerCase() == needle) {
+          return brand;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  void _syncBrandSelection() {
+    if (!mounted) return;
+    final matched = _matchBrandSelection();
+    setState(() {
+      _selectedBrand = matched;
+      if (matched != null) {
+        _selectedBrandId = matched.id;
+        _brandController.text = matched.name;
+      }
+    });
+  }
+
+  Future<void> _openBrandPicker() async {
+    await _ensureBrandsLoaded();
+    if (!mounted) return;
+
+    final searchController = TextEditingController();
+    bool includeInactive = false;
+
+    List<ProductBrand> applyFilter() {
+      final query = searchController.text.trim().toLowerCase();
+      final filtered = _brands.where((brand) {
+        if (!includeInactive && !brand.isActive) return false;
+        if (query.isEmpty) return true;
+        final description = brand.description ?? '';
+        final website = brand.website ?? '';
+        final country = brand.country ?? '';
+        return brand.name.toLowerCase().contains(query) ||
+            description.toLowerCase().contains(query) ||
+            website.toLowerCase().contains(query) ||
+            country.toLowerCase().contains(query);
+      }).toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return filtered;
+    }
+
+    var filteredBrands = applyFilter();
+
+    final result = await showModalBottomSheet<dynamic>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.85,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              builder: (context, scrollController) {
+                return StatefulBuilder(
+                  builder: (context, setModalState) {
+                    void refresh() {
+                      setModalState(() {
+                        filteredBrands = applyFilter();
+                      });
+                    }
+
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Selecciona una marca',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () => Navigator.of(context).pop(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                          ),
+                          child: TextField(
+                            controller: searchController,
+                            decoration: const InputDecoration(
+                              labelText: 'Buscar marcas...',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (_) => refresh(),
+                          ),
+                        ),
+                        SwitchListTile.adaptive(
+                          title: const Text('Incluir marcas inactivas'),
+                          value: includeInactive,
+                          onChanged: (value) {
+                            includeInactive = value;
+                            refresh();
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.add_circle_outline),
+                          title: const Text('Crear nueva marca'),
+                          onTap: () => Navigator.of(context).pop('_create'),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.clear),
+                          title: const Text('Sin marca'),
+                          onTap: () => Navigator.of(context).pop('_clear'),
+                        ),
+                        const Divider(height: 1),
+                        Expanded(
+                          child: filteredBrands.isEmpty
+                              ? const Center(
+                                  child: Text('No se encontraron marcas'),
+                                )
+                              : ListView.builder(
+                                  controller: scrollController,
+                                  itemCount: filteredBrands.length,
+                                  itemBuilder: (context, index) {
+                                    final brand = filteredBrands[index];
+                                    final isSelected =
+                                        brand.id == _selectedBrandId;
+                                    return ListTile(
+                                      leading: Icon(
+                                        Icons.workspace_premium_outlined,
+                                        color: isSelected
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                            : null,
+                                      ),
+                                      title: Text(brand.name),
+                                      subtitle: Text(
+                                        [
+                                          if (brand.country != null &&
+                                              brand.country!.isNotEmpty)
+                                            brand.country!,
+                                          if (brand.website != null &&
+                                              brand.website!.isNotEmpty)
+                                            brand.website!,
+                                        ].join(' • '),
+                                      ),
+                                      trailing: brand.isActive
+                                          ? null
+                                          : const Chip(
+                                              label: Text('Inactiva'),
+                                              avatar: Icon(
+                                                Icons.pause_circle_outline,
+                                                size: 16,
+                                              ),
+                                            ),
+                                      onTap: () =>
+                                          Navigator.of(context).pop(brand),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+
+    searchController.dispose();
+
+    if (!mounted) return;
+
+    if (result == '_create') {
+      await context.push('/inventory/brands/new');
+      if (!mounted) return;
+      await _loadBrands();
+      await _openBrandPicker();
+      return;
+    }
+
+    if (result == '_clear') {
+      setState(() {
+        _selectedBrand = null;
+        _selectedBrandId = null;
+        _brandController.clear();
+      });
+      return;
+    }
+
+    if (result is ProductBrand) {
+      setState(() {
+        _selectedBrand = result;
+        _selectedBrandId = result.id;
+        _brandController.text = result.name;
+      });
+    }
+  }
+
   Future<void> _loadProduct() async {
     setState(() => _isLoading = true);
     try {
@@ -154,6 +427,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         _skuController.text = product.sku;
         _descriptionController.text = product.description ?? '';
         _brandController.text = product.brand ?? '';
+        _selectedBrandId = product.brandId;
         _modelController.text = product.model ?? '';
         _priceController.text = product.price.toStringAsFixed(0);
         _costController.text = product.cost.toStringAsFixed(0);
@@ -168,6 +442,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         _additionalImages
           ..clear()
           ..addAll(product.additionalImages);
+        _syncBrandSelection();
       }
     } catch (e) {
       if (!mounted) return;
@@ -349,6 +624,20 @@ class _ProductFormPageState extends State<ProductFormPage> {
       final rawDescription = _descriptionController.text.trim();
       final rawBrand = _brandController.text.trim();
       final rawModel = _modelController.text.trim();
+      final potentialBrand = _selectedBrand ?? _matchBrandSelection();
+      final normalizedBrandId = (() {
+        final candidate = potentialBrand?.id ?? _selectedBrandId;
+        if (candidate == null) return null;
+        final trimmed = candidate.trim();
+        return trimmed.isEmpty ? null : trimmed;
+      })();
+      final normalizedBrandName = (() {
+        if (potentialBrand != null) {
+          final trimmed = potentialBrand.name.trim();
+          return trimmed.isEmpty ? null : trimmed;
+        }
+        return rawBrand.isEmpty ? null : rawBrand;
+      })();
       final price =
           double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0;
       final cost =
@@ -384,7 +673,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
             categoryName: selectedCategoryName,
             supplierId: _selectedSupplierId,
             supplierName: selectedSupplierName,
-            brand: rawBrand.isEmpty ? null : rawBrand,
+            brandId: normalizedBrandId,
+            brand: normalizedBrandName,
             model: rawModel.isEmpty ? null : rawModel,
             price: price,
             cost: cost,
@@ -406,7 +696,10 @@ class _ProductFormPageState extends State<ProductFormPage> {
         categoryName: selectedCategoryName ?? baseProduct.categoryName,
         supplierId: _selectedSupplierId,
         supplierName: selectedSupplierName ?? baseProduct.supplierName,
-        brand: rawBrand.isEmpty ? null : rawBrand,
+        brandId: normalizedBrandId,
+        brandIdHasValue: true,
+        brand: normalizedBrandName,
+        brandHasValue: true,
         model: rawModel.isEmpty ? null : rawModel,
         price: price,
         cost: cost,
@@ -871,10 +1164,60 @@ class _ProductFormPageState extends State<ProductFormPage> {
           Expanded(
             child: TextFormField(
               controller: _brandController,
-              decoration: const InputDecoration(
+              readOnly: true,
+              enableInteractiveSelection: false,
+              decoration: InputDecoration(
                 labelText: 'Marca',
-                hintText: 'Ej. Trek, Specialized, Giant',
+                hintText: _brands.isEmpty
+                    ? 'Toca para seleccionar'
+                    : 'Selecciona una marca',
+                suffixIcon: _isLoadingBrands
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : SizedBox(
+                        width: _selectedBrand != null ? 96 : 72,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (_selectedBrand != null)
+                              IconButton(
+                                tooltip: 'Limpiar marca',
+                                iconSize: 20,
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedBrand = null;
+                                    _selectedBrandId = null;
+                                    _brandController.clear();
+                                  });
+                                },
+                              ),
+                            IconButton(
+                              tooltip: 'Nueva marca',
+                              iconSize: 20,
+                              icon: const Icon(Icons.add_circle_outline),
+                              onPressed: () async {
+                                await context.push('/inventory/brands/new');
+                                if (!mounted) return;
+                                await _loadBrands();
+                                await _openBrandPicker();
+                              },
+                            ),
+                            const Icon(Icons.arrow_drop_down),
+                          ],
+                        ),
+                      ),
               ),
+              onTap: () async {
+                FocusScope.of(context).unfocus();
+                await _openBrandPicker();
+              },
             ),
           ),
           const SizedBox(width: 16),
@@ -1046,9 +1389,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
           'Controla si este producto se muestra en la web y en el catálogo público.',
         ),
         value: _isActive ? _isPublished : false,
-        onChanged: _isActive
-            ? (value) => setState(() => _isPublished = value)
-            : null,
+        onChanged:
+            _isActive ? (value) => setState(() => _isPublished = value) : null,
       ),
     ];
   }

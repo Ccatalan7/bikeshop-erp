@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:vinabike_erp/modules/accounting/widgets/accounting_dashboard_section.dart';
+
 import '../widgets/main_layout.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -51,6 +53,10 @@ class DashboardScreen extends StatelessWidget {
                 ],
               ),
             ),
+
+            const SizedBox(height: 32),
+
+            const AccountingDashboardSection(),
 
             const SizedBox(height: 32),
 

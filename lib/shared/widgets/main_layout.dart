@@ -15,6 +15,11 @@ const List<MenuSubItem> _accountingMenuItems = [
     route: '/accounting/accounts',
   ),
   MenuSubItem(
+    icon: Icons.receipt_long_outlined,
+    title: 'Gastos',
+    route: '/accounting/expenses',
+  ),
+  MenuSubItem(
     icon: Icons.library_books_outlined,
     title: 'Asientos contables',
     route: '/accounting/journal-entries',
@@ -93,6 +98,11 @@ const List<MenuSubItem> _inventoryMenuItems = [
     icon: Icons.category_outlined,
     title: 'Categorías',
     route: '/inventory/categories',
+  ),
+  MenuSubItem(
+    icon: Icons.workspace_premium_outlined,
+    title: 'Marcas',
+    route: '/inventory/brands',
   ),
   MenuSubItem(
     icon: Icons.swap_horiz_outlined,
@@ -487,6 +497,11 @@ class _AppSidebarState extends State<AppSidebar> {
                             child: CachedNetworkImage(
                               imageUrl: appearanceService.companyLogoUrl!,
                               fit: BoxFit.contain,
+                              imageBuilder: (context, imageProvider) => Image(
+                                image: imageProvider,
+                                fit: BoxFit.contain,
+                                filterQuality: FilterQuality.high,
+                              ),
                               placeholder: (context, url) => const Center(
                                 child: SizedBox(
                                   width: 20,
@@ -848,6 +863,11 @@ class AppDrawer extends StatelessWidget {
                           child: CachedNetworkImage(
                             imageUrl: appearanceService.companyLogoUrl!,
                             fit: BoxFit.contain,
+                            imageBuilder: (context, imageProvider) => Image(
+                              image: imageProvider,
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.high,
+                            ),
                             placeholder: (context, url) => const Center(
                               child: CircularProgressIndicator(
                                 color: Colors.white,

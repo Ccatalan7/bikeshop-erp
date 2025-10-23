@@ -5,6 +5,7 @@ import '../models/financial_report.dart';
 import '../models/report_line.dart';
 import '../models/income_statement.dart';
 import '../models/balance_sheet.dart';
+import '../models/dashboard_metrics.dart';
 
 /// Service for generating professional financial reports
 /// Uses SQL functions from core_schema.sql for calculations
@@ -352,5 +353,77 @@ class FinancialReportsService extends ChangeNotifier {
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value);
     return null;
+  }
+
+  DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
+  /// Dashboard helpers -----------------------------------------------------
+
+  Future<List<MonthlyIncomeExpensePoint>> getIncomeExpenseTimeseries({
+    int months = 12,
+  }) async {
+    final safeMonths = months < 1 ? 1 : months;
+    debugPrint('📊 Fetching income/expense timeseries for $safeMonths months');
+
+    final result = await _databaseService.rpc(
+      'get_income_expense_timeseries',
+      params: {'p_months': safeMonths},
+    );
+
+    if (result is! List) {
+      return const [];
+    }
+
+    return result.map((row) {
+      final map = Map<String, dynamic>.from(row as Map);
+      final start = _parseDate(map['period_start']);
+      final end = _parseDate(map['period_end']);
+      return MonthlyIncomeExpensePoint(
+        periodStart: start ?? DateTime.now(),
+        periodEnd: end ?? DateTime.now(),
+        income: _parseDouble(map['income']) ?? 0,
+        expense: _parseDouble(map['expense']) ?? 0,
+      );
+    }).toList()
+      ..sort((a, b) => a.periodStart.compareTo(b.periodStart));
+  }
+
+  Future<List<ExpenseBreakdownItem>> getExpenseBreakdown({
+    required DateTime startDate,
+    required DateTime endDate,
+    int limit = 6,
+  }) async {
+    debugPrint(
+        '📊 Fetching expense breakdown from $startDate to $endDate (limit $limit)');
+
+    final result = await _databaseService.rpc(
+      'get_expense_breakdown',
+      params: {
+        'p_start_date': startDate.toIso8601String(),
+        'p_end_date': endDate.toIso8601String(),
+        'p_limit': limit,
+      },
+    );
+
+    if (result is! List) {
+      return const [];
+    }
+
+    return result.map((row) {
+      final map = Map<String, dynamic>.from(row as Map);
+      return ExpenseBreakdownItem(
+        accountId: map['account_id']?.toString() ?? '',
+        accountCode: map['account_code']?.toString() ?? '',
+        accountName: map['account_name']?.toString() ?? '',
+        amount: _parseDouble(map['amount']) ?? 0,
+      );
+    }).toList();
   }
 }

@@ -4,12 +4,14 @@ class SearchWidget extends StatefulWidget {
   final String hintText;
   final Function(String) onSearchChanged;
   final VoidCallback? onClear;
+  final TextEditingController? controller;
 
   const SearchWidget({
     super.key,
     required this.hintText,
     required this.onSearchChanged,
     this.onClear,
+    this.controller,
   });
 
   @override
@@ -17,11 +19,45 @@ class SearchWidget extends StatefulWidget {
 }
 
 class _SearchWidgetState extends State<SearchWidget> {
-  final TextEditingController _controller = TextEditingController();
+  late TextEditingController _controller;
+  bool _isExternalController = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _configureController();
+  }
+
+  void _configureController() {
+    _isExternalController = widget.controller != null;
+    _controller = widget.controller ?? TextEditingController();
+    _controller.addListener(_handleControllerChange);
+  }
+
+  void _handleControllerChange() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant SearchWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      _controller.removeListener(_handleControllerChange);
+      if (!_isExternalController) {
+        _controller.dispose();
+      }
+      _configureController();
+    }
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller.removeListener(_handleControllerChange);
+    if (!_isExternalController) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 

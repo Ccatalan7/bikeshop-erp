@@ -340,8 +340,9 @@ class WebsiteBlockRenderer {
     }
     itemsPerRow = itemsPerRow.clamp(2, 4);
 
-    final products =
-        (featuredProducts ?? []).where((product) => product.isActive).toList();
+    final products = (featuredProducts ?? [])
+        .where((product) => product.isActive && product.isPublished)
+        .toList();
 
     final resolvedProducts = products.isNotEmpty
         ? products

@@ -99,6 +99,12 @@ class AppearanceSettingsPage extends StatelessWidget {
                                 child: CachedNetworkImage(
                                   imageUrl: appearanceService.companyLogoUrl!,
                                   fit: BoxFit.contain,
+                                  imageBuilder: (context, imageProvider) =>
+                                      Image(
+                                    image: imageProvider,
+                                    fit: BoxFit.contain,
+                                    filterQuality: FilterQuality.high,
+                                  ),
                                   placeholder: (context, url) => const Center(
                                     child: CircularProgressIndicator(),
                                   ),

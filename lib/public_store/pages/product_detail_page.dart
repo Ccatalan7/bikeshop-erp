@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../theme/public_store_theme.dart';
 import '../providers/cart_provider.dart';
 import '../../shared/services/inventory_service.dart';
 import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
+import 'package:vinabike_erp/modules/website/services/website_service.dart';
+import 'package:vinabike_erp/public_store/utils/structured_data.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -17,6 +19,7 @@ class ProductDetailPage extends StatefulWidget {
 }
 
 class _ProductDetailPageState extends State<ProductDetailPage> {
+  static const _structuredDataScriptId = 'vinabike-product-structured-data';
   Product? _product;
   List<Product> _relatedProducts = [];
   bool _isLoading = true;
@@ -27,6 +30,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   void initState() {
     super.initState();
     _loadProduct();
+  }
+
+  @override
+  void didUpdateWidget(ProductDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.productId != oldWidget.productId) {
+      removeStructuredDataScript(_structuredDataScriptId);
+      _product = null;
+      _relatedProducts = [];
+      _quantity = 1;
+      _selectedImageIndex = 0;
+      _loadProduct();
+    }
+  }
+
+  @override
+  void dispose() {
+    removeStructuredDataScript(_structuredDataScriptId);
+    super.dispose();
   }
 
   Future<void> _loadProduct() async {
@@ -48,14 +70,93 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 p.stockQuantity > 0)
             .take(4)
             .toList();
+
+        if (mounted) {
+          _updateStructuredData();
+        }
+      } else {
+        removeStructuredDataScript(_structuredDataScriptId);
       }
     } catch (e) {
       debugPrint('[ProductDetailPage] Error loading product: $e');
+      removeStructuredDataScript(_structuredDataScriptId);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _updateStructuredData() {
+    final product = _product;
+    if (product == null) {
+      removeStructuredDataScript(_structuredDataScriptId);
+      return;
+    }
+
+    final websiteService = context.read<WebsiteService>();
+    final storeName = websiteService.getSetting('store_name', 'Vinabike');
+    final storeUrl = websiteService.getSetting(
+      'store_url',
+      'https://tienda.vinabike.cl',
+    );
+
+    final productUrl = '$storeUrl/tienda/producto/${product.id}';
+    final availability = product.stockQuantity > 0
+        ? 'https://schema.org/InStock'
+        : 'https://schema.org/OutOfStock';
+
+    final imageList = <String>[];
+    if (product.imageUrls.isNotEmpty) {
+      imageList.addAll(product.imageUrls);
+    } else if (product.imageUrl != null && product.imageUrl!.isNotEmpty) {
+      imageList.add(product.imageUrl!);
+    }
+
+    final description = (product.description?.trim().isNotEmpty ?? false)
+        ? product.description!.trim()
+        : 'Encuentra $storeName online: ${product.name}';
+
+    final priceString = product.price % 1 == 0
+        ? product.price.toStringAsFixed(0)
+        : product.price.toStringAsFixed(2);
+
+    final structuredData = <String, dynamic>{
+      '@context': 'https://schema.org/',
+      '@type': 'Product',
+      'name': product.name,
+      'description': description,
+      'sku': product.sku,
+      if (product.barcode != null && product.barcode!.isNotEmpty)
+        'gtin': product.barcode,
+      'brand': {
+        '@type': 'Brand',
+        'name': product.brand?.isNotEmpty == true ? product.brand : storeName,
+      },
+      'offers': {
+        '@type': 'Offer',
+        'priceCurrency': 'CLP',
+        'price': priceString,
+        'availability': availability,
+        'url': productUrl,
+        'seller': {
+          '@type': 'Organization',
+          'name': storeName,
+        },
+        'itemCondition': 'https://schema.org/NewCondition',
+      },
+    };
+
+    if (imageList.isNotEmpty) {
+      structuredData['image'] =
+          imageList.length == 1 ? imageList.first : imageList;
+    }
+
+    if (product.categoryName != null && product.categoryName!.isNotEmpty) {
+      structuredData['category'] = product.categoryName;
+    }
+
+    setStructuredDataScript(_structuredDataScriptId, structuredData);
   }
 
   void _addToCart() {

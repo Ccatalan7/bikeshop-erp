@@ -329,6 +329,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       debugPrint('[OdooEditor] Failed to load theme settings: $e');
     }
   }
+
   Future<void> _loadFromDatabase() async {
     try {
       final websiteService = context.read<WebsiteService>();
@@ -957,8 +958,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
             ),
           if (_autoSaveEnabled && !_hasChanges)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.green.shade100,
                 borderRadius: BorderRadius.circular(4),
@@ -1352,7 +1352,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         break;
     }
 
-  final highlight = Colors.tealAccent.withValues(alpha: 0.85);
+    final highlight = Colors.tealAccent.withValues(alpha: 0.85);
 
     return Positioned.fill(
       child: IgnorePointer(
@@ -1360,8 +1360,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           padding: const EdgeInsets.all(12),
           child: DecoratedBox(
             decoration: BoxDecoration(
-        border: Border.all(
-          color: highlight.withValues(alpha: 0.25), width: 2),
+              border: Border.all(
+                  color: highlight.withValues(alpha: 0.25), width: 2),
               borderRadius: BorderRadius.circular(18),
             ),
             child: Padding(
@@ -1769,7 +1769,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     final resolvedProducts = <Product>[];
     for (final entry in sortedEntries) {
       final product = productMap[entry.productId];
-      if (product != null && product.isActive) {
+      if (product != null && product.isActive && product.isPublished) {
         resolvedProducts.add(product);
       }
     }
@@ -1824,9 +1824,9 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-      color: isActive
-        ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
-        : null,
+            color: isActive
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+                : null,
             border: Border(
               bottom: BorderSide(
                 color:
@@ -1895,8 +1895,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
-      ...byCategory[category]!
-        .map((definition) => _buildBlockDefinitionCard(definition, theme)),
+          ...byCategory[category]!.map(
+              (definition) => _buildBlockDefinitionCard(definition, theme)),
           const SizedBox(height: 24),
         ],
       ],
@@ -2151,8 +2151,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                   )
               : null,
           backgroundColor: theme.colorScheme.surfaceContainerHigh,
-      selectedColor:
-        theme.colorScheme.primary.withValues(alpha: 0.18),
+          selectedColor: theme.colorScheme.primary.withValues(alpha: 0.18),
           disabledColor: theme.colorScheme.surfaceContainerHighest,
           labelStyle: theme.textTheme.bodyMedium?.copyWith(
             color: isBlockVisible
@@ -2169,8 +2168,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-    side: BorderSide(
-      color: theme.dividerColor.withValues(alpha: 0.5)),
+        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
       ),
       elevation: 0,
       color: theme.colorScheme.surfaceContainerLowest,
@@ -2410,8 +2408,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
               labelText: field.label,
               border: const OutlineInputBorder(),
             ),
-      initialValue:
-        options.any((option) => option.value == value) ? value : null,
+            initialValue:
+                options.any((option) => option.value == value) ? value : null,
             items: options
                 .map(
                   (option) => DropdownMenuItem<String>(
@@ -4174,7 +4172,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
   Widget _buildThemePresetSection(ThemeData theme) {
     final helperStyle = theme.textTheme.bodySmall?.copyWith(
-  color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
     );
 
     return Column(
@@ -4223,8 +4221,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest
-          .withValues(alpha: 0.35),
+              color: theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
@@ -4248,10 +4246,10 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
     final Color borderColor = isActive
         ? theme.colorScheme.secondary
-  : theme.dividerColor.withValues(alpha: 0.5);
+        : theme.dividerColor.withValues(alpha: 0.5);
 
     final Color backgroundColor = isActive
-  ? theme.colorScheme.secondaryContainer.withValues(alpha: 0.6)
+        ? theme.colorScheme.secondaryContainer.withValues(alpha: 0.6)
         : theme.colorScheme.surface;
 
     return Container(
@@ -4547,10 +4545,10 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   bool _isPresetActive(ThemePreset preset) {
     const double tolerance = 0.5;
 
-  return preset.primaryColor == _primaryColor.toARGB32() &&
-    preset.accentColor == _accentColor.toARGB32() &&
-    preset.backgroundColor == _backgroundColor.toARGB32() &&
-    preset.textColor == _textColor.toARGB32() &&
+    return preset.primaryColor == _primaryColor.toARGB32() &&
+        preset.accentColor == _accentColor.toARGB32() &&
+        preset.backgroundColor == _backgroundColor.toARGB32() &&
+        preset.textColor == _textColor.toARGB32() &&
         preset.headingFont == _headingFont &&
         preset.bodyFont == _bodyFont &&
         (_headingSize - preset.headingSize).abs() <= tolerance &&

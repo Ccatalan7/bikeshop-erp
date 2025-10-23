@@ -302,6 +302,7 @@ class InventoryService extends ChangeNotifier {
       ),
       categoryId: json['category_id']?.toString(),
       categoryName: json['category_name'] as String?,
+  brandId: json['brand_id']?.toString(),
       brand: json['brand'] as String?,
       model: json['model'] as String?,
       specifications:

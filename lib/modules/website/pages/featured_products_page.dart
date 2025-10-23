@@ -292,6 +292,7 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
     FeaturedProduct featuredItem,
     WebsiteService service,
   ) {
+    final warningColor = Colors.orange.shade700;
     return Card(
       key: ValueKey(featuredItem.id),
       margin: const EdgeInsets.only(right: 12),
@@ -345,6 +346,30 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
+                  if (!product.isPublished || !product.isActive) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.visibility_off_outlined,
+                          size: 14,
+                          color: warningColor,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            !product.isActive ? 'Inactivo' : 'No publicado',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: warningColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -388,6 +413,7 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
     bool maxReached,
   ) {
     final theme = Theme.of(context);
+    final warningColor = Colors.orange.shade700;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -423,17 +449,45 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
                 child: const Icon(Icons.image, size: 24),
               ),
         title: Text(product.name),
-        subtitle: Row(
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('SKU: ${product.sku}'),
-            const SizedBox(width: 12),
-            Text(
-              ChileanUtils.formatCurrency(product.price),
-              style: const TextStyle(
-                color: Colors.green,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              children: [
+                Text('SKU: ${product.sku}'),
+                const SizedBox(width: 12),
+                Text(
+                  ChileanUtils.formatCurrency(product.price),
+                  style: const TextStyle(
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
+            if (!product.isPublished || !product.isActive)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.visibility_off_outlined,
+                      size: 16,
+                      color: warningColor,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      !product.isActive
+                          ? 'Producto inactivo (no visible en web)'
+                          : 'No publicado en la tienda online',
+                      style: TextStyle(
+                        color: warningColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
         trailing: isFeatured

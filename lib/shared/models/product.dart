@@ -14,6 +14,7 @@ class Product {
   final ProductCategory category;
   final String? categoryId; // Custom category reference
   final String? categoryName; // Resolved category name (if available)
+  final String? brandId;
   final String? brand;
   final String? model;
   final Map<String, String> specifications;
@@ -66,6 +67,7 @@ class Product {
     required this.category,
     this.categoryId,
     this.categoryName,
+    this.brandId,
     this.brand,
     this.model,
     this.specifications = const {},
@@ -125,6 +127,7 @@ class Product {
           json['category_id'] as String? ?? json['categoryId'] as String?,
       categoryName:
           json['category_name'] as String? ?? json['categoryName'] as String?,
+      brandId: json['brand_id'] as String? ?? json['brandId'] as String?,
       brand: json['brand'] as String?,
       model: json['model'] as String?,
       specifications:
@@ -191,6 +194,7 @@ class Product {
       'category': category.name,
       'category_id': categoryId,
       'category_name': categoryName,
+      'brand_id': brandId,
       'brand': brand,
       'model': model,
       'specifications': specifications,
@@ -250,7 +254,10 @@ class Product {
     ProductCategory? category,
     String? categoryId,
     String? categoryName,
+    String? brandId,
+    bool brandIdHasValue = false,
     String? brand,
+    bool brandHasValue = false,
     String? model,
     Map<String, String>? specifications,
     String? supplierId,
@@ -302,7 +309,8 @@ class Product {
       category: category ?? this.category,
       categoryId: categoryId ?? this.categoryId,
       categoryName: categoryName ?? this.categoryName,
-      brand: brand ?? this.brand,
+      brandId: (brandIdHasValue || brandId != null) ? brandId : this.brandId,
+      brand: (brandHasValue || brand != null) ? brand : this.brand,
       model: model ?? this.model,
       specifications: specifications ?? this.specifications,
       supplierId: supplierId ?? this.supplierId,

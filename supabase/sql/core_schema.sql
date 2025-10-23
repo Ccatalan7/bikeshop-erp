@@ -126,7 +126,6 @@ create table if not exists company_settings (
   updated_at timestamp with time zone not null default now()
 );
 
--- Migration: Insert default settings if not exists
 do $$
 begin
   -- Ensure home_icon setting exists
@@ -140,12 +139,43 @@ begin
   end if;
 end $$;
 
+create table if not exists product_brands (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  description text,
+  website text,
+  country text,
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_product_brands_name on product_brands (lower(name));
+create index if not exists idx_product_brands_is_active on product_brands (is_active);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and c.relname = 'product_brands'
+     and t.tgname = 'trg_product_brands_updated_at'
+  ) then
+    create trigger trg_product_brands_updated_at
+      before update on product_brands
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
+
 create table if not exists products (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   sku text unique,
   price numeric(12,2) not null default 0,
   cost numeric(12,2) not null default 0,
+  brand_id uuid references public.product_brands(id) on delete set null,
   inventory_qty integer not null default 0,
   created_at timestamp with time zone not null default now()
 );
@@ -201,6 +231,22 @@ begin
   -- Add category_name (resolved name)
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'category_name') then
     alter table products add column category_name text;
+  end if;
+
+  -- Add brand reference
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'brand_id') then
+    alter table products add column brand_id uuid references public.product_brands(id) on delete set null;
+  end if;
+
+  if not exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.products'::regclass
+       and conname = 'products_brand_id_fkey'
+  ) then
+    alter table products
+      add constraint products_brand_id_fkey
+        foreign key (brand_id) references public.product_brands(id) on delete set null;
   end if;
 
   -- Add brand
@@ -359,11 +405,44 @@ begin
     alter table products add column updated_at timestamp with time zone not null default now();
   end if;
 
+  -- Normalize existing brands into product_brands table and backfill brand_id
+  with normalized_brands as (
+    select lower(btrim(brand)) as normalized_name,
+           min(btrim(brand)) as canonical_name
+      from products
+     where brand is not null
+       and btrim(brand) <> ''
+     group by lower(btrim(brand))
+  )
+  insert into product_brands (name, created_at, updated_at)
+  select canonical_name, now(), now()
+    from normalized_brands nb
+   where not exists (
+     select 1
+       from product_brands pb
+      where lower(pb.name) = nb.normalized_name
+   );
+
+  update products p
+     set brand_id = pb.id
+    from product_brands pb
+   where p.brand_id is null
+     and p.brand is not null
+     and btrim(p.brand) <> ''
+     and lower(pb.name) = lower(btrim(p.brand));
+
+  update products p
+     set brand = pb.name
+    from product_brands pb
+   where p.brand_id = pb.id
+     and (p.brand is distinct from pb.name);
+
   -- Sync inventory_qty to stock_quantity for existing records
   update products set stock_quantity = inventory_qty where stock_quantity = 0 and inventory_qty > 0;
 end $$;
 
 create index if not exists idx_products_supplier_id on products(supplier_id);
+create index if not exists idx_products_brand_id on products(brand_id);
 create index if not exists idx_products_gtin on products(gtin);
 create index if not exists idx_products_hs_code on products(hs_code);
  
@@ -781,7 +860,25 @@ values
   ('1101', 'Caja General', 'asset', 'currentAsset', 'Efectivo disponible en caja y fondos inmediatos.'),
   ('1110', 'Bancos - Cuenta Corriente', 'asset', 'currentAsset', 'Saldos disponibles en cuentas corrientes bancarias.'),
   ('1190', 'Otros Activos Corrientes', 'asset', 'currentAsset', 'Activos circulantes no clasificados en otra cuenta específica.'),
-  ('1130', 'Cuentas por Cobrar Comerciales', 'asset', 'currentAsset', 'Saldos pendientes de cobro a clientes por ventas a crédito.')
+  ('1130', 'Cuentas por Cobrar Comerciales', 'asset', 'currentAsset', 'Saldos pendientes de cobro a clientes por ventas a crédito.'),
+  ('510000', 'Costo de Ventas', 'expense', 'costOfGoodsSold', 'Costos directos asociados a la venta de productos y servicios.'),
+  ('610100', 'Sueldos y Salarios', 'expense', 'operatingExpense', 'Remuneraciones del personal y pagos de nómina.'),
+  ('610200', 'Cotizaciones Previsionales y Salud', 'expense', 'operatingExpense', 'Aportes previsionales, salud y seguros obligatorios del personal.'),
+  ('610300', 'Honorarios Profesionales', 'expense', 'operatingExpense', 'Servicios profesionales externos y consultorías.'),
+  ('620100', 'Arriendo de Locales', 'expense', 'operatingExpense', 'Pagos de arriendo de oficinas, locales y bodegas.'),
+  ('620200', 'Servicios Básicos', 'expense', 'operatingExpense', 'Consumo de electricidad, agua, gas y otros servicios básicos.'),
+  ('620300', 'Telefonía e Internet', 'expense', 'operatingExpense', 'Planes de telefonía fija, móvil y servicios de internet.'),
+  ('620400', 'Mantención y Reparaciones', 'expense', 'operatingExpense', 'Gastos de mantenimiento preventivo y correctivo de infraestructura y equipos.'),
+  ('620500', 'Suministros de Oficina', 'expense', 'operatingExpense', 'Materiales de oficina, papelería e insumos administrativos.'),
+  ('630100', 'Marketing y Publicidad', 'expense', 'operatingExpense', 'Campañas de marketing, publicidad y promoción de la marca.'),
+  ('630200', 'Comisiones y Servicios de Venta', 'expense', 'operatingExpense', 'Comisiones pagadas a vendedores y servicios relacionados con ventas.'),
+  ('640100', 'Gastos de Viaje y Viáticos', 'expense', 'operatingExpense', 'Traslados, alojamiento y viáticos del personal.'),
+  ('640200', 'Capacitación y Desarrollo', 'expense', 'operatingExpense', 'Programas de formación, cursos y certificaciones del personal.'),
+  ('650100', 'Seguros Generales', 'expense', 'operatingExpense', 'Primas de seguros patrimoniales, de responsabilidad y otros.'),
+  ('650200', 'Impuestos y Contribuciones Municipales', 'expense', 'taxExpense', 'Patentes, contribuciones y otros impuestos municipales.'),
+  ('660100', 'Intereses y Gastos Financieros', 'expense', 'financialExpense', 'Intereses de créditos, comisiones bancarias y costos financieros.'),
+  ('670100', 'Depreciación y Amortización', 'expense', 'operatingExpense', 'Gastos por depreciación de activos fijos y amortización de intangibles.'),
+  ('680100', 'Gastos Varios', 'expense', 'operatingExpense', 'Gastos generales menores no clasificados en otras cuentas específicas.')
 on conflict (code) do update
 set
   name = excluded.name,
@@ -2673,6 +2770,1072 @@ create trigger trg_purchase_payments_change
   after insert or update or delete on public.purchase_payments
   for each row execute procedure public.handle_purchase_payment_change();
 
+-- ============================================================================
+-- EXPENSES MODULE - Professional Expense Management
+-- ============================================================================
+
+create sequence if not exists expense_number_seq;
+
+create table if not exists expense_categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  description text,
+  default_account_id uuid references accounts(id),
+  default_tax_rate numeric(5,2) not null default 0,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_expense_categories_name
+  on expense_categories (lower(name));
+
+create table if not exists expenses (
+  id uuid primary key default gen_random_uuid(),
+  expense_number text not null unique,
+  category_id uuid references expense_categories(id),
+  supplier_id uuid references suppliers(id) on delete set null,
+  supplier_name text,
+  supplier_rut text,
+  document_type text not null default 'invoice',
+  document_number text,
+  issue_date timestamp with time zone not null default now(),
+  due_date timestamp with time zone,
+  payment_terms text,
+  currency text not null default 'CLP',
+  exchange_rate numeric(12,6) not null default 1,
+  posting_status text not null default 'draft'
+    check (posting_status in ('draft','posted','void')),
+  payment_status text not null default 'pending'
+    check (payment_status in ('pending','scheduled','partial','paid','void')),
+  subtotal numeric(14,2) not null default 0,
+  tax_amount numeric(14,2) not null default 0,
+  total_amount numeric(14,2) not null default 0,
+  amount_paid numeric(14,2) not null default 0,
+  balance numeric(14,2) not null default 0,
+  notes text,
+  reference text,
+  approval_status text not null default 'pending'
+    check (approval_status in ('pending','approved','rejected')),
+  approved_by uuid references auth.users(id),
+  approved_at timestamp with time zone,
+  posted_at timestamp with time zone,
+  paid_at timestamp with time zone,
+  liability_account_id uuid references accounts(id),
+  payment_account_id uuid references accounts(id),
+  payment_method_id uuid references payment_methods(id),
+  tags text[] default '{}',
+  created_by uuid references auth.users(id),
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+alter table public.expenses
+  add column if not exists expense_number text,
+  add column if not exists category_id uuid references public.expense_categories(id),
+  add column if not exists supplier_id uuid references public.suppliers(id) on delete set null,
+  add column if not exists supplier_name text,
+  add column if not exists supplier_rut text,
+  add column if not exists document_type text not null default 'invoice',
+  add column if not exists document_number text,
+  add column if not exists issue_date timestamp with time zone not null default now(),
+  add column if not exists due_date timestamp with time zone,
+  add column if not exists payment_terms text,
+  add column if not exists currency text not null default 'CLP',
+  add column if not exists exchange_rate numeric(12,6) not null default 1,
+  add column if not exists posting_status text not null default 'draft',
+  add column if not exists payment_status text not null default 'pending',
+  add column if not exists subtotal numeric(14,2) not null default 0,
+  add column if not exists tax_amount numeric(14,2) not null default 0,
+  add column if not exists total_amount numeric(14,2) not null default 0,
+  add column if not exists amount_paid numeric(14,2) not null default 0,
+  add column if not exists balance numeric(14,2) not null default 0,
+  add column if not exists notes text,
+  add column if not exists reference text,
+  add column if not exists approval_status text not null default 'pending',
+  add column if not exists approved_by uuid references auth.users(id),
+  add column if not exists approved_at timestamp with time zone,
+  add column if not exists posted_at timestamp with time zone,
+  add column if not exists paid_at timestamp with time zone,
+  add column if not exists liability_account_id uuid references accounts(id),
+  add column if not exists payment_account_id uuid references accounts(id),
+  add column if not exists payment_method_id uuid references payment_methods(id),
+  add column if not exists tags text[] default '{}',
+  add column if not exists created_by uuid references auth.users(id),
+  add column if not exists created_at timestamp with time zone not null default now(),
+  add column if not exists updated_at timestamp with time zone not null default now();
+
+do $$
+begin
+  if exists (
+    select 1
+      from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'expenses'
+       and column_name = 'expense_number'
+       and is_nullable = 'YES'
+  ) then
+    alter table public.expenses
+      alter column expense_number set not null;
+  end if;
+
+  if not exists (
+    select 1
+      from information_schema.table_constraints
+     where table_schema = 'public'
+       and table_name = 'expenses'
+       and constraint_type = 'UNIQUE'
+       and constraint_name = 'expenses_expense_number_key'
+  ) then
+    alter table public.expenses
+      add constraint expenses_expense_number_key unique (expense_number);
+  end if;
+
+  if not exists (
+    select 1
+      from information_schema.check_constraints
+     where constraint_schema = 'public'
+       and constraint_name = 'expenses_posting_status_check'
+  ) then
+    alter table public.expenses
+      add constraint expenses_posting_status_check
+        check (posting_status in ('draft','posted','void'));
+  end if;
+
+  if not exists (
+    select 1
+      from information_schema.check_constraints
+     where constraint_schema = 'public'
+       and constraint_name = 'expenses_payment_status_check'
+  ) then
+    alter table public.expenses
+      add constraint expenses_payment_status_check
+        check (payment_status in ('pending','scheduled','partial','paid','void'));
+  end if;
+end $$;
+
+create index if not exists idx_expenses_issue_date on expenses(issue_date);
+create index if not exists idx_expenses_supplier_id on expenses(supplier_id);
+create index if not exists idx_expenses_category_id on expenses(category_id);
+create index if not exists idx_expenses_posting_status on expenses(posting_status);
+create index if not exists idx_expenses_payment_status on expenses(payment_status);
+
+create table if not exists expense_lines (
+  id uuid primary key default gen_random_uuid(),
+  expense_id uuid not null references expenses(id) on delete cascade,
+  line_index integer not null default 0,
+  account_id uuid not null references accounts(id),
+  account_code text not null,
+  account_name text not null,
+  description text,
+  quantity numeric(12,4) not null default 1,
+  unit_price numeric(14,4) not null default 0,
+  subtotal numeric(14,2) not null default 0,
+  tax_rate numeric(6,3) not null default 0,
+  tax_amount numeric(14,2) not null default 0,
+  total numeric(14,2) not null default 0,
+  cost_center text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_expense_lines_expense_id
+  on expense_lines(expense_id);
+create index if not exists idx_expense_lines_account_id
+  on expense_lines(account_id);
+
+create table if not exists expense_payments (
+  id uuid primary key default gen_random_uuid(),
+  expense_id uuid not null references expenses(id) on delete cascade,
+  payment_method_id uuid references payment_methods(id),
+  payment_account_id uuid references accounts(id),
+  amount numeric(14,2) not null default 0,
+  payment_date timestamp with time zone not null default now(),
+  reference text,
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_expense_payments_expense_id
+  on expense_payments(expense_id);
+create index if not exists idx_expense_payments_method
+  on expense_payments(payment_method_id);
+
+create table if not exists expense_attachments (
+  id uuid primary key default gen_random_uuid(),
+  expense_id uuid not null references expenses(id) on delete cascade,
+  file_name text not null,
+  file_url text not null,
+  file_type text,
+  file_size integer,
+  uploaded_by uuid references auth.users(id),
+  uploaded_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_expense_attachments_expense_id
+  on expense_attachments(expense_id);
+
+create or replace function public.generate_expense_number()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_next bigint;
+begin
+  select nextval('expense_number_seq') into v_next;
+  return format('GTO-%s-%s', to_char(now(), 'YYYY'), lpad(v_next::text, 5, '0'));
+exception
+  when others then
+    raise notice 'generate_expense_number fallback due to %', SQLERRM;
+    return concat('GTO-', to_char(now(), 'YYYYMMDDHH24MISS'));
+end;
+$$;
+
+create or replace function public.prepare_expense_record()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_posting text := lower(coalesce(NEW.posting_status, 'draft'));
+  v_payment text := lower(coalesce(NEW.payment_status, 'pending'));
+begin
+  if TG_OP = 'INSERT' then
+    if coalesce(NEW.expense_number, '') = '' then
+      NEW.expense_number := public.generate_expense_number();
+    end if;
+    NEW.created_at := coalesce(NEW.created_at, now());
+    if v_posting = 'posted' then
+      NEW.posted_at := coalesce(NEW.posted_at, now());
+    end if;
+    if v_payment = 'paid' then
+      NEW.paid_at := coalesce(NEW.paid_at, now());
+    end if;
+  elsif TG_OP = 'UPDATE' then
+    if v_posting = 'posted' and lower(coalesce(OLD.posting_status, 'draft')) <> 'posted' then
+      NEW.posted_at := coalesce(NEW.posted_at, now());
+    elsif v_posting <> 'posted' then
+      NEW.posted_at := null;
+    end if;
+
+    if v_payment = 'paid' and lower(coalesce(OLD.payment_status, 'pending')) <> 'paid' then
+      NEW.paid_at := coalesce(NEW.paid_at, now());
+    elsif v_payment <> 'paid' then
+      NEW.paid_at := null;
+    end if;
+  end if;
+
+  NEW.updated_at := now();
+  return NEW;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_trigger
+     where tgname = 'trg_expenses_prepare'
+       and tgrelid = 'public.expenses'::regclass
+  ) then
+    create trigger trg_expenses_prepare
+      before insert or update on public.expenses
+      for each row execute procedure public.prepare_expense_record();
+  end if;
+end;
+$$;
+
+create or replace function public.prepare_expense_line()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_account record;
+begin
+  NEW.quantity := coalesce(NEW.quantity, 1);
+  NEW.unit_price := coalesce(NEW.unit_price, 0);
+  NEW.subtotal := round(NEW.quantity * NEW.unit_price, 2);
+  NEW.tax_rate := coalesce(NEW.tax_rate, 0);
+
+  if NEW.tax_amount is null then
+    NEW.tax_amount := round((NEW.subtotal * NEW.tax_rate) / 100, 2);
+  end if;
+
+  if NEW.total is null then
+    NEW.total := NEW.subtotal + NEW.tax_amount;
+  end if;
+
+  if (NEW.account_code is null or NEW.account_name is null) and NEW.account_id is not null then
+    select code, name
+      into v_account
+      from public.accounts
+     where id = NEW.account_id;
+    if found then
+      NEW.account_code := coalesce(NEW.account_code, v_account.code);
+      NEW.account_name := coalesce(NEW.account_name, v_account.name);
+    end if;
+  end if;
+
+  if TG_OP = 'INSERT' then
+    NEW.created_at := coalesce(NEW.created_at, now());
+  end if;
+
+  NEW.updated_at := now();
+  return NEW;
+end;
+$$;
+
+create or replace function public.handle_expense_line_change()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if TG_OP = 'DELETE' then
+    perform public.recalculate_expense_totals(OLD.expense_id);
+    return OLD;
+  else
+    perform public.recalculate_expense_totals(NEW.expense_id);
+    return NEW;
+  end if;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_trigger
+     where tgname = 'trg_expense_lines_prepare'
+       and tgrelid = 'public.expense_lines'::regclass
+  ) then
+    create trigger trg_expense_lines_prepare
+      before insert or update on public.expense_lines
+      for each row execute procedure public.prepare_expense_line();
+  end if;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_trigger
+     where tgname = 'trg_expense_lines_change'
+       and tgrelid = 'public.expense_lines'::regclass
+  ) then
+    create trigger trg_expense_lines_change
+      after insert or update or delete on public.expense_lines
+      for each row execute procedure public.handle_expense_line_change();
+  end if;
+end;
+$$;
+
+create or replace function public.prepare_expense_payment()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if NEW.payment_date is null then
+    NEW.payment_date := now();
+  end if;
+
+  if TG_OP = 'INSERT' then
+    NEW.created_at := coalesce(NEW.created_at, now());
+  end if;
+
+  NEW.updated_at := now();
+  return NEW;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_trigger
+     where tgname = 'trg_expense_payments_prepare'
+       and tgrelid = 'public.expense_payments'::regclass
+  ) then
+    create trigger trg_expense_payments_prepare
+      before insert or update on public.expense_payments
+      for each row execute procedure public.prepare_expense_payment();
+  end if;
+end;
+$$;
+
+create or replace function public.recalculate_expense_totals(p_expense_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expense record;
+  v_subtotal numeric(14,2) := 0;
+  v_tax numeric(14,2) := 0;
+  v_total numeric(14,2) := 0;
+  v_paid numeric(14,2) := 0;
+  v_prev_payment text;
+  v_new_payment text;
+begin
+  if p_expense_id is null then
+    return;
+  end if;
+
+  select e.id,
+         lower(coalesce(e.payment_status, 'pending')) as payment_status,
+         lower(coalesce(e.posting_status, 'draft')) as posting_status,
+         e.paid_at
+    into v_expense
+    from public.expenses e
+   where e.id = p_expense_id
+   for update;
+
+  if not found then
+    return;
+  end if;
+
+  select
+      coalesce(sum(subtotal), 0),
+      coalesce(sum(tax_amount), 0),
+      coalesce(sum(total), 0)
+    into v_subtotal, v_tax, v_total
+    from public.expense_lines
+   where expense_id = p_expense_id;
+
+  select coalesce(sum(amount), 0)
+    into v_paid
+    from public.expense_payments
+   where expense_id = p_expense_id;
+
+  v_prev_payment := v_expense.payment_status;
+
+  if v_total = 0 then
+    v_new_payment := v_prev_payment;
+  elsif v_paid <= 0 then
+    if v_prev_payment = 'scheduled' then
+      v_new_payment := 'scheduled';
+    else
+      v_new_payment := 'pending';
+    end if;
+  elsif v_paid + 0.01 < v_total then
+    v_new_payment := 'partial';
+  else
+    v_new_payment := 'paid';
+  end if;
+
+  update public.expenses
+     set subtotal = v_subtotal,
+         tax_amount = v_tax,
+         total_amount = v_total,
+         amount_paid = v_paid,
+         balance = greatest(v_total - v_paid, 0),
+         payment_status = case
+           when v_expense.posting_status = 'void' then payment_status
+           when v_prev_payment = 'void' then 'void'
+           else v_new_payment
+         end,
+         paid_at = case
+           when v_expense.posting_status <> 'void'
+             and v_total > 0
+             and v_paid + 0.01 >= v_total then coalesce(paid_at, now())
+           when v_new_payment <> 'paid' then null
+           else paid_at
+         end,
+         updated_at = now()
+   where id = p_expense_id;
+end;
+$$;
+
+create or replace function public.create_expense_journal_entry(p_expense_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expense record;
+  v_entry_id uuid := gen_random_uuid();
+  v_exists boolean;
+  v_liability_account_id uuid;
+  v_liability_account_code text := '2105';
+  v_liability_account_name text := 'Cuentas por Pagar - Gastos';
+  v_tax_account_id uuid;
+  v_tax_account_code text := '1140';
+  v_tax_account_name text := 'IVA Crédito Fiscal';
+  v_cash_account record;
+  v_total numeric(14,2);
+  v_tax_total numeric(14,2);
+  v_credit_account_id uuid;
+  v_credit_account_code text;
+  v_credit_account_name text;
+  v_description text;
+  v_supplier text;
+  v_document text;
+  v_line record;
+  v_line_count integer := 0;
+  v_default_account record;
+begin
+  select e.*
+    into v_expense
+    from public.expenses e
+   where e.id = p_expense_id;
+
+  if not found then
+    return;
+  end if;
+
+  if lower(coalesce(v_expense.posting_status, 'draft')) <> 'posted' then
+    return;
+  end if;
+
+  v_total := coalesce(v_expense.total_amount, 0);
+
+  if v_total = 0 then
+    return;
+  end if;
+
+  select exists (
+           select 1
+             from public.journal_entries
+            where source_module = 'expenses'
+              and source_reference = v_expense.id::text
+         )
+    into v_exists;
+
+  if v_exists then
+    return;
+  end if;
+
+  v_liability_account_id := coalesce(
+    v_expense.liability_account_id,
+    public.ensure_account(
+      v_liability_account_code,
+      v_liability_account_name,
+      'liability',
+      'currentLiability',
+      'Obligaciones por gastos pendientes de pago',
+      null
+    )
+  );
+
+  if v_expense.payment_account_id is not null then
+    select a.id, a.code, a.name
+      into v_cash_account
+      from public.accounts a
+     where a.id = v_expense.payment_account_id;
+  elsif v_expense.payment_method_id is not null then
+    select a.id, a.code, a.name
+      into v_cash_account
+      from public.payment_methods pm
+      join public.accounts a on a.id = pm.account_id
+     where pm.id = v_expense.payment_method_id;
+  end if;
+
+  v_tax_account_id := public.ensure_account(
+    v_tax_account_code,
+    v_tax_account_name,
+    'asset',
+    'currentAsset',
+    'Crédito fiscal IVA soportado en compras',
+    null
+  );
+
+  v_supplier := coalesce(nullif(v_expense.supplier_name, ''), 'Proveedor');
+  v_document := coalesce(nullif(v_expense.document_number, ''), v_expense.expense_number);
+  v_description := format('Gasto %s - %s', v_document, v_supplier);
+
+  insert into public.journal_entries (
+    id,
+    entry_number,
+    date,
+    description,
+    type,
+    source_module,
+    source_reference,
+    status,
+    total_debit,
+    total_credit,
+    created_at,
+    updated_at
+  ) values (
+    v_entry_id,
+    concat('GTO-', to_char(now(), 'YYYYMMDDHH24MISS')),
+    coalesce(v_expense.issue_date, now()),
+    v_description,
+    'purchase',
+    'expenses',
+    v_expense.id::text,
+    'posted',
+    v_total,
+    v_total,
+    now(),
+    now()
+  );
+
+  for v_line in
+    select el.*
+      from public.expense_lines el
+     where el.expense_id = v_expense.id
+     order by el.line_index, el.created_at
+  loop
+    v_line_count := v_line_count + 1;
+    insert into public.journal_lines (
+      id,
+      entry_id,
+      account_id,
+      account_code,
+      account_name,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      gen_random_uuid(),
+      v_entry_id,
+      v_line.account_id,
+      v_line.account_code,
+      v_line.account_name,
+      coalesce(nullif(v_line.description, ''), v_description),
+      coalesce(v_line.subtotal, 0),
+      0,
+      now(),
+      now()
+    );
+  end loop;
+
+  if v_line_count = 0 then
+    if v_expense.category_id is not null then
+      select a.id, a.code, a.name
+        into v_default_account
+        from public.expense_categories ec
+        join public.accounts a on a.id = ec.default_account_id
+       where ec.id = v_expense.category_id;
+    end if;
+
+    if not found or v_default_account.id is null then
+      select public.ensure_account(
+               '5200',
+               'Gastos Generales',
+               'expense',
+               'operatingExpense',
+               'Gastos generales y administrativos',
+               null
+             ) as id,
+             '5200' as code,
+             'Gastos Generales' as name
+        into v_default_account;
+    end if;
+
+    insert into public.journal_lines (
+      id,
+      entry_id,
+      account_id,
+      account_code,
+      account_name,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      gen_random_uuid(),
+      v_entry_id,
+      v_default_account.id,
+      v_default_account.code,
+      v_default_account.name,
+      v_description,
+      coalesce(v_expense.subtotal, v_total - coalesce(v_expense.tax_amount, 0)),
+      0,
+      now(),
+      now()
+    );
+  end if;
+
+  v_tax_total := coalesce(v_expense.tax_amount, 0);
+  if v_tax_total <> 0 then
+    insert into public.journal_lines (
+      id,
+      entry_id,
+      account_id,
+      account_code,
+      account_name,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      gen_random_uuid(),
+      v_entry_id,
+      v_tax_account_id,
+      v_tax_account_code,
+      v_tax_account_name,
+      format('IVA crédito gasto %s', v_document),
+      v_tax_total,
+      0,
+      now(),
+      now()
+    );
+  end if;
+
+  if lower(coalesce(v_expense.payment_status, 'pending')) = 'paid'
+     and coalesce(v_expense.balance, 0) <= 0.01
+     and v_cash_account.id is not null then
+    v_credit_account_id := v_cash_account.id;
+    v_credit_account_code := v_cash_account.code;
+    v_credit_account_name := v_cash_account.name;
+  else
+    v_credit_account_id := v_liability_account_id;
+    select code, name
+      into v_credit_account_code, v_credit_account_name
+      from public.accounts
+     where id = v_credit_account_id;
+  end if;
+
+  insert into public.journal_lines (
+    id,
+    entry_id,
+    account_id,
+    account_code,
+    account_name,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
+    gen_random_uuid(),
+    v_entry_id,
+    v_credit_account_id,
+    v_credit_account_code,
+    v_credit_account_name,
+    v_description,
+    0,
+    v_total,
+    now(),
+    now()
+  );
+end;
+$$;
+
+create or replace function public.delete_expense_journal_entry(p_expense_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_expense_id is null then
+    return;
+  end if;
+
+  delete from public.journal_entries
+   where source_module = 'expenses'
+     and source_reference = p_expense_id::text;
+end;
+$$;
+
+create or replace function public.create_expense_payment_journal_entry(p_payment_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_payment record;
+  v_expense record;
+  v_entry_id uuid := gen_random_uuid();
+  v_exists boolean;
+  v_liability_account_id uuid;
+  v_liability_code text := '2105';
+  v_liability_name text := 'Cuentas por Pagar - Gastos';
+  v_cash_account record;
+  v_description text;
+begin
+  select ep.*
+    into v_payment
+    from public.expense_payments ep
+   where ep.id = p_payment_id;
+
+  if not found then
+    return;
+  end if;
+
+  select e.*
+    into v_expense
+    from public.expenses e
+   where e.id = v_payment.expense_id;
+
+  if not found then
+    return;
+  end if;
+
+  if lower(coalesce(v_expense.posting_status, 'draft')) <> 'posted' then
+    return;
+  end if;
+
+  if coalesce(v_payment.amount, 0) = 0 then
+    return;
+  end if;
+
+  select exists (
+           select 1
+             from public.journal_entries
+            where source_module = 'expense_payments'
+              and source_reference = v_payment.id::text
+         )
+    into v_exists;
+
+  if v_exists then
+    return;
+  end if;
+
+  v_liability_account_id := coalesce(
+    v_expense.liability_account_id,
+    public.ensure_account(
+      v_liability_code,
+      v_liability_name,
+      'liability',
+      'currentLiability',
+      'Obligaciones por gastos pendientes de pago',
+      null
+    )
+  );
+
+  if v_payment.payment_account_id is not null then
+    select a.id, a.code, a.name
+      into v_cash_account
+      from public.accounts a
+     where a.id = v_payment.payment_account_id;
+  elsif v_payment.payment_method_id is not null then
+    select a.id, a.code, a.name
+      into v_cash_account
+      from public.payment_methods pm
+      join public.accounts a on a.id = pm.account_id
+     where pm.id = v_payment.payment_method_id;
+  end if;
+
+  if v_cash_account.id is null then
+    select a.id, a.code, a.name
+      into v_cash_account
+      from public.accounts a
+     where a.code = '1101'
+     limit 1;
+  end if;
+
+  v_description := format('Pago gasto %s', coalesce(v_expense.expense_number, v_expense.id::text));
+
+  insert into public.journal_entries (
+    id,
+    entry_number,
+    date,
+    description,
+    type,
+    source_module,
+    source_reference,
+    status,
+    total_debit,
+    total_credit,
+    created_at,
+    updated_at
+  ) values (
+    v_entry_id,
+    concat('GTPAY-', to_char(now(), 'YYYYMMDDHH24MISS')),
+    coalesce(v_payment.payment_date, now()),
+    v_description,
+    'payment',
+    'expense_payments',
+    v_payment.id::text,
+    'posted',
+    v_payment.amount,
+    v_payment.amount,
+    now(),
+    now()
+  );
+
+  insert into public.journal_lines (
+    id,
+    entry_id,
+    account_id,
+    account_code,
+    account_name,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
+    gen_random_uuid(),
+    v_entry_id,
+    v_liability_account_id,
+    (select code from public.accounts where id = v_liability_account_id),
+    (select name from public.accounts where id = v_liability_account_id),
+    v_description,
+    v_payment.amount,
+    0,
+    now(),
+    now()
+  );
+
+  insert into public.journal_lines (
+    id,
+    entry_id,
+    account_id,
+    account_code,
+    account_name,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
+    gen_random_uuid(),
+    v_entry_id,
+    v_cash_account.id,
+    v_cash_account.code,
+    v_cash_account.name,
+    v_description,
+    0,
+    v_payment.amount,
+    now(),
+    now()
+  );
+end;
+$$;
+
+create or replace function public.delete_expense_payment_journal_entry(p_payment_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_payment_id is null then
+    return;
+  end if;
+
+  delete from public.journal_entries
+   where source_module = 'expense_payments'
+     and source_reference = p_payment_id::text;
+end;
+$$;
+
+create or replace function public.process_expense_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_old_posted boolean := lower(coalesce(OLD.posting_status, 'draft')) = 'posted';
+  v_new_posted boolean := lower(coalesce(NEW.posting_status, 'draft')) = 'posted';
+begin
+  if pg_trigger_depth() > 1 then
+    if TG_OP = 'DELETE' then
+      return OLD;
+    else
+      return NEW;
+    end if;
+  end if;
+
+  if TG_OP = 'INSERT' then
+    perform public.recalculate_expense_totals(NEW.id);
+    if v_new_posted then
+      perform public.create_expense_journal_entry(NEW.id);
+    end if;
+    return NEW;
+
+  elsif TG_OP = 'UPDATE' then
+    perform public.recalculate_expense_totals(NEW.id);
+
+    if v_old_posted and not v_new_posted then
+      perform public.delete_expense_journal_entry(OLD.id);
+    elsif not v_old_posted and v_new_posted then
+      perform public.create_expense_journal_entry(NEW.id);
+    elsif v_old_posted and v_new_posted then
+      perform public.delete_expense_journal_entry(OLD.id);
+      perform public.create_expense_journal_entry(NEW.id);
+    end if;
+
+    return NEW;
+
+  elsif TG_OP = 'DELETE' then
+    if v_old_posted then
+      perform public.delete_expense_journal_entry(OLD.id);
+    end if;
+    return OLD;
+  end if;
+
+  return NULL;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_trigger
+     where tgname = 'trg_expenses_change'
+       and tgrelid = 'public.expenses'::regclass
+  ) then
+    create trigger trg_expenses_change
+      after insert or update or delete on public.expenses
+      for each row execute procedure public.process_expense_change();
+  end if;
+end;
+$$;
+
+create or replace function public.handle_expense_payment_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if TG_OP = 'INSERT' then
+    perform public.recalculate_expense_totals(NEW.expense_id);
+    perform public.create_expense_payment_journal_entry(NEW.id);
+    return NEW;
+
+  elsif TG_OP = 'UPDATE' then
+    perform public.recalculate_expense_totals(NEW.expense_id);
+    perform public.delete_expense_payment_journal_entry(OLD.id);
+    perform public.create_expense_payment_journal_entry(NEW.id);
+    return NEW;
+
+  elsif TG_OP = 'DELETE' then
+    perform public.recalculate_expense_totals(OLD.expense_id);
+    perform public.delete_expense_payment_journal_entry(OLD.id);
+    return OLD;
+  end if;
+
+  return NULL;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_trigger
+     where tgname = 'trg_expense_payments_change'
+       and tgrelid = 'public.expense_payments'::regclass
+  ) then
+    create trigger trg_expense_payments_change
+      after insert or update or delete on public.expense_payments
+      for each row execute procedure public.handle_expense_payment_change();
+  end if;
+end;
+$$;
+
 create table if not exists stock_movements (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references products(id) on delete cascade,
@@ -3625,6 +4788,7 @@ end $$;
 -- Basic RLS scaffolding: enable on each table; policies to be tailored per role.
 alter table customers enable row level security;
 alter table products enable row level security;
+alter table product_brands enable row level security;
 alter table sales_invoices enable row level security;
 alter table sales_payments enable row level security;
 alter table stock_movements enable row level security;
@@ -3773,6 +4937,70 @@ begin
   ) then
     create policy "Authenticated suppliers delete"
       on suppliers
+      for delete
+      to authenticated
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'product_brands'
+      and policyname = 'Authenticated product_brands read'
+  ) then
+    create policy "Authenticated product_brands read"
+      on product_brands
+      for select
+      using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'product_brands'
+      and policyname = 'Authenticated product_brands insert'
+  ) then
+    create policy "Authenticated product_brands insert"
+      on product_brands
+      for insert
+      to authenticated
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'product_brands'
+      and policyname = 'Authenticated product_brands update'
+  ) then
+    create policy "Authenticated product_brands update"
+      on product_brands
+      for update
+      to authenticated
+      using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'product_brands'
+      and policyname = 'Authenticated product_brands delete'
+  ) then
+    create policy "Authenticated product_brands delete"
+      on product_brands
       for delete
       to authenticated
       using (auth.role() = 'authenticated');
@@ -4728,6 +5956,99 @@ begin
     end,
     a.category,
     a.code;
+end;
+$$;
+
+-- Function 10.1: Income vs Expense time series for dashboards (last N months)
+create or replace function public.get_income_expense_timeseries(
+  p_months integer default 12
+)
+returns table (
+  period_start date,
+  period_end date,
+  income numeric(14,2),
+  expense numeric(14,2)
+)
+language sql
+security definer
+set search_path = public
+as $$
+  with month_windows as (
+    select
+      date_trunc('month', current_timestamp) - make_interval(months => m.month_index) as period_start
+    from generate_series(0, greatest(p_months, 1) - 1) as m(month_index)
+  )
+  select
+    mw.period_start::date,
+    (mw.period_start + interval '1 month' - interval '1 day')::date as period_end,
+    coalesce(
+      (
+        select
+          sum(coalesce(jl.credit_amount, 0) - coalesce(jl.debit_amount, 0))
+        from journal_lines jl
+        join journal_entries je on je.id = jl.entry_id
+        join accounts a on a.id = jl.account_id
+        where je.status = 'posted'
+          and a.type = 'income'
+          and je.entry_date >= mw.period_start
+          and je.entry_date < mw.period_start + interval '1 month'
+      ),
+      0
+    )::numeric(14,2) as income,
+    coalesce(
+      (
+        select
+          sum(coalesce(jl.debit_amount, 0) - coalesce(jl.credit_amount, 0))
+        from journal_lines jl
+        join journal_entries je on je.id = jl.entry_id
+        join accounts a on a.id = jl.account_id
+        where je.status = 'posted'
+          and a.type = 'expense'
+          and je.entry_date >= mw.period_start
+          and je.entry_date < mw.period_start + interval '1 month'
+      ),
+      0
+    )::numeric(14,2) as expense
+  from month_windows mw
+  order by mw.period_start;
+$$;
+
+-- Function 10.2: Top expense accounts for a period (for donut charts)
+create or replace function public.get_expense_breakdown(
+  p_start_date timestamp with time zone,
+  p_end_date timestamp with time zone,
+  p_limit integer default 6
+)
+returns table (
+  account_id uuid,
+  account_code text,
+  account_name text,
+  amount numeric(14,2)
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select
+    a.id,
+    a.code,
+    a.name,
+    coalesce(sum(jl.debit_amount), 0) - coalesce(sum(jl.credit_amount), 0)
+      as amount
+  from accounts a
+  join journal_lines jl on jl.account_id = a.id
+  join journal_entries je on je.id = jl.entry_id
+  where a.type = 'expense'
+    and a.is_active = true
+    and je.status = 'posted'
+    and je.entry_date >= p_start_date
+    and je.entry_date <= p_end_date
+  group by a.id, a.code, a.name
+  having coalesce(sum(jl.debit_amount), 0) - coalesce(sum(jl.credit_amount), 0) <> 0
+  order by amount desc
+  limit greatest(p_limit, 1);
 end;
 $$;
 

@@ -12,6 +12,9 @@ import '../../modules/accounting/pages/journal_entry_form_page.dart';
 import '../../modules/accounting/pages/financial_reports_hub_page.dart';
 import '../../modules/accounting/pages/income_statement_page.dart';
 import '../../modules/accounting/pages/balance_sheet_page.dart';
+import '../../modules/accounting/pages/expense_list_page.dart';
+import '../../modules/accounting/pages/expense_detail_page.dart';
+import '../../modules/accounting/pages/expense_form_page.dart';
 import '../../modules/crm/pages/customer_list_page.dart';
 import '../../modules/crm/pages/customer_form_page.dart';
 import '../../modules/crm/pages/customer_bike_directory_page.dart';
@@ -23,6 +26,8 @@ import '../../modules/inventory/pages/product_form_page.dart';
 import '../../modules/inventory/pages/product_import_page.dart';
 import '../../modules/inventory/pages/category_list_page.dart';
 import '../../modules/inventory/pages/category_form_page.dart';
+import '../../modules/inventory/pages/brand_list_page.dart';
+import '../../modules/inventory/pages/brand_form_page.dart';
 import '../../modules/inventory/pages/stock_movement_list_page.dart';
 import '../../modules/sales/pages/invoice_list_page.dart';
 import '../../modules/sales/pages/invoice_form_page.dart';
@@ -260,6 +265,44 @@ class AppRouter {
           ),
         ),
         GoRoute(
+          path: '/accounting/expenses',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const ExpenseListPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/accounting/expenses/new',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const ExpenseFormPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/accounting/expenses/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              ExpenseDetailPage(expenseId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/accounting/expenses/:id/edit',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              ExpenseFormPage(expenseId: id),
+            );
+          },
+        ),
+        GoRoute(
           path: '/accounting/accounts/new',
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
@@ -483,6 +526,33 @@ class AppRouter {
               context,
               state,
               CategoryFormPage(categoryId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/inventory/brands',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const BrandListPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/inventory/brands/new',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const BrandFormPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/inventory/brands/:id/edit',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              BrandFormPage(brandId: id),
             );
           },
         ),

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:mime/mime.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'error_reporting_service.dart';
 
@@ -32,6 +33,23 @@ class ImageService {
     return sanitized;
   }
 
+  static String _inferContentType(Uint8List bytes, String fileName) {
+    // Try mime package first (uses file name + header bytes)
+    final inferred = lookupMimeType(fileName, headerBytes: bytes);
+    if (inferred != null && inferred.isNotEmpty) {
+      return inferred;
+    }
+
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.svg')) return 'image/svg+xml';
+
+    return 'application/octet-stream';
+  }
+
   /// Upload image bytes directly - WEB ONLY VERSION
   static Future<String?> uploadBytes({
     required Uint8List bytes,
@@ -54,10 +72,13 @@ class ImageService {
 
       final storageFile = _client.storage.from(bucket);
 
+      final detectedContentType =
+          contentType ?? _inferContentType(bytes, sanitizedFileName);
+
       final options = FileOptions(
         cacheControl: '3600',
         upsert: true,
-        contentType: contentType ?? 'image/jpeg',
+        contentType: detectedContentType,
       );
 
       await storageFile.uploadBinary(objectPath, bytes, fileOptions: options);

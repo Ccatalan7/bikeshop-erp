@@ -263,6 +263,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     child: Image.asset(
                       'assets/images/vinabike_logo.png',
                       fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
                       semanticLabel:
                           storeName.isNotEmpty ? storeName : 'Vinabike',
                       errorBuilder: (context, error, stackTrace) => Text(
