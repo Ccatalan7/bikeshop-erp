@@ -258,43 +258,30 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               children: [
                 InkWell(
                   onTap: () => context.go('/tienda'),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        height: 48,
-                        child: Image.asset(
-                          'assets/images/vinabike_logo.png',
-                          fit: BoxFit.contain,
-                          semanticLabel:
-                              storeName.isNotEmpty ? storeName : 'Vinabike',
-                          errorBuilder: (context, error, stackTrace) => Text(
-                            storeName.isNotEmpty
-                                ? storeName.toUpperCase()
-                                : 'VINABIKE',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineMedium
-                                ?.copyWith(
-                                  color: primaryColor,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1,
-                                ),
-                          ),
-                        ),
+                  child: SizedBox(
+                    height: 48,
+                    child: Image.asset(
+                      'assets/images/vinabike_logo.png',
+                      fit: BoxFit.contain,
+                      semanticLabel:
+                          storeName.isNotEmpty ? storeName : 'Vinabike',
+                      errorBuilder: (context, error, stackTrace) => Text(
+                        storeName.isNotEmpty
+                            ? storeName.toUpperCase()
+                            : 'VINABIKE',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
                       ),
-                      if (storeDescription.isNotEmpty)
-                        Text(
-                          storeDescription,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: PublicStoreTheme.textSecondary,
-                                  ),
-                        ),
-                    ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: 48),
+                const SizedBox(width: 24),
                 Expanded(
                   child: Row(
                     children: [
