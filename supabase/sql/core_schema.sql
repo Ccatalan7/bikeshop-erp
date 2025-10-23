@@ -1348,7 +1348,7 @@ begin
   insert into public.journal_entries (
     id,
     entry_number,
-    date,
+    entry_date,
     description,
     type,
     source_module,
@@ -1624,7 +1624,7 @@ begin
   insert into public.journal_entries (
     id,
     entry_number,
-    date,
+    entry_date,
     description,
     type,
     source_module,
@@ -2118,7 +2118,7 @@ begin
   insert into public.journal_entries (
     id,
     entry_number,
-    date,
+    entry_date,
     description,
     type,
     source_module,
@@ -3191,7 +3191,10 @@ begin
   select e.id,
          lower(coalesce(e.payment_status, 'pending')) as payment_status,
          lower(coalesce(e.posting_status, 'draft')) as posting_status,
-         e.paid_at
+         e.paid_at,
+         e.payment_method_id,
+         e.amount_paid as current_amount_paid,
+         e.balance as current_balance
     into v_expense
     from public.expenses e
    where e.id = p_expense_id
@@ -3216,7 +3219,15 @@ begin
 
   v_prev_payment := v_expense.payment_status;
 
-  if v_total = 0 then
+  -- If already marked as paid with payment_method_id set (immediate payment on creation)
+  -- and no separate payment records exist, respect that status
+  if v_prev_payment = 'paid' 
+     and v_expense.payment_method_id is not null 
+     and v_paid = 0 
+     and v_total > 0 then
+    v_new_payment := 'paid';
+    v_paid := v_total; -- Use total as paid amount
+  elsif v_total = 0 then
     v_new_payment := v_prev_payment;
   elsif v_paid <= 0 then
     if v_prev_payment = 'scheduled' then
@@ -3354,7 +3365,7 @@ begin
   insert into public.journal_entries (
     id,
     entry_number,
-    date,
+    entry_date,
     description,
     type,
     source_module,
@@ -3636,7 +3647,7 @@ begin
   insert into public.journal_entries (
     id,
     entry_number,
-    date,
+    entry_date,
     description,
     type,
     source_module,
@@ -3853,7 +3864,7 @@ create table if not exists stock_movements (
 create table if not exists journal_entries (
   id uuid primary key default gen_random_uuid(),
   entry_number text not null,
-  date timestamp with time zone not null default now(),
+  entry_date timestamp with time zone not null default now(),
   description text not null,
   type text not null,
   source_module text,
@@ -3864,6 +3875,24 @@ create table if not exists journal_entries (
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+do $$
+begin
+  if exists (
+    select 1
+      from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'journal_entries'
+       and column_name = 'date'
+  ) then
+    begin
+      alter table public.journal_entries rename column date to entry_date;
+    exception when others then
+      null;
+    end;
+  end if;
+end;
+$$;
 
 create table if not exists journal_lines (
   id uuid primary key default gen_random_uuid(),
@@ -4052,7 +4081,7 @@ end $$;
 
 alter table public.journal_entries
   add column if not exists entry_number text,
-  add column if not exists date timestamp with time zone not null default now(),
+  add column if not exists entry_date timestamp with time zone not null default now(),
   add column if not exists description text,
   add column if not exists type text,
   add column if not exists source_module text,
@@ -4159,8 +4188,9 @@ create index if not exists idx_stock_movements_product_id
 create index if not exists idx_journal_entries_entry_number
   on journal_entries(entry_number);
 
-create index if not exists idx_journal_entries_date
-  on journal_entries(date);
+drop index if exists idx_journal_entries_date;
+create index if not exists idx_journal_entries_entry_date
+  on journal_entries(entry_date);
 
 create index if not exists idx_journal_lines_entry_id
   on journal_lines(entry_id);
@@ -4492,7 +4522,7 @@ begin
   insert into public.journal_entries (
     id,
     entry_number,
-    date,
+    entry_date,
     description,
     type,
     source_module,

@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/models/payment_method.dart';
+import '../../../shared/services/payment_method_service.dart';
 import '../../accounting/models/account.dart';
 import '../../accounting/services/accounting_service.dart';
 import '../models/expense.dart';
@@ -27,10 +29,12 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
 
   late ExpenseService _expenseService;
   late AccountingService _accountingService;
+  late PaymentMethodService _paymentMethodService;
 
   Expense? _existingExpense;
   List<ExpenseCategory> _categories = const [];
   List<Account> _accounts = const [];
+  List<PaymentMethod> _paymentMethods = const [];
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -61,6 +65,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
   ExpenseDocumentType _documentType = ExpenseDocumentType.invoice;
   String? _selectedCategoryId;
   Account? _selectedAccount;
+  PaymentMethod? _selectedPaymentMethod;
 
   double _subtotal = 0;
   double _taxAmount = 0;
@@ -72,6 +77,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
     super.initState();
     _expenseService = context.read<ExpenseService>();
     _accountingService = context.read<AccountingService>();
+    _paymentMethodService = context.read<PaymentMethodService>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
@@ -87,6 +93,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
       final categoriesFuture =
           _expenseService.fetchCategories(forceRefresh: true);
       final accountsFuture = _accountingService.getAccounts();
+      final paymentMethodsFuture = _paymentMethodService.loadPaymentMethods(forceRefresh: true);
       final expenseFuture = widget.expenseId == null
           ? Future<Expense?>.value()
           : _expenseService.getExpense(widget.expenseId!, forceRefresh: true);
@@ -94,15 +101,17 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
       final results = await Future.wait([
         categoriesFuture,
         accountsFuture,
+        paymentMethodsFuture,
         expenseFuture,
       ]);
 
       final categories = results[0] as List<ExpenseCategory>;
       final accounts = results[1] as List<Account>;
-      final expense = results[2] as Expense?;
+      final expense = results[3] as Expense?;
 
       _categories = categories;
       _accounts = accounts;
+      _paymentMethods = _paymentMethodService.paymentMethods;
 
       if (expense != null) {
         _existingExpense = expense;
@@ -244,6 +253,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
             _buildGeneralSection(context),
             const SizedBox(height: 24),
             _buildAmountsSection(context),
+            const SizedBox(height: 24),
+            _buildPaymentMethodSection(context),
             const SizedBox(height: 24),
             _buildAccountingSection(context),
             const SizedBox(height: 24),
@@ -570,6 +581,82 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
     );
   }
 
+  Widget _buildPaymentMethodSection(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Método de Pago',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<PaymentMethod>(
+              value: _selectedPaymentMethod,
+              decoration: const InputDecoration(
+                labelText: 'Método de Pago *',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.payment),
+                helperText: 'Selecciona cómo se pagó este gasto',
+              ),
+              items: _paymentMethods.map((method) {
+                return DropdownMenuItem<PaymentMethod>(
+                  value: method,
+                  child: Text(method.name),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedPaymentMethod = value;
+                });
+              },
+              validator: (value) {
+                if (value == null) {
+                  return 'Selecciona un método de pago';
+                }
+                return null;
+              },
+            ),
+            if (_selectedPaymentMethod != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, 
+                      color: Colors.blue.shade700, 
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'El pago será registrado automáticamente al guardar',
+                        style: TextStyle(
+                          color: Colors.blue.shade900,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _amountSummaryChip(
     BuildContext context, {
     required String label,
@@ -751,6 +838,13 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
       return;
     }
 
+    if (_selectedPaymentMethod == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona un método de pago')),
+      );
+      return;
+    }
+
     final net = _parseDouble(_netAmountController.text);
     final taxRate = _parseDouble(_taxRateController.text);
     final taxAmount = net * (taxRate / 100);
@@ -783,17 +877,13 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
             : _paymentTermsController.text.trim(),
         currency: _existingExpense?.currency ?? 'CLP',
         exchangeRate: exchangeRate,
-        postingStatus:
-            _existingExpense?.postingStatus ?? ExpensePostingStatus.draft,
-        paymentStatus:
-            _existingExpense?.paymentStatus ?? ExpensePaymentStatus.pending,
+        postingStatus: ExpensePostingStatus.posted, // Save as posted immediately
+        paymentStatus: ExpensePaymentStatus.paid, // Save as paid immediately
         subtotal: net,
         taxAmount: taxAmount,
         totalAmount: total,
-        amountPaid: _existingExpense?.amountPaid ?? 0,
-        balance: (_existingExpense?.amountPaid ?? 0) >= total
-            ? 0
-            : total - (_existingExpense?.amountPaid ?? 0),
+        amountPaid: total, // Full amount paid
+        balance: 0, // No balance
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
@@ -804,11 +894,11 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
             _existingExpense?.approvalStatus ?? ExpenseApprovalStatus.pending,
         approvedBy: _existingExpense?.approvedBy,
         approvedAt: _existingExpense?.approvedAt,
-        postedAt: _existingExpense?.postedAt,
-        paidAt: _existingExpense?.paidAt,
+        postedAt: DateTime.now(), // Set posted time
+        paidAt: DateTime.now(), // Set paid time
         liabilityAccountId: _existingExpense?.liabilityAccountId,
-        paymentAccountId: _existingExpense?.paymentAccountId,
-        paymentMethodId: _existingExpense?.paymentMethodId,
+        paymentAccountId: _selectedPaymentMethod!.accountId, // From payment method
+        paymentMethodId: _selectedPaymentMethod!.id, // Payment method ID
   tags: List<String>.from(_existingExpense?.tags ?? const []),
         createdBy: _existingExpense?.createdBy,
         createdAt: _existingExpense?.createdAt,
