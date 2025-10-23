@@ -6,34 +6,47 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 ---
 
-# 🚨 CRITICAL RULE: ALWAYS USE CORE_SCHEMA.SQL
+# 🚨 CRITICAL RULE: DATABASE SCHEMA FILES
 
-**⚠️ NEVER CREATE NEW SQL FILES!**
+**⚠️ SCHEMA IS SPLIT INTO 3 FILES FOR DEPLOYMENT!**
 
-**ALL database changes MUST go into `supabase/sql/core_schema.sql`:**
-- ✅ New tables → Add to `core_schema.sql`
-- ✅ New functions → Add to `core_schema.sql`
-- ✅ New triggers → Add to `core_schema.sql`
-- ✅ Schema fixes → Fix in `core_schema.sql`
-- ✅ Missing columns → Add to `core_schema.sql`
-- ✅ Wrong constraints → Fix in `core_schema.sql`
-- ❌ NEVER create `FIX_*.sql`, `DEPLOY_*.sql`, `add_*.sql`, etc.
+**The database schema exists in TWO forms:**
+
+1. **`supabase/sql/core_schema.sql`** (MASTER FILE - 9630 lines)
+   - ✅ **EDIT THIS FILE** when making schema changes
+   - ✅ This is the SINGLE SOURCE OF TRUTH
+   - ✅ All changes go here FIRST
+
+2. **Split files for deployment** (generated from master):
+   - `supabase/sql/1_core_tables.sql` (Tables + seed data)
+   - `supabase/sql/2_business_logic.sql` (Functions + triggers)
+   - `supabase/sql/3_analytics_views.sql` (Dashboard RPCs + views)
+   - ⚠️ These are GENERATED from `core_schema.sql` - don't edit directly!
+
+**When making database changes:**
+- ✅ Edit `core_schema.sql` (master file)
+- ✅ After editing, tell user: "Deploy the updated `supabase/sql/core_schema.sql` OR regenerate the 3-file split"
+- ✅ Be EXPLICIT: "I modified `core_schema.sql` at line X" or "I updated function Y in `core_schema.sql`"
+- ❌ NEVER create new SQL files (`FIX_*.sql`, `DEPLOY_*.sql`, etc.)
 
 **⚠️ CRITICAL: AVOID DUPLICATES!**
 
 **BEFORE creating ANY database object, you MUST:**
-1. 🔍 **SEARCH `core_schema.sql` for existing similar functions/triggers/tables**
-2. ❌ **NEVER assume a function/trigger doesn't exist - ALWAYS verify first**
-3. 🔄 **UPDATE existing functions rather than creating new ones with different names**
-4. ⚠️ **Example of what NOT to do:**
+1. 🔍 **READ `core_schema.sql` first** - check the ENTIRE file if needed
+2. 🔍 **SEARCH for existing similar functions/triggers/tables** using grep or semantic search
+3. ❌ **NEVER assume a function/trigger doesn't exist** - ALWAYS verify first
+4. 🔄 **UPDATE existing functions** rather than creating new ones with different names
+5. 📝 **BE EXPLICIT:** Always tell user "I modified `core_schema.sql` at line X" or "I updated function Y in `core_schema.sql`"
+6. ⚠️ **Example of what NOT to do:**
    - ❌ Creating `handle_purchase_invoice_change()` when `handle_sales_invoice_change()` pattern already exists
    - ❌ Creating `create_purchase_journal_entry()` when similar function already exists
    - ❌ Creating new triggers without checking for existing trigger patterns
-5. ✅ **Example of what TO do:**
+7. ✅ **Example of what TO do:**
    - ✅ Find existing `handle_sales_invoice_change()` function
    - ✅ Check how it works and what pattern it uses
    - ✅ Create `handle_purchase_invoice_change()` following the SAME pattern
    - ✅ Reuse existing helper functions like `ensure_account()`, `consume_inventory()`, etc.
+   - ✅ Tell user: "I added `handle_purchase_invoice_change()` to `core_schema.sql` at line 4850, following the same pattern as `handle_sales_invoice_change()`"
 
 **Common mistakes to AVOID:**
 - ❌ Creating duplicate functions with slightly different names
@@ -48,9 +61,10 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 3. 📖 Read the relevant section (tables, functions, triggers)
 4. 🤔 **Ask: "Does something similar already exist?"**
 5. ✏️ Make changes directly in `core_schema.sql`
-6. 💾 Save and inform user to deploy the updated file
+6. 💾 Save and inform user: "Deploy the updated `core_schema.sql` to Supabase"
+7. 📝 **BE EXPLICIT:** Tell user which file and line number you modified
 
-**This is the ONLY database schema file. Everything else has been deleted.**
+**This is the ONLY database schema file to edit. The 3-file split is for deployment only.**
 
 ---
 
@@ -65,13 +79,15 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 5. ✅ **UPDATE** existing code or add new code following EXISTING patterns
 6. ✅ **NEVER** create duplicate functions/triggers with different names
 7. ✅ **VERIFY** column names match what's in `core_schema.sql`
-8. ✅ **INFORM** user to deploy updated `core_schema.sql`
+8. ✅ **INFORM** user: "I modified `core_schema.sql` at line X" or "I added function Y to `core_schema.sql`"
+9. ✅ **TELL USER:** "Deploy the updated `core_schema.sql` to Supabase"
 
 **CRITICAL: Before creating ANY function/trigger:**
 - 🔍 Search `core_schema.sql` for: `CREATE OR REPLACE FUNCTION public.[function_name]`
 - 🔍 Search for similar patterns (e.g., if creating purchase trigger, look for sales trigger)
 - 🔍 Check what helper functions exist (ensure_account, consume_inventory, etc.)
 - ❌ NEVER create `create_purchase_invoice_journal_entry` if `create_sales_invoice_journal_entry` already exists - study the existing one first!
+- 📝 **BE EXPLICIT:** Tell user "I added `create_purchase_invoice_journal_entry()` to `core_schema.sql` at line 4680"
 
 **For ANY Flutter code changes:**
 

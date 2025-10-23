@@ -3089,21 +3089,8 @@ begin
 end;
 $$;
 
-create or replace function public.handle_expense_line_change()
-returns trigger
-language plpgsql
-set search_path = public
-as $$
-begin
-  if TG_OP = 'DELETE' then
-    perform public.recalculate_expense_totals(OLD.expense_id);
-    return OLD;
-  else
-    perform public.recalculate_expense_totals(NEW.expense_id);
-    return NEW;
-  end if;
-end;
-$$;
+-- NOTE: handle_expense_line_change() is defined later at line ~3851
+-- (removed duplicate definition here to avoid overwriting the correct version)
 
 do $$
 begin
@@ -3312,6 +3299,7 @@ begin
     return;
   end if;
 
+  -- Delete existing journal entry if it exists (to recreate it fresh)
   select exists (
            select 1
              from public.journal_entries
@@ -3321,7 +3309,7 @@ begin
     into v_exists;
 
   if v_exists then
-    return;
+    perform public.delete_expense_journal_entry(p_expense_id);
   end if;
 
   v_liability_account_id := coalesce(
