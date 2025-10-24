@@ -445,6 +445,144 @@ create index if not exists idx_products_supplier_id on products(supplier_id);
 create index if not exists idx_products_brand_id on products(brand_id);
 create index if not exists idx_products_gtin on products(gtin);
 create index if not exists idx_products_hs_code on products(hs_code);
+
+-- ============================================================================
+-- PRODUCT CATEGORIES - Hierarchical (Odoo-style)
+-- ============================================================================
+
+-- Step 1: Create the new product_categories table if it doesn't exist
+create table if not exists product_categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  full_path text not null unique, -- e.g., "Accesorios / Asientos / Tija"
+  parent_id uuid references product_categories(id) on delete cascade,
+  level integer not null default 0, -- 0 = root, 1 = child, 2 = grandchild, etc.
+  description text,
+  image_url text,
+  is_active boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+-- Step 2: Create indexes for product_categories
+create index if not exists idx_product_categories_parent_id on product_categories(parent_id);
+create index if not exists idx_product_categories_full_path on product_categories(full_path);
+create index if not exists idx_product_categories_level on product_categories(level);
+create index if not exists idx_product_categories_is_active on product_categories(is_active);
+create index if not exists idx_product_categories_name on product_categories using gin (to_tsvector('spanish', coalesce(name, '')));
+
+-- Step 3: Migrate existing data from 'categories' to 'product_categories' (if old table exists)
+do $$
+declare
+  old_table_exists boolean;
+  has_sort_order boolean;
+  has_description boolean;
+  has_image_url boolean;
+  migration_sql text;
+begin
+  -- Check if old 'categories' table exists
+  select exists (
+    select from pg_tables
+    where schemaname = 'public'
+    and tablename = 'categories'
+  ) into old_table_exists;
+
+  if old_table_exists then
+    raise notice 'Found old categories table, migrating data...';
+    
+    -- Check which columns exist in old table
+    select exists (
+      select 1 from information_schema.columns 
+      where table_schema = 'public' 
+      and table_name = 'categories' 
+      and column_name = 'sort_order'
+    ) into has_sort_order;
+    
+    select exists (
+      select 1 from information_schema.columns 
+      where table_schema = 'public' 
+      and table_name = 'categories' 
+      and column_name = 'description'
+    ) into has_description;
+    
+    select exists (
+      select 1 from information_schema.columns 
+      where table_schema = 'public' 
+      and table_name = 'categories' 
+      and column_name = 'image_url'
+    ) into has_image_url;
+    
+    -- Build dynamic SQL based on available columns
+    migration_sql := 'insert into product_categories (id, name, full_path, parent_id, level, description, image_url, is_active, sort_order, created_at, updated_at) ' ||
+                     'select id, name, name as full_path, null as parent_id, 0 as level, ';
+    
+    if has_description then
+      migration_sql := migration_sql || 'description, ';
+    else
+      migration_sql := migration_sql || 'null as description, ';
+    end if;
+    
+    if has_image_url then
+      migration_sql := migration_sql || 'image_url, ';
+    else
+      migration_sql := migration_sql || 'null as image_url, ';
+    end if;
+    
+    migration_sql := migration_sql || 'coalesce(is_active, true) as is_active, ';
+    
+    if has_sort_order then
+      migration_sql := migration_sql || 'coalesce(sort_order, 0) as sort_order, ';
+    else
+      migration_sql := migration_sql || '0 as sort_order, ';
+    end if;
+    
+    migration_sql := migration_sql || 'created_at, updated_at from categories on conflict (id) do nothing';
+    
+    -- Execute migration
+    execute migration_sql;
+
+    raise notice 'Migrated % categories from old table', (select count(*) from categories);
+  else
+    raise notice 'Old categories table does not exist, skipping migration';
+  end if;
+end $$;
+
+-- Step 4: Drop old foreign key constraint if it exists and points to wrong table
+do $$
+begin
+  -- Check if constraint exists and points to 'categories' table
+  if exists (
+    select 1
+    from pg_constraint c
+    join pg_class t on c.conrelid = t.oid
+    join pg_class ft on c.confrelid = ft.oid
+    where t.relname = 'products'
+    and c.conname = 'products_category_id_fkey'
+    and ft.relname = 'categories'
+  ) then
+    alter table products drop constraint products_category_id_fkey;
+    raise notice 'Dropped old products_category_id_fkey constraint pointing to categories table';
+  end if;
+end $$;
+
+-- Step 5: Add new foreign key constraint pointing to product_categories
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.products'::regclass
+       and conname = 'products_category_id_fkey'
+  ) then
+    alter table products
+      add constraint products_category_id_fkey
+        foreign key (category_id) references public.product_categories(id) on delete set null;
+    raise notice 'Added products_category_id_fkey constraint pointing to product_categories';
+  end if;
+end $$;
+
+create index if not exists idx_products_category_id on products(category_id);
  
 create table if not exists suppliers (
   id uuid primary key default gen_random_uuid(),
@@ -6084,6 +6222,62 @@ as $$
     )::numeric(14,2) as expense
   from month_windows mw
   order by mw.period_start;
+$$;
+
+-- Function 10.1b: Get income/expense time series aggregated by day
+-- Used for daily views (current week, current month, previous month)
+create or replace function public.get_income_expense_daily_timeseries(
+  p_start_date timestamp with time zone,
+  p_end_date timestamp with time zone
+)
+returns table (
+  period_start date,
+  period_end date,
+  income numeric(14,2),
+  expense numeric(14,2)
+)
+language sql
+security definer
+set search_path = public
+as $$
+  with day_windows as (
+    select
+      (date_trunc('day', p_start_date) + make_interval(days => d.day_index))::date as period_start
+    from generate_series(0, extract(days from (p_end_date - p_start_date))::integer) as d(day_index)
+  )
+  select
+    dw.period_start::date,
+    dw.period_start::date as period_end,
+    coalesce(
+      (
+        select
+          sum(coalesce(jl.credit_amount, 0) - coalesce(jl.debit_amount, 0))
+        from journal_lines jl
+        join journal_entries je on je.id = jl.entry_id
+        join accounts a on a.id = jl.account_id
+        where je.status = 'posted'
+          and a.type = 'income'
+          and je.entry_date >= dw.period_start
+          and je.entry_date < dw.period_start + interval '1 day'
+      ),
+      0
+    )::numeric(14,2) as income,
+    coalesce(
+      (
+        select
+          sum(coalesce(jl.debit_amount, 0) - coalesce(jl.credit_amount, 0))
+        from journal_lines jl
+        join journal_entries je on je.id = jl.entry_id
+        join accounts a on a.id = jl.account_id
+        where je.status = 'posted'
+          and a.type = 'expense'
+          and je.entry_date >= dw.period_start
+          and je.entry_date < dw.period_start + interval '1 day'
+      ),
+      0
+    )::numeric(14,2) as expense
+  from day_windows dw
+  order by dw.period_start;
 $$;
 
 -- Function 10.2: Top expense accounts for a period (for donut charts)

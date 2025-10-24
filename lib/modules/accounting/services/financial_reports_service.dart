@@ -395,6 +395,38 @@ class FinancialReportsService extends ChangeNotifier {
       ..sort((a, b) => a.periodStart.compareTo(b.periodStart));
   }
 
+  Future<List<MonthlyIncomeExpensePoint>> getIncomeExpenseDailyTimeseries({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    debugPrint('📊 Fetching daily income/expense timeseries from $startDate to $endDate');
+
+    final result = await _databaseService.rpc(
+      'get_income_expense_daily_timeseries',
+      params: {
+        'p_start_date': startDate.toIso8601String(),
+        'p_end_date': endDate.toIso8601String(),
+      },
+    );
+
+    if (result is! List) {
+      return const [];
+    }
+
+    return result.map((row) {
+      final map = Map<String, dynamic>.from(row as Map);
+      final start = _parseDate(map['period_start']);
+      final end = _parseDate(map['period_end']);
+      return MonthlyIncomeExpensePoint(
+        periodStart: start ?? DateTime.now(),
+        periodEnd: end ?? DateTime.now(),
+        income: _parseDouble(map['income']) ?? 0,
+        expense: _parseDouble(map['expense']) ?? 0,
+      );
+    }).toList()
+      ..sort((a, b) => a.periodStart.compareTo(b.periodStart));
+  }
+
   Future<List<ExpenseBreakdownItem>> getExpenseBreakdown({
     required DateTime startDate,
     required DateTime endDate,

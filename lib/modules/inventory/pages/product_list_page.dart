@@ -1047,8 +1047,11 @@ class _ProductListPageState extends State<ProductListPage> {
     if (product.categoryId == null) return null;
     final category = _categories.firstWhere(
       (c) => c.id == product.categoryId,
-      orElse: () =>
-          Category(id: product.categoryId!, name: 'Categoría sin nombre'),
+      orElse: () => Category(
+        id: product.categoryId!,
+        name: 'Categoría sin nombre',
+        fullPath: 'Categoría sin nombre',
+      ),
     );
     return category.name;
   }

@@ -116,6 +116,29 @@ class SettingsPage extends StatelessWidget {
           ),
           _buildSection(
             context,
+            title: 'Dispositivos',
+            icon: Icons.devices,
+            children: [
+              _buildSettingTile(
+                context,
+                icon: Icons.usb,
+                title: 'Lector USB/Teclado',
+                subtitle: 'Lector de código de barras USB (Windows/Desktop)',
+                iconColor: Colors.green,
+                onTap: () => context.push('/settings/keyboard-scanner'),
+              ),
+              _buildSettingTile(
+                context,
+                icon: Icons.bluetooth,
+                title: 'Lector Bluetooth',
+                subtitle: 'Conectar lector Bluetooth (Android/iOS)',
+                iconColor: Colors.blue,
+                onTap: () => context.push('/settings/bluetooth-scanner'),
+              ),
+            ],
+          ),
+          _buildSection(
+            context,
             title: 'Contabilidad',
             icon: Icons.account_balance,
             children: [

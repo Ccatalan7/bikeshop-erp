@@ -52,6 +52,10 @@ dependencies:
   csv: ^5.1.1
   excel: ^4.0.2
   file_saver: ^0.2.8
+  
+  # Bluetooth & Barcode Scanning
+  flutter_blue_plus: ^1.32.12
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:

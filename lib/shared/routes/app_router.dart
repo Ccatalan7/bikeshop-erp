@@ -24,7 +24,7 @@ import '../../modules/bikeshop/pages/mechanic_job_form_page.dart';
 import '../../modules/inventory/pages/product_list_page.dart';
 import '../../modules/inventory/pages/product_form_page.dart';
 import '../../modules/inventory/pages/product_import_page.dart';
-import '../../modules/inventory/pages/category_list_page.dart';
+import '../../modules/inventory/pages/hierarchical_category_page.dart';
 import '../../modules/inventory/pages/category_form_page.dart';
 import '../../modules/inventory/pages/brand_list_page.dart';
 import '../../modules/inventory/pages/brand_form_page.dart';
@@ -48,6 +48,8 @@ import '../../modules/pos/models/pos_transaction.dart';
 import '../../modules/settings/pages/settings_page.dart';
 import '../../modules/settings/pages/factory_reset_page.dart';
 import '../../modules/settings/pages/appearance_settings_page.dart';
+import '../../modules/settings/pages/bluetooth_scanner_page.dart';
+import '../../modules/settings/pages/keyboard_scanner_page.dart';
 import '../../modules/hr/pages/employee_list_page.dart';
 import '../../modules/hr/pages/attendances_page.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
@@ -507,16 +509,39 @@ class AppRouter {
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,
-            const CategoryListPage(),
+            const HierarchicalCategoryPage(),
           ),
         ),
         GoRoute(
           path: '/inventory/categories/new',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
-            context,
-            state,
-            const CategoryFormPage(),
-          ),
+          pageBuilder: (context, state) {
+            final parentId = state.uri.queryParameters['parent'];
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              CategoryFormPage(parentCategoryId: parentId),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/inventory/categories/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            // Check if this is an edit route by looking at the full path
+            if (state.uri.path.endsWith('/edit')) {
+              return _buildPageWithNoTransition(
+                context,
+                state,
+                CategoryFormPage(categoryId: id),
+              );
+            }
+            // Otherwise it's a category view
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              HierarchicalCategoryPage(categoryId: id),
+            );
+          },
         ),
         GoRoute(
           path: '/inventory/categories/:id/edit',
@@ -790,6 +815,22 @@ class AppRouter {
             const MainLayout(
               child: AppearanceSettingsPage(),
             ),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/bluetooth-scanner',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const BluetoothScannerPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/keyboard-scanner',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const KeyboardScannerPage(),
           ),
         ),
 

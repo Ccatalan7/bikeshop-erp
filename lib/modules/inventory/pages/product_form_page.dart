@@ -128,7 +128,21 @@ class _ProductFormPageState extends State<ProductFormPage> {
     try {
       final categories = await _categoryService.getCategories(activeOnly: true);
       if (mounted) {
-        setState(() => _categories = categories);
+        setState(() {
+          _categories = categories;
+          
+          // Validate that selected category exists in loaded categories
+          if (_selectedCategoryId != null) {
+            final categoryExists = _categories.any((c) => c.id == _selectedCategoryId);
+            if (!categoryExists) {
+              // Category doesn't exist, reset to first available or null
+              _selectedCategoryId = _categories.isNotEmpty ? _categories.first.id : null;
+              if (kDebugMode) {
+                print('Warning: Product category not found, reset to: ${_categories.firstOrNull?.fullPath}');
+              }
+            }
+          }
+        });
       }
     } catch (e) {
       if (!mounted) return;
@@ -138,6 +152,17 @@ class _ProductFormPageState extends State<ProductFormPage> {
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  Future<void> _showCategorySearchDialog(BuildContext context) async {
+    final result = await showDialog<category_models.Category>(
+      context: context,
+      builder: (context) => _CategorySearchDialog(categories: _categories),
+    );
+    
+    if (result != null) {
+      setState(() => _selectedCategoryId = result.id);
     }
   }
 
@@ -555,7 +580,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       (c) => c.id == _selectedCategoryId,
       orElse: () => _categories.isNotEmpty
           ? _categories.first
-          : category_models.Category(id: null, name: 'PRD'),
+          : category_models.Category(id: null, name: 'PRD', fullPath: 'PRD'),
     );
 
     final categorySegment = category.name
@@ -1090,21 +1115,34 @@ class _ProductFormPageState extends State<ProductFormPage> {
         ],
       ),
       const SizedBox(height: 16),
-      DropdownButtonFormField<String>(
-        value: _selectedCategoryId,
-        decoration: const InputDecoration(
-          labelText: 'Categoría',
-          helperText: 'Determina reportes y navegación en el POS',
+      // Searchable Category Selector
+      InkWell(
+        onTap: () => _showCategorySearchDialog(context),
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: 'Categoría',
+            helperText: 'Determina reportes y navegación en el POS',
+            suffixIcon: const Icon(Icons.arrow_drop_down),
+            errorText: _selectedCategoryId == null ? 'Seleccione una categoría' : null,
+          ),
+          child: Text(
+            _selectedCategoryId != null
+                ? (_categories.firstWhere(
+                      (c) => c.id == _selectedCategoryId,
+                      orElse: () => category_models.Category(
+                        id: '',
+                        name: 'Categoría no encontrada',
+                        fullPath: 'Categoría no encontrada',
+                        createdAt: DateTime.now(),
+                        updatedAt: DateTime.now(),
+                      ),
+                    ).fullPath)
+                : 'Seleccione una categoría...',
+            style: TextStyle(
+              color: _selectedCategoryId != null ? null : Colors.grey,
+            ),
+          ),
         ),
-        items: _categories
-            .map(
-              (category) => DropdownMenuItem<String>(
-                value: category.id,
-                child: Text(category.name),
-              ),
-            )
-            .toList(),
-        onChanged: (value) => setState(() => _selectedCategoryId = value),
       ),
       const SizedBox(height: 16),
       // Product Type Selector
@@ -1547,5 +1585,150 @@ class _ProductFormPageState extends State<ProductFormPage> {
         ],
       ),
     ];
+  }
+}
+
+// Searchable Category Dialog
+class _CategorySearchDialog extends StatefulWidget {
+  final List<category_models.Category> categories;
+
+  const _CategorySearchDialog({required this.categories});
+
+  @override
+  State<_CategorySearchDialog> createState() => _CategorySearchDialogState();
+}
+
+class _CategorySearchDialogState extends State<_CategorySearchDialog> {
+  final TextEditingController _searchController = TextEditingController();
+  List<category_models.Category> _filteredCategories = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredCategories = widget.categories;
+    _searchController.addListener(_filterCategories);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterCategories() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredCategories = widget.categories;
+      } else {
+        _filteredCategories = widget.categories
+            .where((cat) => cat.fullPath.toLowerCase().contains(query))
+            .toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        width: 500,
+        height: 600,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Seleccionar Categoría',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Search bar
+            TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Buscar categoría',
+                hintText: 'Escriba para filtrar...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          _filterCategories();
+                        },
+                      )
+                    : null,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Results count
+            Text(
+              '${_filteredCategories.length} categoría${_filteredCategories.length != 1 ? 's' : ''} encontrada${_filteredCategories.length != 1 ? 's' : ''}',
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            const Divider(),
+            // Category list
+            Expanded(
+              child: _filteredCategories.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No se encontraron categorías',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _filteredCategories.length,
+                      itemBuilder: (context, index) {
+                        final category = _filteredCategories[index];
+                        final indent = category.level * 16.0;
+                        
+                        return ListTile(
+                          contentPadding: EdgeInsets.only(
+                            left: 16 + indent,
+                            right: 16,
+                          ),
+                          leading: Icon(
+                            category.level == 0
+                                ? Icons.folder
+                                : Icons.subdirectory_arrow_right,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                          title: Text(
+                            category.name,
+                            style: TextStyle(
+                              fontWeight: category.level == 0
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          subtitle: category.level > 0
+                              ? Text(
+                                  category.fullPath,
+                                  style: const TextStyle(fontSize: 12),
+                                )
+                              : null,
+                          onTap: () => Navigator.pop(context, category),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

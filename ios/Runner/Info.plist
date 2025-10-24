@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Esta aplicación necesita acceso a Bluetooth para conectarse a lectores de código de barras</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Esta aplicación necesita acceso a Bluetooth para conectarse a lectores de código de barras</string>
 </dict>
 </plist>

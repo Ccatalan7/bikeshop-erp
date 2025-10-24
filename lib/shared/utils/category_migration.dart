@@ -41,35 +41,42 @@ class CategoryMigration {
     final defaultCategories = [
       inventory_models.Category(
         name: 'Bicicletas',
+        fullPath: 'Bicicletas',
         description:
             'Bicicletas completas de todos los tipos (MTB, ruta, urbana, etc.)',
       ),
       inventory_models.Category(
         name: 'Repuestos',
+        fullPath: 'Repuestos',
         description:
             'Piezas y componentes para bicicletas (frenos, cambios, etc.)',
       ),
       inventory_models.Category(
         name: 'Accesorios',
+        fullPath: 'Accesorios',
         description:
             'Accesorios y complementos para ciclistas (luces, timbre, candados)',
       ),
       inventory_models.Category(
         name: 'Ropa',
+        fullPath: 'Ropa',
         description:
             'Vestimenta y equipamiento para ciclistas (cascos, guantes, jersey)',
       ),
       inventory_models.Category(
         name: 'Herramientas',
+        fullPath: 'Herramientas',
         description:
             'Herramientas para mantenimiento y reparación de bicicletas',
       ),
       inventory_models.Category(
         name: 'Mantenimiento',
+        fullPath: 'Mantenimiento',
         description: 'Productos para mantenimiento y limpieza de bicicletas',
       ),
       inventory_models.Category(
         name: 'Otros',
+        fullPath: 'Otros',
         description: 'Productos diversos no clasificados en otras categorías',
       ),
     ];

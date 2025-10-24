@@ -10,17 +10,28 @@ import '../services/accounting_service.dart';
 import '../services/financial_reports_service.dart';
 
 enum _ChartSeriesMode { monthly, cumulative }
-enum _ExpenseBreakdownRange { previousMonth, last3Months, last6Months }
+
+enum _ExpenseBreakdownRange { 
+  currentMonth,
+  previousMonth, 
+  last3Months, 
+  last6Months,
+  last12Months,
+}
 
 extension on _ExpenseBreakdownRange {
   String get label {
     switch (this) {
+      case _ExpenseBreakdownRange.currentMonth:
+        return 'Mes actual';
       case _ExpenseBreakdownRange.previousMonth:
         return 'Mes anterior';
       case _ExpenseBreakdownRange.last3Months:
         return 'Últimos 3 meses';
       case _ExpenseBreakdownRange.last6Months:
         return 'Últimos 6 meses';
+      case _ExpenseBreakdownRange.last12Months:
+        return 'Últimos 12 meses';
     }
   }
 
@@ -36,32 +47,54 @@ class AccountingDashboardSection extends StatefulWidget {
 
 class _AccountingDashboardSectionState
     extends State<AccountingDashboardSection> {
-  static const List<int> _monthOptions = [6, 12, 18, 24];
+  static const List<String> _periodOptions = [
+    'Esta semana',
+    'Mes actual',
+    'Mes anterior',
+    'Últimos 6 meses',
+    'Últimos 12 meses',
+    'Últimos 18 meses',
+    'Últimos 24 meses',
+  ];
+  
+  static const Map<String, int> _periodToMonths = {
+    'Esta semana': 1,
+    'Mes actual': 1,
+    'Mes anterior': 1,
+    'Últimos 6 meses': 6,
+    'Últimos 12 meses': 12,
+    'Últimos 18 meses': 18,
+    'Últimos 24 meses': 24,
+  };
+  
   static const List<_ExpenseBreakdownRange> _breakdownOptions = [
+    _ExpenseBreakdownRange.currentMonth,
     _ExpenseBreakdownRange.previousMonth,
     _ExpenseBreakdownRange.last3Months,
     _ExpenseBreakdownRange.last6Months,
+    _ExpenseBreakdownRange.last12Months,
   ];
 
   late Future<_DashboardPayload> _loadFuture;
-  int _selectedMonths = 12;
+  String _selectedPeriod = 'Últimos 12 meses';
   _ChartSeriesMode _seriesMode = _ChartSeriesMode.monthly;
   _ExpenseBreakdownRange _breakdownRange =
-      _ExpenseBreakdownRange.previousMonth;
+      _ExpenseBreakdownRange.last12Months;
 
   @override
   void initState() {
     super.initState();
+    final months = _periodToMonths[_selectedPeriod] ?? 12;
     _loadFuture = Future.value(_DashboardPayload(
       series: [],
       expenseBreakdown: [],
       trailingLabel: '',
       totalIncome: 0,
       totalExpense: 0,
-      months: _selectedMonths,
+      months: months,
       rangeStart: DateTime.now(),
       rangeEnd: DateTime.now(),
-      breakdownRange: _ExpenseBreakdownRange.previousMonth,
+      breakdownRange: _ExpenseBreakdownRange.last12Months,
       breakdownStart: DateTime.now(),
       breakdownEnd: DateTime.now(),
       breakdownTotal: 0,
@@ -82,38 +115,74 @@ class _AccountingDashboardSectionState
     int? months,
     _ExpenseBreakdownRange? breakdownRange,
   }) async {
-    final monthsToLoad = months ?? _selectedMonths;
+    final defaultMonths = _periodToMonths[_selectedPeriod] ?? 12;
+    final monthsToLoad = months ?? defaultMonths;
     final selectedBreakdownRange = breakdownRange ?? _breakdownRange;
     final reportsService = context.read<FinancialReportsService>();
-
-    final series =
-        await reportsService.getIncomeExpenseTimeseries(months: monthsToLoad);
-
+    
     final now = DateTime.now();
+    final isDailyView = _selectedPeriod == 'Esta semana' || 
+                        _selectedPeriod == 'Mes actual' || 
+                        _selectedPeriod == 'Mes anterior';
+    
+    List<MonthlyIncomeExpensePoint> series;
+    
+    if (isDailyView) {
+      // Calculate date range for daily views
+      DateTime startDate;
+      DateTime endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      
+      if (_selectedPeriod == 'Esta semana') {
+        // Get start of week (Monday)
+        final weekday = now.weekday;
+        startDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: weekday - 1));
+      } else if (_selectedPeriod == 'Mes actual') {
+        startDate = DateTime(now.year, now.month, 1);
+      } else { // Mes anterior
+        final previousMonth = DateTime(now.year, now.month - 1, 1);
+        startDate = previousMonth;
+        final lastDayOfPreviousMonth = DateTime(now.year, now.month, 0);
+        endDate = DateTime(lastDayOfPreviousMonth.year, lastDayOfPreviousMonth.month, lastDayOfPreviousMonth.day, 23, 59, 59);
+      }
+      
+      series = await reportsService.getIncomeExpenseDailyTimeseries(
+        startDate: startDate,
+        endDate: endDate,
+      );
+    } else {
+      // Monthly aggregation for longer periods
+      series = await reportsService.getIncomeExpenseTimeseries(months: monthsToLoad);
+    }
+
     final currentMonthStart = DateTime(now.year, now.month);
     final previousMonthEnd = currentMonthStart.subtract(const Duration(days: 1));
 
     DateTime breakdownStart;
     DateTime breakdownEnd;
     switch (selectedBreakdownRange) {
+      case _ExpenseBreakdownRange.currentMonth:
+        breakdownStart = currentMonthStart;
+        breakdownEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
+        break;
       case _ExpenseBreakdownRange.previousMonth:
         breakdownStart = DateTime(previousMonthEnd.year, previousMonthEnd.month);
         breakdownEnd = DateTime(previousMonthEnd.year, previousMonthEnd.month,
             previousMonthEnd.day, 23, 59, 59);
         break;
       case _ExpenseBreakdownRange.last3Months:
-        final startSeed = DateTime(previousMonthEnd.year,
-            previousMonthEnd.month - 2, 1);
+        final startSeed = DateTime(now.year, now.month - 2, 1);
         breakdownStart = startSeed;
-        breakdownEnd = DateTime(previousMonthEnd.year, previousMonthEnd.month,
-            previousMonthEnd.day, 23, 59, 59);
+        breakdownEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
         break;
       case _ExpenseBreakdownRange.last6Months:
-        final startSeed = DateTime(previousMonthEnd.year,
-            previousMonthEnd.month - 5, 1);
+        final startSeed = DateTime(now.year, now.month - 5, 1);
         breakdownStart = startSeed;
-        breakdownEnd = DateTime(previousMonthEnd.year, previousMonthEnd.month,
-            previousMonthEnd.day, 23, 59, 59);
+        breakdownEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
+        break;
+      case _ExpenseBreakdownRange.last12Months:
+        final startSeed = DateTime(now.year, now.month - 11, 1);
+        breakdownStart = startSeed;
+        breakdownEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
         break;
     }
 
@@ -180,14 +249,14 @@ class _AccountingDashboardSectionState
 
         return _DashboardContent(
           data: data,
-          selectedMonths: _selectedMonths,
-          monthOptions: _monthOptions,
-          onMonthsChanged: (value) {
-            if (value == null || value == _selectedMonths) {
+          selectedPeriod: _selectedPeriod,
+          periodOptions: _periodOptions,
+          onPeriodChanged: (value) {
+            if (value == null || value == _selectedPeriod) {
               return;
             }
             setState(() {
-              _selectedMonths = value;
+              _selectedPeriod = value;
               _loadFuture = _fetchData();
             });
           },
@@ -399,9 +468,9 @@ class _DashboardEmpty extends StatelessWidget {
 
 class _DashboardContent extends StatelessWidget {
   final _DashboardPayload data;
-  final int selectedMonths;
-  final List<int> monthOptions;
-  final ValueChanged<int?> onMonthsChanged;
+  final String selectedPeriod;
+  final List<String> periodOptions;
+  final ValueChanged<String?> onPeriodChanged;
   final _ChartSeriesMode seriesMode;
   final ValueChanged<_ChartSeriesMode> onSeriesModeChanged;
   final VoidCallback onRefresh;
@@ -411,9 +480,9 @@ class _DashboardContent extends StatelessWidget {
 
   const _DashboardContent({
     required this.data,
-    required this.selectedMonths,
-    required this.monthOptions,
-    required this.onMonthsChanged,
+    required this.selectedPeriod,
+    required this.periodOptions,
+    required this.onPeriodChanged,
     required this.seriesMode,
     required this.onSeriesModeChanged,
     required this.onRefresh,
@@ -427,43 +496,45 @@ class _DashboardContent extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 1080;
-        final chartHeight =
-            math.min(360.0, constraints.maxWidth / (isWide ? 3 : 1.5));
+        // Same fixed height for both cards to keep them aligned
+        final chartHeight = 400.0;
 
         final charts = isWide
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: _IncomeExpenseCard(
-                      data: data.series,
-                      chartHeight: chartHeight,
-                      mode: seriesMode,
-                      onModeChanged: onSeriesModeChanged,
-                      selectedMonths: selectedMonths,
-                      monthOptions: monthOptions,
-                      onMonthsChanged: onMonthsChanged,
-                      totalIncome: data.totalIncome,
-                      totalExpense: data.totalExpense,
+            ? IntrinsicHeight( // This ensures both cards have the same height
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 6, // Slightly more width for bar chart
+                      child: _IncomeExpenseCard(
+                        data: data.series,
+                        chartHeight: chartHeight,
+                        mode: seriesMode,
+                        onModeChanged: onSeriesModeChanged,
+                        selectedPeriod: selectedPeriod,
+                        periodOptions: periodOptions,
+                        onPeriodChanged: onPeriodChanged,
+                        totalIncome: data.totalIncome,
+                        totalExpense: data.totalExpense,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    flex: 2,
-                    child: _ExpenseBreakdownCard(
-                      items: data.expenseBreakdown,
-                      chartHeight: chartHeight,
-                      breakdownRange: selectedBreakdownRange,
-                      rangeLabel: data.trailingLabel,
-                      breakdownOptions: breakdownOptions,
-                      onRangeChanged: onBreakdownRangeChanged,
-                      totalAmount: data.breakdownTotal,
-                      rangeStart: data.breakdownStart,
-                      rangeEnd: data.breakdownEnd,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 5, // Good space for pie chart
+                      child: _ExpenseBreakdownCard(
+                        items: data.expenseBreakdown,
+                        chartHeight: chartHeight,
+                        breakdownRange: selectedBreakdownRange,
+                        rangeLabel: data.trailingLabel,
+                        breakdownOptions: breakdownOptions,
+                        onRangeChanged: onBreakdownRangeChanged,
+                        totalAmount: data.breakdownTotal,
+                        rangeStart: data.breakdownStart,
+                        rangeEnd: data.breakdownEnd,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,9 +544,9 @@ class _DashboardContent extends StatelessWidget {
                     chartHeight: chartHeight,
                     mode: seriesMode,
                     onModeChanged: onSeriesModeChanged,
-                    selectedMonths: selectedMonths,
-                    monthOptions: monthOptions,
-                    onMonthsChanged: onMonthsChanged,
+                    selectedPeriod: selectedPeriod,
+                    periodOptions: periodOptions,
+                    onPeriodChanged: onPeriodChanged,
                     totalIncome: data.totalIncome,
                     totalExpense: data.totalExpense,
                   ),
@@ -497,14 +568,15 @@ class _DashboardContent extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            charts,
+            const SizedBox(height: 16),
             _DashboardHeader(
               totalIncome: data.totalIncome,
               totalExpense: data.totalExpense,
               totalNet: data.totalNet,
               onRefresh: onRefresh,
+              selectedPeriod: selectedPeriod,
             ),
-            const SizedBox(height: 16),
-            charts,
           ],
         );
       },
@@ -512,18 +584,27 @@ class _DashboardContent extends StatelessWidget {
   }
 }
 
-class _DashboardHeader extends StatelessWidget {
+class _DashboardHeader extends StatefulWidget {
   final double totalIncome;
   final double totalExpense;
   final double totalNet;
   final VoidCallback onRefresh;
+  final String selectedPeriod;
 
   const _DashboardHeader({
     required this.totalIncome,
     required this.totalExpense,
     required this.totalNet,
     required this.onRefresh,
+    required this.selectedPeriod,
   });
+
+  @override
+  State<_DashboardHeader> createState() => _DashboardHeaderState();
+}
+
+class _DashboardHeaderState extends State<_DashboardHeader> {
+  bool _isExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -532,59 +613,75 @@ class _DashboardHeader extends StatelessWidget {
       return formatter.format(value.round());
     }
 
-    final netColor = totalNet >= 0
+    final netColor = widget.totalNet >= 0
         ? Theme.of(context).colorScheme.primary
         : Theme.of(context).colorScheme.error;
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Resumen contable (últimos 12 meses)',
-                    style: Theme.of(context).textTheme.titleMedium,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                _isExpanded = !_isExpanded;
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Icon(
+                    _isExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                ),
-                IconButton(
-                  onPressed: onRefresh,
-                  tooltip: 'Actualizar datos',
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Resumen contable (${widget.selectedPeriod})',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: widget.onRefresh,
+                    tooltip: 'Actualizar datos',
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 24,
-              runSpacing: 12,
-              children: [
-                _StatChip(
-                  label: 'Total de ingresos',
-                  value: formatCLP(totalIncome),
-                  color: const Color(0xFF1B5E20),
-                  icon: Icons.trending_up,
-                ),
-                _StatChip(
-                  label: 'Total de gastos',
-                  value: formatCLP(totalExpense),
-                  color: const Color(0xFFB71C1C),
-                  icon: Icons.trending_down,
-                ),
-                _StatChip(
-                  label: 'Resultado neto',
-                  value: formatCLP(totalNet),
-                  color: netColor,
-                  icon:
-                      totalNet >= 0 ? Icons.stacked_line_chart : Icons.warning,
-                ),
-              ],
+          ),
+          if (_isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Wrap(
+                spacing: 24,
+                runSpacing: 12,
+                children: [
+                  _StatChip(
+                    label: 'Total de ingresos',
+                    value: formatCLP(widget.totalIncome),
+                    color: const Color(0xFF1B5E20),
+                    icon: Icons.trending_up,
+                  ),
+                  _StatChip(
+                    label: 'Total de gastos',
+                    value: formatCLP(widget.totalExpense),
+                    color: const Color(0xFFB71C1C),
+                    icon: Icons.trending_down,
+                  ),
+                  _StatChip(
+                    label: 'Resultado neto',
+                    value: formatCLP(widget.totalNet),
+                    color: netColor,
+                    icon: widget.totalNet >= 0
+                        ? Icons.stacked_line_chart
+                        : Icons.warning,
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -644,9 +741,9 @@ class _IncomeExpenseCard extends StatelessWidget {
   final double chartHeight;
   final _ChartSeriesMode mode;
   final ValueChanged<_ChartSeriesMode>? onModeChanged;
-  final int selectedMonths;
-  final List<int> monthOptions;
-  final ValueChanged<int?>? onMonthsChanged;
+  final String selectedPeriod;
+  final List<String> periodOptions;
+  final ValueChanged<String?>? onPeriodChanged;
   final double totalIncome;
   final double totalExpense;
 
@@ -655,9 +752,9 @@ class _IncomeExpenseCard extends StatelessWidget {
     required this.chartHeight,
     required this.mode,
     this.onModeChanged,
-    required this.selectedMonths,
-    required this.monthOptions,
-    required this.onMonthsChanged,
+    required this.selectedPeriod,
+    required this.periodOptions,
+    required this.onPeriodChanged,
     required this.totalIncome,
     required this.totalExpense,
   });
@@ -674,8 +771,11 @@ class _IncomeExpenseCard extends StatelessWidget {
     final maxValue = displayData
         .map((point) => math.max(point.income.abs(), point.expense.abs()))
         .fold<double>(0, (previous, value) => math.max(previous, value));
-    final chartMax = maxValue == 0 ? 1000.0 : maxValue * 1.15;
-    final axisInterval = chartMax <= 0 ? 1.0 : chartMax / 4;
+    
+    // Better chart max calculation with proper rounding
+    final chartMax = _calculateChartMax(maxValue);
+    // Use nice round intervals
+    final axisInterval = _calculateAxisInterval(chartMax);
 
     return Card(
       child: Padding(
@@ -692,16 +792,16 @@ class _IncomeExpenseCard extends StatelessWidget {
                   ),
                 ),
                 DropdownButtonHideUnderline(
-                  child: DropdownButton<int>(
-                    value: selectedMonths,
+                  child: DropdownButton<String>(
+                    value: selectedPeriod,
                     borderRadius: BorderRadius.circular(12),
-                    onChanged: onMonthsChanged,
+                    onChanged: onPeriodChanged,
                     style: Theme.of(context).textTheme.bodyMedium,
-                    items: monthOptions
+                    items: periodOptions
                         .map(
-                          (value) => DropdownMenuItem<int>(
+                          (value) => DropdownMenuItem<String>(
                             value: value,
-                            child: Text('Últimos $value meses'),
+                            child: Text(value),
                           ),
                         )
                         .toList(),
@@ -744,7 +844,9 @@ class _IncomeExpenseCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               mode == _ChartSeriesMode.monthly
-                  ? 'Resultados efectivos por mes'
+                  ? (data.length > 0 && data[0].periodStart.day == data[0].periodEnd.day
+                      ? 'Resultados efectivos por día'
+                      : 'Resultados efectivos por mes')
                   : 'Comportamiento acumulado del período',
               style: Theme.of(context)
                   .textTheme
@@ -753,7 +855,7 @@ class _IncomeExpenseCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             SizedBox(
-              height: math.max(chartHeight, 200.0),
+              height: math.max(chartHeight * 0.6, 200.0), // Reduced to 60% of total card height
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
@@ -818,27 +920,72 @@ class _IncomeExpenseCard extends StatelessWidget {
                           if (index < 0 || index >= displayData.length) {
                             return const SizedBox.shrink();
                           }
-                          if (displayData.length > 10 && index % 2 == 1) {
-                            return const SizedBox.shrink();
-                          }
+                          
                           final date = displayData[index].periodStart;
-                          final month = DateFormat('MMM', 'es_CL')
-                              .format(date)
-                              .toUpperCase();
-                          final year = DateFormat('yyyy').format(date);
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              '$month\n$year',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                          );
+                          
+                          // Check if this is a daily view (same start and end date)
+                          final isDailyView = displayData[index].periodStart.day == 
+                                              displayData[index].periodEnd.day &&
+                                              displayData[index].periodStart.month == 
+                                              displayData[index].periodEnd.month;
+                          
+                          if (isDailyView) {
+                            // Daily view: show day number and weekday
+                            // Show fewer labels if there are many days
+                            if (displayData.length > 14 && index % 2 == 1) {
+                              return const SizedBox.shrink();
+                            }
+                            if (displayData.length > 21 && index % 3 != 0) {
+                              return const SizedBox.shrink();
+                            }
+                            
+                            final day = DateFormat('d', 'es_CL').format(date);
+                            final weekday = DateFormat('EEE', 'es_CL').format(date);
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                '$weekday\n$day',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 10,
+                                    ),
+                              ),
+                            );
+                          } else {
+                            // Monthly view: show month and year
+                            // Show fewer labels if there are many months
+                            if (displayData.length > 12 && index % 2 == 1) {
+                              return const SizedBox.shrink();
+                            }
+                            if (displayData.length > 18 && index % 3 != 0) {
+                              return const SizedBox.shrink();
+                            }
+                            
+                            final month = DateFormat('MMM', 'es_CL')
+                                .format(date)
+                                .toUpperCase();
+                            final year = DateFormat('yyyy').format(date);
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                '$month\n$year',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 10,
+                                    ),
+                              ),
+                            );
+                          }
                         },
-                        reservedSize: 30,
+                        reservedSize: 42, // Increased from 30 to prevent cutoff
                       ),
                     ),
                   ),
@@ -880,7 +1027,7 @@ class _IncomeExpenseCard extends StatelessWidget {
                         );
                         final label = rodIndex == 0 ? 'Ingresos' : 'Gastos';
                         return BarTooltipItem(
-                          '${displayData[group.x.toInt()].monthLabel()}\n$label: ${formatter.format(rod.toY)}',
+                          '${displayData[group.x.toInt()].periodLabel()}\n$label: ${formatter.format(rod.toY)}',
                           const TextStyle(color: Colors.white),
                         );
                       },
@@ -942,6 +1089,56 @@ class _IncomeExpenseCard extends StatelessWidget {
         );
       },
     ).toList(growable: false);
+  }
+
+  /// Calculate a nice round chart maximum
+  double _calculateChartMax(double maxValue) {
+    if (maxValue == 0) return 100000.0;
+    
+    // Add 15% padding
+    final paddedMax = maxValue * 1.15;
+    
+    // Round to nice numbers
+    final magnitude = math.pow(10, (math.log(paddedMax) / math.ln10).floor());
+    final normalized = paddedMax / magnitude;
+    
+    double rounded;
+    if (normalized <= 1) {
+      rounded = 1;
+    } else if (normalized <= 2) {
+      rounded = 2;
+    } else if (normalized <= 5) {
+      rounded = 5;
+    } else {
+      rounded = 10;
+    }
+    
+    return rounded * magnitude;
+  }
+
+  /// Calculate nice axis intervals
+  double _calculateAxisInterval(double chartMax) {
+    if (chartMax <= 0) return 10000.0;
+    
+    // Aim for 4-5 intervals
+    final rawInterval = chartMax / 4;
+    
+    // Round to nice numbers
+    final magnitude = math.pow(10, (math.log(rawInterval) / math.ln10).floor());
+    final normalized = rawInterval / magnitude;
+    
+    double rounded;
+    if (normalized <= 1) {
+      rounded = 1;
+    } else if (normalized <= 2) {
+      rounded = 2;
+    } else if (normalized <= 5) {
+      rounded = 5;
+    } else {
+      rounded = 10;
+    }
+    
+    return rounded * magnitude;
   }
 }
 
@@ -1106,7 +1303,7 @@ class _ExpenseBreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveHeight = math.max(chartHeight, 220.0);
+    final effectiveHeight = chartHeight * 0.7; // Use 70% of total card height for content
     final currency = NumberFormat.currency(
       locale: 'es_CL',
       symbol: 'CLP',
@@ -1117,10 +1314,25 @@ class _ExpenseBreakdownCard extends StatelessWidget {
       return Card(
         child: SizedBox(
           height: effectiveHeight,
-          child: Center(
-            child: Text(
-              'No hay gastos registrados en ${rangeLabel.toLowerCase()}',
-              style: Theme.of(context).textTheme.bodyMedium,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.pie_chart_outline,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.secondary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No hay gastos registrados en ${rangeLabel.toLowerCase()}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1136,127 +1348,155 @@ class _ExpenseBreakdownCard extends StatelessWidget {
     final rangeDescription = '$rangeLabel · $startLabel – $endLabel';
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Gastos principales',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<_ExpenseBreakdownRange>(
-                    value: breakdownRange,
-                    borderRadius: BorderRadius.circular(12),
-                    onChanged: (value) {
-                      if (value != null) {
-                        onRangeChanged(value);
-                      }
-                    },
-                    items: breakdownOptions
-                        .map(
-                          (option) => DropdownMenuItem<
-                              _ExpenseBreakdownRange>(
-                            value: option,
-                            child: Text(option.label),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              rangeDescription,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).hintColor),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: effectiveHeight,
-              child: Row(
+      child: SizedBox(
+        height: chartHeight, // Fixed height for the entire card
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
                   Expanded(
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        PieChart(
-                          PieChartData(
-                            sectionsSpace: 4,
-                            centerSpaceRadius: 58,
-                            sections: [
-                              for (var i = 0; i < items.length; i++)
-                                PieChartSectionData(
-                                  value: items[i].displayAmount,
-                                  color: palette[i],
-                                  radius: effectiveHeight / 3.2,
-                                  title: '',
-                                ),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'GASTOS',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              'PRINCIPALES',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context).hintColor,
-                                  ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              currency.format(total.round()),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ],
+                    child: Text(
+                      'Gastos principales',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          for (var i = 0; i < items.length; i++)
-                            _ExpenseLegendRow(
-                              color: palette[i],
-                              accountCode: items[i].accountCode,
-                              accountName: items[i].accountName,
-                              amount: items[i].displayAmount,
-                              total: total,
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<_ExpenseBreakdownRange>(
+                      value: breakdownRange,
+                      borderRadius: BorderRadius.circular(12),
+                      onChanged: (value) {
+                        if (value != null) {
+                          onRangeChanged(value);
+                        }
+                      },
+                      items: breakdownOptions
+                          .map(
+                            (option) => DropdownMenuItem<
+                                _ExpenseBreakdownRange>(
+                              value: option,
+                              child: Text(option.label),
                             ),
-                        ],
-                      ),
+                          )
+                          .toList(),
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                rangeDescription,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Theme.of(context).hintColor),
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Pie chart section - LEFT SIDE
+                    Expanded(
+                      flex: 3,
+                      child: Center(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final size = math.min(constraints.maxWidth, constraints.maxHeight) * 0.85;
+                            return SizedBox(
+                              width: size,
+                              height: size,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  PieChart(
+                                    PieChartData(
+                                      sectionsSpace: 3,
+                                      centerSpaceRadius: size * 0.35,
+                                      sections: [
+                                        for (var i = 0; i < items.length; i++)
+                                          PieChartSectionData(
+                                            value: items[i].displayAmount,
+                                            color: palette[i],
+                                            radius: size * 0.25,
+                                            title: '',
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'GASTOS',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 0.5,
+                                            ),
+                                      ),
+                                      Text(
+                                        'PRINCIPALES',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context).hintColor,
+                                              fontSize: 10,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        currency.format(total.round()),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Legend section - RIGHT SIDE
+                    Expanded(
+                      flex: 2,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (var i = 0; i < items.length; i++)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _ExpenseLegendRow(
+                                  color: palette[i],
+                                  accountCode: items[i].accountCode,
+                                  accountName: items[i].accountName,
+                                  amount: items[i].displayAmount,
+                                  total: total,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
