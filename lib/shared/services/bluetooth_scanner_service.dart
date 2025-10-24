@@ -30,7 +30,9 @@ class BluetoothScannerService extends ChangeNotifier {
   /// Check if permissions are granted
   Future<bool> hasPermissions() async {
     try {
-      if (defaultTargetPlatform == TargetPlatform.android) {
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        return true; // No runtime permissions required on Windows
+      } else if (defaultTargetPlatform == TargetPlatform.android) {
         final bluetoothScan = await Permission.bluetoothScan.status;
         final bluetoothConnect = await Permission.bluetoothConnect.status;
         final location = await Permission.location.status;
@@ -52,7 +54,9 @@ class BluetoothScannerService extends ChangeNotifier {
   /// Request Bluetooth permissions
   Future<bool> requestPermissions() async {
     try {
-      if (defaultTargetPlatform == TargetPlatform.android) {
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        return true; // All Bluetooth permissions granted by default on Windows
+      } else if (defaultTargetPlatform == TargetPlatform.android) {
         Map<Permission, PermissionStatus> statuses = await [
           Permission.bluetoothScan,
           Permission.bluetoothConnect,
@@ -81,7 +85,9 @@ class BluetoothScannerService extends ChangeNotifier {
   /// Check if any permission is permanently denied
   Future<bool> hasPermissionsDenied() async {
     try {
-      if (defaultTargetPlatform == TargetPlatform.android) {
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        return false;
+      } else if (defaultTargetPlatform == TargetPlatform.android) {
         final bluetoothScan = await Permission.bluetoothScan.status;
         final bluetoothConnect = await Permission.bluetoothConnect.status;
         final location = await Permission.location.status;
@@ -119,6 +125,8 @@ class BluetoothScannerService extends ChangeNotifier {
   Future<void> turnOnBluetooth() async {
     try {
       if (defaultTargetPlatform == TargetPlatform.android) {
+        await FlutterBluePlus.turnOn();
+      } else if (defaultTargetPlatform == TargetPlatform.windows) {
         await FlutterBluePlus.turnOn();
       }
     } catch (e) {
@@ -274,7 +282,8 @@ class BluetoothScannerService extends ChangeNotifier {
   /// Get list of bonded/paired devices (Android only)
   Future<List<BluetoothDevice>> getBondedDevices() async {
     try {
-      if (defaultTargetPlatform == TargetPlatform.android) {
+      if (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.windows) {
         return await FlutterBluePlus.bondedDevices;
       }
       return [];

@@ -53,14 +53,20 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
   }
 
   bool _checkPlatformSupport() {
-    // Bluetooth is only supported on Android and iOS
+    if (kIsWeb) {
+      return false;
+    }
+
     return defaultTargetPlatform == TargetPlatform.android ||
-           defaultTargetPlatform == TargetPlatform.iOS;
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.windows;
   }
 
   @override
   void dispose() {
-    _scannerService.dispose();
+    if (_isPlatformSupported) {
+      _scannerService.dispose();
+    }
     super.dispose();
   }
 
@@ -264,7 +270,8 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Los lectores de código de barras Bluetooth solo están disponibles en dispositivos móviles (Android/iOS).',
+                  'Los lectores de código de barras Bluetooth están disponibles en Windows, Android e iOS. '
+                  'Usa un lector USB/teclado cuando trabajes desde la versión web.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Colors.grey[600],
                   ),

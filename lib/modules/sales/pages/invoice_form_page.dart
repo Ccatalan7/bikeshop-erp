@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -81,6 +82,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       _outstandingAmount > 0.01;
   bool get _shouldShowReadOnlyNotice =>
       !_canEditFields && _status == InvoiceStatus.draft;
+  
+  StreamSubscription? _scanSubscription;
+  final _remoteScannerService = RemoteScannerService();
+  bool _scannerEnabled = false;
 
   @override
   void initState() {
@@ -88,6 +93,13 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     _isEditing = widget.invoiceId == null;
     _dueDate = _issueDate.add(const Duration(days: 30));
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
+    
+    // Listen for barcode scans
+    _scanSubscription = _remoteScannerService.scanStream.listen((scan) {
+      if (mounted && _canEditFields) {
+        _handleBarcodeScan(scan.barcode);
+      }
+    });
   }
 
   @override
@@ -97,7 +109,118 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     for (final entry in _lineEntries) {
       entry.dispose();
     }
+    _scanSubscription?.cancel();
     super.dispose();
+  }
+  
+  Future<void> _toggleScanner() async {
+    if (!_canEditFields) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ No se puede escanear en facturas enviadas'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    try {
+      if (_scannerEnabled) {
+        await _remoteScannerService.stopListening();
+        setState(() => _scannerEnabled = false);
+      } else {
+        await _remoteScannerService.startListening();
+        setState(() => _scannerEnabled = true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('📱 Escáner remoto activado'),
+              duration: Duration(seconds: 2),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error con escáner: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+  
+  Future<void> _handleBarcodeScan(String barcode) async {
+    // Search for product by SKU
+    final product = _cachedProducts.cast<Product?>().firstWhere(
+      (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
+      orElse: () => null,
+    );
+    
+    if (product != null) {
+      // Check if product is already in the invoice
+      final existingLineIndex = _lineEntries.indexWhere(
+        (entry) => entry.line.product?.id == product.id,
+      );
+      
+      if (existingLineIndex != -1) {
+        // Increment quantity
+        final entry = _lineEntries[existingLineIndex];
+        final currentQty = int.tryParse(entry.quantityController.text) ?? 0;
+        entry.quantityController.text = (currentQty + 1).toString();
+        setState(() {}); // Trigger recalculation
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Cantidad aumentada: ${product.name}'),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
+      } else {
+        // Add as new line - simplified approach
+        setState(() {
+          final newLine = _InvoiceLine(
+            productId: product.id,
+            product: product,
+            name: product.name,
+            sku: product.sku,
+            quantity: 1,
+            unitPrice: product.price,
+            discount: 0,
+            cost: product.cost,
+          );
+          final newEntry = _InvoiceLineEntry(newLine);
+          newEntry.attachListeners(() {
+            setState(() {});
+          });
+          _lineEntries.add(newEntry);
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Producto agregado: ${product.name}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Producto no encontrado: $barcode'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _initialize() async {
@@ -640,6 +763,24 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     final actionButtons = <Widget>[];
 
     if (_canEditFields) {
+      // Scanner button (only when editing)
+      actionButtons.add(
+        IconButton(
+          onPressed: _toggleScanner,
+          icon: Icon(
+            _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
+            color: _scannerEnabled ? Colors.green : null,
+          ),
+          tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+          style: IconButton.styleFrom(
+            backgroundColor: _scannerEnabled 
+                ? Colors.green.withOpacity(0.1) 
+                : null,
+          ),
+        ),
+      );
+      actionButtons.add(const SizedBox(width: 8));
+      
       if (_loadedInvoice != null) {
         actionButtons.add(
           OutlinedButton.icon(

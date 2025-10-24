@@ -8,6 +8,7 @@ import '../../../shared/models/supplier.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
+import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -54,6 +55,10 @@ class _ProductListPageState extends State<ProductListPage> {
   bool _showLowStockOnly = false;
   bool _showInactive = false;
   ProductViewMode _viewMode = ProductViewMode.table;
+  
+  StreamSubscription? _scanSubscription;
+  final _remoteScannerService = RemoteScannerService();
+  bool _scannerEnabled = false;
 
   @override
   void initState() {
@@ -88,13 +93,83 @@ class _ProductListPageState extends State<ProductListPage> {
 
     _loadSuppliers();
     _loadProducts();
+    
+    // Listen for barcode scans
+    _scanSubscription = _remoteScannerService.scanStream.listen((scan) {
+      if (mounted) {
+        _handleBarcodeScan(scan.barcode);
+      }
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _tableScrollController.dispose();
+    _scanSubscription?.cancel();
     super.dispose();
+  }
+  
+  Future<void> _toggleScanner() async {
+    try {
+      if (_scannerEnabled) {
+        await _remoteScannerService.stopListening();
+        setState(() => _scannerEnabled = false);
+      } else {
+        await _remoteScannerService.startListening();
+        setState(() => _scannerEnabled = true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('📱 Escáner remoto activado'),
+              duration: Duration(seconds: 2),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error con escáner: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+  
+  Future<void> _handleBarcodeScan(String barcode) async {
+    // Search for product by SKU
+    final product = _products.cast<Product?>().firstWhere(
+      (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
+      orElse: () => null,
+    );
+    
+    if (product != null) {
+      // Navigate to product detail
+      if (mounted) {
+        context.push('/inventory/products/${product.id}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Producto encontrado: ${product.name}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Producto no encontrado: $barcode'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadCategories() async {
@@ -307,6 +382,20 @@ class _ProductListPageState extends State<ProductListPage> {
             selected: <ProductViewMode>{_viewMode},
             onSelectionChanged: (selection) =>
                 _onViewModeChanged(selection.first),
+          ),
+          const SizedBox(width: 16),
+          IconButton(
+            onPressed: _toggleScanner,
+            icon: Icon(
+              _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
+              color: _scannerEnabled ? Colors.green : null,
+            ),
+            tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+            style: IconButton.styleFrom(
+              backgroundColor: _scannerEnabled 
+                  ? Colors.green.withOpacity(0.1) 
+                  : null,
+            ),
           ),
           const SizedBox(width: 16),
           AppButton(

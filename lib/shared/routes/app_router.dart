@@ -50,6 +50,7 @@ import '../../modules/settings/pages/factory_reset_page.dart';
 import '../../modules/settings/pages/appearance_settings_page.dart';
 import '../../modules/settings/pages/bluetooth_scanner_page.dart';
 import '../../modules/settings/pages/keyboard_scanner_page.dart';
+import '../../modules/settings/pages/remote_scanner_page.dart';
 import '../../modules/hr/pages/employee_list_page.dart';
 import '../../modules/hr/pages/attendances_page.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
@@ -831,6 +832,14 @@ class AppRouter {
             context,
             state,
             const KeyboardScannerPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/remote-scanner',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const RemoteScannerPage(),
           ),
         ),
 

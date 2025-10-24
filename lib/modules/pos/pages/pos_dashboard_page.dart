@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -9,6 +10,7 @@ import '../../inventory/models/category_models.dart' as inventory_models;
 import '../../inventory/services/category_service.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/payment_method_service.dart';
+import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../services/pos_service.dart';
 import '../widgets/product_tile.dart';
@@ -30,6 +32,9 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   List<_CategoryOption> _serviceCategoryOptions = [];
   bool _isLoadingCategories = false;
   ProductType? _selectedProductType;
+  StreamSubscription? _scanSubscription;
+  final _remoteScannerService = RemoteScannerService();
+  bool _scannerEnabled = false;
 
   @override
   void initState() {
@@ -47,12 +52,75 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
       paymentMethodService.loadPaymentMethods();
       _loadCategories(categoryService);
     });
+    
+    // Listen for barcode scans
+    _scanSubscription = _remoteScannerService.scanStream.listen((scan) {
+      if (mounted) {
+        _handleBarcodeScan(scan.barcode);
+      }
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scanSubscription?.cancel();
     super.dispose();
+  }
+  
+  Future<void> _toggleScanner() async {
+    try {
+      if (_scannerEnabled) {
+        await _remoteScannerService.stopListening();
+        setState(() => _scannerEnabled = false);
+      } else {
+        await _remoteScannerService.startListening();
+        setState(() => _scannerEnabled = true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('📱 Escáner remoto activado - Listo para escanear'),
+              duration: Duration(seconds: 2),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error con escáner: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+  
+  Future<void> _handleBarcodeScan(String barcode) async {
+    final inventoryService = Provider.of<InventoryService>(context, listen: false);
+    
+    // Search for product by SKU or barcode
+    final product = inventoryService.products.cast<Product?>().firstWhere(
+      (p) => p!.sku?.toLowerCase() == barcode.toLowerCase() ||
+             p.barcode?.toLowerCase() == barcode.toLowerCase(),
+      orElse: () => null,
+    );
+    
+    if (product != null) {
+      _addToCart(product);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Producto no encontrado: $barcode'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   void _addToCart(Product product, {int quantity = 1}) {
@@ -303,6 +371,21 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                     ),
                   ),
                 ),
+                // Scanner toggle button
+                IconButton(
+                  onPressed: _toggleScanner,
+                  icon: Icon(
+                    _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
+                    color: _scannerEnabled ? Colors.green : null,
+                  ),
+                  tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+                  style: IconButton.styleFrom(
+                    backgroundColor: _scannerEnabled 
+                        ? Colors.green.withOpacity(0.1) 
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Consumer<POSService>(
                   builder: (context, posService, child) {
                     return Row(

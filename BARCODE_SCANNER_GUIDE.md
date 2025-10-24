@@ -2,10 +2,11 @@
 
 ## 🎯 Resumen
 
-Este ERP soporta **dos tipos de lectores de código de barras** para adaptarse a diferentes entornos de trabajo:
+Este ERP soporta **tres tipos de lectores de código de barras** para adaptarse a diferentes entornos de trabajo:
 
 1. **🖥️ Lector USB/Teclado** - Para escritorio (Windows, macOS, Linux, Web)
-2. **📱 Lector Bluetooth** - Para móviles (Android, iOS)
+2. **📱 Lector Bluetooth** - Para Windows, Android e iOS
+3. **📱 Celular como Escáner** - Usa tu teléfono como escáner inalámbrico (NUEVO)
 
 ---
 
@@ -67,7 +68,62 @@ Si necesitas cambiar la configuración:
 
 ---
 
-## 📱 Lector Bluetooth (Para móviles)
+## 📱 Celular como Escáner (NUEVO - Opción 2)
+
+### ¿Qué es?
+
+Convierte tu celular Android o iOS en un escáner de código de barras inalámbrico que envía los códigos directamente a tu ERP en Windows a través de Internet.
+
+### ✅ Ventajas
+
+- ✅ **Sin hardware adicional** - Usa el celular que ya tienes
+- ✅ **Costo $0** - No necesitas comprar lectores
+- ✅ **Inalámbrico** - Funciona por WiFi o datos móviles
+- ✅ **Multi-dispositivo** - Conecta varios celulares al mismo ERP
+- ✅ **Fácil configuración** - Emparejar con código QR en segundos
+- ✅ **Funciona en cualquier lugar** - No requiere estar cerca del PC
+
+### 📋 Cómo usar
+
+1. **Instalar app móvil** "Vinabike Scanner" en tu celular (ver guía de instalación)
+2. **En Windows ERP**: Ir a `Configuración → Dispositivos → Escáner Remoto`
+3. **Presionar "Iniciar"** para comenzar a escuchar
+4. **Escanear código QR** mostrado en pantalla con la app móvil
+5. **¡Listo!** Ahora puedes escanear códigos con la cámara de tu celular
+
+### 💻 Plataformas soportadas
+
+| Plataforma | Receptor (ERP) | Escáner (Móvil) |
+|------------|----------------|-----------------|
+| **Windows** | ✅ Funciona | - |
+| **Android** | - | ✅ Funciona |
+| **iOS** | - | ✅ Funciona |
+| **Web** | ⚠️ Proximamente | - |
+
+### 🔧 Instalación de la App Móvil
+
+Ver guía completa en: **MOBILE_SCANNER_COMPLETE_GUIDE.md**
+
+Resumen:
+```bash
+cd /Users/Claudio/Dev
+flutter create vinabike_scanner
+# Copiar archivos del template
+# Configurar Supabase
+flutter build apk --release
+```
+
+### 🎯 Casos de uso ideales
+
+- ✅ **Inventario en bodega** - Caminar con el celular escaneando productos
+- ✅ **Múltiples cajeros** - Cada cajero con su celular, un solo Windows POS
+- ✅ **Recepción de mercancía** - Escanear cajas al llegar
+- ✅ **Trabajo remoto** - Escanear desde cualquier ubicación
+- ✅ **Presupuesto limitado** - Evitar compra de hardware
+
+---
+
+## 📱 Lector Bluetooth (Windows/Android/iOS)
 
 ### ¿Qué es?
 
@@ -82,8 +138,9 @@ Lectores de código de barras que se conectan vía Bluetooth Low Energy (BLE) a 
 
 ### ⚠️ Limitaciones
 
-- ❌ **No funciona en web/desktop** (limitación técnica de Bluetooth)
-- ⚠️ **Requiere permisos** de Bluetooth y ubicación
+- ❌ **No funciona en web ni macOS** (limitaciones de Flutter BLE)
+- ⚠️ **Windows**: requiere adaptador Bluetooth Low Energy (BLE 4.0+) y Windows 10 build 15014 o superior
+- ⚠️ **Android**: requiere permisos de Bluetooth y ubicación
 - ⚠️ **Más caro** que lectores USB
 - ⚠️ **Requiere batería** y recarga
 
@@ -107,6 +164,12 @@ Lectores Bluetooth Low Energy (BLE):
 5. **Conectar** al lector deseado
 6. **Escanear** - Los códigos llegarán automáticamente
 
+#### Windows (pasos adicionales)
+
+- Verifica que Bluetooth esté activado en `Configuración → Dispositivos → Bluetooth`
+- Algunos lectores requieren emparejarse primero desde Windows; hazlo una vez antes de usar la app
+- Si Windows solicita un PIN durante el emparejamiento, consulta el manual del lector (habitualmente `0000` o `1234`)
+
 ### 🔐 Permisos necesarios
 
 **Android:**
@@ -117,13 +180,17 @@ Lectores Bluetooth Low Energy (BLE):
 **iOS:**
 - Bluetooth (se solicita automáticamente)
 
+**Windows:**
+- No requiere permisos dentro de la app, Windows maneja el emparejamiento
+- Asegúrate de que el adaptador BLE esté activado y el lector esté vinculado
+
 ### 💻 Uso en diferentes plataformas
 
 | Plataforma | Estado | Notas |
 |------------|--------|-------|
 | **Android** | ✅ Funciona | Requiere permisos |
 | **iOS** | ✅ Funciona | Requiere permiso |
-| **Windows** | ❌ No soportado | Usar lector USB |
+| **Windows** | ✅ Funciona | BLE 4.0+, Windows 10 build 15014+ |
 | **macOS** | ❌ No soportado | Usar lector USB |
 | **Web** | ❌ No soportado | Usar lector USB |
 
@@ -141,6 +208,8 @@ Lectores Bluetooth Low Energy (BLE):
 ✅ Funciona en Windows/Web  
 
 **Producto sugerido**: Honeywell Voyager 1200g o Inateck BCST-70 (económico)
+
+> ¿Tablet o 2-en-1 con Windows? Puedes usar también el lector Bluetooth para inventario rápido, siempre que el equipo tenga BLE 4.0+.
 
 ---
 
@@ -162,6 +231,7 @@ Lectores Bluetooth Low Energy (BLE):
 
 **En escritorio (Windows)**: Lector USB para registro de pegas  
 **En bodega (móvil)**: Lector Bluetooth para buscar repuestos  
+**En tablets Windows con BLE**: Puedes reutilizar el lector Bluetooth siguiendo la guía previa  
 
 ---
 
@@ -236,16 +306,17 @@ Los navegadores web no soportan Bluetooth Low Energy para escaneo de códigos.
 
 ## 📊 Comparación Rápida
 
-| Característica | USB/Teclado | Bluetooth |
-|----------------|-------------|-----------|
-| **Plataformas** | Windows, Mac, Linux, Web | Solo Android/iOS |
-| **Instalación** | Plug and play | Requiere emparejamiento |
-| **Permisos** | No requiere | Requiere permisos |
-| **Precio** | $25-150 USD | $40-300 USD |
-| **Movilidad** | Cable (1-2 metros) | Inalámbrico (10 metros) |
-| **Batería** | No requiere | Requiere recarga |
-| **Velocidad** | Muy rápida | Rápida |
-| **Ideal para** | POS, Escritorio | Inventario, Bodega |
+| Característica | USB/Teclado | Bluetooth | Celular (Remoto) |
+|----------------|-------------|-----------|------------------|
+| **Plataformas** | Windows, Mac, Linux, Web | Windows, Android, iOS | Windows (ERP) + Android/iOS (App) |
+| **Instalación** | Plug and play | Requiere emparejamiento | App móvil + QR pairing |
+| **Permisos** | No requiere | Requiere permisos | Cámara en celular |
+| **Precio** | $25-150 USD | $40-300 USD | **$0** (usa tu celular) |
+| **Movilidad** | Cable (1-2 metros) | Inalámbrico (10 metros) | **Ilimitada** (WiFi/datos) |
+| **Batería** | No requiere | Requiere recarga | Usa batería del celular |
+| **Velocidad** | Muy rápida | Rápida | Rápida |
+| **Multi-dispositivo** | No | No | **Sí** (múltiples celulares) |
+| **Ideal para** | POS, Escritorio | Inventario, Bodega | Inventario, Multi-cajero, Presupuesto bajo |
 
 ---
 
@@ -256,16 +327,17 @@ Los navegadores web no soportan Bluetooth Low Energy para escaneo de códigos.
 El sistema detecta automáticamente la plataforma:
 
 ```dart
-// Desktop/Web → Lector USB/Teclado
-if (Platform.isWindows || Platform.isMacOS || Platform.isLinux || kIsWeb) {
+// HID (USB/Teclado) → Web y escritorios sin BLE
+if (kIsWeb || Platform.isMacOS || Platform.isLinux) {
   // Usa BarcodeScannerService (keyboard listener)
 }
 
-// Mobile → Lector Bluetooth
-if (Platform.isAndroid || Platform.isIOS) {
-  // Usa BluetoothScannerService (flutter_blue_plus)
+// Bluetooth Low Energy → Windows, Android, iOS
+if (Platform.isWindows || Platform.isAndroid || Platform.isIOS) {
+  // Usa BluetoothScannerService (flutter_blue_plus + flutter_blue_plus_windows)
 }
 ```
+> Dependencias mínimas: `flutter_blue_plus` y `flutter_blue_plus_windows` (para registrar el plugin en Windows desktop).
 
 **Stream unificado de códigos:**
 

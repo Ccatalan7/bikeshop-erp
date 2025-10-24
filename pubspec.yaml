@@ -55,7 +55,9 @@ dependencies:
   
   # Bluetooth & Barcode Scanning
   flutter_blue_plus: ^1.32.12
+  flutter_blue_plus_windows: ^1.26.1
   permission_handler: ^11.3.1
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

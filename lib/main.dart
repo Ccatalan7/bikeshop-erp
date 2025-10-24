@@ -31,37 +31,37 @@ import 'shared/routes/app_router.dart';
 import 'shared/services/error_reporting_service.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  if (!SupabaseConfig.isConfigured && kDebugMode) {
-    debugPrint(
-        '[Supabase] WARNING: SupabaseConfig still has placeholder values. '
-        'Update lib/shared/config/supabase_config.dart or provide dart-defines.');
-  }
+    if (!SupabaseConfig.isConfigured && kDebugMode) {
+      debugPrint(
+          '[Supabase] WARNING: SupabaseConfig still has placeholder values. '
+          'Update lib/shared/config/supabase_config.dart or provide dart-defines.');
+    }
 
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    anonKey: SupabaseConfig.anonKey,
-    authOptions: const FlutterAuthClientOptions(
-      autoRefreshToken: true,
-    ),
-  );
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey,
+      authOptions: const FlutterAuthClientOptions(
+        autoRefreshToken: true,
+      ),
+    );
 
-  // Handle deep links for OAuth callbacks on desktop
-  if (!kIsWeb) {
-    final appLinks = AppLinks();
-    appLinks.uriLinkStream.listen((uri) {
-      debugPrint('[DeepLink] Received: $uri');
-      // Supabase will automatically handle the OAuth callback
-    });
-  }
+    // Handle deep links for OAuth callbacks on desktop
+    if (!kIsWeb) {
+      final appLinks = AppLinks();
+      appLinks.uriLinkStream.listen((uri) {
+        debugPrint('[DeepLink] Received: $uri');
+        // Supabase will automatically handle the OAuth callback
+      });
+    }
 
-  FlutterError.onError = (FlutterErrorDetails details) {
-    ErrorReportingService.report(details.exception, details.stack);
-    FlutterError.dumpErrorToConsole(details);
-  };
+    FlutterError.onError = (FlutterErrorDetails details) {
+      ErrorReportingService.report(details.exception, details.stack);
+      FlutterError.dumpErrorToConsole(details);
+    };
 
-  runZonedGuarded(() {
     runApp(const VinabikeApp());
   }, (error, stack) {
     ErrorReportingService.report(error, stack);

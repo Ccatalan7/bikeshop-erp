@@ -1,0 +1,41 @@
+name: vinabike_scanner
+description: Mobile barcode scanner companion app for Vinabike ERP
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Supabase Realtime
+  supabase_flutter: ^2.6.0
+
+  # Barcode Scanning
+  mobile_scanner: ^5.2.3
+
+  # State Management
+  provider: ^6.1.2
+
+  # Storage
+  shared_preferences: ^2.2.3
+
+  # Utilities
+  uuid: ^4.4.0
+  intl: ^0.20.0
+
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # Optional: Add app icon
+  # assets:
+  #   - assets/icon/
