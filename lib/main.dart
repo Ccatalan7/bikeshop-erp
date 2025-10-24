@@ -26,6 +26,7 @@ import 'modules/settings/services/appearance_service.dart';
 import 'modules/bikeshop/services/bikeshop_service.dart';
 import 'modules/hr/services/hr_service.dart';
 import 'modules/website/services/website_service.dart';
+import 'modules/website/services/mercadopago_service.dart';
 import 'public_store/providers/cart_provider.dart';
 import 'shared/routes/app_router.dart';
 import 'shared/services/error_reporting_service.dart';
@@ -125,6 +126,7 @@ class VinabikeApp extends StatelessWidget {
                 )),
         ChangeNotifierProvider(create: (_) => HRService()),
         ChangeNotifierProvider(create: (_) => WebsiteService()),
+        ChangeNotifierProvider(create: (_) => MercadoPagoService()..initialize()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProxyProvider2<DatabaseService, AccountingService,
             SalesService>(

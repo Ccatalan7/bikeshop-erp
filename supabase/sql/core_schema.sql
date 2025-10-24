@@ -1209,6 +1209,15 @@ on conflict (code) do update set
   account_id = excluded.account_id,
   updated_at = now();
 
+-- MercadoPago for online payments
+insert into payment_methods (code, name, account_id, requires_reference, icon, sort_order)
+select 'mercadopago', 'MercadoPago', id, true, 'payment', 5
+from accounts where code = '1110'
+on conflict (code) do update set
+  name = excluded.name,
+  account_id = excluded.account_id,
+  updated_at = now();
+
 -- ============================================================================
 -- SALES PAYMENTS TABLE (Updated to use payment_method_id)
 -- ============================================================================
@@ -9651,6 +9660,7 @@ declare
   v_items jsonb;
   v_next_number integer;
   v_year text;
+  v_payment_method_id uuid;
 begin
   -- Get order details
   select * into v_order
@@ -9735,6 +9745,49 @@ begin
       updated_at = now()
   where id = p_order_id;
   
+  -- If order is already paid, create payment record
+  if v_order.payment_status = 'paid' and v_order.payment_method is not null then
+    -- Get payment method ID by code (default to MercadoPago if not found)
+    select id into v_payment_method_id
+    from payment_methods
+    where code = lower(v_order.payment_method)
+      and is_active = true;
+    
+    -- If payment method not found, try to get MercadoPago
+    if v_payment_method_id is null then
+      select id into v_payment_method_id
+      from payment_methods
+      where code = 'mercadopago'
+        and is_active = true;
+    end if;
+    
+    -- Create payment record if we found a payment method
+    if v_payment_method_id is not null then
+      insert into sales_payments (
+        invoice_id,
+        invoice_reference,
+        payment_method_id,
+        amount,
+        payment_date,
+        reference,
+        notes
+      ) values (
+        v_invoice_id,
+        v_invoice_number,
+        v_payment_method_id,
+        v_order.total,
+        coalesce(v_order.paid_at, now()),
+        v_order.payment_reference,
+        'Pago automático desde pedido online #' || v_order.order_number
+      );
+      
+      -- The trigger on sales_payments will automatically:
+      -- 1. Create the journal entry (Dr: Bank, Cr: AR)
+      -- 2. Update paid_amount and balance on the invoice
+      -- 3. Transition invoice status to 'pagado'
+    end if;
+  end if;
+  
   return v_invoice_id;
 end;
 $$;
@@ -9796,7 +9849,10 @@ insert into website_settings (key, value, description) values
   ('google_analytics_id', '', 'Google Analytics tracking ID'),
   ('facebook_pixel_id', '', 'Facebook Pixel ID'),
   ('meta_description', 'Tienda online de bicicletas y accesorios en Chile', 'Meta descripción para SEO'),
-  ('meta_keywords', 'bicicletas, bikes, chile, ciclismo, accesorios', 'Palabras clave para SEO')
+  ('meta_keywords', 'bicicletas, bikes, chile, ciclismo, accesorios', 'Palabras clave para SEO'),
+  ('mercadopago_public_key', '', 'MercadoPago Public Key (TEST-xxxx for sandbox)'),
+  ('mercadopago_access_token', '', 'MercadoPago Access Token (TEST-xxxx for sandbox)'),
+  ('mercadopago_test_mode', 'true', 'MercadoPago modo prueba (true/false)')
 on conflict (key) do nothing;
 
 -- Seed default homepage content

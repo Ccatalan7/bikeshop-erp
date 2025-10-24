@@ -148,9 +148,9 @@ class _ProductListPageState extends State<ProductListPage> {
     );
     
     if (product != null) {
-      // Navigate to product detail
+      // Navigate to product edit page
       if (mounted) {
-        context.push('/inventory/products/${product.id}');
+        context.push('/inventory/products/${product.id}/edit');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('✅ Producto encontrado: ${product.name}'),

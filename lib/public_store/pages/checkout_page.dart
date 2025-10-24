@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/public_store_theme.dart';
 import '../providers/cart_provider.dart';
 import '../../modules/website/services/website_service.dart';
+import '../../modules/website/services/mercadopago_service.dart';
 import '../../shared/utils/chilean_utils.dart';
 
 class CheckoutPage extends StatefulWidget {
@@ -21,7 +23,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final _addressController = TextEditingController();
   final _notesController = TextEditingController();
 
-  String _paymentMethod = 'transfer'; // transfer, cash_on_delivery
+  String _paymentMethod = 'mercadopago'; // mercadopago, transfer, cash_on_delivery
   bool _isProcessing = false;
 
   @override
@@ -52,6 +54,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     try {
       final websiteService =
           Provider.of<WebsiteService>(context, listen: false);
+      final mercadopagoService =
+          Provider.of<MercadoPagoService>(context, listen: false);
 
       // Create order data (database will generate id and orderNumber)
       final orderData = {
@@ -87,13 +91,63 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       if (!mounted) return;
 
-      // Clear cart
-      while (cart.items.isNotEmpty) {
-        cart.removeProduct(cart.items.first.product.id);
-      }
+      // Handle payment based on selected method
+      if (_paymentMethod == 'mercadopago') {
+        // Redirect to MercadoPago checkout
+        try {
+          final order = await websiteService.getOrderById(orderId);
+          if (order == null) throw Exception('Order not found');
 
-      // Navigate to order confirmation
-      context.go('/tienda/pedido/$orderId');
+          final preference = await mercadopagoService.createPreference(
+            orderId: orderId,
+            orderNumber: order.orderNumber,
+            total: cart.total,
+            items: cart.items
+                .map((item) => {
+                      'title': item.product.name,
+                      'quantity': item.quantity,
+                      'unit_price': item.product.price,
+                    })
+                .toList(),
+            customerEmail: _emailController.text.trim(),
+            customerName: _nameController.text.trim(),
+          );
+
+          // Open MercadoPago checkout in new window/tab
+          final url = Uri.parse(preference['init_point'] as String);
+          if (await canLaunchUrl(url)) {
+            await launchUrl(url, mode: LaunchMode.externalApplication);
+          }
+
+          // Clear cart
+          while (cart.items.isNotEmpty) {
+            cart.removeProduct(cart.items.first.product.id);
+          }
+
+          // Navigate to order confirmation
+          if (mounted) {
+            context.go('/tienda/pedido/$orderId');
+          }
+        } catch (e) {
+          if (!mounted) return;
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al procesar pago con MercadoPago: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else {
+        // Traditional payment methods (transfer, cash on delivery)
+        // Clear cart
+        while (cart.items.isNotEmpty) {
+          cart.removeProduct(cart.items.first.product.id);
+        }
+
+        // Navigate to order confirmation
+        context.go('/tienda/pedido/$orderId');
+      }
     } catch (e) {
       if (!mounted) return;
 
@@ -300,6 +354,39 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 24),
+                  RadioListTile<String>(
+                    value: 'mercadopago',
+                    groupValue: _paymentMethod,
+                    onChanged: (value) =>
+                        setState(() => _paymentMethod = value!),
+                    title: Row(
+                      children: [
+                        const Text('MercadoPago'),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade100,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'RECOMENDADO',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    subtitle: const Text(
+                        'Pago seguro con tarjeta de crédito/débito o efectivo'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
                   RadioListTile<String>(
                     value: 'transfer',
                     groupValue: _paymentMethod,
