@@ -64,6 +64,11 @@ import '../../public_store/pages/cart_page.dart';
 import '../../public_store/pages/checkout_page.dart';
 import '../../public_store/pages/order_confirmation_page.dart';
 import '../../public_store/pages/contact_page.dart';
+import '../../public_store/pages/customer_auth_page.dart';
+import '../../public_store/pages/customer_account_page.dart';
+import '../../public_store/pages/customer_profile_page.dart';
+import '../../public_store/pages/customer_addresses_page.dart';
+import '../../public_store/pages/customer_orders_page.dart';
 import '../../public_store/widgets/public_store_layout.dart';
 
 // Helper wrapper for public store pages
@@ -105,6 +110,7 @@ class AppRouter {
       '/tienda/checkout',
       '/tienda/pedido',
       '/tienda/contacto',
+      '/tienda/cuenta',
     ];
 
     final effectiveInitialLocation = initialLocationOverride ??
@@ -231,6 +237,60 @@ class AppRouter {
             context,
             state,
             const PublicStoreWrapper(child: ContactPage()),
+          ),
+        ),
+
+        // ========================================
+        // CUSTOMER ACCOUNT ROUTES (Public Store)
+        // ========================================
+
+        // Login / Sign Up
+        GoRoute(
+          path: '/tienda/cuenta/login',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerAuthPage()),
+          ),
+        ),
+
+        // Account Dashboard
+        GoRoute(
+          path: '/tienda/cuenta',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerAccountPage()),
+          ),
+        ),
+
+        // My Profile
+        GoRoute(
+          path: '/tienda/cuenta/perfil',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerProfilePage()),
+          ),
+        ),
+
+        // My Addresses
+        GoRoute(
+          path: '/tienda/cuenta/direcciones',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerAddressesPage()),
+          ),
+        ),
+
+        // My Orders
+        GoRoute(
+          path: '/tienda/cuenta/pedidos',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerOrdersPage()),
           ),
         ),
 

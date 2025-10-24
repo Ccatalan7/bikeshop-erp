@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/cart_provider.dart';
 import '../theme/public_store_theme.dart';
 import 'floating_whatsapp_button.dart';
+import 'customer_account_menu.dart';
 import '../../modules/website/pages/odoo_style_editor_page.dart';
 import '../../modules/website/services/website_service.dart';
 
@@ -339,6 +340,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                           ),
                       ],
                     ),
+                    const SizedBox(width: 16),
+                    const CustomerAccountMenu(),
                   ],
                 ),
               ],

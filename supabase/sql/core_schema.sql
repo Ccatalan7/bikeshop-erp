@@ -52,6 +52,7 @@ create table if not exists customers (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   email text unique,
+  auth_user_id uuid references auth.users(id) on delete set null,
   created_at timestamp with time zone not null default now()
 );
 
@@ -115,7 +116,58 @@ begin
   if not exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'updated_at') then
     alter table customers add column updated_at timestamp with time zone not null default now();
   end if;
+
+  -- Add auth_user_id column for linking to Supabase Auth
+  if not exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'auth_user_id') then
+    alter table customers add column auth_user_id uuid references auth.users(id) on delete set null;
+    create index if not exists idx_customers_auth_user on customers(auth_user_id);
+  end if;
 end $$;
+
+-- Customer addresses table for multiple shipping addresses
+create table if not exists customer_addresses (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references customers(id) on delete cascade,
+  label text not null, -- e.g., "Home", "Work", "Mom's House"
+  recipient_name text not null,
+  phone text not null,
+  street_address text not null,
+  street_number text,
+  apartment text, -- Depto, oficina, etc.
+  comuna text not null, -- Comuna (e.g., "Las Condes", "Providencia")
+  city text not null, -- Ciudad (e.g., "Santiago", "Valparaíso")
+  region text not null, -- Región (e.g., "Región Metropolitana")
+  postal_code text,
+  additional_info text, -- Referencias adicionales
+  is_default boolean not null default false,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_customer_addresses_customer on customer_addresses(customer_id);
+create index if not exists idx_customer_addresses_default on customer_addresses(customer_id, is_default) where is_default = true;
+
+-- Trigger to ensure only one default address per customer
+create or replace function ensure_single_default_address()
+returns trigger as $$
+begin
+  if new.is_default then
+    update customer_addresses
+    set is_default = false
+    where customer_id = new.customer_id
+      and id != new.id
+      and is_default = true;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists customer_address_default_trigger on customer_addresses;
+create trigger customer_address_default_trigger
+  before insert or update on customer_addresses
+  for each row
+  when (new.is_default = true)
+  execute function ensure_single_default_address();
 
 -- Company settings table for global app configuration
 create table if not exists company_settings (
@@ -5007,6 +5059,7 @@ end $$;
 
 -- Basic RLS scaffolding: enable on each table; policies to be tailored per role.
 alter table customers enable row level security;
+alter table customer_addresses enable row level security;
 alter table products enable row level security;
 alter table product_brands enable row level security;
 alter table sales_invoices enable row level security;
@@ -5096,6 +5149,125 @@ begin
       on customers
       for select
       using (auth.role() = 'authenticated');
+  end if;
+end $$;
+
+-- Allow customers to insert their own record on signup
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'customers'
+      and policyname = 'Customers can create own profile'
+  ) then
+    create policy "Customers can create own profile"
+      on customers
+      for insert
+      with check (auth.uid() = auth_user_id);
+  end if;
+end $$;
+
+-- Allow customers to update their own profile
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'customers'
+      and policyname = 'Customers can update own profile'
+  ) then
+    create policy "Customers can update own profile"
+      on customers
+      for update
+      using (auth.uid() = auth_user_id);
+  end if;
+end $$;
+
+-- RLS for customer_addresses
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'customer_addresses'
+      and policyname = 'Customers can view own addresses'
+  ) then
+    create policy "Customers can view own addresses"
+      on customer_addresses
+      for select
+      using (
+        auth.role() = 'authenticated' AND (
+          -- Customer can see their own addresses
+          customer_id IN (
+            select id from customers where auth_user_id = auth.uid()
+          )
+          -- Or user is admin/staff
+          OR EXISTS (select 1 from customers where auth_user_id = auth.uid() AND email IN (
+            select email from auth.users where raw_app_meta_data->>'role' = 'admin'
+          ))
+        )
+      );
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'customer_addresses'
+      and policyname = 'Customers can insert own addresses'
+  ) then
+    create policy "Customers can insert own addresses"
+      on customer_addresses
+      for insert
+      with check (
+        auth.role() = 'authenticated' AND
+        customer_id IN (
+          select id from customers where auth_user_id = auth.uid()
+        )
+      );
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'customer_addresses'
+      and policyname = 'Customers can update own addresses'
+  ) then
+    create policy "Customers can update own addresses"
+      on customer_addresses
+      for update
+      using (
+        auth.role() = 'authenticated' AND
+        customer_id IN (
+          select id from customers where auth_user_id = auth.uid()
+        )
+      );
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'customer_addresses'
+      and policyname = 'Customers can delete own addresses'
+  ) then
+    create policy "Customers can delete own addresses"
+      on customer_addresses
+      for delete
+      using (
+        auth.role() = 'authenticated' AND
+        customer_id IN (
+          select id from customers where auth_user_id = auth.uid()
+        )
+      );
   end if;
 end $$;
 

@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/config/supabase_config.dart';
+
 /// Service for integrating MercadoPago payment gateway
-/// 
+///
 /// This service handles:
 /// - Payment preference creation
 /// - Payment status verification
@@ -14,6 +16,7 @@ class MercadoPagoService extends ChangeNotifier {
   String? _publicKey;
   String? _accessToken;
   bool _isTestMode = true; // Start in test mode
+  String? _storeUrl;
 
   String? get publicKey => _publicKey;
   bool get isTestMode => _isTestMode;
@@ -29,7 +32,8 @@ class MercadoPagoService extends ChangeNotifier {
           .inFilter('key', [
         'mercadopago_public_key',
         'mercadopago_access_token',
-        'mercadopago_test_mode'
+        'mercadopago_test_mode',
+        'store_url',
       ]);
 
       for (final setting in response as List) {
@@ -45,6 +49,9 @@ class MercadoPagoService extends ChangeNotifier {
             break;
           case 'mercadopago_test_mode':
             _isTestMode = value == 'true' || value == '1';
+            break;
+          case 'store_url':
+            _storeUrl = value;
             break;
         }
       }
@@ -80,7 +87,7 @@ class MercadoPagoService extends ChangeNotifier {
   }
 
   /// Create a payment preference for an online order
-  /// 
+  ///
   /// This generates a MercadoPago checkout preference and returns the init_point
   /// (URL where customer should be redirected to complete payment)
   Future<Map<String, dynamic>> createPreference({
@@ -92,7 +99,8 @@ class MercadoPagoService extends ChangeNotifier {
     String? customerName,
   }) async {
     if (!isConfigured) {
-      throw Exception('MercadoPago no está configurado. Configure las credenciales primero.');
+      throw Exception(
+          'MercadoPago no está configurado. Configure las credenciales primero.');
     }
 
     try {
@@ -110,9 +118,9 @@ class MercadoPagoService extends ChangeNotifier {
             if (customerName != null) 'name': customerName,
           },
           'back_urls': {
-            'success': _getCallbackUrl('success'),
-            'failure': _getCallbackUrl('failure'),
-            'pending': _getCallbackUrl('pending'),
+            'success': _buildReturnUrl(orderId: orderId, status: 'success'),
+            'failure': _buildReturnUrl(orderId: orderId, status: 'failure'),
+            'pending': _buildReturnUrl(orderId: orderId, status: 'pending'),
           },
           'auto_return': 'approved',
           'notification_url': _getWebhookUrl(),
@@ -154,7 +162,7 @@ class MercadoPagoService extends ChangeNotifier {
   }
 
   /// Process payment confirmation from callback
-  /// 
+  ///
   /// This is called when customer returns from MercadoPago after payment
   Future<void> processPaymentCallback({
     required String orderId,
@@ -184,13 +192,15 @@ class MercadoPagoService extends ChangeNotifier {
         'payment_status': paymentStatus,
         'payment_method': 'mercadopago',
         'payment_reference': paymentId,
-        'paid_at': status == 'approved' ? DateTime.now().toIso8601String() : null,
+        'paid_at':
+            status == 'approved' ? DateTime.now().toIso8601String() : null,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', orderId);
 
       // If payment is approved, process the order (create invoice + payment)
       if (status == 'approved') {
-        await _supabase.rpc('process_online_order', params: {'p_order_id': orderId});
+        await _supabase
+            .rpc('process_online_order', params: {'p_order_id': orderId});
       }
     } catch (e) {
       debugPrint('Error processing payment callback: $e');
@@ -199,7 +209,7 @@ class MercadoPagoService extends ChangeNotifier {
   }
 
   /// Handle MercadoPago webhook notification
-  /// 
+  ///
   /// This should be implemented as a Supabase Edge Function for security
   /// The Edge Function will:
   /// 1. Verify the webhook signature
@@ -216,18 +226,40 @@ class MercadoPagoService extends ChangeNotifier {
   // HELPER METHODS
   // ============================================================================
 
-  String _getCallbackUrl(String status) {
-    // TODO: Replace with your actual website URL
-    const baseUrl = kIsWeb
-        ? 'http://localhost:8080' // Development
-        : 'https://your-website.com'; // Production
+  String _resolveStoreUrl() {
+    if (kIsWeb) {
+      final origin = Uri.base.origin;
+      if (origin.isNotEmpty) {
+        return origin;
+      }
+    }
 
-    return '$baseUrl/checkout/callback?status=$status';
+    if (_storeUrl != null && _storeUrl!.isNotEmpty) {
+      return _storeUrl!;
+    }
+
+    return 'https://vinabike-store.web.app';
+  }
+
+  String _buildReturnUrl({required String orderId, required String status}) {
+    final base = _normalizeBaseUrl(_resolveStoreUrl());
+
+    if (status == 'failure') {
+      return '$base/tienda/checkout?pedido=$orderId&status=$status';
+    }
+
+    return '$base/tienda/pedido/$orderId?status=$status';
   }
 
   String _getWebhookUrl() {
-    // TODO: Replace with your Supabase Edge Function URL
-    const supabaseUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+    final supabaseUrl = _normalizeBaseUrl(SupabaseConfig.url);
     return '$supabaseUrl/functions/v1/mercadopago-webhook';
+  }
+
+  String _normalizeBaseUrl(String url) {
+    if (url.endsWith('/')) {
+      return url.substring(0, url.length - 1);
+    }
+    return url;
   }
 }
