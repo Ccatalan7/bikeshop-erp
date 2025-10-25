@@ -51,14 +51,27 @@ create table if not exists user_invitations (
 );
 
 create index if not exists idx_invitations_email_status on user_invitations(email, status);
-create index if not exists idx_invitations_tenant on user_invitations(tenant_id);
+
+do $$ begin
+  create index if not exists idx_invitations_tenant on user_invitations(tenant_id);
+exception
+  when undefined_table then raise notice '⚠ Table user_invitations does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in user_invitations';
+end $$;
+
+-- Clean up any old policies first
+do $$
+begin
+  drop policy if exists "users_view_own_invitations" on user_invitations;
+  drop policy if exists "managers_create_invitations" on user_invitations;
+  drop policy if exists "managers_view_tenant_invitations" on user_invitations;
+exception
+  when undefined_table then null;
+  when undefined_object then null;
+end $$;
 
 -- Enable RLS on user_invitations
 alter table user_invitations enable row level security;
-
--- Users can view invitations sent to their email
-create policy "users_view_own_invitations" on user_invitations
-  for select using (email = auth.jwt()->>'email');
 
 -- Managers can create invitations for their tenant
 create policy "managers_create_invitations" on user_invitations
@@ -245,35 +258,42 @@ create trigger customer_address_default_trigger
 -- Company settings table for global app configuration
 create table if not exists company_settings (
   id uuid primary key default gen_random_uuid(),
-  key text unique not null,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  key text not null,
   value text,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, key) -- Each tenant has their own settings
 );
 
-do $$
-begin
-  -- Ensure home_icon setting exists
-  if not exists (select 1 from company_settings where key = 'home_icon') then
-    insert into company_settings (key, value) values ('home_icon', 'pedal_bike');
-  end if;
-
-  -- Ensure company_logo setting exists (can be null)
-  if not exists (select 1 from company_settings where key = 'company_logo') then
-    insert into company_settings (key, value) values ('company_logo', null);
-  end if;
+do $$ begin
+  create index if not exists idx_company_settings_tenant on company_settings(tenant_id);
+exception
+  when undefined_table then raise notice '⚠ Table company_settings does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in company_settings';
 end $$;
+
+-- Note: Default settings will be seeded via trigger when tenant is created
 
 create table if not exists product_brands (
   id uuid primary key default gen_random_uuid(),
-  name text not null unique,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  name text not null,
   description text,
   website text,
   country text,
   is_active boolean not null default true,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, name) -- Each tenant can have their own brands
 );
+
+do $$ begin
+  create index if not exists idx_product_brands_tenant on product_brands(tenant_id);
+exception
+  when undefined_table then raise notice '⚠ Table product_brands does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in product_brands';
+end $$;
 
 create index if not exists idx_product_brands_name on product_brands (lower(name));
 create index if not exists idx_product_brands_is_active on product_brands (is_active);
@@ -1286,7 +1306,8 @@ end $$;
 
 create table if not exists payment_methods (
   id uuid primary key default gen_random_uuid(),
-  code text not null unique,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  code text not null,
   name text not null,
   account_id uuid not null references accounts(id),
   requires_reference boolean not null default false,
@@ -1294,54 +1315,21 @@ create table if not exists payment_methods (
   sort_order integer not null default 0,
   is_active boolean not null default true,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, code) -- Each tenant has their own payment methods
 );
 
-create index if not exists idx_payment_methods_code on payment_methods(code);
+do $$ begin
+  create index if not exists idx_payment_methods_tenant on payment_methods(tenant_id);
+  create index if not exists idx_payment_methods_code on payment_methods(tenant_id, code);
+exception
+  when undefined_table then raise notice '⚠ Table payment_methods does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in payment_methods';
+end $$;
 create index if not exists idx_payment_methods_sort_order on payment_methods(sort_order);
 create index if not exists idx_payment_methods_account_id on payment_methods(account_id);
 
--- Seed basic payment methods (Efectivo → Caja, Transferencia/Tarjeta → Banco)
-insert into payment_methods (code, name, account_id, requires_reference, icon, sort_order)
-select 'cash', 'Efectivo', id, false, 'cash', 1
-from accounts where code = '1101'
-on conflict (code) do update set
-  name = excluded.name,
-  account_id = excluded.account_id,
-  updated_at = now();
-
-insert into payment_methods (code, name, account_id, requires_reference, icon, sort_order)
-select 'transfer', 'Transferencia Bancaria', id, true, 'bank', 2
-from accounts where code = '1110'
-on conflict (code) do update set
-  name = excluded.name,
-  account_id = excluded.account_id,
-  updated_at = now();
-
-insert into payment_methods (code, name, account_id, requires_reference, icon, sort_order)
-select 'card', 'Tarjeta de Débito/Crédito', id, false, 'credit_card', 3
-from accounts where code = '1110'
-on conflict (code) do update set
-  name = excluded.name,
-  account_id = excluded.account_id,
-  updated_at = now();
-
-insert into payment_methods (code, name, account_id, requires_reference, icon, sort_order)
-select 'check', 'Cheque', id, true, 'receipt', 4
-from accounts where code = '1110'
-on conflict (code) do update set
-  name = excluded.name,
-  account_id = excluded.account_id,
-  updated_at = now();
-
--- MercadoPago for online payments
-insert into payment_methods (code, name, account_id, requires_reference, icon, sort_order)
-select 'mercadopago', 'MercadoPago', id, true, 'payment', 5
-from accounts where code = '1110'
-on conflict (code) do update set
-  name = excluded.name,
-  account_id = excluded.account_id,
-  updated_at = now();
+-- Note: Payment methods will be seeded via trigger when tenant is created
 
 -- ============================================================================
 -- SALES PAYMENTS TABLE (Updated to use payment_method_id)
@@ -3050,16 +3038,23 @@ create sequence if not exists expense_number_seq;
 
 create table if not exists expense_categories (
   id uuid primary key default gen_random_uuid(),
-  name text not null unique,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  name text not null,
   description text,
   default_account_id uuid references accounts(id),
   default_tax_rate numeric(5,2) not null default 0,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, name) -- Each tenant has their own expense categories
 );
 
-create index if not exists idx_expense_categories_name
-  on expense_categories (lower(name));
+do $$ begin
+  create index if not exists idx_expense_categories_tenant on expense_categories(tenant_id);
+  create index if not exists idx_expense_categories_name on expense_categories(tenant_id, lower(name));
+exception
+  when undefined_table then raise notice '⚠ Table expense_categories does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in expense_categories';
+end $$;
 
 create table if not exists expenses (
   id uuid primary key default gen_random_uuid(),
@@ -3235,6 +3230,7 @@ create index if not exists idx_expense_payments_method
 
 create table if not exists expense_attachments (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   expense_id uuid not null references expenses(id) on delete cascade,
   file_name text not null,
   file_url text not null,
@@ -3244,8 +3240,13 @@ create table if not exists expense_attachments (
   uploaded_at timestamp with time zone not null default now()
 );
 
-create index if not exists idx_expense_attachments_expense_id
-  on expense_attachments(expense_id);
+do $$ begin
+  create index if not exists idx_expense_attachments_tenant on expense_attachments(tenant_id);
+  create index if not exists idx_expense_attachments_expense_id on expense_attachments(expense_id);
+exception
+  when undefined_table then raise notice '⚠ Table expense_attachments does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in expense_attachments';
+end $$;
 
 create or replace function public.generate_expense_number()
 returns text
@@ -4512,6 +4513,7 @@ create index if not exists idx_journal_lines_entry_id
 
 create table if not exists orders (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   customer_id uuid references customers(id) on delete set null,
   source text not null check (source in ('POS', 'Website')),
   order_date timestamp with time zone not null default now(),
@@ -4519,14 +4521,29 @@ create table if not exists orders (
   created_at timestamp with time zone not null default now()
 );
 
+do $$ begin
+  create index if not exists idx_orders_tenant on orders(tenant_id);
+exception
+  when undefined_table then raise notice '⚠ Table orders does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in orders';
+end $$;
+
 create table if not exists order_items (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   order_id uuid not null references orders(id) on delete cascade,
   product_id uuid not null references products(id) on delete restrict,
   quantity integer not null,
   price numeric(12,2) not null,
   created_at timestamp with time zone not null default now()
 );
+
+do $$ begin
+  create index if not exists idx_order_items_tenant on order_items(tenant_id);
+exception
+  when undefined_table then raise notice '⚠ Table order_items does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in order_items';
+end $$;
 
 create or replace function public.handle_order_item_insert()
 returns trigger as $$
@@ -5145,793 +5162,34 @@ alter table journal_lines enable row level security;
 alter table suppliers enable row level security;
 alter table purchase_invoices enable row level security;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'accounts'
-      and policyname = 'Authenticated accounts read'
-  ) then
-    create policy "Authenticated accounts read"
-      on accounts
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'accounts'
-      and policyname = 'Authenticated accounts insert'
-  ) then
-    create policy "Authenticated accounts insert"
-      on accounts
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'accounts'
-      and policyname = 'Authenticated accounts update'
-  ) then
-    create policy "Authenticated accounts update"
-      on accounts
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'accounts'
-      and policyname = 'Authenticated accounts delete'
-  ) then
-    create policy "Authenticated accounts delete"
-      on accounts
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
--- Example policies; replace with final role-aware versions.
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'customers'
-      and policyname = 'Authenticated customers read'
-  ) then
-    create policy "Authenticated customers read"
-      on customers
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
--- Allow customers to insert their own record on signup
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'customers'
-      and policyname = 'Customers can create own profile'
-  ) then
-    create policy "Customers can create own profile"
-      on customers
-      for insert
-      with check (auth.uid() = auth_user_id);
-  end if;
-end $$;
-
--- Allow customers to update their own profile
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'customers'
-      and policyname = 'Customers can update own profile'
-  ) then
-    create policy "Customers can update own profile"
-      on customers
-      for update
-      using (auth.uid() = auth_user_id);
-  end if;
-end $$;
-
--- RLS for customer_addresses
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'customer_addresses'
-      and policyname = 'Customers can view own addresses'
-  ) then
-    create policy "Customers can view own addresses"
-      on customer_addresses
-      for select
-      using (
-        auth.role() = 'authenticated' AND (
-          -- Customer can see their own addresses
-          customer_id IN (
-            select id from customers where auth_user_id = auth.uid()
-          )
-          -- Or user is admin/staff
-          OR EXISTS (select 1 from customers where auth_user_id = auth.uid() AND email IN (
-            select email from auth.users where raw_app_meta_data->>'role' = 'admin'
-          ))
-        )
-      );
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'customer_addresses'
-      and policyname = 'Customers can insert own addresses'
-  ) then
-    create policy "Customers can insert own addresses"
-      on customer_addresses
-      for insert
-      with check (
-        auth.role() = 'authenticated' AND
-        customer_id IN (
-          select id from customers where auth_user_id = auth.uid()
-        )
-      );
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'customer_addresses'
-      and policyname = 'Customers can update own addresses'
-  ) then
-    create policy "Customers can update own addresses"
-      on customer_addresses
-      for update
-      using (
-        auth.role() = 'authenticated' AND
-        customer_id IN (
-          select id from customers where auth_user_id = auth.uid()
-        )
-      );
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'customer_addresses'
-      and policyname = 'Customers can delete own addresses'
-  ) then
-    create policy "Customers can delete own addresses"
-      on customer_addresses
-      for delete
-      using (
-        auth.role() = 'authenticated' AND
-        customer_id IN (
-          select id from customers where auth_user_id = auth.uid()
-        )
-      );
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'suppliers'
-      and policyname = 'Authenticated suppliers read'
-  ) then
-    create policy "Authenticated suppliers read"
-      on suppliers
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'suppliers'
-      and policyname = 'Authenticated suppliers insert'
-  ) then
-    create policy "Authenticated suppliers insert"
-      on suppliers
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'suppliers'
-      and policyname = 'Authenticated suppliers update'
-  ) then
-    create policy "Authenticated suppliers update"
-      on suppliers
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'suppliers'
-      and policyname = 'Authenticated suppliers delete'
-  ) then
-    create policy "Authenticated suppliers delete"
-      on suppliers
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'product_brands'
-      and policyname = 'Authenticated product_brands read'
-  ) then
-    create policy "Authenticated product_brands read"
-      on product_brands
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'product_brands'
-      and policyname = 'Authenticated product_brands insert'
-  ) then
-    create policy "Authenticated product_brands insert"
-      on product_brands
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'product_brands'
-      and policyname = 'Authenticated product_brands update'
-  ) then
-    create policy "Authenticated product_brands update"
-      on product_brands
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'product_brands'
-      and policyname = 'Authenticated product_brands delete'
-  ) then
-    create policy "Authenticated product_brands delete"
-      on product_brands
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'purchase_invoices'
-      and policyname = 'Authenticated purchase_invoices read'
-  ) then
-    create policy "Authenticated purchase_invoices read"
-      on purchase_invoices
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'purchase_invoices'
-      and policyname = 'Authenticated purchase_invoices insert'
-  ) then
-    create policy "Authenticated purchase_invoices insert"
-      on purchase_invoices
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'purchase_invoices'
-      and policyname = 'Authenticated purchase_invoices update'
-  ) then
-    create policy "Authenticated purchase_invoices update"
-      on purchase_invoices
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'purchase_invoices'
-      and policyname = 'Authenticated purchase_invoices delete'
-  ) then
-    create policy "Authenticated purchase_invoices delete"
-      on purchase_invoices
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'journal_entries'
-      and policyname = 'Authenticated journal_entries read'
-  ) then
-    create policy "Authenticated journal_entries read"
-      on journal_entries
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'journal_entries'
-      and policyname = 'Authenticated journal_entries insert'
-  ) then
-    create policy "Authenticated journal_entries insert"
-      on journal_entries
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'journal_entries'
-      and policyname = 'Authenticated journal_entries update'
-  ) then
-    create policy "Authenticated journal_entries update"
-      on journal_entries
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'journal_entries'
-      and policyname = 'Authenticated journal_entries delete'
-  ) then
-    create policy "Authenticated journal_entries delete"
-      on journal_entries
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'journal_lines'
-      and policyname = 'Authenticated journal_lines read'
-  ) then
-    create policy "Authenticated journal_lines read"
-      on journal_lines
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'journal_lines'
-      and policyname = 'Authenticated journal_lines insert'
-  ) then
-    create policy "Authenticated journal_lines insert"
-      on journal_lines
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'journal_lines'
-      and policyname = 'Authenticated journal_lines update'
-  ) then
-    create policy "Authenticated journal_lines update"
-      on journal_lines
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'journal_lines'
-      and policyname = 'Authenticated journal_lines delete'
-  ) then
-    create policy "Authenticated journal_lines delete"
-      on journal_lines
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'products'
-      and policyname = 'Authenticated products read'
-  ) then
-    create policy "Authenticated products read"
-      on products
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'products'
-      and policyname = 'Public website products read'
-  ) then
-    create policy "Public website products read"
-      on products
-      for select
-      using (show_on_website = true and is_active = true);
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'sales_invoices'
-      and policyname = 'Authenticated invoices read'
-  ) then
-    create policy "Authenticated invoices read"
-      on sales_invoices
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'sales_invoices'
-      and policyname = 'Authenticated invoices insert'
-  ) then
-    create policy "Authenticated invoices insert"
-      on sales_invoices
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'sales_invoices'
-      and policyname = 'Authenticated invoices update'
-  ) then
-    create policy "Authenticated invoices update"
-      on sales_invoices
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'sales_invoices'
-      and policyname = 'Authenticated invoices delete'
-  ) then
-    create policy "Authenticated invoices delete"
-      on sales_invoices
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'sales_payments'
-      and policyname = 'Authenticated payments read'
-  ) then
-    create policy "Authenticated payments read"
-      on sales_payments
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'sales_payments'
-      and policyname = 'Authenticated payments insert'
-  ) then
-    create policy "Authenticated payments insert"
-      on sales_payments
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'sales_payments'
-      and policyname = 'Authenticated payments update'
-  ) then
-    create policy "Authenticated payments update"
-      on sales_payments
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'sales_payments'
-      and policyname = 'Authenticated payments delete'
-  ) then
-    create policy "Authenticated payments delete"
-      on sales_payments
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'products'
-      and policyname = 'Authenticated products insert'
-  ) then
-    create policy "Authenticated products insert"
-      on products
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'products'
-      and policyname = 'Authenticated products update'
-  ) then
-    create policy "Authenticated products update"
-      on products
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'products'
-      and policyname = 'Authenticated products delete'
-  ) then
-    create policy "Authenticated products delete"
-      on products
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'stock_movements'
-      and policyname = 'Authenticated stock_movements read'
-  ) then
-    create policy "Authenticated stock_movements read"
-      on stock_movements
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'stock_movements'
-      and policyname = 'Authenticated stock_movements insert'
-  ) then
-    create policy "Authenticated stock_movements insert"
-      on stock_movements
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'orders'
-      and policyname = 'Authenticated orders read'
-  ) then
-    create policy "Authenticated orders read"
-      on orders
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'order_items'
-      and policyname = 'Authenticated order_items read'
-  ) then
-    create policy "Authenticated order_items read"
-      on order_items
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
 -- TODO: add role-specific policies matching Sales, Inventory, HR, Mechanic, Cashier profiles.
 
@@ -6797,6 +6055,7 @@ create index if not exists idx_bikes_brand_model on bikes using gin (to_tsvector
 -- Predefined service templates (e.g., "Basic Tune-up", "Full Overhaul")
 create table if not exists service_packages (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   name text not null,
   description text,
   estimated_duration_hours numeric(5,2) not null default 1,
@@ -6804,43 +6063,23 @@ create table if not exists service_packages (
   items jsonb not null default '[]'::jsonb, -- Array of {product_id, quantity, description}
   is_active boolean not null default true,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, name) -- Each tenant has their own service packages
 );
 
-do $$
-begin
-  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'name') then
-    alter table service_packages add column name text not null;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'description') then
-    alter table service_packages add column description text;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'estimated_duration_hours') then
-    alter table service_packages add column estimated_duration_hours numeric(5,2) not null default 1;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'base_labor_cost') then
-    alter table service_packages add column base_labor_cost numeric(12,2) not null default 0;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'items') then
-    alter table service_packages add column items jsonb not null default '[]'::jsonb;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'is_active') then
-    alter table service_packages add column is_active boolean not null default true;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'created_at') then
-    alter table service_packages add column created_at timestamp with time zone not null default now();
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'service_packages' and column_name = 'updated_at') then
-    alter table service_packages add column updated_at timestamp with time zone not null default now();
-  end if;
+do $$ begin
+  create index if not exists idx_service_packages_tenant on service_packages(tenant_id);
+  create index if not exists idx_service_packages_name on service_packages using gin (to_tsvector('spanish', coalesce(name, '')));
+exception
+  when undefined_table then raise notice '⚠ Table service_packages does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in service_packages';
 end $$;
-
-create index if not exists idx_service_packages_name on service_packages using gin (to_tsvector('spanish', coalesce(name, '')));
 
 -- Table: mechanic_jobs (pegas)
 -- Main table for tracking service jobs/work orders
 create table if not exists mechanic_jobs (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   job_number text not null unique, -- Auto-generated: MJ-YYYYMMDD-001
   customer_id uuid not null references customers(id) on delete cascade,
   bike_id uuid not null references bikes(id) on delete cascade,
@@ -7018,13 +6257,19 @@ begin
   end if;
 end $$;
 
-create index if not exists idx_mechanic_jobs_customer_id on mechanic_jobs(customer_id);
-create index if not exists idx_mechanic_jobs_bike_id on mechanic_jobs(bike_id);
-create index if not exists idx_mechanic_jobs_status on mechanic_jobs(status);
-create index if not exists idx_mechanic_jobs_priority on mechanic_jobs(priority);
-create index if not exists idx_mechanic_jobs_assigned_to on mechanic_jobs(assigned_to) where assigned_to is not null;
-create index if not exists idx_mechanic_jobs_deadline on mechanic_jobs(deadline) where deadline is not null;
-create index if not exists idx_mechanic_jobs_job_number on mechanic_jobs(job_number);
+do $$ begin
+  create index if not exists idx_mechanic_jobs_tenant on mechanic_jobs(tenant_id);
+  create index if not exists idx_mechanic_jobs_customer_id on mechanic_jobs(customer_id);
+  create index if not exists idx_mechanic_jobs_bike_id on mechanic_jobs(bike_id);
+  create index if not exists idx_mechanic_jobs_status on mechanic_jobs(status);
+  create index if not exists idx_mechanic_jobs_priority on mechanic_jobs(priority);
+  create index if not exists idx_mechanic_jobs_assigned_to on mechanic_jobs(assigned_to) where assigned_to is not null;
+  create index if not exists idx_mechanic_jobs_deadline on mechanic_jobs(deadline) where deadline is not null;
+  create index if not exists idx_mechanic_jobs_job_number on mechanic_jobs(job_number);
+exception
+  when undefined_table then raise notice '⚠ Table mechanic_jobs does not exist';
+  when undefined_column then raise notice '⚠ Column missing in mechanic_jobs';
+end $$;
 
 -- Table: mechanic_job_items
 -- Parts/products used in a job
@@ -8748,61 +7993,23 @@ create trigger trg_mechanic_job_labor_updated_at
 -- Departments table (organizes employees by area)
 create table if not exists departments (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   name text not null,
   code text,
   manager_id uuid,
   description text,
   active boolean not null default true,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, name) -- Each tenant has their own departments
 );
 
--- Migration: Add missing columns to departments table
-do $$
-begin
-  -- Add code column if it doesn't exist
-  if not exists (
-    select 1 from information_schema.columns 
-    where table_name = 'departments' and column_name = 'code'
-  ) then
-    alter table departments add column code text;
-  end if;
-  
-  -- Add manager_id column if it doesn't exist
-  if not exists (
-    select 1 from information_schema.columns 
-    where table_name = 'departments' and column_name = 'manager_id'
-  ) then
-    alter table departments add column manager_id uuid;
-  end if;
-  
-  -- Add description column if it doesn't exist
-  if not exists (
-    select 1 from information_schema.columns 
-    where table_name = 'departments' and column_name = 'description'
-  ) then
-    alter table departments add column description text;
-  end if;
-  
-  -- Add active column if it doesn't exist
-  if not exists (
-    select 1 from information_schema.columns 
-    where table_name = 'departments' and column_name = 'active'
-  ) then
-    alter table departments add column active boolean not null default true;
-  end if;
-  
-  -- Add unique constraint on code if it doesn't exist
-  if not exists (
-    select 1 from information_schema.table_constraints 
-    where constraint_name = 'departments_code_key' and table_name = 'departments'
-  ) then
-    alter table departments add constraint departments_code_key unique (code);
-  end if;
+do $$ begin
+  create index if not exists idx_departments_tenant on departments(tenant_id);
+exception
+  when undefined_table then raise notice '⚠ Table departments does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in departments';
 end $$;
-
-create index if not exists idx_departments_code on departments(code);
-create index if not exists idx_departments_manager on departments(manager_id);
 
 -- Employees table (core HR entity)
 create table if not exists employees (
@@ -8956,6 +8163,7 @@ end $$;
 -- Work schedules table (defines expected working hours)
 create table if not exists work_schedules (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   name text not null,
   description text,
   monday_start time,
@@ -8976,14 +8184,22 @@ create table if not exists work_schedules (
   timezone text not null default 'America/Santiago',
   active boolean not null default true,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, name)
 );
 
-create index if not exists idx_work_schedules_active on work_schedules(active);
+do $$ begin
+  create index if not exists idx_work_schedules_tenant on work_schedules(tenant_id);
+  create index if not exists idx_work_schedules_active on work_schedules(active);
+exception
+  when undefined_table then raise notice '⚠ Table work_schedules does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in work_schedules';
+end $$;
 
 -- Contracts table (employment contracts with salary info)
 create table if not exists employee_contracts (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   employee_id uuid not null references employees(id) on delete cascade,
   contract_type text check (contract_type in ('indefinite', 'fixed_term', 'project_based', 'seasonal')) not null default 'indefinite',
   start_date date not null,
@@ -9001,8 +8217,14 @@ create table if not exists employee_contracts (
   updated_at timestamp with time zone not null default now()
 );
 
-create index if not exists idx_contracts_employee on employee_contracts(employee_id);
-create index if not exists idx_contracts_status on employee_contracts(status);
+do $$ begin
+  create index if not exists idx_contracts_tenant on employee_contracts(tenant_id);
+  create index if not exists idx_contracts_employee on employee_contracts(employee_id);
+  create index if not exists idx_contracts_status on employee_contracts(status);
+exception
+  when undefined_table then raise notice '⚠ Table employee_contracts does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in employee_contracts';
+end $$;
 create index if not exists idx_contracts_dates on employee_contracts(start_date, end_date);
 
 -- Attendances table (Odoo-style check-in/check-out tracking)
@@ -9210,42 +8432,11 @@ create trigger trg_attendances_updated_at
   before update on attendances
   for each row execute procedure public.set_updated_at();
 
--- Seed default work schedule (Chilean standard: Monday-Friday 9am-6pm)
-insert into work_schedules (name, description, monday_start, monday_end, tuesday_start, tuesday_end, wednesday_start, wednesday_end, thursday_start, thursday_end, friday_start, friday_end, weekly_hours)
-values ('Estándar (9:00 - 18:00)', 'Horario estándar chileno: Lunes a Viernes, 9:00 a 18:00', '09:00', '18:00', '09:00', '18:00', '09:00', '18:00', '09:00', '18:00', '09:00', '18:00', 45.00)
-on conflict do nothing;
+-- Note: Default work schedules will be seeded via trigger when tenant is created
+-- (Cannot seed global data in multi-tenant architecture - each tenant needs their own)
 
--- Seed default departments (only if table is empty)
-do $$
-declare
-  v_has_company_id boolean;
-  v_count integer;
-begin
-  -- Check if departments already exist
-  select count(*) into v_count from departments;
-  
-  if v_count = 0 then
-    -- Check if company_id column exists
-    select exists(
-      select 1 from information_schema.columns 
-      where table_name = 'departments' and column_name = 'company_id'
-    ) into v_has_company_id;
-    
-    if v_has_company_id then
-      -- Skip seeding if company_id is required but no company exists
-      raise notice 'departments table has company_id column - skipping seed data. Create a company first.';
-    else
-      -- No company_id column, insert seed data
-      insert into departments (name, code, description)
-      values 
-        ('Administración', 'ADMIN', 'Departamento administrativo y gerencia'),
-        ('Ventas', 'SALES', 'Equipo de ventas y atención al cliente'),
-        ('Taller', 'WORKSHOP', 'Mecánicos y técnicos del taller'),
-        ('Contabilidad', 'ACCOUNTING', 'Contabilidad y finanzas')
-      on conflict (code) do nothing;
-    end if;
-  end if;
-end $$;
+-- Note: Default departments will be seeded via trigger when tenant is created
+-- (Cannot seed global data in multi-tenant architecture - each tenant needs their own)
 
 -- ============================================================================
 -- HR MODULE: ROW LEVEL SECURITY POLICIES
@@ -9256,200 +8447,11 @@ alter table employees enable row level security;
 alter table departments enable row level security;
 alter table attendances enable row level security;
 
--- Employees table policies
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'employees'
-      and policyname = 'Authenticated employees read'
-  ) then
-    create policy "Authenticated employees read"
-      on employees
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'employees'
-      and policyname = 'Authenticated employees insert'
-  ) then
-    create policy "Authenticated employees insert"
-      on employees
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'employees'
-      and policyname = 'Authenticated employees update'
-  ) then
-    create policy "Authenticated employees update"
-      on employees
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'employees'
-      and policyname = 'Authenticated employees delete'
-  ) then
-    create policy "Authenticated employees delete"
-      on employees
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
--- Departments table policies
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'departments'
-      and policyname = 'Authenticated departments read'
-  ) then
-    create policy "Authenticated departments read"
-      on departments
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'departments'
-      and policyname = 'Authenticated departments insert'
-  ) then
-    create policy "Authenticated departments insert"
-      on departments
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'departments'
-      and policyname = 'Authenticated departments update'
-  ) then
-    create policy "Authenticated departments update"
-      on departments
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'departments'
-      and policyname = 'Authenticated departments delete'
-  ) then
-    create policy "Authenticated departments delete"
-      on departments
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
--- Attendances table policies
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'attendances'
-      and policyname = 'Authenticated attendances read'
-  ) then
-    create policy "Authenticated attendances read"
-      on attendances
-      for select
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'attendances'
-      and policyname = 'Authenticated attendances insert'
-  ) then
-    create policy "Authenticated attendances insert"
-      on attendances
-      for insert
-      to authenticated
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'attendances'
-      and policyname = 'Authenticated attendances update'
-  ) then
-    create policy "Authenticated attendances update"
-      on attendances
-      for update
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'attendances'
-      and policyname = 'Authenticated attendances delete'
-  ) then
-    create policy "Authenticated attendances delete"
-      on attendances
-      for delete
-      to authenticated
-      using (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
 -- ============================================================================
 -- E-COMMERCE / WEBSITE MODULE TABLES
@@ -9465,6 +8467,7 @@ end $$;
 -- Website banners (hero images, promotional banners)
 create table if not exists website_banners (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   title text not null,
   subtitle text,
   image_url text,
@@ -9477,48 +8480,53 @@ create table if not exists website_banners (
   updated_at timestamp with time zone not null default now()
 );
 
-create index if not exists idx_website_banners_active on website_banners(active, order_index);
-
--- Featured products (handpicked products to display on homepage)
--- Migration: Ensure table exists with correct structure
-do $$
-begin
-  -- Create table if it doesn't exist
-  if not exists (
-    select from pg_tables
-    where schemaname = 'public' and tablename = 'featured_products'
-  ) then
-    create table featured_products (
-      id uuid primary key default gen_random_uuid(),
-      product_id uuid references products(id) on delete cascade,
-      active boolean default true,
-      order_index integer default 0,
-      created_at timestamp with time zone not null default now()
-    );
-    raise notice 'Created featured_products table';
-  else
-    raise notice 'featured_products table already exists';
-  end if;
+do $$ begin
+  create index if not exists idx_website_banners_tenant on website_banners(tenant_id);
+  create index if not exists idx_website_banners_active on website_banners(active, order_index);
 exception
-  when others then
-    raise notice 'Error creating featured_products: %', sqlerrm;
+  when undefined_table then raise notice '⚠ Table website_banners does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in website_banners';
 end $$;
 
--- Ensure indexes exist
-create index if not exists idx_featured_products_product on featured_products(product_id);
-create index if not exists idx_featured_products_active on featured_products(active, order_index);
+-- Featured products (handpicked products to display on homepage)
+create table if not exists featured_products (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  product_id uuid references products(id) on delete cascade,
+  active boolean default true,
+  order_index integer default 0,
+  created_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_featured_products_tenant on featured_products(tenant_id);
+  create index if not exists idx_featured_products_product on featured_products(product_id);
+  create index if not exists idx_featured_products_active on featured_products(active, order_index);
+exception
+  when undefined_table then raise notice '⚠ Table featured_products does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in featured_products';
+end $$;
 
 -- Website content (rich text content blocks for homepage, about page, etc.)
 create table if not exists website_content (
   id text primary key, -- e.g., 'homepage_promo', 'about_us', 'terms_conditions'
+  tenant_id uuid references tenants(id) on delete cascade not null,
   title text not null,
   content text, -- HTML or markdown content
   updated_at timestamp with time zone not null default now()
 );
 
+do $$ begin
+  create index if not exists idx_website_content_tenant on website_content(tenant_id);
+exception
+  when undefined_table then raise notice '⚠ Table website_content does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in website_content';
+end $$;
+
 -- Website blocks (Odoo-style visual editor blocks)
 create table if not exists website_blocks (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   block_type text not null, -- 'hero', 'products', 'services', 'about', 'testimonials', 'features', 'cta', 'gallery', 'contact'
   block_data jsonb not null default '{}'::jsonb, -- All block properties (title, subtitle, images, etc.)
   is_visible boolean default true,
@@ -9527,24 +8535,39 @@ create table if not exists website_blocks (
   updated_at timestamp with time zone not null default now()
 );
 
-create index if not exists idx_website_blocks_visible on website_blocks(is_visible, order_index);
-create index if not exists idx_website_blocks_type on website_blocks(block_type);
+do $$ begin
+  create index if not exists idx_website_blocks_tenant on website_blocks(tenant_id);
+  create index if not exists idx_website_blocks_visible on website_blocks(is_visible, order_index);
+  create index if not exists idx_website_blocks_type on website_blocks(block_type);
+exception
+  when undefined_table then raise notice '⚠ Table website_blocks does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in website_blocks';
+end $$;
 
 -- Website settings (store configuration)
 create table if not exists website_settings (
   id uuid primary key default gen_random_uuid(),
-  key text unique not null,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  key text not null,
   value text,
   description text,
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, key)
 );
 
-create index if not exists idx_website_settings_key on website_settings(key);
+do $$ begin
+  create index if not exists idx_website_settings_tenant on website_settings(tenant_id);
+  create index if not exists idx_website_settings_key on website_settings(key);
+exception
+  when undefined_table then raise notice '⚠ Table website_settings does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in website_settings';
+end $$;
 
 -- Online orders (customer orders from website, separate from POS orders)
 create table if not exists online_orders (
   id uuid primary key default gen_random_uuid(),
-  order_number text unique not null,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  order_number text not null,
   customer_id uuid references customers(id) on delete set null,
   customer_email text not null,
   customer_name text not null,
@@ -9580,19 +8603,27 @@ create table if not exists online_orders (
   internal_notes text,
   
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, order_number)
 );
 
-create index if not exists idx_online_orders_customer on online_orders(customer_id);
-create index if not exists idx_online_orders_status on online_orders(status);
-create index if not exists idx_online_orders_payment_status on online_orders(payment_status);
-create index if not exists idx_online_orders_invoice on online_orders(sales_invoice_id);
-create index if not exists idx_online_orders_number on online_orders(order_number);
-create index if not exists idx_online_orders_created on online_orders(created_at desc);
+do $$ begin
+  create index if not exists idx_online_orders_tenant on online_orders(tenant_id);
+  create index if not exists idx_online_orders_customer on online_orders(customer_id);
+  create index if not exists idx_online_orders_status on online_orders(status);
+  create index if not exists idx_online_orders_payment_status on online_orders(payment_status);
+  create index if not exists idx_online_orders_invoice on online_orders(sales_invoice_id);
+  create index if not exists idx_online_orders_number on online_orders(order_number);
+  create index if not exists idx_online_orders_created on online_orders(created_at desc);
+exception
+  when undefined_table then raise notice '⚠ Table online_orders does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in online_orders';
+end $$;
 
 -- Online order items
 create table if not exists online_order_items (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   order_id uuid references online_orders(id) on delete cascade,
   product_id uuid references products(id) on delete set null,
   product_name text not null, -- Store name for historical record
@@ -9603,8 +8634,14 @@ create table if not exists online_order_items (
   created_at timestamp with time zone not null default now()
 );
 
-create index if not exists idx_online_order_items_order on online_order_items(order_id);
-create index if not exists idx_online_order_items_product on online_order_items(product_id);
+do $$ begin
+  create index if not exists idx_online_order_items_tenant on online_order_items(tenant_id);
+  create index if not exists idx_online_order_items_order on online_order_items(order_id);
+  create index if not exists idx_online_order_items_product on online_order_items(product_id);
+exception
+  when undefined_table then raise notice '⚠ Table online_order_items does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in online_order_items';
+end $$;
 
 -- Product visibility for online store (control which products appear on website)
 alter table public.products
@@ -9619,319 +8656,40 @@ create index if not exists idx_products_featured on products(website_featured) w
 -- ROW LEVEL SECURITY FOR WEBSITE TABLES
 -- ============================================================================
 
--- Website banners: Public can read active banners, authenticated can manage
+-- Website banners: RLS enabled (tenant-filtered policies added later)
 alter table website_banners enable row level security;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'website_banners'
-      and policyname = 'Public can read active banners'
-  ) then
-    create policy "Public can read active banners"
-      on website_banners
-      for select
-      using (active = true);
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'website_banners'
-      and policyname = 'Authenticated can manage banners'
-  ) then
-    create policy "Authenticated can manage banners"
-      on website_banners
-      for all
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
--- Featured products: Public can read active, authenticated can manage
+-- Featured products: RLS enabled (tenant-filtered policies added later)
 alter table featured_products enable row level security;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'featured_products'
-      and policyname = 'Public can read active featured'
-  ) then
-    create policy "Public can read active featured"
-      on featured_products
-      for select
-      using (active = true);
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'featured_products'
-      and policyname = 'Authenticated can manage featured'
-  ) then
-    create policy "Authenticated can manage featured"
-      on featured_products
-      for all
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
--- Website content: Public can read, authenticated can manage
+-- Website content: RLS enabled (tenant-filtered policies added later)
 alter table website_content enable row level security;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'website_content'
-      and policyname = 'Public can read content'
-  ) then
-    create policy "Public can read content"
-      on website_content
-      for select
-      using (true);
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'website_content'
-      and policyname = 'Authenticated can manage content'
-  ) then
-    create policy "Authenticated can manage content"
-      on website_content
-      for all
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
--- Website blocks: Public can read visible blocks, authenticated can manage
+-- Website blocks: RLS enabled (tenant-filtered policies added later)
 alter table website_blocks enable row level security;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'website_blocks'
-      and policyname = 'Public can read visible blocks'
-  ) then
-    create policy "Public can read visible blocks"
-      on website_blocks
-      for select
-      using (is_visible = true);
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'website_blocks'
-      and policyname = 'Authenticated can manage blocks'
-  ) then
-    create policy "Authenticated can manage blocks"
-      on website_blocks
-      for all
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
--- Website settings: Authenticated can read and manage
+-- Website settings: RLS enabled (tenant-filtered policies added later)
 alter table website_settings enable row level security;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'website_settings'
-      and policyname = 'Public can read website settings'
-  ) then
-    create policy "Public can read website settings"
-      on website_settings
-      for select
-      to anon
-      using (true);
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'website_settings'
-      and policyname = 'Authenticated can manage settings'
-  ) then
-    create policy "Authenticated can manage settings"
-      on website_settings
-      for all
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
--- Online orders: Customers can read their own orders, authenticated can manage all
+-- Online orders: RLS enabled (tenant-filtered policies added later)
 alter table online_orders enable row level security;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'online_orders'
-      and policyname = 'Public can create orders'
-  ) then
-    create policy "Public can create orders"
-      on online_orders
-      for insert
-      with check (true); -- Anyone can place an order
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'online_orders'
-      and policyname = 'Public can read orders'
-  ) then
-    create policy "Public can read orders"
-      on online_orders
-      for select
-      to anon
-      using (true);
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'online_orders'
-      and policyname = 'Customers can read own orders'
-  ) then
-    create policy "Customers can read own orders"
-      on online_orders
-      for select
-      using (customer_email = current_setting('request.jwt.claims', true)::json->>'email');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'online_orders'
-      and policyname = 'Authenticated can manage all orders'
-  ) then
-    create policy "Authenticated can manage all orders"
-      on online_orders
-      for all
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
-
--- Online order items: Follow parent order permissions
+-- Online order items: RLS enabled (tenant-filtered policies added later)
 alter table online_order_items enable row level security;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'online_order_items'
-      and policyname = 'Public can create order items'
-  ) then
-    create policy "Public can create order items"
-      on online_order_items
-      for insert
-      with check (true);
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'online_order_items'
-      and policyname = 'Public can read order items'
-  ) then
-    create policy "Public can read order items"
-      on online_order_items
-      for select
-      to anon
-      using (true);
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'online_order_items'
-      and policyname = 'Customers can read own order items'
-  ) then
-    create policy "Customers can read own order items"
-      on online_order_items
-      for select
-      using (
-        exists (
-          select 1 from online_orders
-          where online_orders.id = online_order_items.order_id
-            and online_orders.customer_email = current_setting('request.jwt.claims', true)::json->>'email'
-        )
-      );
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'online_order_items'
-      and policyname = 'Authenticated can manage all order items'
-  ) then
-    create policy "Authenticated can manage all order items"
-      on online_order_items
-      for all
-      to authenticated
-      using (auth.role() = 'authenticated')
-      with check (auth.role() = 'authenticated');
-  end if;
-end $$;
+-- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
 -- ============================================================================
 -- FUNCTIONS FOR ONLINE ORDER PROCESSING
@@ -10548,7 +9306,8 @@ begin
 end $$;
 
 -- Drop all existing policies before recreating (idempotent deployment)
-do $$ begin
+do $$ 
+begin
   drop policy if exists "tenant_select_own" on tenants;
   drop policy if exists "tenant_update_own" on tenants;
   drop policy if exists "user_activity_log_select" on user_activity_log;
@@ -10620,58 +9379,128 @@ do $$ begin
   drop policy if exists "payment_methods_insert" on payment_methods;
   drop policy if exists "payment_methods_update" on payment_methods;
   raise notice '✓ Dropped all existing RLS policies (idempotent deployment)';
+exception
+  when undefined_table then 
+    raise notice '⚠ Some tables do not exist yet, skipping policy drops';
+  when undefined_object then 
+    raise notice '⚠ Some policies do not exist yet, skipping';
+  when undefined_column then
+    raise notice '⚠ Column tenant_id does not exist in some tables yet, skipping policy drops';
 end $$;
 
 -- Tenants table: Users can only see their own tenant
-create policy "tenant_select_own" on tenants for select using (id = public.user_tenant_id());
-create policy "tenant_update_own" on tenants for update using (id = public.user_tenant_id());
+do $$ begin
+  create policy "tenant_select_own" on tenants for select using (id = public.user_tenant_id());
+  create policy "tenant_update_own" on tenants for update using (id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for tenants';
+exception
+  when undefined_table then raise notice '⚠ Table tenants does not exist yet';
+  when undefined_column then raise notice '⚠ Column missing in tenants table';
+  when duplicate_object then raise notice '⚠ Policies already exist for tenants';
+end $$;
 
 -- User Activity Log: Tenant isolation
-create policy "user_activity_log_select" on user_activity_log for select using (tenant_id = public.user_tenant_id());
-create policy "user_activity_log_insert" on user_activity_log for insert with check (tenant_id = public.user_tenant_id());
+do $$ begin
+  create policy "user_activity_log_select" on user_activity_log for select using (tenant_id = public.user_tenant_id());
+  create policy "user_activity_log_insert" on user_activity_log for insert with check (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for user_activity_log';
+exception
+  when undefined_table then raise notice '⚠ Table user_activity_log does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in user_activity_log';
+  when duplicate_object then raise notice '⚠ Policies already exist for user_activity_log';
+end $$;
 
 -- Customers: Tenant isolation
-create policy "customers_select" on customers for select using (tenant_id = public.user_tenant_id());
-create policy "customers_insert" on customers for insert with check (tenant_id = public.user_tenant_id());
-create policy "customers_update" on customers for update using (tenant_id = public.user_tenant_id());
-create policy "customers_delete" on customers for delete using (tenant_id = public.user_tenant_id());
+do $$ begin
+  create policy "customers_select" on customers for select using (tenant_id = public.user_tenant_id());
+  create policy "customers_insert" on customers for insert with check (tenant_id = public.user_tenant_id());
+  create policy "customers_update" on customers for update using (tenant_id = public.user_tenant_id());
+  create policy "customers_delete" on customers for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for customers';
+exception
+  when undefined_table then raise notice '⚠ Table customers does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in customers';
+  when duplicate_object then raise notice '⚠ Policies already exist for customers';
+end $$;
 
 -- Products: Tenant isolation
-create policy "products_select" on products for select using (tenant_id = public.user_tenant_id());
-create policy "products_insert" on products for insert with check (tenant_id = public.user_tenant_id());
-create policy "products_update" on products for update using (tenant_id = public.user_tenant_id());
-create policy "products_delete" on products for delete using (tenant_id = public.user_tenant_id());
+do $$ begin
+  create policy "products_select" on products for select using (tenant_id = public.user_tenant_id());
+  create policy "products_insert" on products for insert with check (tenant_id = public.user_tenant_id());
+  create policy "products_update" on products for update using (tenant_id = public.user_tenant_id());
+  create policy "products_delete" on products for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for products';
+exception
+  when undefined_table then raise notice '⚠ Table products does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in products';
+  when duplicate_object then raise notice '⚠ Policies already exist for products';
+end $$;
 
 -- Categories: Tenant isolation
-create policy "categories_select" on categories for select using (tenant_id = public.user_tenant_id());
-create policy "categories_insert" on categories for insert with check (tenant_id = public.user_tenant_id());
-create policy "categories_update" on categories for update using (tenant_id = public.user_tenant_id());
-create policy "categories_delete" on categories for delete using (tenant_id = public.user_tenant_id());
+do $$ begin
+  create policy "categories_select" on categories for select using (tenant_id = public.user_tenant_id());
+  create policy "categories_insert" on categories for insert with check (tenant_id = public.user_tenant_id());
+  create policy "categories_update" on categories for update using (tenant_id = public.user_tenant_id());
+  create policy "categories_delete" on categories for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for categories';
+exception
+  when undefined_table then raise notice '⚠ Table categories does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in categories';
+  when duplicate_object then raise notice '⚠ Policies already exist for categories';
+end $$;
 
 -- Product Categories: Tenant isolation
-create policy "product_categories_select" on product_categories for select using (tenant_id = public.user_tenant_id());
-create policy "product_categories_insert" on product_categories for insert with check (tenant_id = public.user_tenant_id());
-create policy "product_categories_update" on product_categories for update using (tenant_id = public.user_tenant_id());
-create policy "product_categories_delete" on product_categories for delete using (tenant_id = public.user_tenant_id());
+do $$ begin
+  create policy "product_categories_select" on product_categories for select using (tenant_id = public.user_tenant_id());
+  create policy "product_categories_insert" on product_categories for insert with check (tenant_id = public.user_tenant_id());
+  create policy "product_categories_update" on product_categories for update using (tenant_id = public.user_tenant_id());
+  create policy "product_categories_delete" on product_categories for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for product_categories';
+exception
+  when undefined_table then raise notice '⚠ Table product_categories does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in product_categories';
+  when duplicate_object then raise notice '⚠ Policies already exist for product_categories';
+end $$;
 
 -- Product Brands: Tenant isolation
-create policy "product_brands_select" on product_brands for select using (tenant_id = public.user_tenant_id());
-create policy "product_brands_insert" on product_brands for insert with check (tenant_id = public.user_tenant_id());
-create policy "product_brands_update" on product_brands for update using (tenant_id = public.user_tenant_id());
-create policy "product_brands_delete" on product_brands for delete using (tenant_id = public.user_tenant_id());
+do $$ begin
+  create policy "product_brands_select" on product_brands for select using (tenant_id = public.user_tenant_id());
+  create policy "product_brands_insert" on product_brands for insert with check (tenant_id = public.user_tenant_id());
+  create policy "product_brands_update" on product_brands for update using (tenant_id = public.user_tenant_id());
+  create policy "product_brands_delete" on product_brands for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for product_brands';
+exception
+  when undefined_table then raise notice '⚠ Table product_brands does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in product_brands';
+  when duplicate_object then raise notice '⚠ Policies already exist for product_brands';
+end $$;
 
 -- Stock Movements: Tenant isolation
-create policy "stock_movements_select" on stock_movements for select using (tenant_id = public.user_tenant_id());
-create policy "stock_movements_insert" on stock_movements for insert with check (tenant_id = public.user_tenant_id());
+do $$ begin
+  create policy "stock_movements_select" on stock_movements for select using (tenant_id = public.user_tenant_id());
+  create policy "stock_movements_insert" on stock_movements for insert with check (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for stock_movements';
+exception
+  when undefined_table then raise notice '⚠ Table stock_movements does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in stock_movements';
+  when duplicate_object then raise notice '⚠ Policies already exist for stock_movements';
+end $$;
 
 -- Sales Invoices: Tenant isolation
-create policy "sales_invoices_select" on sales_invoices for select using (tenant_id = public.user_tenant_id());
-create policy "sales_invoices_insert" on sales_invoices for insert with check (tenant_id = public.user_tenant_id());
-create policy "sales_invoices_update" on sales_invoices for update using (tenant_id = public.user_tenant_id());
-create policy "sales_invoices_delete" on sales_invoices for delete using (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager' -- Only managers can delete
-);
+do $$ begin
+  create policy "sales_invoices_select" on sales_invoices for select using (tenant_id = public.user_tenant_id());
+  create policy "sales_invoices_insert" on sales_invoices for insert with check (tenant_id = public.user_tenant_id());
+  create policy "sales_invoices_update" on sales_invoices for update using (tenant_id = public.user_tenant_id());
+  create policy "sales_invoices_delete" on sales_invoices for delete using (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager' -- Only managers can delete
+  );
+  raise notice '✓ Created RLS policies for sales_invoices';
+exception
+  when undefined_table then raise notice '⚠ Table sales_invoices does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in sales_invoices';
+  when duplicate_object then raise notice '⚠ Policies already exist for sales_invoices';
+end $$;
 
 -- Sales Invoice Items: Tenant isolation (if table exists)
 do $$
@@ -10688,27 +9517,48 @@ begin
 end $$;
 
 -- Sales Payments: Tenant isolation
-create policy "sales_payments_select" on sales_payments for select using (tenant_id = public.user_tenant_id());
-create policy "sales_payments_insert" on sales_payments for insert with check (tenant_id = public.user_tenant_id());
-create policy "sales_payments_delete" on sales_payments for delete using (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-);
+do $$ begin
+  create policy "sales_payments_select" on sales_payments for select using (tenant_id = public.user_tenant_id());
+  create policy "sales_payments_insert" on sales_payments for insert with check (tenant_id = public.user_tenant_id());
+  create policy "sales_payments_delete" on sales_payments for delete using (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+  );
+  raise notice '✓ Created RLS policies for sales_payments';
+exception
+  when undefined_table then raise notice '⚠ Table sales_payments does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in sales_payments';
+  when duplicate_object then raise notice '⚠ Policies already exist for sales_payments';
+end $$;
 
 -- Suppliers: Tenant isolation
-create policy "suppliers_select" on suppliers for select using (tenant_id = public.user_tenant_id());
-create policy "suppliers_insert" on suppliers for insert with check (tenant_id = public.user_tenant_id());
-create policy "suppliers_update" on suppliers for update using (tenant_id = public.user_tenant_id());
-create policy "suppliers_delete" on suppliers for delete using (tenant_id = public.user_tenant_id());
+do $$ begin
+  create policy "suppliers_select" on suppliers for select using (tenant_id = public.user_tenant_id());
+  create policy "suppliers_insert" on suppliers for insert with check (tenant_id = public.user_tenant_id());
+  create policy "suppliers_update" on suppliers for update using (tenant_id = public.user_tenant_id());
+  create policy "suppliers_delete" on suppliers for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for suppliers';
+exception
+  when undefined_table then raise notice '⚠ Table suppliers does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in suppliers';
+  when duplicate_object then raise notice '⚠ Policies already exist for suppliers';
+end $$;
 
 -- Purchase Invoices: Tenant isolation
-create policy "purchase_invoices_select" on purchase_invoices for select using (tenant_id = public.user_tenant_id());
-create policy "purchase_invoices_insert" on purchase_invoices for insert with check (tenant_id = public.user_tenant_id());
-create policy "purchase_invoices_update" on purchase_invoices for update using (tenant_id = public.user_tenant_id());
-create policy "purchase_invoices_delete" on purchase_invoices for delete using (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
-);
+do $$ begin
+  create policy "purchase_invoices_select" on purchase_invoices for select using (tenant_id = public.user_tenant_id());
+  create policy "purchase_invoices_insert" on purchase_invoices for insert with check (tenant_id = public.user_tenant_id());
+  create policy "purchase_invoices_update" on purchase_invoices for update using (tenant_id = public.user_tenant_id());
+  create policy "purchase_invoices_delete" on purchase_invoices for delete using (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+  );
+  raise notice '✓ Created RLS policies for purchase_invoices';
+exception
+  when undefined_table then raise notice '⚠ Table purchase_invoices does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in purchase_invoices';
+  when duplicate_object then raise notice '⚠ Policies already exist for purchase_invoices';
+end $$;
 
 -- Purchase Invoice Items: Tenant isolation (if table exists)
 do $$
@@ -10725,12 +9575,19 @@ begin
 end $$;
 
 -- Purchase Payments: Tenant isolation
-create policy "purchase_payments_select" on purchase_payments for select using (tenant_id = public.user_tenant_id());
-create policy "purchase_payments_insert" on purchase_payments for insert with check (tenant_id = public.user_tenant_id());
-create policy "purchase_payments_delete" on purchase_payments for delete using (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
-);
+do $$ begin
+  create policy "purchase_payments_select" on purchase_payments for select using (tenant_id = public.user_tenant_id());
+  create policy "purchase_payments_insert" on purchase_payments for insert with check (tenant_id = public.user_tenant_id());
+  create policy "purchase_payments_delete" on purchase_payments for delete using (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+  );
+  raise notice '✓ Created RLS policies for purchase_payments';
+exception
+  when undefined_table then raise notice '⚠ Table purchase_payments does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in purchase_payments';
+  when duplicate_object then raise notice '⚠ Policies already exist for purchase_payments';
+end $$;
 
 -- Customer Bikes: Tenant isolation (if table exists)
 do $$
@@ -10747,29 +9604,43 @@ begin
 end $$;
 
 -- Accounts (Chart of Accounts): Tenant isolation + Role check
-create policy "accounts_select" on accounts for select using (tenant_id = public.user_tenant_id());
-create policy "accounts_insert" on accounts for insert with check (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
-);
-create policy "accounts_update" on accounts for update using (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
-);
-create policy "accounts_delete" on accounts for delete using (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-);
+do $$ begin
+  create policy "accounts_select" on accounts for select using (tenant_id = public.user_tenant_id());
+  create policy "accounts_insert" on accounts for insert with check (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+  );
+  create policy "accounts_update" on accounts for update using (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+  );
+  create policy "accounts_delete" on accounts for delete using (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+  );
+  raise notice '✓ Created RLS policies for accounts';
+exception
+  when undefined_table then raise notice '⚠ Table accounts does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in accounts';
+  when duplicate_object then raise notice '⚠ Policies already exist for accounts';
+end $$;
 
 -- Journal Entries: Tenant isolation + Role check
-create policy "journal_entries_select" on journal_entries for select using (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
-);
-create policy "journal_entries_insert" on journal_entries for insert with check (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
-);
+do $$ begin
+  create policy "journal_entries_select" on journal_entries for select using (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+  );
+  create policy "journal_entries_insert" on journal_entries for insert with check (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+  );
+  raise notice '✓ Created RLS policies for journal_entries';
+exception
+  when undefined_table then raise notice '⚠ Table journal_entries does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in journal_entries';
+  when duplicate_object then raise notice '⚠ Policies already exist for journal_entries';
+end $$;
 
 -- Journal Entry Lines: Tenant isolation + Role check (if table exists)
 do $$
@@ -10799,54 +9670,330 @@ begin
 end $$;
 
 -- Employees: Tenant isolation
-create policy "employees_select" on employees for select using (tenant_id = public.user_tenant_id());
-create policy "employees_insert" on employees for insert with check (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-);
-create policy "employees_update" on employees for update using (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-);
-create policy "employees_delete" on employees for delete using (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-);
+do $$ begin
+  create policy "employees_select" on employees for select using (tenant_id = public.user_tenant_id());
+  create policy "employees_insert" on employees for insert with check (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+  );
+  create policy "employees_update" on employees for update using (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+  );
+  create policy "employees_delete" on employees for delete using (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+  );
+  raise notice '✓ Created RLS policies for employees';
+exception
+  when undefined_table then raise notice '⚠ Table employees does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in employees';
+  when duplicate_object then raise notice '⚠ Policies already exist for employees';
+end $$;
 
 -- Attendances: Tenant isolation
-create policy "attendances_select" on attendances for select using (tenant_id = public.user_tenant_id());
-create policy "attendances_insert" on attendances for insert with check (tenant_id = public.user_tenant_id());
-create policy "attendances_update" on attendances for update using (tenant_id = public.user_tenant_id());
+do $$ begin
+  create policy "attendances_select" on attendances for select using (tenant_id = public.user_tenant_id());
+  create policy "attendances_insert" on attendances for insert with check (tenant_id = public.user_tenant_id());
+  create policy "attendances_update" on attendances for update using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for attendances';
+exception
+  when undefined_table then raise notice '⚠ Table attendances does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in attendances';
+  when duplicate_object then raise notice '⚠ Policies already exist for attendances';
+end $$;
 
 -- Website Settings: Tenant isolation
-create policy "website_settings_select" on website_settings for select using (tenant_id = public.user_tenant_id());
-create policy "website_settings_insert" on website_settings for insert with check (tenant_id = public.user_tenant_id());
-create policy "website_settings_update" on website_settings for update using (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-);
+do $$ begin
+  create policy "website_settings_select" on website_settings for select using (tenant_id = public.user_tenant_id());
+  create policy "website_settings_insert" on website_settings for insert with check (tenant_id = public.user_tenant_id());
+  create policy "website_settings_update" on website_settings for update using (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+  );
+  raise notice '✓ Created RLS policies for website_settings';
+exception
+  when undefined_table then raise notice '⚠ Table website_settings does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in website_settings';
+  when duplicate_object then raise notice '⚠ Policies already exist for website_settings';
+end $$;
+
+-- Journal Entries: Tenant isolation (accounting)
+do $$ begin
+  create policy "journal_entries_select" on journal_entries for select using (tenant_id = public.user_tenant_id());
+  create policy "journal_entries_insert" on journal_entries for insert with check (tenant_id = public.user_tenant_id());
+  create policy "journal_entries_update" on journal_entries for update using (tenant_id = public.user_tenant_id());
+  create policy "journal_entries_delete" on journal_entries for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for journal_entries';
+exception
+  when undefined_table then raise notice '⚠ Table journal_entries does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in journal_entries';
+  when duplicate_object then raise notice '⚠ Policies already exist for journal_entries';
+end $$;
+
+-- Journal Lines: Tenant isolation (accounting)
+do $$ begin
+  create policy "journal_lines_select" on journal_lines for select using (tenant_id = public.user_tenant_id());
+  create policy "journal_lines_insert" on journal_lines for insert with check (tenant_id = public.user_tenant_id());
+  create policy "journal_lines_update" on journal_lines for update using (tenant_id = public.user_tenant_id());
+  create policy "journal_lines_delete" on journal_lines for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for journal_lines';
+exception
+  when undefined_table then raise notice '⚠ Table journal_lines does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in journal_lines';
+  when duplicate_object then raise notice '⚠ Policies already exist for journal_lines';
+end $$;
+
+-- Orders: Tenant isolation (POS)
+do $$ begin
+  create policy "orders_select" on orders for select using (tenant_id = public.user_tenant_id());
+  create policy "orders_insert" on orders for insert with check (tenant_id = public.user_tenant_id());
+  create policy "orders_update" on orders for update using (tenant_id = public.user_tenant_id());
+  create policy "orders_delete" on orders for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for orders';
+exception
+  when undefined_table then raise notice '⚠ Table orders does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in orders';
+  when duplicate_object then raise notice '⚠ Policies already exist for orders';
+end $$;
+
+-- Order Items: Tenant isolation (POS)
+do $$ begin
+  create policy "order_items_select" on order_items for select using (tenant_id = public.user_tenant_id());
+  create policy "order_items_insert" on order_items for insert with check (tenant_id = public.user_tenant_id());
+  create policy "order_items_update" on order_items for update using (tenant_id = public.user_tenant_id());
+  create policy "order_items_delete" on order_items for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for order_items';
+exception
+  when undefined_table then raise notice '⚠ Table order_items does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in order_items';
+  when duplicate_object then raise notice '⚠ Policies already exist for order_items';
+end $$;
+
+-- Departments: Tenant isolation (HR)
+do $$ begin
+  create policy "departments_select" on departments for select using (tenant_id = public.user_tenant_id());
+  create policy "departments_insert" on departments for insert with check (tenant_id = public.user_tenant_id());
+  create policy "departments_update" on departments for update using (tenant_id = public.user_tenant_id());
+  create policy "departments_delete" on departments for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for departments';
+exception
+  when undefined_table then raise notice '⚠ Table departments does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in departments';
+  when duplicate_object then raise notice '⚠ Policies already exist for departments';
+end $$;
+
+-- Company Settings: Tenant isolation (CRITICAL - logo/company data)
+do $$ begin
+  create policy "company_settings_select" on company_settings for select using (tenant_id = public.user_tenant_id());
+  create policy "company_settings_insert" on company_settings for insert with check (tenant_id = public.user_tenant_id());
+  create policy "company_settings_update" on company_settings for update using (tenant_id = public.user_tenant_id());
+  create policy "company_settings_delete" on company_settings for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for company_settings';
+exception
+  when undefined_table then raise notice '⚠ Table company_settings does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in company_settings';
+  when duplicate_object then raise notice '⚠ Policies already exist for company_settings';
+end $$;
+
+-- Bikes: Tenant isolation (Customer bikes/vehicles)
+do $$ begin
+  create policy "bikes_select" on bikes for select using (tenant_id = public.user_tenant_id());
+  create policy "bikes_insert" on bikes for insert with check (tenant_id = public.user_tenant_id());
+  create policy "bikes_update" on bikes for update using (tenant_id = public.user_tenant_id());
+  create policy "bikes_delete" on bikes for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for bikes';
+exception
+  when undefined_table then raise notice '⚠ Table bikes does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in bikes';
+  when duplicate_object then raise notice '⚠ Policies already exist for bikes';
+end $$;
+
+-- Mechanic Jobs: Tenant isolation
+do $$ begin
+  create policy "mechanic_jobs_select" on mechanic_jobs for select using (tenant_id = public.user_tenant_id());
+  create policy "mechanic_jobs_insert" on mechanic_jobs for insert with check (tenant_id = public.user_tenant_id());
+  create policy "mechanic_jobs_update" on mechanic_jobs for update using (tenant_id = public.user_tenant_id());
+  create policy "mechanic_jobs_delete" on mechanic_jobs for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for mechanic_jobs';
+exception
+  when undefined_table then raise notice '⚠ Table mechanic_jobs does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in mechanic_jobs';
+  when duplicate_object then raise notice '⚠ Policies already exist for mechanic_jobs';
+end $$;
+
+-- Mechanic Job Items: Tenant isolation
+do $$ begin
+  create policy "mechanic_job_items_select" on mechanic_job_items for select using (tenant_id = public.user_tenant_id());
+  create policy "mechanic_job_items_insert" on mechanic_job_items for insert with check (tenant_id = public.user_tenant_id());
+  create policy "mechanic_job_items_update" on mechanic_job_items for update using (tenant_id = public.user_tenant_id());
+  create policy "mechanic_job_items_delete" on mechanic_job_items for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for mechanic_job_items';
+exception
+  when undefined_table then raise notice '⚠ Table mechanic_job_items does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in mechanic_job_items';
+  when duplicate_object then raise notice '⚠ Policies already exist for mechanic_job_items';
+end $$;
+
+-- Mechanic Job Labor: Tenant isolation
+do $$ begin
+  create policy "mechanic_job_labor_select" on mechanic_job_labor for select using (tenant_id = public.user_tenant_id());
+  create policy "mechanic_job_labor_insert" on mechanic_job_labor for insert with check (tenant_id = public.user_tenant_id());
+  create policy "mechanic_job_labor_update" on mechanic_job_labor for update using (tenant_id = public.user_tenant_id());
+  create policy "mechanic_job_labor_delete" on mechanic_job_labor for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for mechanic_job_labor';
+exception
+  when undefined_table then raise notice '⚠ Table mechanic_job_labor does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in mechanic_job_labor';
+  when duplicate_object then raise notice '⚠ Policies already exist for mechanic_job_labor';
+end $$;
+
+-- Mechanic Job Timeline: Tenant isolation
+do $$ begin
+  create policy "mechanic_job_timeline_select" on mechanic_job_timeline for select using (tenant_id = public.user_tenant_id());
+  create policy "mechanic_job_timeline_insert" on mechanic_job_timeline for insert with check (tenant_id = public.user_tenant_id());
+  create policy "mechanic_job_timeline_update" on mechanic_job_timeline for update using (tenant_id = public.user_tenant_id());
+  create policy "mechanic_job_timeline_delete" on mechanic_job_timeline for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for mechanic_job_timeline';
+exception
+  when undefined_table then raise notice '⚠ Table mechanic_job_timeline does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in mechanic_job_timeline';
+  when duplicate_object then raise notice '⚠ Policies already exist for mechanic_job_timeline';
+end $$;
+
+-- Expense Attachments: Tenant isolation
+do $$ begin
+  create policy "expense_attachments_select" on expense_attachments for select using (tenant_id = public.user_tenant_id());
+  create policy "expense_attachments_insert" on expense_attachments for insert with check (tenant_id = public.user_tenant_id());
+  create policy "expense_attachments_update" on expense_attachments for update using (tenant_id = public.user_tenant_id());
+  create policy "expense_attachments_delete" on expense_attachments for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for expense_attachments';
+exception
+  when undefined_table then raise notice '⚠ Table expense_attachments does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in expense_attachments';
+  when duplicate_object then raise notice '⚠ Policies already exist for expense_attachments';
+end $$;
+
+-- Expense Lines: Tenant isolation
+do $$ begin
+  create policy "expense_lines_select" on expense_lines for select using (tenant_id = public.user_tenant_id());
+  create policy "expense_lines_insert" on expense_lines for insert with check (tenant_id = public.user_tenant_id());
+  create policy "expense_lines_update" on expense_lines for update using (tenant_id = public.user_tenant_id());
+  create policy "expense_lines_delete" on expense_lines for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for expense_lines';
+exception
+  when undefined_table then raise notice '⚠ Table expense_lines does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in expense_lines';
+  when duplicate_object then raise notice '⚠ Policies already exist for expense_lines';
+end $$;
+
+-- Expense Payments: Tenant isolation
+do $$ begin
+  create policy "expense_payments_select" on expense_payments for select using (tenant_id = public.user_tenant_id());
+  create policy "expense_payments_insert" on expense_payments for insert with check (tenant_id = public.user_tenant_id());
+  create policy "expense_payments_update" on expense_payments for update using (tenant_id = public.user_tenant_id());
+  create policy "expense_payments_delete" on expense_payments for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for expense_payments';
+exception
+  when undefined_table then raise notice '⚠ Table expense_payments does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in expense_payments';
+  when duplicate_object then raise notice '⚠ Policies already exist for expense_payments';
+end $$;
 
 -- Website Blocks: Tenant isolation
-create policy "website_blocks_select" on website_blocks for select using (tenant_id = public.user_tenant_id());
-create policy "website_blocks_insert" on website_blocks for insert with check (tenant_id = public.user_tenant_id());
-create policy "website_blocks_update" on website_blocks for update using (tenant_id = public.user_tenant_id());
-create policy "website_blocks_delete" on website_blocks for delete using (tenant_id = public.user_tenant_id());
+do $$ begin
+  create policy "website_blocks_select" on website_blocks for select using (tenant_id = public.user_tenant_id());
+  create policy "website_blocks_insert" on website_blocks for insert with check (tenant_id = public.user_tenant_id());
+  create policy "website_blocks_update" on website_blocks for update using (tenant_id = public.user_tenant_id());
+  create policy "website_blocks_delete" on website_blocks for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for website_blocks';
+exception
+  when undefined_table then raise notice '⚠ Table website_blocks does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in website_blocks';
+  when duplicate_object then raise notice '⚠ Policies already exist for website_blocks';
+end $$;
 
 -- Online Orders: Tenant isolation
-create policy "online_orders_select" on online_orders for select using (tenant_id = public.user_tenant_id());
-create policy "online_orders_insert" on online_orders for insert with check (tenant_id = public.user_tenant_id());
-create policy "online_orders_update" on online_orders for update using (tenant_id = public.user_tenant_id());
+do $$ begin
+  create policy "online_orders_select" on online_orders for select using (tenant_id = public.user_tenant_id());
+  create policy "online_orders_insert" on online_orders for insert with check (tenant_id = public.user_tenant_id());
+  create policy "online_orders_update" on online_orders for update using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for online_orders';
+exception
+  when undefined_table then raise notice '⚠ Table online_orders does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in online_orders';
+  when duplicate_object then raise notice '⚠ Policies already exist for online_orders';
+end $$;
 
 -- Payment Methods: Tenant isolation
-create policy "payment_methods_select" on payment_methods for select using (tenant_id = public.user_tenant_id());
-create policy "payment_methods_insert" on payment_methods for insert with check (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-);
-create policy "payment_methods_update" on payment_methods for update using (
-  tenant_id = public.user_tenant_id() and
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-);
+do $$ begin
+  create policy "payment_methods_select" on payment_methods for select using (tenant_id = public.user_tenant_id());
+  create policy "payment_methods_insert" on payment_methods for insert with check (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+  );
+  create policy "payment_methods_update" on payment_methods for update using (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+  );
+  raise notice '✓ Created RLS policies for payment_methods';
+exception
+  when undefined_table then raise notice '⚠ Table payment_methods does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in payment_methods';
+  when duplicate_object then raise notice '⚠ Policies already exist for payment_methods';
+end $$;
+
+-- Website Banners: Tenant isolation
+do $$ begin
+  create policy "website_banners_select" on website_banners for select using (tenant_id = public.user_tenant_id());
+  create policy "website_banners_insert" on website_banners for insert with check (tenant_id = public.user_tenant_id());
+  create policy "website_banners_update" on website_banners for update using (tenant_id = public.user_tenant_id());
+  create policy "website_banners_delete" on website_banners for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for website_banners';
+exception
+  when undefined_table then raise notice '⚠ Table website_banners does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in website_banners';
+  when duplicate_object then raise notice '⚠ Policies already exist for website_banners';
+end $$;
+
+-- Featured Products: Tenant isolation
+do $$ begin
+  create policy "featured_products_select" on featured_products for select using (tenant_id = public.user_tenant_id());
+  create policy "featured_products_insert" on featured_products for insert with check (tenant_id = public.user_tenant_id());
+  create policy "featured_products_update" on featured_products for update using (tenant_id = public.user_tenant_id());
+  create policy "featured_products_delete" on featured_products for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for featured_products';
+exception
+  when undefined_table then raise notice '⚠ Table featured_products does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in featured_products';
+  when duplicate_object then raise notice '⚠ Policies already exist for featured_products';
+end $$;
+
+-- Website Content: Tenant isolation
+do $$ begin
+  create policy "website_content_select" on website_content for select using (tenant_id = public.user_tenant_id());
+  create policy "website_content_insert" on website_content for insert with check (tenant_id = public.user_tenant_id());
+  create policy "website_content_update" on website_content for update using (tenant_id = public.user_tenant_id());
+  create policy "website_content_delete" on website_content for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for website_content';
+exception
+  when undefined_table then raise notice '⚠ Table website_content does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in website_content';
+  when duplicate_object then raise notice '⚠ Policies already exist for website_content';
+end $$;
+
+-- Online Order Items: Tenant isolation
+do $$ begin
+  create policy "online_order_items_select" on online_order_items for select using (tenant_id = public.user_tenant_id());
+  create policy "online_order_items_insert" on online_order_items for insert with check (tenant_id = public.user_tenant_id());
+  create policy "online_order_items_update" on online_order_items for update using (tenant_id = public.user_tenant_id());
+  create policy "online_order_items_delete" on online_order_items for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for online_order_items';
+exception
+  when undefined_table then raise notice '⚠ Table online_order_items does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in online_order_items';
+  when duplicate_object then raise notice '⚠ Policies already exist for online_order_items';
+end $$;
 
 --------------------------------------------------------------------------------
 -- AUTO-SIGNUP SYSTEM: Automatic Tenant Creation & Invitation Handling
@@ -10964,6 +10111,659 @@ create trigger on_auth_user_created
   before insert on auth.users
   for each row
   execute function public.handle_new_user();
+
+-- ============================================================================
+-- MISSING TABLES - Add tenant_id to tables created manually in Supabase
+-- ============================================================================
+
+-- CRITICAL MIGRATION: Add tenant_id to ALL existing tables that are missing it
+do $$
+declare
+  vinabike_tenant_id uuid := '97ef40bf-f58c-4f76-a629-c013fb3928cf';
+  v_table text;
+  v_tables text[] := ARRAY[
+    'analytics_snapshots', 'attendance_records', 'campaign_metrics', 'campaigns',
+    'companies', 'company_settings', 'content_items', 'content_media',
+    'employee_contracts', 'featured_products', 'inventory_adjustments', 'leave_requests',
+    'online_order_items', 'payroll_entries', 'payroll_runs', 'purchase_order_items',
+    'purchase_orders', 'sales_order_items', 'sales_orders', 'service_packages',
+    'shifts', 'users_profiles', 'vehicles', 'website_banners', 'work_order_items',
+    'work_schedules'
+  ];
+begin
+  raise notice 'Starting tenant_id migration for existing tables...';
+  
+  foreach v_table in array v_tables loop
+    begin
+      -- Check if table exists and doesn't have tenant_id
+      if exists (select 1 from information_schema.tables where table_name = v_table and table_schema = 'public')
+        and not exists (select 1 from information_schema.columns where table_name = v_table and column_name = 'tenant_id')
+      then
+        execute format('alter table %I add column tenant_id uuid references tenants(id) on delete cascade', v_table);
+        execute format('update %I set tenant_id = $1 where tenant_id is null', v_table) using vinabike_tenant_id;
+        execute format('alter table %I alter column tenant_id set not null', v_table);
+        execute format('create index if not exists idx_%s_tenant on %I(tenant_id)', v_table, v_table);
+        raise notice '✅ Added tenant_id to %', v_table;
+      else
+        raise notice '⏭️  Skipped % (already has tenant_id or does not exist)', v_table;
+      end if;
+    exception when others then
+      raise notice '❌ Error migrating %: %', v_table, SQLERRM;
+    end;
+  end loop;
+  
+  raise notice 'tenant_id migration complete!';
+end $$;
+
+-- Analytics snapshots
+create table if not exists analytics_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  snapshot_date date not null,
+  metric_name text not null,
+  metric_value numeric(12,2),
+  created_at timestamp with time zone not null default now(),
+  unique(tenant_id, snapshot_date, metric_name)
+);
+
+do $$ begin
+  create index if not exists idx_analytics_snapshots_tenant on analytics_snapshots(tenant_id);
+  create index if not exists idx_analytics_snapshots_date on analytics_snapshots(snapshot_date);
+exception
+  when undefined_table then raise notice '⚠ Table analytics_snapshots does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in analytics_snapshots';
+end $$;
+
+-- Attendance records
+create table if not exists attendance_records (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  employee_id uuid references employees(id) on delete cascade,
+  check_in timestamp with time zone,
+  check_out timestamp with time zone,
+  date date not null,
+  status text check (status in ('present', 'absent', 'late', 'half_day', 'leave')) default 'present',
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_attendance_records_tenant on attendance_records(tenant_id);
+  create index if not exists idx_attendance_records_employee on attendance_records(employee_id);
+  create index if not exists idx_attendance_records_date on attendance_records(date);
+exception
+  when undefined_table then raise notice '⚠ Table attendance_records does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in attendance_records';
+end $$;
+
+-- Campaigns
+create table if not exists campaigns (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  name text not null,
+  description text,
+  campaign_type text check (campaign_type in ('email', 'sms', 'push', 'promo')) not null,
+  status text check (status in ('draft', 'scheduled', 'active', 'paused', 'completed')) default 'draft',
+  start_date timestamp with time zone,
+  end_date timestamp with time zone,
+  target_segment jsonb, -- Customer segmentation criteria
+  message_template text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, name)
+);
+
+do $$ begin
+  create index if not exists idx_campaigns_tenant on campaigns(tenant_id);
+  create index if not exists idx_campaigns_status on campaigns(status);
+exception
+  when undefined_table then raise notice '⚠ Table campaigns does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in campaigns';
+end $$;
+
+-- Campaign metrics
+create table if not exists campaign_metrics (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  campaign_id uuid references campaigns(id) on delete cascade,
+  metric_date date not null,
+  sent_count integer default 0,
+  opened_count integer default 0,
+  clicked_count integer default 0,
+  converted_count integer default 0,
+  revenue_generated numeric(12,2) default 0,
+  created_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_campaign_metrics_tenant on campaign_metrics(tenant_id);
+  create index if not exists idx_campaign_metrics_campaign on campaign_metrics(campaign_id);
+exception
+  when undefined_table then raise notice '⚠ Table campaign_metrics does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in campaign_metrics';
+end $$;
+
+-- Companies (multi-company support within tenant)
+create table if not exists companies (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  name text not null,
+  legal_name text,
+  tax_id text,
+  address text,
+  city text,
+  country text default 'Chile',
+  phone text,
+  email text,
+  is_default boolean default false,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, tax_id)
+);
+
+do $$ begin
+  create index if not exists idx_companies_tenant on companies(tenant_id);
+exception
+  when undefined_table then raise notice '⚠ Table companies does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in companies';
+end $$;
+
+-- Content items (for website builder CMS)
+create table if not exists content_items (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  title text not null,
+  slug text not null,
+  content_type text check (content_type in ('page', 'blog', 'promo', 'faq')) not null,
+  content text,
+  meta_description text,
+  published boolean default false,
+  published_at timestamp with time zone,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, slug)
+);
+
+do $$ begin
+  create index if not exists idx_content_items_tenant on content_items(tenant_id);
+  create index if not exists idx_content_items_slug on content_items(slug);
+exception
+  when undefined_table then raise notice '⚠ Table content_items does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in content_items';
+end $$;
+
+-- Content media (images/videos for CMS)
+create table if not exists content_media (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  content_item_id uuid references content_items(id) on delete cascade,
+  media_type text check (media_type in ('image', 'video', 'document')) not null,
+  url text not null,
+  alt_text text,
+  display_order integer default 0,
+  created_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_content_media_tenant on content_media(tenant_id);
+  create index if not exists idx_content_media_content on content_media(content_item_id);
+exception
+  when undefined_table then raise notice '⚠ Table content_media does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in content_media';
+end $$;
+
+-- Inventory adjustments
+create table if not exists inventory_adjustments (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  product_id uuid references products(id) on delete cascade,
+  warehouse_id uuid references warehouses(id) on delete cascade,
+  adjustment_type text check (adjustment_type in ('add', 'subtract', 'set')) not null,
+  quantity integer not null,
+  reason text,
+  reference text,
+  created_by uuid references auth.users(id),
+  created_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_inventory_adjustments_tenant on inventory_adjustments(tenant_id);
+  create index if not exists idx_inventory_adjustments_product on inventory_adjustments(product_id);
+exception
+  when undefined_table then raise notice '⚠ Table inventory_adjustments does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in inventory_adjustments';
+end $$;
+
+-- Leave requests
+create table if not exists leave_requests (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  employee_id uuid references employees(id) on delete cascade,
+  leave_type text check (leave_type in ('vacation', 'sick', 'personal', 'unpaid', 'bereavement')) not null,
+  start_date date not null,
+  end_date date not null,
+  days_count numeric(5,2) not null,
+  status text check (status in ('pending', 'approved', 'rejected', 'cancelled')) default 'pending',
+  reason text,
+  approved_by uuid references auth.users(id),
+  approved_at timestamp with time zone,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_leave_requests_tenant on leave_requests(tenant_id);
+  create index if not exists idx_leave_requests_employee on leave_requests(employee_id);
+  create index if not exists idx_leave_requests_status on leave_requests(status);
+exception
+  when undefined_table then raise notice '⚠ Table leave_requests does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in leave_requests';
+end $$;
+
+-- Payroll runs
+create table if not exists payroll_runs (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  period_start date not null,
+  period_end date not null,
+  payment_date date not null,
+  status text check (status in ('draft', 'processing', 'completed', 'paid')) default 'draft',
+  total_gross numeric(12,2) default 0,
+  total_deductions numeric(12,2) default 0,
+  total_net numeric(12,2) default 0,
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_payroll_runs_tenant on payroll_runs(tenant_id);
+  create index if not exists idx_payroll_runs_period on payroll_runs(period_start, period_end);
+exception
+  when undefined_table then raise notice '⚠ Table payroll_runs does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in payroll_runs';
+end $$;
+
+-- Payroll entries
+create table if not exists payroll_entries (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  payroll_run_id uuid references payroll_runs(id) on delete cascade,
+  employee_id uuid references employees(id) on delete cascade,
+  gross_salary numeric(12,2) not null,
+  overtime_hours numeric(5,2) default 0,
+  overtime_pay numeric(12,2) default 0,
+  bonuses numeric(12,2) default 0,
+  deductions numeric(12,2) default 0,
+  net_salary numeric(12,2) not null,
+  payment_status text check (payment_status in ('pending', 'paid', 'failed')) default 'pending',
+  payment_method text,
+  payment_reference text,
+  created_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_payroll_entries_tenant on payroll_entries(tenant_id);
+  create index if not exists idx_payroll_entries_run on payroll_entries(payroll_run_id);
+  create index if not exists idx_payroll_entries_employee on payroll_entries(employee_id);
+exception
+  when undefined_table then raise notice '⚠ Table payroll_entries does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in payroll_entries';
+end $$;
+
+-- Purchase orders
+create table if not exists purchase_orders (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  order_number text not null,
+  supplier_id uuid references suppliers(id) on delete cascade,
+  order_date date not null,
+  expected_date date,
+  status text check (status in ('draft', 'sent', 'confirmed', 'received', 'cancelled')) default 'draft',
+  subtotal numeric(12,2) default 0,
+  tax_amount numeric(12,2) default 0,
+  total_amount numeric(12,2) default 0,
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, order_number)
+);
+
+do $$ begin
+  create index if not exists idx_purchase_orders_tenant on purchase_orders(tenant_id);
+  create index if not exists idx_purchase_orders_supplier on purchase_orders(supplier_id);
+  create index if not exists idx_purchase_orders_status on purchase_orders(status);
+exception
+  when undefined_table then raise notice '⚠ Table purchase_orders does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in purchase_orders';
+end $$;
+
+-- Purchase order items
+create table if not exists purchase_order_items (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  purchase_order_id uuid references purchase_orders(id) on delete cascade,
+  product_id uuid references products(id) on delete cascade,
+  quantity integer not null,
+  unit_price numeric(12,2) not null,
+  subtotal numeric(12,2) not null,
+  tax_rate numeric(5,2) default 19,
+  tax_amount numeric(12,2) default 0,
+  total numeric(12,2) not null,
+  created_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_purchase_order_items_tenant on purchase_order_items(tenant_id);
+  create index if not exists idx_purchase_order_items_order on purchase_order_items(purchase_order_id);
+exception
+  when undefined_table then raise notice '⚠ Table purchase_order_items does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in purchase_order_items';
+end $$;
+
+-- Sales orders
+create table if not exists sales_orders (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  order_number text not null,
+  customer_id uuid references customers(id) on delete cascade,
+  order_date date not null,
+  expected_date date,
+  status text check (status in ('draft', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled')) default 'draft',
+  subtotal numeric(12,2) default 0,
+  tax_amount numeric(12,2) default 0,
+  total_amount numeric(12,2) default 0,
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, order_number)
+);
+
+do $$ begin
+  create index if not exists idx_sales_orders_tenant on sales_orders(tenant_id);
+  create index if not exists idx_sales_orders_customer on sales_orders(customer_id);
+  create index if not exists idx_sales_orders_status on sales_orders(status);
+exception
+  when undefined_table then raise notice '⚠ Table sales_orders does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in sales_orders';
+end $$;
+
+-- Sales order items
+create table if not exists sales_order_items (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  sales_order_id uuid references sales_orders(id) on delete cascade,
+  product_id uuid references products(id) on delete cascade,
+  quantity integer not null,
+  unit_price numeric(12,2) not null,
+  discount_percent numeric(5,2) default 0,
+  subtotal numeric(12,2) not null,
+  tax_rate numeric(5,2) default 19,
+  tax_amount numeric(12,2) default 0,
+  total numeric(12,2) not null,
+  created_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_sales_order_items_tenant on sales_order_items(tenant_id);
+  create index if not exists idx_sales_order_items_order on sales_order_items(sales_order_id);
+exception
+  when undefined_table then raise notice '⚠ Table sales_order_items does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in sales_order_items';
+end $$;
+
+-- Shifts (for scheduling)
+create table if not exists shifts (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  employee_id uuid references employees(id) on delete cascade,
+  shift_date date not null,
+  start_time time not null,
+  end_time time not null,
+  break_duration integer default 60, -- minutes
+  status text check (status in ('scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled')) default 'scheduled',
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_shifts_tenant on shifts(tenant_id);
+  create index if not exists idx_shifts_employee on shifts(employee_id);
+  create index if not exists idx_shifts_date on shifts(shift_date);
+exception
+  when undefined_table then raise notice '⚠ Table shifts does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in shifts';
+end $$;
+
+-- User profiles (extended user data)
+create table if not exists users_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  full_name text,
+  avatar_url text,
+  phone text,
+  address text,
+  city text,
+  country text default 'Chile',
+  preferences jsonb default '{}'::jsonb,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_users_profiles_tenant on users_profiles(tenant_id);
+exception
+  when undefined_table then raise notice '⚠ Table users_profiles does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in users_profiles';
+end $$;
+
+-- Vehicles (for bike shop - customer bikes)
+create table if not exists vehicles (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  customer_id uuid references customers(id) on delete cascade,
+  vehicle_type text check (vehicle_type in ('bike', 'ebike', 'scooter', 'motorcycle', 'other')) default 'bike',
+  brand text,
+  model text,
+  year integer,
+  serial_number text,
+  color text,
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_vehicles_tenant on vehicles(tenant_id);
+  create index if not exists idx_vehicles_customer on vehicles(customer_id);
+  create index if not exists idx_vehicles_serial on vehicles(serial_number);
+exception
+  when undefined_table then raise notice '⚠ Table vehicles does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in vehicles';
+end $$;
+
+-- Work order items (parts/services for work orders)
+create table if not exists work_order_items (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  work_order_id uuid references work_orders(id) on delete cascade,
+  product_id uuid references products(id) on delete set null,
+  item_type text check (item_type in ('part', 'service', 'labor')) not null,
+  description text not null,
+  quantity numeric(10,2) not null default 1,
+  unit_price numeric(12,2) not null,
+  subtotal numeric(12,2) not null,
+  created_at timestamp with time zone not null default now()
+);
+
+do $$ begin
+  create index if not exists idx_work_order_items_tenant on work_order_items(tenant_id);
+  create index if not exists idx_work_order_items_work_order on work_order_items(work_order_id);
+exception
+  when undefined_table then raise notice '⚠ Table work_order_items does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in work_order_items';
+end $$;
+
+-- ============================================================================
+-- ROW LEVEL SECURITY (RLS) POLICIES FOR MISSING TABLES
+-- ============================================================================
+
+-- Enable RLS and create policies for all missing tables
+-- Each table wrapped in its own exception handler
+
+-- analytics_snapshots
+do $$ begin
+  alter table analytics_snapshots enable row level security;
+  drop policy if exists analytics_snapshots_tenant_isolation on analytics_snapshots;
+  create policy analytics_snapshots_tenant_isolation on analytics_snapshots
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- attendance_records
+do $$ begin
+  alter table attendance_records enable row level security;
+  drop policy if exists attendance_records_tenant_isolation on attendance_records;
+  create policy attendance_records_tenant_isolation on attendance_records
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- campaigns
+do $$ begin
+  alter table campaigns enable row level security;
+  drop policy if exists campaigns_tenant_isolation on campaigns;
+  create policy campaigns_tenant_isolation on campaigns
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- campaign_metrics
+do $$ begin
+  alter table campaign_metrics enable row level security;
+  drop policy if exists campaign_metrics_tenant_isolation on campaign_metrics;
+  create policy campaign_metrics_tenant_isolation on campaign_metrics
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- companies
+do $$ begin
+  alter table companies enable row level security;
+  drop policy if exists companies_tenant_isolation on companies;
+  create policy companies_tenant_isolation on companies
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- content_items
+do $$ begin
+  alter table content_items enable row level security;
+  drop policy if exists content_items_tenant_isolation on content_items;
+  create policy content_items_tenant_isolation on content_items
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- content_media
+do $$ begin
+  alter table content_media enable row level security;
+  drop policy if exists content_media_tenant_isolation on content_media;
+  create policy content_media_tenant_isolation on content_media
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- inventory_adjustments
+do $$ begin
+  alter table inventory_adjustments enable row level security;
+  drop policy if exists inventory_adjustments_tenant_isolation on inventory_adjustments;
+  create policy inventory_adjustments_tenant_isolation on inventory_adjustments
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- leave_requests
+do $$ begin
+  alter table leave_requests enable row level security;
+  drop policy if exists leave_requests_tenant_isolation on leave_requests;
+  create policy leave_requests_tenant_isolation on leave_requests
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- payroll_runs
+do $$ begin
+  alter table payroll_runs enable row level security;
+  drop policy if exists payroll_runs_tenant_isolation on payroll_runs;
+  create policy payroll_runs_tenant_isolation on payroll_runs
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- payroll_entries
+do $$ begin
+  alter table payroll_entries enable row level security;
+  drop policy if exists payroll_entries_tenant_isolation on payroll_entries;
+  create policy payroll_entries_tenant_isolation on payroll_entries
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- purchase_orders
+do $$ begin
+  alter table purchase_orders enable row level security;
+  drop policy if exists purchase_orders_tenant_isolation on purchase_orders;
+  create policy purchase_orders_tenant_isolation on purchase_orders
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- purchase_order_items
+do $$ begin
+  alter table purchase_order_items enable row level security;
+  drop policy if exists purchase_order_items_tenant_isolation on purchase_order_items;
+  create policy purchase_order_items_tenant_isolation on purchase_order_items
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- sales_orders
+do $$ begin
+  alter table sales_orders enable row level security;
+  drop policy if exists sales_orders_tenant_isolation on sales_orders;
+  create policy sales_orders_tenant_isolation on sales_orders
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- sales_order_items
+do $$ begin
+  alter table sales_order_items enable row level security;
+  drop policy if exists sales_order_items_tenant_isolation on sales_order_items;
+  create policy sales_order_items_tenant_isolation on sales_order_items
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- shifts
+do $$ begin
+  alter table shifts enable row level security;
+  drop policy if exists shifts_tenant_isolation on shifts;
+  create policy shifts_tenant_isolation on shifts
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- users_profiles
+do $$ begin
+  alter table users_profiles enable row level security;
+  drop policy if exists users_profiles_tenant_isolation on users_profiles;
+  create policy users_profiles_tenant_isolation on users_profiles
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- vehicles
+do $$ begin
+  alter table vehicles enable row level security;
+  drop policy if exists vehicles_tenant_isolation on vehicles;
+  create policy vehicles_tenant_isolation on vehicles
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- work_order_items
+do $$ begin
+  alter table work_order_items enable row level security;
+  drop policy if exists work_order_items_tenant_isolation on work_order_items;
+  create policy work_order_items_tenant_isolation on work_order_items
+    for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
 
 notify pgrst, 'reload schema';
 

@@ -1,8 +1,57 @@
 # 🧠 Project Overview
 
-This is a modular ERP-style app for managing a bikeshop. It includes accounting, inventory, POS, customer management, maintenance tracking, HR, website builder, marketing, and analytics. The app is built in **Flutter/Dart**, targeting **Windows, Android, Web**, and optionally macOS/iOS.
+This is a **MULTI-TENANT SaaS ERP** for managing bikeshops. Multiple independent businesses use the same app with **COMPLETE DATA ISOLATION**. It includes accounting, inventory, POS, customer management, maintenance tracking, HR, website builder, marketing, and analytics. Built in **Flutter/Dart**, targeting **Windows, Android, Web**, and optionally macOS/iOS.
 
 The backend uses Supabase exclusively, with PostgreSQL as the relational database, Supabase Auth for authentication (including OAuth2 support like Google login), and Supabase Storage for file management. All business logic follows an accounting-first approach, with audit-ready data structures and strong relational integrity across modules.
+
+---
+
+# 🚨 CRITICAL: MULTI-TENANT ARCHITECTURE
+
+**THIS IS A MULTI-TENANT SaaS APPLICATION - EVERY TABLE MUST HAVE `tenant_id`**
+
+## Core Principle
+- **EVERY** piece of data belongs to ONE tenant
+- **EVERY** table (except auth/system tables) MUST have `tenant_id uuid references tenants(id) on delete cascade not null`
+- **EVERY** query MUST filter by `tenant_id`
+- **EVERY** insert MUST include `tenant_id`
+- **NO EXCEPTIONS** - this is for subscription-based SaaS offering
+
+## When Creating ANY Table
+```sql
+create table table_name (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null, -- ⚠️ MANDATORY
+  -- other columns...
+);
+
+create index idx_table_name_tenant on table_name(tenant_id); -- ⚠️ MANDATORY
+```
+
+## When Creating Unique Constraints
+```sql
+unique(tenant_id, name)  -- ✅ Correct: per-tenant unique
+unique(name)             -- ❌ Wrong: global unique = shared data
+```
+
+## Row Level Security (RLS)
+- **EVERY** tenant-data table MUST have RLS enabled
+- **EVERY** operation (SELECT, INSERT, UPDATE, DELETE) MUST filter by `tenant_id = user_tenant_id()`
+- Use `public.user_tenant_id()` helper function to get current user's tenant
+
+## Tables That DON'T Need tenant_id
+- `auth.users` (Supabase auth system table)
+- `tenants` (the tenant registry itself)
+- Pure lookup/enum tables that are truly global (rare, verify first)
+
+## Before Creating ANY Feature
+1. ✅ Does the table have `tenant_id`? 
+2. ✅ Does the index include `tenant_id`?
+3. ✅ Are unique constraints scoped to `tenant_id`?
+4. ✅ Does RLS filter by `tenant_id`?
+5. ✅ Does the Flutter service filter by `tenant_id`?
+
+**If ANY answer is NO → STOP and fix it first**
 
 ---
 
@@ -100,13 +149,19 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 **For ANY new feature:**
 
 1. ✅ **Database schema first (in `core_schema.sql`)**
+   - ⚠️ **MUST have `tenant_id` column** (except auth/system tables)
+   - ⚠️ **MUST have index on `tenant_id`**
+   - ⚠️ **MUST have RLS policies filtering by `tenant_id`**
    - Check what tables/functions/triggers already exist
    - Follow existing patterns and naming conventions
    - Reuse existing helper functions
 2. ✅ Backend triggers/functions (in `core_schema.sql`)
+   - ⚠️ **MUST filter by `tenant_id` in WHERE clauses**
    - Search for similar triggers/functions first
    - Use same pattern as existing code
 3. ✅ Flutter models and services
+   - ⚠️ **MUST include `tenant_id` in queries**
+   - ⚠️ **MUST get `tenant_id` from auth context**
 4. ✅ UI implementation
 5. ✅ Navigation integration (add to main menu)
 
@@ -116,10 +171,16 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 - 🚫 No markdown guides for simple tasks
 - 🚫 No assumptions about schema - always check first
 - 🚫 No creating new patterns when existing patterns work
+- 🚫 **NO TABLES WITHOUT `tenant_id`** (except auth/system)
+- 🚫 **NO GLOBAL UNIQUE CONSTRAINTS** (must be per-tenant)
+- 🚫 **NO QUERIES WITHOUT `tenant_id` FILTER**
 - ✅ Always search for existing similar code
 - ✅ Always follow existing naming conventions
 - ✅ Always reuse existing helper functions
 - ✅ Always verify changes compile before finishing
+- ✅ **ALWAYS add `tenant_id` to new tables**
+- ✅ **ALWAYS create RLS policies for tenant isolation**
+- ✅ **ALWAYS test with multiple tenants to verify isolation**
 
 ---
 
