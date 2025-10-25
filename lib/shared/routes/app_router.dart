@@ -48,6 +48,7 @@ import '../../modules/pos/models/pos_transaction.dart';
 import '../../modules/settings/pages/settings_page.dart';
 import '../../modules/settings/pages/factory_reset_page.dart';
 import '../../modules/settings/pages/appearance_settings_page.dart';
+import '../../modules/settings/pages/user_management_page.dart';
 import '../../modules/settings/pages/bluetooth_scanner_page.dart';
 import '../../modules/settings/pages/keyboard_scanner_page.dart';
 import '../../modules/settings/pages/remote_scanner_page.dart';
@@ -875,6 +876,16 @@ class AppRouter {
             state,
             const MainLayout(
               child: AppearanceSettingsPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/users',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              child: UserManagementPage(),
             ),
           ),
         ),

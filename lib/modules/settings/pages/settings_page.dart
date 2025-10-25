@@ -47,6 +47,14 @@ class SettingsPage extends StatelessWidget {
             children: [
               _buildSettingTile(
                 context,
+                icon: Icons.people,
+                title: 'Gestión de Usuarios',
+                subtitle: 'Invitar usuarios, roles y permisos',
+                iconColor: Colors.blue,
+                onTap: () => context.push('/settings/users'),
+              ),
+              _buildSettingTile(
+                context,
                 icon: Icons.info,
                 title: 'Información de la Empresa',
                 subtitle: 'Nombre, RUT, dirección, logo',

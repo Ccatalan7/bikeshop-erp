@@ -5961,7 +5961,8 @@ begin
   -- Get account type to determine balance calculation
   select type into v_account
   from accounts
-  where id = p_account_id;
+  where id = p_account_id
+    and tenant_id = user_tenant_id();
   
   if not found then
     raise exception 'Account not found: %', p_account_id;
@@ -5977,7 +5978,9 @@ begin
   where jl.account_id = p_account_id
     and je.entry_date >= p_start_date
     and je.entry_date <= p_end_date
-    and je.status = 'posted';
+    and je.status = 'posted'
+    and jl.tenant_id = user_tenant_id()
+    and je.tenant_id = user_tenant_id();
   
   -- Calculate balance based on account type
   -- Assets and Expenses: Debit increases balance (debit - credit)
@@ -6032,13 +6035,15 @@ begin
         coalesce(sum(jl.credit_amount), 0) - coalesce(sum(jl.debit_amount), 0)
     end::numeric(14,2) as balance
   from accounts a
-  left join journal_lines jl on jl.account_id = a.id
+  left join journal_lines jl on jl.account_id = a.id AND jl.tenant_id = user_tenant_id()
   left join journal_entries je on je.id = jl.entry_id
     and je.entry_date >= p_start_date
     and je.entry_date <= p_end_date
     and je.status = 'posted'
+    and je.tenant_id = user_tenant_id()
   where a.type = p_account_type
     and a.is_active = true
+    and a.tenant_id = user_tenant_id()
   group by a.id, a.code, a.name, a.category, a.parent_id, a.type
   order by a.code;
 end;
@@ -6082,13 +6087,15 @@ begin
         coalesce(sum(jl.credit_amount), 0) - coalesce(sum(jl.debit_amount), 0)
     end::numeric(14,2) as balance
   from accounts a
-  left join journal_lines jl on jl.account_id = a.id
+  left join journal_lines jl on jl.account_id = a.id AND jl.tenant_id = user_tenant_id()
   left join journal_entries je on je.id = jl.entry_id
     and je.entry_date >= p_start_date
     and je.entry_date <= p_end_date
     and je.status = 'posted'
+    and je.tenant_id = user_tenant_id()
   where a.category = p_account_category
     and a.is_active = true
+    and a.tenant_id = user_tenant_id()
   group by a.id, a.code, a.name, a.type, a.parent_id
   order by a.code;
 end;
@@ -6129,12 +6136,14 @@ begin
         coalesce(sum(jl.credit_amount), 0) - coalesce(sum(jl.debit_amount), 0)
     end::numeric(14,2) as balance
   from accounts a
-  left join journal_lines jl on jl.account_id = a.id
+  left join journal_lines jl on jl.account_id = a.id AND jl.tenant_id = user_tenant_id()
   left join journal_entries je on je.id = jl.entry_id
     and je.entry_date >= p_start_date
     and je.entry_date <= p_end_date
     and je.status = 'posted'
+    and je.tenant_id = user_tenant_id()
   where a.is_active = true
+    and a.tenant_id = user_tenant_id()
   group by a.id, a.code, a.name, a.type, a.category
   having coalesce(sum(jl.debit_amount), 0) <> 0 
       or coalesce(sum(jl.credit_amount), 0) <> 0
@@ -6173,7 +6182,10 @@ begin
   where je.entry_date >= p_start_date
     and je.entry_date <= p_end_date
     and je.status = 'posted'
-    and a.type = 'income';
+    and a.type = 'income'
+    and jl.tenant_id = user_tenant_id()
+    and je.tenant_id = user_tenant_id()
+    and a.tenant_id = user_tenant_id();
   
   -- Calculate total expenses (debit balance for expense accounts)
   select coalesce(sum(
@@ -6190,7 +6202,10 @@ begin
   where je.entry_date >= p_start_date
     and je.entry_date <= p_end_date
     and je.status = 'posted'
-    and a.type = 'expense';
+    and a.type = 'expense'
+    and jl.tenant_id = user_tenant_id()
+    and je.tenant_id = user_tenant_id()
+    and a.tenant_id = user_tenant_id();
   
   -- Net Income = Income - Expenses
   v_net_income := v_total_income - v_total_expense;
@@ -6218,7 +6233,8 @@ declare
 begin
   select type into v_account
   from accounts
-  where id = p_account_id;
+  where id = p_account_id
+    and tenant_id = user_tenant_id();
   
   if not found then
     raise exception 'Account not found: %', p_account_id;
@@ -6233,7 +6249,9 @@ begin
   inner join journal_entries je on je.id = jl.entry_id
   where jl.account_id = p_account_id
     and je.entry_date <= p_as_of_date
-    and je.status = 'posted';
+    and je.status = 'posted'
+    and jl.tenant_id = user_tenant_id()
+    and je.tenant_id = user_tenant_id();
   
   -- Calculate balance based on account type
   if v_account.type in ('asset', 'expense') then
@@ -6282,12 +6300,14 @@ begin
         coalesce(sum(jl.credit_amount), 0) - coalesce(sum(jl.debit_amount), 0)
     end::numeric(14,2) as balance
   from accounts a
-  left join journal_lines jl on jl.account_id = a.id
+  left join journal_lines jl on jl.account_id = a.id AND jl.tenant_id = user_tenant_id()
   left join journal_entries je on je.id = jl.entry_id
     and je.entry_date <= p_as_of_date
     and je.status = 'posted'
+    and je.tenant_id = user_tenant_id()
   where a.type = p_account_type
     and a.is_active = true
+    and a.tenant_id = user_tenant_id()
   group by a.id, a.code, a.name, a.category, a.parent_id, a.type
   order by a.code;
 end;
@@ -6326,7 +6346,10 @@ begin
   inner join accounts a on a.id = jl.account_id
   where je.entry_date <= p_as_of_date
     and je.status = 'posted'
-    and a.type = 'asset';
+    and a.type = 'asset'
+    and jl.tenant_id = user_tenant_id()
+    and je.tenant_id = user_tenant_id()
+    and a.tenant_id = user_tenant_id();
   
   -- Calculate total liabilities
   select coalesce(sum(
@@ -6338,7 +6361,10 @@ begin
   inner join accounts a on a.id = jl.account_id
   where je.entry_date <= p_as_of_date
     and je.status = 'posted'
-    and a.type = 'liability';
+    and a.type = 'liability'
+    and jl.tenant_id = user_tenant_id()
+    and je.tenant_id = user_tenant_id()
+    and a.tenant_id = user_tenant_id();
   
   -- Calculate total equity
   select coalesce(sum(
@@ -6350,7 +6376,10 @@ begin
   inner join accounts a on a.id = jl.account_id
   where je.entry_date <= p_as_of_date
     and je.status = 'posted'
-    and a.type = 'equity';
+    and a.type = 'equity'
+    and jl.tenant_id = user_tenant_id()
+    and je.tenant_id = user_tenant_id()
+    and a.tenant_id = user_tenant_id();
   
   -- Calculate difference (should be near zero)
   v_diff := v_assets - (v_liabilities + v_equity);
@@ -6403,13 +6432,15 @@ begin
       else 0
     end::numeric(14,2) as amount
   from accounts a
-  left join journal_lines jl on jl.account_id = a.id
+  left join journal_lines jl on jl.account_id = a.id AND jl.tenant_id = user_tenant_id()
   left join journal_entries je on je.id = jl.entry_id
     and je.entry_date >= p_start_date
     and je.entry_date <= p_end_date
     and je.status = 'posted'
+    and je.tenant_id = user_tenant_id()
   where a.type in ('income', 'expense')
     and a.is_active = true
+    and a.tenant_id = user_tenant_id()
   group by a.id, a.code, a.name, a.type, a.category
   having (coalesce(sum(jl.debit_amount), 0) <> 0 
        or coalesce(sum(jl.credit_amount), 0) <> 0)
@@ -6457,6 +6488,9 @@ as $$
           and a.type = 'income'
           and je.entry_date >= mw.period_start
           and je.entry_date < mw.period_start + interval '1 month'
+          and je.tenant_id = user_tenant_id()
+          and jl.tenant_id = user_tenant_id()
+          and a.tenant_id = user_tenant_id()
       ),
       0
     )::numeric(14,2) as income,
@@ -6471,6 +6505,9 @@ as $$
           and a.type = 'expense'
           and je.entry_date >= mw.period_start
           and je.entry_date < mw.period_start + interval '1 month'
+          and je.tenant_id = user_tenant_id()
+          and jl.tenant_id = user_tenant_id()
+          and a.tenant_id = user_tenant_id()
       ),
       0
     )::numeric(14,2) as expense
@@ -6513,6 +6550,9 @@ as $$
           and a.type = 'income'
           and je.entry_date >= dw.period_start
           and je.entry_date < dw.period_start + interval '1 day'
+          and je.tenant_id = user_tenant_id()
+          and jl.tenant_id = user_tenant_id()
+          and a.tenant_id = user_tenant_id()
       ),
       0
     )::numeric(14,2) as income,
@@ -6527,6 +6567,9 @@ as $$
           and a.type = 'expense'
           and je.entry_date >= dw.period_start
           and je.entry_date < dw.period_start + interval '1 day'
+          and je.tenant_id = user_tenant_id()
+          and jl.tenant_id = user_tenant_id()
+          and a.tenant_id = user_tenant_id()
       ),
       0
     )::numeric(14,2) as expense
@@ -6559,10 +6602,11 @@ begin
     coalesce(sum(jl.debit_amount), 0) - coalesce(sum(jl.credit_amount), 0)
       as amount
   from accounts a
-  join journal_lines jl on jl.account_id = a.id
-  join journal_entries je on je.id = jl.entry_id
+  join journal_lines jl on jl.account_id = a.id AND jl.tenant_id = user_tenant_id()
+  join journal_entries je on je.id = jl.entry_id AND je.tenant_id = user_tenant_id()
   where a.type = 'expense'
     and a.is_active = true
+    and a.tenant_id = user_tenant_id()
     and je.status = 'posted'
     and je.entry_date >= p_start_date
     and je.entry_date <= p_end_date
@@ -6622,12 +6666,14 @@ begin
       else 0
     end::numeric(14,2) as amount
   from accounts a
-  left join journal_lines jl on jl.account_id = a.id
+  left join journal_lines jl on jl.account_id = a.id AND jl.tenant_id = user_tenant_id()
   left join journal_entries je on je.id = jl.entry_id
     and je.entry_date <= p_as_of_date
     and je.status = 'posted'
+    and je.tenant_id = user_tenant_id()
   where a.type in ('asset', 'liability', 'equity')
     and a.is_active = true
+    and a.tenant_id = user_tenant_id()
   group by a.id, a.code, a.name, a.type, a.category
   having (coalesce(sum(jl.debit_amount), 0) <> 0 
        or coalesce(sum(jl.credit_amount), 0) <> 0)
@@ -10327,21 +10373,9 @@ begin
 end $$;
 
 --------------------------------------------------------------------------------
--- RLS HELPER FUNCTIONS
 --------------------------------------------------------------------------------
 
 -- Function to extract tenant_id from JWT (in public schema, not auth)
-create or replace function public.user_tenant_id()
-returns uuid
-language sql stable
-security definer
-as $$
-  select coalesce(
-    (auth.jwt() -> 'user_metadata' ->> 'tenant_id')::uuid,
-    null
-  );
-$$;
-
 -- Function to get all users in a tenant (for user management UI)
 create or replace function get_tenant_users(p_tenant_id uuid)
 returns table (
@@ -10362,19 +10396,92 @@ begin
   return query
   select 
     u.id,
-    u.email,
-    (u.raw_user_meta_data->>'role')::text as role,
-    (u.raw_user_meta_data->'permissions')::jsonb as permissions,
+    u.email::text,
+    (u.raw_app_meta_data->>'role')::text as role,
+    (u.raw_app_meta_data->'permissions')::jsonb as permissions,
     u.banned_until is null as is_active,
     u.last_sign_in_at,
     u.created_at,
     e.id as employee_id,
-    e.name as employee_name
+    (e.first_name || ' ' || e.last_name) as employee_name
   from auth.users u
   left join employees e on e.user_id = u.id and e.tenant_id = p_tenant_id
-  where (u.raw_user_meta_data->>'tenant_id')::uuid = p_tenant_id
+  where (u.raw_app_meta_data->>'tenant_id')::uuid = p_tenant_id
   order by u.created_at desc;
 end;
+$$;
+
+-- Function to delete a user (must be called by tenant manager)
+-- This is a security definer function that can delete auth.users
+create or replace function delete_tenant_user(p_user_id uuid)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  v_tenant_id uuid;
+  v_caller_role text;
+  v_caller_tenant_id uuid;
+  v_caller_user_id uuid;
+begin
+  -- Get caller's user ID from the session
+  v_caller_user_id := auth.uid();
+  
+  if v_caller_user_id is null then
+    raise exception 'Not authenticated';
+  end if;
+  
+  -- Get caller's tenant_id and role from auth.users metadata
+  select 
+    (raw_app_meta_data->>'tenant_id')::uuid,
+    (raw_app_meta_data->>'role')::text
+  into v_caller_tenant_id, v_caller_role
+  from auth.users
+  where id = v_caller_user_id;
+  
+  -- Only managers can delete users
+  if v_caller_role != 'manager' then
+    raise exception 'Only managers can delete users. Your role: %', v_caller_role;
+  end if;
+  
+  -- Get the target user's tenant_id
+  select (raw_app_meta_data->>'tenant_id')::uuid into v_tenant_id
+  from auth.users
+  where id = p_user_id;
+  
+  -- Verify same tenant
+  if v_tenant_id != v_caller_tenant_id then
+    raise exception 'Cannot delete user from different tenant';
+  end if;
+  
+  -- Unlink from employee
+  update employees
+  set user_id = null
+  where user_id = p_user_id;
+  
+  -- Delete the auth user
+  delete from auth.users where id = p_user_id;
+  
+  raise notice 'User % deleted successfully', p_user_id;
+end;
+$$;
+
+--------------------------------------------------------------------------------
+-- HELPER FUNCTION: Get current user's tenant_id from database
+--------------------------------------------------------------------------------
+create or replace function public.user_tenant_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (raw_app_meta_data->>'tenant_id')::uuid,
+    (raw_user_meta_data->>'tenant_id')::uuid
+  )
+  from auth.users
+  where id = auth.uid();
 $$;
 
 --------------------------------------------------------------------------------
@@ -10438,6 +10545,81 @@ begin
   alter table payment_methods enable row level security;
 
   raise notice '✓ Enabled RLS on all tables';
+end $$;
+
+-- Drop all existing policies before recreating (idempotent deployment)
+do $$ begin
+  drop policy if exists "tenant_select_own" on tenants;
+  drop policy if exists "tenant_update_own" on tenants;
+  drop policy if exists "user_activity_log_select" on user_activity_log;
+  drop policy if exists "user_activity_log_insert" on user_activity_log;
+  drop policy if exists "customers_select" on customers;
+  drop policy if exists "customers_insert" on customers;
+  drop policy if exists "customers_update" on customers;
+  drop policy if exists "customers_delete" on customers;
+  drop policy if exists "products_select" on products;
+  drop policy if exists "products_insert" on products;
+  drop policy if exists "products_update" on products;
+  drop policy if exists "products_delete" on products;
+  drop policy if exists "categories_select" on categories;
+  drop policy if exists "categories_insert" on categories;
+  drop policy if exists "categories_update" on categories;
+  drop policy if exists "categories_delete" on categories;
+  drop policy if exists "product_categories_select" on product_categories;
+  drop policy if exists "product_categories_insert" on product_categories;
+  drop policy if exists "product_categories_update" on product_categories;
+  drop policy if exists "product_categories_delete" on product_categories;
+  drop policy if exists "product_brands_select" on product_brands;
+  drop policy if exists "product_brands_insert" on product_brands;
+  drop policy if exists "product_brands_update" on product_brands;
+  drop policy if exists "product_brands_delete" on product_brands;
+  drop policy if exists "stock_movements_select" on stock_movements;
+  drop policy if exists "stock_movements_insert" on stock_movements;
+  drop policy if exists "sales_invoices_select" on sales_invoices;
+  drop policy if exists "sales_invoices_insert" on sales_invoices;
+  drop policy if exists "sales_invoices_update" on sales_invoices;
+  drop policy if exists "sales_invoices_delete" on sales_invoices;
+  drop policy if exists "sales_payments_select" on sales_payments;
+  drop policy if exists "sales_payments_insert" on sales_payments;
+  drop policy if exists "sales_payments_delete" on sales_payments;
+  drop policy if exists "suppliers_select" on suppliers;
+  drop policy if exists "suppliers_insert" on suppliers;
+  drop policy if exists "suppliers_update" on suppliers;
+  drop policy if exists "suppliers_delete" on suppliers;
+  drop policy if exists "purchase_invoices_select" on purchase_invoices;
+  drop policy if exists "purchase_invoices_insert" on purchase_invoices;
+  drop policy if exists "purchase_invoices_update" on purchase_invoices;
+  drop policy if exists "purchase_invoices_delete" on purchase_invoices;
+  drop policy if exists "purchase_payments_select" on purchase_payments;
+  drop policy if exists "purchase_payments_insert" on purchase_payments;
+  drop policy if exists "purchase_payments_delete" on purchase_payments;
+  drop policy if exists "accounts_select" on accounts;
+  drop policy if exists "accounts_insert" on accounts;
+  drop policy if exists "accounts_update" on accounts;
+  drop policy if exists "accounts_delete" on accounts;
+  drop policy if exists "journal_entries_select" on journal_entries;
+  drop policy if exists "journal_entries_insert" on journal_entries;
+  drop policy if exists "employees_select" on employees;
+  drop policy if exists "employees_insert" on employees;
+  drop policy if exists "employees_update" on employees;
+  drop policy if exists "employees_delete" on employees;
+  drop policy if exists "attendances_select" on attendances;
+  drop policy if exists "attendances_insert" on attendances;
+  drop policy if exists "attendances_update" on attendances;
+  drop policy if exists "website_settings_select" on website_settings;
+  drop policy if exists "website_settings_insert" on website_settings;
+  drop policy if exists "website_settings_update" on website_settings;
+  drop policy if exists "website_blocks_select" on website_blocks;
+  drop policy if exists "website_blocks_insert" on website_blocks;
+  drop policy if exists "website_blocks_update" on website_blocks;
+  drop policy if exists "website_blocks_delete" on website_blocks;
+  drop policy if exists "online_orders_select" on online_orders;
+  drop policy if exists "online_orders_insert" on online_orders;
+  drop policy if exists "online_orders_update" on online_orders;
+  drop policy if exists "payment_methods_select" on payment_methods;
+  drop policy if exists "payment_methods_insert" on payment_methods;
+  drop policy if exists "payment_methods_update" on payment_methods;
+  raise notice '✓ Dropped all existing RLS policies (idempotent deployment)';
 end $$;
 
 -- Tenants table: Users can only see their own tenant
@@ -10700,7 +10882,7 @@ begin
     -- ========================================================================
     v_tenant_id := v_invitation.tenant_id;
     
-    new.raw_user_meta_data := jsonb_build_object(
+    new.raw_app_meta_data := jsonb_build_object(
       'tenant_id', v_tenant_id,
       'role', v_invitation.role,
       'permissions', v_invitation.permissions
@@ -10745,7 +10927,7 @@ begin
     returning id into v_tenant_id;
     
     -- Assign as manager with full permissions
-    new.raw_user_meta_data := jsonb_build_object(
+    new.raw_app_meta_data := jsonb_build_object(
       'tenant_id', v_tenant_id,
       'role', 'manager',
       'permissions', jsonb_build_object(

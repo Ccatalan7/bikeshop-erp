@@ -14,8 +14,10 @@ import 'shared/services/inventory_service.dart';
 import 'shared/services/payment_method_service.dart';
 import 'shared/services/navigation_service.dart';
 import 'shared/services/tenant_service.dart';
+import 'shared/services/user_management_service.dart';
 import 'shared/config/supabase_config.dart';
 import 'modules/inventory/services/category_service.dart';
+import 'modules/inventory/services/inventory_service.dart' as module_inventory;
 import 'modules/inventory/services/brand_service.dart';
 import 'modules/crm/services/customer_service.dart';
 import 'modules/accounting/services/accounting_service.dart';
@@ -111,9 +113,16 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => NavigationService()),
 
         // Business services
+        // Shared inventory service (used by POS)
         ChangeNotifierProvider(
             create: (context) => InventoryService(
                   db: Provider.of<DatabaseService>(context, listen: false),
+                )),
+        // Module inventory service (used by ProductListPage)
+        ChangeNotifierProvider(
+            create: (context) => module_inventory.InventoryService(
+                  Provider.of<DatabaseService>(context, listen: false),
+                  Provider.of<TenantService>(context, listen: false),
                 )),
         ChangeNotifierProvider(
             create: (context) => CategoryService(
@@ -152,6 +161,10 @@ class VinabikeApp extends StatelessWidget {
                 )),
         ChangeNotifierProvider(
             create: (context) => HRService(
+                  Provider.of<TenantService>(context, listen: false),
+                )),
+        Provider(
+            create: (context) => UserManagementService(
                   Provider.of<TenantService>(context, listen: false),
                 )),
         ChangeNotifierProvider(create: (_) => WebsiteService()),

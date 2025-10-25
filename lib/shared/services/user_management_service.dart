@@ -36,16 +36,16 @@ class UserManagementService {
 
   /// Invite a new user to the current tenant
   /// 
-  /// Creates an auth.users record with:
-  /// - email and password
-  /// - tenant_id (current tenant)
-  /// - role (manager, cashier, mechanic, accountant)
-  /// - permissions (custom permission map)
+  /// Creates an invitation record that will be used when the user signs up.
+  /// The auto-signup trigger will assign them to this tenant with the specified role.
   /// 
-  /// Optionally links to an existing employee record
-  Future<void> inviteUser({
+  /// Parameters:
+  /// - email: Email address of the user to invite
+  /// - role: manager, cashier, mechanic, accountant, viewer
+  /// - permissions: Custom permission map (optional, defaults based on role)
+  /// - employeeId: Link to existing employee record (optional)
+  Future<String> inviteUser({
     required String email,
-    required String password,
     required String role,
     Map<String, bool>? permissions,
     String? employeeId,
@@ -55,45 +55,36 @@ class UserManagementService {
       throw Exception('No tenant_id found. Cannot invite user.');
     }
 
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null) {
+      throw Exception('Not authenticated. Cannot invite user.');
+    }
+
     try {
       // Default permissions based on role
       final defaultPermissions = _getDefaultPermissions(role);
       final finalPermissions = permissions ?? defaultPermissions;
 
-      // Create auth user using admin API
-      // Note: This requires service_role key or proper RLS policies
-      final authResponse = await _supabase.auth.admin.createUser(
-        AdminUserAttributes(
-          email: email,
-          password: password,
-          emailConfirm: true,
-          userMetadata: {
-            'tenant_id': tenantId,
-            'role': role,
-            'permissions': finalPermissions,
-          },
-        ),
-      );
+      // Create invitation record
+      final response = await _supabase.from('user_invitations').insert({
+        'tenant_id': tenantId,
+        'email': email.toLowerCase().trim(),
+        'role': role,
+        'permissions': finalPermissions,
+        'invited_by': currentUserId,
+        'status': 'pending',
+        'expires_at': DateTime.now().add(const Duration(days: 7)).toIso8601String(),
+      }).select().single();
 
-      // Link to employee if provided
-      if (employeeId != null) {
-        await _supabase.from('employees').update({
-          'user_id': authResponse.user!.id,
-        }).eq('id', employeeId);
-      }
+      final invitationId = response['id'] as String;
 
-      // Log the action
-      await _logUserAction(
-        userId: authResponse.user!.id,
-        action: 'user_created',
-        details: {
-          'email': email,
-          'role': role,
-          'created_by': _supabase.auth.currentUser?.id,
-        },
-      );
+      // TODO: Send invitation email with signup link
+      // For now, user can just sign up normally and the trigger will handle it
 
-      debugPrint('✅ User invited successfully: $email');
+      debugPrint('✅ User invited successfully: $email (invitation ID: $invitationId)');
+      debugPrint('📧 User should sign up at your app URL with email: $email');
+      
+      return invitationId;
     } catch (e) {
       debugPrint('❌ Error inviting user: $e');
       rethrow;
@@ -179,17 +170,14 @@ class UserManagementService {
 
   /// Delete a user
   /// 
-  /// Unlinks from employee first, then deletes auth record
+  /// Uses a database function to securely delete the user.
+  /// Only managers can delete users, and only from their own tenant.
   Future<void> deleteUser(String userId) async {
     try {
-      // Unlink from employee
-      await _supabase
-          .from('employees')
-          .update({'user_id': null})
-          .eq('user_id', userId);
-
-      // Delete auth user
-      await _supabase.auth.admin.deleteUser(userId);
+      // Call the database function (security definer)
+      await _supabase.rpc('delete_tenant_user', params: {
+        'p_user_id': userId,
+      });
 
       debugPrint('✅ User deleted: $userId');
     } catch (e) {

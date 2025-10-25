@@ -67,8 +67,12 @@ class AuthService extends ChangeNotifier {
       String? redirectTo;
       
       if (kIsWeb) {
-        // For web, redirect back to the app
-        redirectTo = Uri.base.origin + '/';
+        // For web, redirect back to the current origin
+        final origin = Uri.base.origin;
+        redirectTo = origin.endsWith('/') ? origin : '$origin/';
+        if (kDebugMode) {
+          print('🔐 Google OAuth redirect URL: $redirectTo');
+        }
       } else {
         // For desktop/mobile, use deep link
         redirectTo = 'io.supabase.vinabikeerp://login-callback/';
@@ -80,12 +84,16 @@ class AuthService extends ChangeNotifier {
         authScreenLaunchMode: LaunchMode.externalApplication,
       );
       
+      if (kDebugMode) {
+        print('🔐 OAuth response: $response');
+      }
+      
       // For web/desktop OAuth, the session is handled via redirect callback
       // The auth state listener will update automatically
       return response;
     } catch (e) {
       if (kDebugMode) {
-        print('Google Sign-In error: $e');
+        print('❌ Google Sign-In error: $e');
       }
       throw AuthException(
           'Error al iniciar sesión con Google: ${e.toString()}');
