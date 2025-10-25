@@ -63,10 +63,9 @@ class _ProductListPageState extends State<ProductListPage> {
   @override
   void initState() {
     super.initState();
-    final database = Provider.of<DatabaseService>(context, listen: false);
-    _inventoryService = inventory_services.InventoryService(database);
-    _categoryService = CategoryService(database);
-    _purchaseService = PurchaseService(database);
+    _inventoryService = Provider.of<inventory_services.InventoryService>(context, listen: false);
+    _categoryService = Provider.of<CategoryService>(context, listen: false);
+    _purchaseService = Provider.of<PurchaseService>(context, listen: false);
 
     // Don't set initial category/supplier until categories are loaded
     _loadCategories().then((_) {

@@ -77,10 +77,9 @@ class _PegasTablePageState extends State<PegasTablePage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    final db = Provider.of<DatabaseService>(context, listen: false);
-    _databaseService = db;
-    _bikeshopService = BikeshopService(db);
-    _customerService = CustomerService(db);
+    _databaseService = Provider.of<DatabaseService>(context, listen: false);
+    _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
+    _customerService = Provider.of<CustomerService>(context, listen: false);
     _loadData();
   }
 

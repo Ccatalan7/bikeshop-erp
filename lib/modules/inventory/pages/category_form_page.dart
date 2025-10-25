@@ -45,9 +45,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
   @override
   void initState() {
     super.initState();
-    _categoryService = CategoryService(
-      Provider.of<DatabaseService>(context, listen: false),
-    );
+    _categoryService = Provider.of<CategoryService>(context, listen: false);
 
     _loadInitialData();
   }

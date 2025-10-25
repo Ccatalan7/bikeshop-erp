@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../accounting/services/accounting_service.dart';
 import '../models/sales_models.dart';
 
@@ -11,10 +12,11 @@ class SalesService extends ChangeNotifier {
   static const _invoicesCollection = 'sales_invoices';
   static const _paymentsCollection = 'sales_payments';
 
-  SalesService(this._databaseService, this._accountingService);
+  SalesService(this._databaseService, this._accountingService, this._tenantService);
 
   DatabaseService _databaseService;
   AccountingService _accountingService;
+  final TenantService _tenantService;
 
   RealtimeChannel? _invoiceChannel;
   RealtimeChannel? _paymentChannel;
@@ -99,7 +101,9 @@ class SalesService extends ChangeNotifier {
 
       Map<String, dynamic> result;
       if (isNew) {
-        result = await _databaseService.insert(_invoicesCollection, payload);
+        // Add tenant_id for new invoices
+        final invoiceData = _tenantService.addTenantId(payload);
+        result = await _databaseService.insert(_invoicesCollection, invoiceData);
       } else {
         result = await _databaseService.update(
             _invoicesCollection, invoice.id!, payload);

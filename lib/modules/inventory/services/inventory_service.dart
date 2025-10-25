@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/inventory_models.dart';
 
 class InventoryService extends ChangeNotifier {
   final DatabaseService _db;
+  final TenantService _tenantService;
 
-  InventoryService(this._db);
+  InventoryService(this._db, this._tenantService);
 
   // Product operations
   Future<List<Product>> getProducts({
@@ -85,7 +87,9 @@ class InventoryService extends ChangeNotifier {
         throw Exception('Ya existe un producto con este SKU');
       }
 
-      final data = await _db.insert('products', product.toJson());
+      // Add tenant_id to product data
+      final productData = _tenantService.addTenantId(product.toJson());
+      final data = await _db.insert('products', productData);
 
       // Create initial stock movement if inventory > 0
       if (product.inventoryQty > 0) {

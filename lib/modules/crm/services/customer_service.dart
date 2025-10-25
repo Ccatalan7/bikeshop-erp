@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/crm_models.dart';
 
 class CustomerService extends ChangeNotifier {
   final DatabaseService _db;
+  final TenantService _tenantService;
 
-  CustomerService(this._db);
+  CustomerService(this._db, this._tenantService);
 
   // Customer operations
   Future<List<Customer>> getCustomers({String? searchTerm}) async {
@@ -74,7 +76,9 @@ class CustomerService extends ChangeNotifier {
         customerToSave = customer.copyWith(rut: formattedRut);
       }
 
-      final data = await _db.insert('customers', customerToSave.toJson());
+      // Add tenant_id to customer data
+      final customerData = _tenantService.addTenantId(customerToSave.toJson());
+      final data = await _db.insert('customers', customerData);
 
       // Create initial loyalty record
       final customerId = data['id']?.toString();

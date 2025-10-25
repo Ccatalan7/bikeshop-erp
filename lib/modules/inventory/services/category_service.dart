@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../models/category_models.dart' as models;
 
 class CategoryService extends ChangeNotifier {
   final DatabaseService _db;
+  final TenantService _tenantService;
 
-  CategoryService(this._db);
+  CategoryService(this._db, this._tenantService);
 
   // Category operations
   Future<List<models.Category>> getCategories({
@@ -77,7 +79,9 @@ class CategoryService extends ChangeNotifier {
         throw Exception('Ya existe una categoría con esta ruta: ${category.fullPath}');
       }
 
-      final data = await _db.insert('product_categories', category.toJson());
+      // Add tenant_id to category data
+      final categoryData = _tenantService.addTenantId(category.toJson());
+      final data = await _db.insert('product_categories', categoryData);
       return models.Category.fromJson(data);
     } catch (e) {
       if (kDebugMode) print('Error creating category: $e');

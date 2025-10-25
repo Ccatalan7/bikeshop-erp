@@ -120,42 +120,31 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
-    // Check if running on Windows desktop
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Google Sign-In en Windows'),
-            content: const Text(
-              'Google Sign-In requiere configuración adicional en aplicaciones de escritorio.\n\n'
-              'Por ahora, por favor usa el inicio de sesión con correo y contraseña.\n\n'
-              'Google Sign-In está disponible en la versión web y móvil de la aplicación.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Entendido'),
-              ),
-            ],
-          ),
-        );
-      }
-      return;
-    }
-
     setState(() => _isLoading = true);
 
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
-      final success = await authService.signInWithGoogle();
+      await authService.signInWithGoogle();
 
-      if (success && mounted) {
-        // The auth state listener will handle navigation
-        context.go('/dashboard');
+      // For web, OAuth opens in new tab/window and redirects back
+      // For desktop, OAuth opens in browser
+      // The auth state listener will handle navigation automatically
+      // No need to manually navigate here - just show loading state
+      
+      if (kIsWeb) {
+        // On web, show message that redirect is happening
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Redirigiendo a Google...'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } on AuthException catch (e) {
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error con Google: ${e.message}'),
@@ -165,6 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
@@ -173,11 +163,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
+    // Don't set _isLoading to false here - let the auth state listener handle it
   }
 
   String _mapSupabaseError(AuthException e) {

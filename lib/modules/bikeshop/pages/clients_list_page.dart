@@ -36,9 +36,8 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
   @override
   void initState() {
     super.initState();
-    final db = Provider.of<DatabaseService>(context, listen: false);
-    _customerService = CustomerService(db);
-    _bikeshopService = BikeshopService(db);
+    _customerService = Provider.of<CustomerService>(context, listen: false);
+    _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
     _loadData();
   }
 

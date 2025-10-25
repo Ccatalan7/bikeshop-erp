@@ -3,14 +3,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../accounting/services/accounting_service.dart';
 import '../models/purchase_invoice.dart';
 import '../models/purchase_payment.dart';
 
 class PurchaseService extends ChangeNotifier {
-  PurchaseService(this._db);
+  PurchaseService(this._db, this._tenantService);
 
   final DatabaseService _db;
+  final TenantService _tenantService;
   static AccountingService? _accountingService;
 
   // Helper to get Supabase client
@@ -146,7 +148,9 @@ class PurchaseService extends ChangeNotifier {
       PurchaseInvoice saved;
       if (invoice.id == null) {
         final payload = invoice.toJson()..remove('id');
-        final result = await _db.insert('purchase_invoices', payload);
+        // Add tenant_id for new invoices
+        final invoiceData = _tenantService.addTenantId(payload);
+        final result = await _db.insert('purchase_invoices', invoiceData);
         saved = PurchaseInvoice.fromJson(result);
       } else {
         final payload = invoice.toJson();

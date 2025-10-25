@@ -81,11 +81,10 @@ class _ProductFormPageState extends State<ProductFormPage> {
   @override
   void initState() {
     super.initState();
-    final database = Provider.of<DatabaseService>(context, listen: false);
-    _inventoryService = inventory_services.InventoryService(database);
-    _categoryService = CategoryService(database);
-    _purchaseService = PurchaseService(database);
-    _brandService = BrandService(database);
+    _inventoryService = Provider.of<inventory_services.InventoryService>(context, listen: false);
+    _categoryService = Provider.of<CategoryService>(context, listen: false);
+    _purchaseService = Provider.of<PurchaseService>(context, listen: false);
+    _brandService = Provider.of<BrandService>(context, listen: false);
 
     _inventoryQtyController.text = '0';
     _minStockController.text = '1';

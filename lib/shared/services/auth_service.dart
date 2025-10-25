@@ -63,16 +63,45 @@ class AuthService extends ChangeNotifier {
 
   Future<bool> signInWithGoogle() async {
     try {
-      // For desktop/mobile apps, Supabase handles the OAuth flow automatically
-      // The session will be updated via the auth state listener
+      // Determine redirect URL based on platform
+      String? redirectTo;
+      
+      if (kIsWeb) {
+        // For web, redirect back to the app
+        redirectTo = Uri.base.origin + '/';
+      } else {
+        // For desktop/mobile, use deep link
+        redirectTo = 'io.supabase.vinabikeerp://login-callback/';
+      }
+      
       final response = await _client.auth.signInWithOAuth(
         OAuthProvider.google,
-        // No redirectTo needed - Supabase handles it automatically for desktop
+        redirectTo: redirectTo,
+        authScreenLaunchMode: LaunchMode.externalApplication,
       );
+      
+      // For web/desktop OAuth, the session is handled via redirect callback
+      // The auth state listener will update automatically
       return response;
     } catch (e) {
+      if (kDebugMode) {
+        print('Google Sign-In error: $e');
+      }
       throw AuthException(
           'Error al iniciar sesión con Google: ${e.toString()}');
+    }
+  }
+
+  /// Force refresh the current session to get updated user metadata
+  /// Call this after updating user metadata in the database
+  Future<void> refreshSession() async {
+    try {
+      await _client.auth.refreshSession();
+      _syncAuth(_client.auth.currentSession);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Session refresh error: $e');
+      }
     }
   }
 

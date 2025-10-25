@@ -31,9 +31,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
   @override
   void initState() {
     super.initState();
-    _customerService = CustomerService(
-      Provider.of<DatabaseService>(context, listen: false),
-    );
+    _customerService = Provider.of<CustomerService>(context, listen: false);
     _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
     _loadCustomerData();
   }

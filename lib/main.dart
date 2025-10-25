@@ -13,8 +13,10 @@ import 'shared/services/database_service.dart';
 import 'shared/services/inventory_service.dart';
 import 'shared/services/payment_method_service.dart';
 import 'shared/services/navigation_service.dart';
+import 'shared/services/tenant_service.dart';
 import 'shared/config/supabase_config.dart';
 import 'modules/inventory/services/category_service.dart';
+import 'modules/inventory/services/brand_service.dart';
 import 'modules/crm/services/customer_service.dart';
 import 'modules/accounting/services/accounting_service.dart';
 import 'modules/accounting/services/financial_reports_service.dart';
@@ -51,12 +53,22 @@ Future<void> main() async {
       ),
     );
 
-    // Handle deep links for OAuth callbacks on desktop
+    // Handle deep links for OAuth callbacks on desktop and mobile
     if (!kIsWeb) {
       final appLinks = AppLinks();
       appLinks.uriLinkStream.listen((uri) {
-        debugPrint('[DeepLink] Received: $uri');
-        // Supabase will automatically handle the OAuth callback
+        if (kDebugMode) {
+          print('[DeepLink] Received: $uri');
+        }
+        // Supabase automatically handles OAuth callbacks
+        // The auth state listener will trigger navigation
+      });
+      
+      // Handle initial link (app opened from a link)
+      appLinks.getInitialLink().then((uri) {
+        if (uri != null && kDebugMode) {
+          print('[DeepLink] Initial link: $uri');
+        }
       });
     }
 
@@ -82,6 +94,11 @@ class VinabikeApp extends StatelessWidget {
         // Core services
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider(create: (_) => DatabaseService()),
+        ChangeNotifierProvider(create: (_) {
+          final tenantService = TenantService();
+          tenantService.initialize();
+          return tenantService;
+        }),
         ChangeNotifierProvider(create: (_) => PaymentMethodService()),
         ChangeNotifierProvider(create: (_) {
           final service = AppearanceService();
@@ -101,10 +118,16 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(
             create: (context) => CategoryService(
                   Provider.of<DatabaseService>(context, listen: false),
+                  Provider.of<TenantService>(context, listen: false),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => BrandService(
+                  Provider.of<DatabaseService>(context, listen: false),
                 )),
         ChangeNotifierProvider(
             create: (context) => CustomerService(
                   Provider.of<DatabaseService>(context, listen: false),
+                  Provider.of<TenantService>(context, listen: false),
                 )),
         ChangeNotifierProvider(
             create: (context) => BikeshopService(
@@ -125,22 +148,27 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(
             create: (context) => PurchaseService(
                   Provider.of<DatabaseService>(context, listen: false),
+                  Provider.of<TenantService>(context, listen: false),
                 )),
-        ChangeNotifierProvider(create: (_) => HRService()),
+        ChangeNotifierProvider(
+            create: (context) => HRService(
+                  Provider.of<TenantService>(context, listen: false),
+                )),
         ChangeNotifierProvider(create: (_) => WebsiteService()),
         ChangeNotifierProvider(create: (_) => MercadoPagoService()..initialize()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
   ChangeNotifierProvider(create: (_) => AddressAutocompleteService()),
         ChangeNotifierProvider(create: (_) => CustomerAccountService()),
-        ChangeNotifierProxyProvider2<DatabaseService, AccountingService,
-            SalesService>(
+        ChangeNotifierProxyProvider3<DatabaseService, AccountingService,
+            TenantService, SalesService>(
           create: (context) => SalesService(
             context.read<DatabaseService>(),
             context.read<AccountingService>(),
+            context.read<TenantService>(),
           ),
-          update: (context, databaseService, accountingService, previous) {
+          update: (context, databaseService, accountingService, tenantService, previous) {
             final service =
-                previous ?? SalesService(databaseService, accountingService);
+                previous ?? SalesService(databaseService, accountingService, tenantService);
             service.updateDependencies(databaseService, accountingService);
             return service;
           },

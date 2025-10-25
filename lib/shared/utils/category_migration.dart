@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../services/database_service.dart';
+import '../services/tenant_service.dart';
 import '../../modules/inventory/services/category_service.dart';
 import '../../modules/inventory/models/category_models.dart'
     as inventory_models;
@@ -7,9 +8,11 @@ import '../../modules/inventory/models/category_models.dart'
 /// Migration helper to convert from enum-based categories to database-driven categories
 class CategoryMigration {
   final DatabaseService _db;
+  final TenantService _tenantService;
   final CategoryService _categoryService;
 
-  CategoryMigration(this._db) : _categoryService = CategoryService(_db);
+  CategoryMigration(this._db, this._tenantService) 
+    : _categoryService = CategoryService(_db, _tenantService);
 
   /// Run the complete migration process
   Future<void> migrate() async {

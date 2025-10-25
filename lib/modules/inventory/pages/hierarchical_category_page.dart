@@ -45,7 +45,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
   void initState() {
     super.initState();
     _databaseService = Provider.of<DatabaseService>(context, listen: false);
-    _categoryService = CategoryService(_databaseService);
+    _categoryService = Provider.of<CategoryService>(context, listen: false);
     _loadData();
   }
 

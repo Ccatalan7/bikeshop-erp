@@ -4,12 +4,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/services/tenant_service.dart';
 import '../models/hr_models.dart';
 
 class HRService extends ChangeNotifier {
   final SupabaseClient _client = Supabase.instance.client;
+  final TenantService _tenantService;
 
-  HRService();
+  HRService(this._tenantService);
 
   // ============================================================================
   // DEPARTMENTS
@@ -145,9 +147,11 @@ class HRService extends ChangeNotifier {
 
   Future<Employee> createEmployee(Employee employee) async {
     try {
+      // Add tenant_id to employee data
+      final employeeData = _tenantService.addTenantId(employee.toMap());
       final response = await _client
           .from('employees')
-          .insert(employee.toMap())
+          .insert(employeeData)
           .select()
           .single();
       notifyListeners();

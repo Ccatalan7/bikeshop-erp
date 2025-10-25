@@ -45,9 +45,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
   @override
   void initState() {
     super.initState();
-    _customerService = CustomerService(
-      Provider.of<DatabaseService>(context, listen: false),
-    );
+    _customerService = Provider.of<CustomerService>(context, listen: false);
     if (widget.customerId != null) {
       _loadCustomer();
     }

@@ -37,9 +37,8 @@ class _PegasListPageState extends State<PegasListPage> {
   @override
   void initState() {
     super.initState();
-    final db = Provider.of<DatabaseService>(context, listen: false);
-    _bikeshopService = BikeshopService(db);
-    _customerService = CustomerService(db);
+    _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
+    _customerService = Provider.of<CustomerService>(context, listen: false);
     _loadData();
   }
 

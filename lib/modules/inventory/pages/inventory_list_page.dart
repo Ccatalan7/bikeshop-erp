@@ -34,12 +34,8 @@ class _InventoryListPageState extends State<InventoryListPage> {
   @override
   void initState() {
     super.initState();
-    _inventoryService = InventoryService(
-      Provider.of<DatabaseService>(context, listen: false),
-    );
-    _categoryService = CategoryService(
-      Provider.of<DatabaseService>(context, listen: false),
-    );
+    _inventoryService = Provider.of<InventoryService>(context, listen: false);
+    _categoryService = Provider.of<CategoryService>(context, listen: false);
     _loadCategories();
     _loadProducts();
   }

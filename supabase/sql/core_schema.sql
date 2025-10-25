@@ -4,6 +4,73 @@
 
 create extension if not exists "pgcrypto";
 
+--------------------------------------------------------------------------------
+-- MULTI-TENANT ARCHITECTURE
+--------------------------------------------------------------------------------
+-- Tenants table: Each tenant represents a bike shop (e.g., Vinabike, Shop A, Shop B)
+-- All data is isolated by tenant_id via Row Level Security (RLS)
+--------------------------------------------------------------------------------
+
+create table if not exists tenants (
+  id uuid primary key default gen_random_uuid(),
+  shop_name text not null,
+  subdomain text unique, -- For future multi-domain support (e.g., vinabike.bikeshop.app)
+  owner_email text,
+  plan text default 'free' check (plan in ('free', 'pro', 'enterprise')),
+  is_active boolean default true,
+  logo_url text,
+  currency text default 'CLP',
+  timezone text default 'America/Santiago',
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+-- User activity log: Track user actions within each tenant
+create table if not exists user_activity_log (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  action text not null, -- 'login', 'logout', 'role_changed', 'user_created', 'suspended', etc.
+  details jsonb,
+  performed_by uuid references auth.users(id) on delete set null,
+  created_at timestamp with time zone not null default now()
+);
+
+-- User invitations table: Track employee invitations
+create table if not exists user_invitations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  email text not null,
+  role text not null check (role in ('manager', 'cashier', 'mechanic', 'accountant')),
+  permissions jsonb not null,
+  invited_by uuid references auth.users(id) not null,
+  status text default 'pending' check (status in ('pending', 'accepted', 'expired')),
+  expires_at timestamp with time zone not null,
+  accepted_at timestamp with time zone,
+  created_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_invitations_email_status on user_invitations(email, status);
+create index if not exists idx_invitations_tenant on user_invitations(tenant_id);
+
+-- Enable RLS on user_invitations
+alter table user_invitations enable row level security;
+
+-- Users can view invitations sent to their email
+create policy "users_view_own_invitations" on user_invitations
+  for select using (email = auth.jwt()->>'email');
+
+-- Managers can create invitations for their tenant
+create policy "managers_create_invitations" on user_invitations
+  for insert with check (
+    tenant_id = public.user_tenant_id() and
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+  );
+
+-- Managers can view invitations in their tenant
+create policy "managers_view_tenant_invitations" on user_invitations
+  for select using (tenant_id = public.user_tenant_id());
+
 -- CRITICAL: Nuclear cleanup for purchase_payments type caching issue
 -- This MUST run first before any table or function definitions
 do $$
@@ -100,6 +167,12 @@ begin
   -- Add region column
   if not exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'region') then
     alter table customers add column region text;
+  end if;
+
+  -- Add tenant_id column for multi-tenant support
+  if not exists (select 1 from information_schema.columns where table_name = 'customers' and column_name = 'tenant_id') then
+    alter table customers add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice 'Added tenant_id column to customers table';
   end if;
 
   -- Add is_active column
@@ -10037,4 +10110,678 @@ insert into website_content (id, title, content) values
   ('shipping_info', 'Información de Envío', '<p>Enviamos a todo Chile. Costo de envío: $5.000. Envío gratis en compras sobre $50.000.</p>')
 on conflict (id) do nothing;
 
+--------------------------------------------------------------------------------
+-- MULTI-TENANT MIGRATION: Add tenant_id to all tables
+--------------------------------------------------------------------------------
+do $$
+begin
+  raise notice 'Starting multi-tenant migration...';
+
+  -- Products
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'tenant_id') then
+    alter table products add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to products';
+  end if;
+
+  -- Categories
+  if not exists (select 1 from information_schema.columns where table_name = 'categories' and column_name = 'tenant_id') then
+    alter table categories add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to categories';
+  end if;
+
+  -- Product Categories
+  if not exists (select 1 from information_schema.columns where table_name = 'product_categories' and column_name = 'tenant_id') then
+    alter table product_categories add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to product_categories';
+  end if;
+
+  -- Product Brands
+  if not exists (select 1 from information_schema.columns where table_name = 'product_brands' and column_name = 'tenant_id') then
+    alter table product_brands add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to product_brands';
+  end if;
+
+  -- Stock Movements
+  if not exists (select 1 from information_schema.columns where table_name = 'stock_movements' and column_name = 'tenant_id') then
+    alter table stock_movements add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to stock_movements';
+  end if;
+
+  -- Warehouses (if exists)
+  if exists (select 1 from information_schema.tables where table_name = 'warehouses') then
+    if not exists (select 1 from information_schema.columns where table_name = 'warehouses' and column_name = 'tenant_id') then
+      alter table warehouses add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to warehouses';
+    end if;
+  end if;
+
+  -- Sales Invoices
+  if not exists (select 1 from information_schema.columns where table_name = 'sales_invoices' and column_name = 'tenant_id') then
+    alter table sales_invoices add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to sales_invoices';
+  end if;
+
+  -- Sales Invoice Items (if table exists)
+  if exists (select 1 from information_schema.tables where table_name = 'sales_invoice_items') then
+    if not exists (select 1 from information_schema.columns where table_name = 'sales_invoice_items' and column_name = 'tenant_id') then
+      alter table sales_invoice_items add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to sales_invoice_items';
+    end if;
+  else
+    raise notice '⚠ Table sales_invoice_items does not exist, skipping';
+  end if;
+
+  -- Sales Payments
+  if not exists (select 1 from information_schema.columns where table_name = 'sales_payments' and column_name = 'tenant_id') then
+    alter table sales_payments add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to sales_payments';
+  end if;
+
+  -- Suppliers
+  if not exists (select 1 from information_schema.columns where table_name = 'suppliers' and column_name = 'tenant_id') then
+    alter table suppliers add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to suppliers';
+  end if;
+
+  -- Purchase Invoices
+  if not exists (select 1 from information_schema.columns where table_name = 'purchase_invoices' and column_name = 'tenant_id') then
+    alter table purchase_invoices add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to purchase_invoices';
+  end if;
+
+  -- Purchase Invoice Items (if table exists)
+  if exists (select 1 from information_schema.tables where table_name = 'purchase_invoice_items') then
+    if not exists (select 1 from information_schema.columns where table_name = 'purchase_invoice_items' and column_name = 'tenant_id') then
+      alter table purchase_invoice_items add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to purchase_invoice_items';
+    end if;
+  else
+    raise notice '⚠ Table purchase_invoice_items does not exist, skipping';
+  end if;
+
+  -- Purchase Payments
+  if not exists (select 1 from information_schema.columns where table_name = 'purchase_payments' and column_name = 'tenant_id') then
+    alter table purchase_payments add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to purchase_payments';
+  end if;
+
+  -- Customer Bikes (if exists)
+  if exists (select 1 from information_schema.tables where table_name = 'customer_bikes') then
+    if not exists (select 1 from information_schema.columns where table_name = 'customer_bikes' and column_name = 'tenant_id') then
+      alter table customer_bikes add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to customer_bikes';
+    end if;
+  else
+    raise notice '⚠ Table customer_bikes does not exist, skipping';
+  end if;
+
+  -- Accounts (Chart of Accounts)
+  if not exists (select 1 from information_schema.columns where table_name = 'accounts' and column_name = 'tenant_id') then
+    alter table accounts add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to accounts';
+  end if;
+
+  -- Journal Entries
+  if not exists (select 1 from information_schema.columns where table_name = 'journal_entries' and column_name = 'tenant_id') then
+    alter table journal_entries add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to journal_entries';
+  end if;
+
+  -- Journal Entry Lines (if table exists)
+  if exists (select 1 from information_schema.tables where table_name = 'journal_entry_lines') then
+    if not exists (select 1 from information_schema.columns where table_name = 'journal_entry_lines' and column_name = 'tenant_id') then
+      alter table journal_entry_lines add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to journal_entry_lines';
+    end if;
+  else
+    raise notice '⚠ Table journal_entry_lines does not exist, skipping';
+  end if;
+
+  -- Fiscal Periods (if table exists)
+  if exists (select 1 from information_schema.tables where table_name = 'fiscal_periods') then
+    if not exists (select 1 from information_schema.columns where table_name = 'fiscal_periods' and column_name = 'tenant_id') then
+      alter table fiscal_periods add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to fiscal_periods';
+    end if;
+  else
+    raise notice '⚠ Table fiscal_periods does not exist, skipping';
+  end if;
+
+  -- Employees
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'tenant_id') then
+    alter table employees add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to employees';
+  end if;
+
+  -- Attendances
+  if not exists (select 1 from information_schema.columns where table_name = 'attendances' and column_name = 'tenant_id') then
+    alter table attendances add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to attendances';
+  end if;
+
+  -- Contracts (if exists)
+  if exists (select 1 from information_schema.tables where table_name = 'contracts') then
+    if not exists (select 1 from information_schema.columns where table_name = 'contracts' and column_name = 'tenant_id') then
+      alter table contracts add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to contracts';
+    end if;
+  else
+    raise notice '⚠ Table contracts does not exist, skipping';
+  end if;
+
+  -- Payroll (if exists)
+  if exists (select 1 from information_schema.tables where table_name = 'payroll') then
+    if not exists (select 1 from information_schema.columns where table_name = 'payroll' and column_name = 'tenant_id') then
+      alter table payroll add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to payroll';
+    end if;
+  else
+    raise notice '⚠ Table payroll does not exist, skipping';
+  end if;
+
+  -- Website Settings
+  if not exists (select 1 from information_schema.columns where table_name = 'website_settings' and column_name = 'tenant_id') then
+    alter table website_settings add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to website_settings';
+  end if;
+
+  -- Website Blocks
+  if not exists (select 1 from information_schema.columns where table_name = 'website_blocks' and column_name = 'tenant_id') then
+    alter table website_blocks add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to website_blocks';
+  end if;
+
+  -- Website Content (if exists)
+  if exists (select 1 from information_schema.tables where table_name = 'website_content') then
+    if not exists (select 1 from information_schema.columns where table_name = 'website_content' and column_name = 'tenant_id') then
+      alter table website_content add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to website_content';
+    end if;
+  else
+    raise notice '⚠ Table website_content does not exist, skipping';
+  end if;
+
+  -- Online Orders
+  if not exists (select 1 from information_schema.columns where table_name = 'online_orders' and column_name = 'tenant_id') then
+    alter table online_orders add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to online_orders';
+  end if;
+
+  -- Work Orders (if exists)
+  if exists (select 1 from information_schema.tables where table_name = 'work_orders') then
+    if not exists (select 1 from information_schema.columns where table_name = 'work_orders' and column_name = 'tenant_id') then
+      alter table work_orders add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to work_orders';
+    end if;
+  else
+    raise notice '⚠ Table work_orders does not exist, skipping';
+  end if;
+
+  -- Payment Methods
+  if not exists (select 1 from information_schema.columns where table_name = 'payment_methods' and column_name = 'tenant_id') then
+    alter table payment_methods add column tenant_id uuid references tenants(id) on delete cascade;
+    raise notice '✓ Added tenant_id to payment_methods';
+  end if;
+
+  raise notice 'Multi-tenant migration complete!';
+end $$;
+
+--------------------------------------------------------------------------------
+-- RLS HELPER FUNCTIONS
+--------------------------------------------------------------------------------
+
+-- Function to extract tenant_id from JWT (in public schema, not auth)
+create or replace function public.user_tenant_id()
+returns uuid
+language sql stable
+security definer
+as $$
+  select coalesce(
+    (auth.jwt() -> 'user_metadata' ->> 'tenant_id')::uuid,
+    null
+  );
+$$;
+
+-- Function to get all users in a tenant (for user management UI)
+create or replace function get_tenant_users(p_tenant_id uuid)
+returns table (
+  id uuid,
+  email text,
+  role text,
+  permissions jsonb,
+  is_active boolean,
+  last_sign_in timestamp with time zone,
+  created_at timestamp with time zone,
+  employee_id uuid,
+  employee_name text
+)
+language plpgsql
+security definer
+as $$
+begin
+  return query
+  select 
+    u.id,
+    u.email,
+    (u.raw_user_meta_data->>'role')::text as role,
+    (u.raw_user_meta_data->'permissions')::jsonb as permissions,
+    u.banned_until is null as is_active,
+    u.last_sign_in_at,
+    u.created_at,
+    e.id as employee_id,
+    e.name as employee_name
+  from auth.users u
+  left join employees e on e.user_id = u.id and e.tenant_id = p_tenant_id
+  where (u.raw_user_meta_data->>'tenant_id')::uuid = p_tenant_id
+  order by u.created_at desc;
+end;
+$$;
+
+--------------------------------------------------------------------------------
+-- ROW LEVEL SECURITY POLICIES: Tenant Isolation
+--------------------------------------------------------------------------------
+do $$
+begin
+  raise notice 'Applying Row Level Security policies...';
+
+  -- Enable RLS on all tables (only if they exist)
+  if exists (select 1 from information_schema.tables where table_name = 'tenants') then
+    alter table tenants enable row level security;
+  end if;
+  
+  if exists (select 1 from information_schema.tables where table_name = 'user_activity_log') then
+    alter table user_activity_log enable row level security;
+  end if;
+  
+  alter table customers enable row level security;
+  alter table products enable row level security;
+  alter table categories enable row level security;
+  alter table product_categories enable row level security;
+  alter table product_brands enable row level security;
+  alter table stock_movements enable row level security;
+  alter table sales_invoices enable row level security;
+  
+  if exists (select 1 from information_schema.tables where table_name = 'sales_invoice_items') then
+    alter table sales_invoice_items enable row level security;
+  end if;
+  
+  alter table sales_payments enable row level security;
+  alter table suppliers enable row level security;
+  alter table purchase_invoices enable row level security;
+  
+  if exists (select 1 from information_schema.tables where table_name = 'purchase_invoice_items') then
+    alter table purchase_invoice_items enable row level security;
+  end if;
+  
+  alter table purchase_payments enable row level security;
+  
+  if exists (select 1 from information_schema.tables where table_name = 'customer_bikes') then
+    alter table customer_bikes enable row level security;
+  end if;
+  
+  alter table accounts enable row level security;
+  alter table journal_entries enable row level security;
+  
+  if exists (select 1 from information_schema.tables where table_name = 'journal_entry_lines') then
+    alter table journal_entry_lines enable row level security;
+  end if;
+  
+  if exists (select 1 from information_schema.tables where table_name = 'fiscal_periods') then
+    alter table fiscal_periods enable row level security;
+  end if;
+  
+  alter table employees enable row level security;
+  alter table attendances enable row level security;
+  alter table website_settings enable row level security;
+  alter table website_blocks enable row level security;
+  alter table online_orders enable row level security;
+  alter table payment_methods enable row level security;
+
+  raise notice '✓ Enabled RLS on all tables';
+end $$;
+
+-- Tenants table: Users can only see their own tenant
+create policy "tenant_select_own" on tenants for select using (id = public.user_tenant_id());
+create policy "tenant_update_own" on tenants for update using (id = public.user_tenant_id());
+
+-- User Activity Log: Tenant isolation
+create policy "user_activity_log_select" on user_activity_log for select using (tenant_id = public.user_tenant_id());
+create policy "user_activity_log_insert" on user_activity_log for insert with check (tenant_id = public.user_tenant_id());
+
+-- Customers: Tenant isolation
+create policy "customers_select" on customers for select using (tenant_id = public.user_tenant_id());
+create policy "customers_insert" on customers for insert with check (tenant_id = public.user_tenant_id());
+create policy "customers_update" on customers for update using (tenant_id = public.user_tenant_id());
+create policy "customers_delete" on customers for delete using (tenant_id = public.user_tenant_id());
+
+-- Products: Tenant isolation
+create policy "products_select" on products for select using (tenant_id = public.user_tenant_id());
+create policy "products_insert" on products for insert with check (tenant_id = public.user_tenant_id());
+create policy "products_update" on products for update using (tenant_id = public.user_tenant_id());
+create policy "products_delete" on products for delete using (tenant_id = public.user_tenant_id());
+
+-- Categories: Tenant isolation
+create policy "categories_select" on categories for select using (tenant_id = public.user_tenant_id());
+create policy "categories_insert" on categories for insert with check (tenant_id = public.user_tenant_id());
+create policy "categories_update" on categories for update using (tenant_id = public.user_tenant_id());
+create policy "categories_delete" on categories for delete using (tenant_id = public.user_tenant_id());
+
+-- Product Categories: Tenant isolation
+create policy "product_categories_select" on product_categories for select using (tenant_id = public.user_tenant_id());
+create policy "product_categories_insert" on product_categories for insert with check (tenant_id = public.user_tenant_id());
+create policy "product_categories_update" on product_categories for update using (tenant_id = public.user_tenant_id());
+create policy "product_categories_delete" on product_categories for delete using (tenant_id = public.user_tenant_id());
+
+-- Product Brands: Tenant isolation
+create policy "product_brands_select" on product_brands for select using (tenant_id = public.user_tenant_id());
+create policy "product_brands_insert" on product_brands for insert with check (tenant_id = public.user_tenant_id());
+create policy "product_brands_update" on product_brands for update using (tenant_id = public.user_tenant_id());
+create policy "product_brands_delete" on product_brands for delete using (tenant_id = public.user_tenant_id());
+
+-- Stock Movements: Tenant isolation
+create policy "stock_movements_select" on stock_movements for select using (tenant_id = public.user_tenant_id());
+create policy "stock_movements_insert" on stock_movements for insert with check (tenant_id = public.user_tenant_id());
+
+-- Sales Invoices: Tenant isolation
+create policy "sales_invoices_select" on sales_invoices for select using (tenant_id = public.user_tenant_id());
+create policy "sales_invoices_insert" on sales_invoices for insert with check (tenant_id = public.user_tenant_id());
+create policy "sales_invoices_update" on sales_invoices for update using (tenant_id = public.user_tenant_id());
+create policy "sales_invoices_delete" on sales_invoices for delete using (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager' -- Only managers can delete
+);
+
+-- Sales Invoice Items: Tenant isolation (if table exists)
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_name = 'sales_invoice_items') then
+    execute 'create policy "sales_invoice_items_select" on sales_invoice_items for select using (tenant_id = public.user_tenant_id())';
+    execute 'create policy "sales_invoice_items_insert" on sales_invoice_items for insert with check (tenant_id = public.user_tenant_id())';
+    execute 'create policy "sales_invoice_items_update" on sales_invoice_items for update using (tenant_id = public.user_tenant_id())';
+    execute 'create policy "sales_invoice_items_delete" on sales_invoice_items for delete using (tenant_id = public.user_tenant_id())';
+    raise notice '✓ Created RLS policies for sales_invoice_items';
+  else
+    raise notice '⚠ Table sales_invoice_items does not exist, skipping RLS policies';
+  end if;
+end $$;
+
+-- Sales Payments: Tenant isolation
+create policy "sales_payments_select" on sales_payments for select using (tenant_id = public.user_tenant_id());
+create policy "sales_payments_insert" on sales_payments for insert with check (tenant_id = public.user_tenant_id());
+create policy "sales_payments_delete" on sales_payments for delete using (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+);
+
+-- Suppliers: Tenant isolation
+create policy "suppliers_select" on suppliers for select using (tenant_id = public.user_tenant_id());
+create policy "suppliers_insert" on suppliers for insert with check (tenant_id = public.user_tenant_id());
+create policy "suppliers_update" on suppliers for update using (tenant_id = public.user_tenant_id());
+create policy "suppliers_delete" on suppliers for delete using (tenant_id = public.user_tenant_id());
+
+-- Purchase Invoices: Tenant isolation
+create policy "purchase_invoices_select" on purchase_invoices for select using (tenant_id = public.user_tenant_id());
+create policy "purchase_invoices_insert" on purchase_invoices for insert with check (tenant_id = public.user_tenant_id());
+create policy "purchase_invoices_update" on purchase_invoices for update using (tenant_id = public.user_tenant_id());
+create policy "purchase_invoices_delete" on purchase_invoices for delete using (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+);
+
+-- Purchase Invoice Items: Tenant isolation (if table exists)
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_name = 'purchase_invoice_items') then
+    execute 'create policy "purchase_invoice_items_select" on purchase_invoice_items for select using (tenant_id = public.user_tenant_id())';
+    execute 'create policy "purchase_invoice_items_insert" on purchase_invoice_items for insert with check (tenant_id = public.user_tenant_id())';
+    execute 'create policy "purchase_invoice_items_update" on purchase_invoice_items for update using (tenant_id = public.user_tenant_id())';
+    execute 'create policy "purchase_invoice_items_delete" on purchase_invoice_items for delete using (tenant_id = public.user_tenant_id())';
+    raise notice '✓ Created RLS policies for purchase_invoice_items';
+  else
+    raise notice '⚠ Table purchase_invoice_items does not exist, skipping RLS policies';
+  end if;
+end $$;
+
+-- Purchase Payments: Tenant isolation
+create policy "purchase_payments_select" on purchase_payments for select using (tenant_id = public.user_tenant_id());
+create policy "purchase_payments_insert" on purchase_payments for insert with check (tenant_id = public.user_tenant_id());
+create policy "purchase_payments_delete" on purchase_payments for delete using (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+);
+
+-- Customer Bikes: Tenant isolation (if table exists)
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_name = 'customer_bikes') then
+    execute 'create policy "customer_bikes_select" on customer_bikes for select using (tenant_id = public.user_tenant_id())';
+    execute 'create policy "customer_bikes_insert" on customer_bikes for insert with check (tenant_id = public.user_tenant_id())';
+    execute 'create policy "customer_bikes_update" on customer_bikes for update using (tenant_id = public.user_tenant_id())';
+    execute 'create policy "customer_bikes_delete" on customer_bikes for delete using (tenant_id = public.user_tenant_id())';
+    raise notice '✓ Created RLS policies for customer_bikes';
+  else
+    raise notice '⚠ Table customer_bikes does not exist, skipping RLS policies';
+  end if;
+end $$;
+
+-- Accounts (Chart of Accounts): Tenant isolation + Role check
+create policy "accounts_select" on accounts for select using (tenant_id = public.user_tenant_id());
+create policy "accounts_insert" on accounts for insert with check (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+);
+create policy "accounts_update" on accounts for update using (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+);
+create policy "accounts_delete" on accounts for delete using (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+);
+
+-- Journal Entries: Tenant isolation + Role check
+create policy "journal_entries_select" on journal_entries for select using (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+);
+create policy "journal_entries_insert" on journal_entries for insert with check (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+);
+
+-- Journal Entry Lines: Tenant isolation + Role check (if table exists)
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_name = 'journal_entry_lines') then
+    execute 'create policy "journal_entry_lines_select" on journal_entry_lines for select using (
+      tenant_id = public.user_tenant_id() and
+      (auth.jwt() -> ''user_metadata'' ->> ''role'') in (''manager'', ''accountant'')
+    )';
+    execute 'create policy "journal_entry_lines_insert" on journal_entry_lines for insert with check (
+      tenant_id = public.user_tenant_id() and
+      (auth.jwt() -> ''user_metadata'' ->> ''role'') in (''manager'', ''accountant'')
+    )';
+  end if;
+end $$;
+
+-- Fiscal Periods: Tenant isolation (if table exists)
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_name = 'fiscal_periods') then
+    execute 'create policy "fiscal_periods_select" on fiscal_periods for select using (tenant_id = public.user_tenant_id())';
+    execute 'create policy "fiscal_periods_insert" on fiscal_periods for insert with check (tenant_id = public.user_tenant_id() and (auth.jwt() -> ''user_metadata'' ->> ''role'') in (''manager'', ''accountant''))';
+    raise notice '✓ Created RLS policies for fiscal_periods';
+  else
+    raise notice '⚠ Table fiscal_periods does not exist, skipping RLS policies';
+  end if;
+end $$;
+
+-- Employees: Tenant isolation
+create policy "employees_select" on employees for select using (tenant_id = public.user_tenant_id());
+create policy "employees_insert" on employees for insert with check (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+);
+create policy "employees_update" on employees for update using (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+);
+create policy "employees_delete" on employees for delete using (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+);
+
+-- Attendances: Tenant isolation
+create policy "attendances_select" on attendances for select using (tenant_id = public.user_tenant_id());
+create policy "attendances_insert" on attendances for insert with check (tenant_id = public.user_tenant_id());
+create policy "attendances_update" on attendances for update using (tenant_id = public.user_tenant_id());
+
+-- Website Settings: Tenant isolation
+create policy "website_settings_select" on website_settings for select using (tenant_id = public.user_tenant_id());
+create policy "website_settings_insert" on website_settings for insert with check (tenant_id = public.user_tenant_id());
+create policy "website_settings_update" on website_settings for update using (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+);
+
+-- Website Blocks: Tenant isolation
+create policy "website_blocks_select" on website_blocks for select using (tenant_id = public.user_tenant_id());
+create policy "website_blocks_insert" on website_blocks for insert with check (tenant_id = public.user_tenant_id());
+create policy "website_blocks_update" on website_blocks for update using (tenant_id = public.user_tenant_id());
+create policy "website_blocks_delete" on website_blocks for delete using (tenant_id = public.user_tenant_id());
+
+-- Online Orders: Tenant isolation
+create policy "online_orders_select" on online_orders for select using (tenant_id = public.user_tenant_id());
+create policy "online_orders_insert" on online_orders for insert with check (tenant_id = public.user_tenant_id());
+create policy "online_orders_update" on online_orders for update using (tenant_id = public.user_tenant_id());
+
+-- Payment Methods: Tenant isolation
+create policy "payment_methods_select" on payment_methods for select using (tenant_id = public.user_tenant_id());
+create policy "payment_methods_insert" on payment_methods for insert with check (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+);
+create policy "payment_methods_update" on payment_methods for update using (
+  tenant_id = public.user_tenant_id() and
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+);
+
+--------------------------------------------------------------------------------
+-- AUTO-SIGNUP SYSTEM: Automatic Tenant Creation & Invitation Handling
+--------------------------------------------------------------------------------
+-- This trigger automatically handles new user signups:
+-- 1. If user has a pending invitation → Join existing tenant with assigned role
+-- 2. If no invitation → Create new tenant and assign as manager
+--------------------------------------------------------------------------------
+
+create or replace function public.handle_new_user()
+returns trigger
+security definer
+set search_path = public
+language plpgsql
+as $$
+declare
+  v_tenant_id uuid;
+  v_invitation record;
+  v_shop_name text;
+begin
+  -- Check if user was invited (has pending invitation)
+  select * into v_invitation
+  from user_invitations
+  where email = new.email
+    and status = 'pending'
+    and expires_at > now()
+  order by created_at desc
+  limit 1;
+
+  if found then
+    -- ========================================================================
+    -- SCENARIO: User was invited → Join existing tenant
+    -- ========================================================================
+    v_tenant_id := v_invitation.tenant_id;
+    
+    new.raw_user_meta_data := jsonb_build_object(
+      'tenant_id', v_tenant_id,
+      'role', v_invitation.role,
+      'permissions', v_invitation.permissions
+    );
+    
+    -- Mark invitation as accepted
+    update user_invitations
+    set status = 'accepted', accepted_at = now()
+    where id = v_invitation.id;
+    
+    -- Log activity
+    insert into user_activity_log (tenant_id, user_id, action, details, performed_by)
+    values (v_tenant_id, new.id, 'user_joined', jsonb_build_object(
+      'email', new.email,
+      'role', v_invitation.role,
+      'invited_by', v_invitation.invited_by
+    ), v_invitation.invited_by);
+    
+    raise notice 'User % joined tenant % via invitation', new.email, v_tenant_id;
+  else
+    -- ========================================================================
+    -- SCENARIO: No invitation → Create new tenant (new business owner)
+    -- ========================================================================
+    
+    -- Extract shop name from signup data or email
+    v_shop_name := coalesce(
+      new.raw_user_meta_data->>'shop_name',
+      new.raw_user_meta_data->>'name',
+      split_part(new.email, '@', 1)
+    ) || '''s Shop';
+    
+    -- Create new tenant
+    insert into tenants (shop_name, owner_email, plan, is_active, currency, timezone)
+    values (
+      v_shop_name,
+      new.email,
+      'free',  -- Start with free plan
+      true,
+      'CLP',
+      'America/Santiago'
+    )
+    returning id into v_tenant_id;
+    
+    -- Assign as manager with full permissions
+    new.raw_user_meta_data := jsonb_build_object(
+      'tenant_id', v_tenant_id,
+      'role', 'manager',
+      'permissions', jsonb_build_object(
+        'access_pos', true,
+        'manage_inventory', true,
+        'view_reports', true,
+        'manage_accounting', true,
+        'manage_users', true,
+        'delete_invoices', true,
+        'edit_prices', true,
+        'access_hr', true
+      )
+    );
+    
+    -- Log activity
+    insert into user_activity_log (tenant_id, user_id, action, details)
+    values (v_tenant_id, new.id, 'tenant_created', jsonb_build_object(
+      'email', new.email,
+      'shop_name', v_shop_name
+    ));
+    
+    raise notice 'Created new tenant % for user %', v_tenant_id, new.email;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- Drop existing trigger if it exists
+drop trigger if exists on_auth_user_created on auth.users;
+
+-- Create trigger on new user signup
+create trigger on_auth_user_created
+  before insert on auth.users
+  for each row
+  execute function public.handle_new_user();
+
 notify pgrst, 'reload schema';
+

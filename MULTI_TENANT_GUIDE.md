@@ -41,13 +41,16 @@ Result: Each shop sees ONLY their data via Row Level Security
 - Bike Shop LA = 1 tenant  
 - Pedalea Feliz = 1 tenant
 
-### **2. Users Belong to Tenants**
+### **2. Users Belong to Tenants (Multiple Users Per Tenant)**
 
 ```
-admin@vinabike.cl      → tenant_id: "550e8400..."  (Vinabike)
-cashier@vinabike.cl    → tenant_id: "550e8400..."  (Vinabike)
-owner@bikeshopla.cl    → tenant_id: "660f9511..."  (Bike Shop LA)
+admin@vinabike.cl      → tenant_id: "550e8400..." (Vinabike) | role: "manager"
+cashier@vinabike.cl    → tenant_id: "550e8400..." (Vinabike) | role: "cashier"
+mechanic@vinabike.cl   → tenant_id: "550e8400..." (Vinabike) | role: "mechanic"
+owner@bikeshopla.cl    → tenant_id: "660f9511..." (Bike Shop LA) | role: "manager"
 ```
+
+**Key Point:** Multiple users share the SAME tenant_id (same data access) but have DIFFERENT roles (different permissions).
 
 ### **3. All Data Has tenant_id**
 
@@ -490,20 +493,409 @@ CREATE POLICY "free_plan_product_limit" ON products
 
 ---
 
-## 📋 Migration Checklist
+## � Multi-User Per Tenant: Roles & Permissions
 
-- [ ] Phase 1.1: Create tenants table
-- [ ] Phase 1.2: Add tenant_id to all tables (20+ tables)
-- [ ] Phase 1.3: Migrate existing data to your tenant
-- [ ] Phase 1.4: Update auth.users metadata
-- [ ] Phase 2.1: Create RLS helper function
-- [ ] Phase 2.2: Apply RLS policies (all tables)
-- [ ] Phase 3.1: Create TenantService
-- [ ] Phase 3.2: Update all services to include tenant_id
-- [ ] Phase 3.3: Add TenantService to providers
-- [ ] Phase 4.1: Create tenant registration page
-- [ ] Phase 4.2: Create employee invitation system
-- [ ] Phase 5: Test tenant isolation thoroughly
+### **How Multiple Users Work in ONE Tenant**
+
+```
+Tenant: Vinabike Santiago (tenant_id: 550e8400...)
+├── User 1: admin@vinabike.cl     → Role: Manager    → Full permissions
+├── User 2: cashier@vinabike.cl   → Role: Cashier    → POS + Sales only
+├── User 3: mechanic@vinabike.cl  → Role: Mechanic   → Work orders only
+└── User 4: accountant@vinabike.cl → Role: Accountant → Financial only
+
+All 4 users see the SAME data (products, invoices, customers)
+All 4 users have DIFFERENT permissions (what they can DO with that data)
+```
+
+### **Role-Based Access Control (RBAC)**
+
+**Tenant Isolation = WHICH data you see (tenant_id)**  
+**Role-Based Permissions = WHAT you can do with that data (role + permissions)**
+
+```sql
+-- Example: RLS policy with role check
+CREATE POLICY "products_delete_managers_only" ON products
+  FOR DELETE
+  USING (
+    tenant_id = auth.user_tenant_id() AND
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+  );
+
+-- Cashiers can create invoices but not delete them
+CREATE POLICY "invoices_insert_cashier" ON sales_invoices
+  FOR INSERT
+  WITH CHECK (
+    tenant_id = auth.user_tenant_id() AND
+    (auth.jwt() -> 'user_metadata' ->> 'role') IN ('manager', 'cashier')
+  );
+
+CREATE POLICY "invoices_delete_manager" ON sales_invoices
+  FOR DELETE
+  USING (
+    tenant_id = auth.user_tenant_id() AND
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+  );
+```
+
+### **User Metadata Structure**
+
+```json
+{
+  "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
+  "role": "cashier",
+  "permissions": {
+    "access_pos": true,
+    "create_invoices": true,
+    "edit_prices": false,
+    "delete_invoices": false,
+    "access_accounting": false,
+    "manage_users": false
+  }
+}
+```
+
+---
+
+## 🖥️ User Management GUI (Settings Module)
+
+### **Settings → User Management Page**
+
+**List View:**
+```
+╔════════════════════════════════════════════════════════════╗
+║  Settings > User Management                                 ║
+╠════════════════════════════════════════════════════════════╣
+║                                                             ║
+║  Active Users (5)                          [+ Invite User] ║
+║                                                             ║
+║  ┌─────────────────────────────────────────────────────┐  ║
+║  │ Email              │ Role       │ Status  │ Actions │  ║
+║  ├─────────────────────────────────────────────────────┤  ║
+║  │ admin@vinabike.cl  │ Manager    │ Active  │ [Edit]  │  ║
+║  │ cashier1@          │ Cashier    │ Active  │ [Edit]  │  ║
+║  │ mechanic@          │ Mechanic   │ Active  │ [Edit]  │  ║
+║  │ accountant@        │ Accountant │ Active  │ [Edit]  │  ║
+║  │ cashier2@          │ Cashier    │ Pending │ [Edit]  │  ║
+║  └─────────────────────────────────────────────────────┘  ║
+╚════════════════════════════════════════════════════════════╝
+```
+
+**Invite User Dialog:**
+```
+╔════════════════════════════════════════════════════════════╗
+║  Invite New User                                            ║
+╠════════════════════════════════════════════════════════════╣
+║                                                             ║
+║  Email: [maria.lopez@vinabike.cl                        ]  ║
+║                                                             ║
+║  Role:  [Cashier ▼]  (Manager/Cashier/Mechanic/Accountant) ║
+║                                                             ║
+║  Link to Employee (optional):                               ║
+║  [Search employee...                                    ▼]  ║
+║  → María López (ID: EMP-005)                                ║
+║                                                             ║
+║  Permissions (auto-filled based on role):                   ║
+║  ☑ Access POS                                               ║
+║  ☑ View Products                                            ║
+║  ☑ Create Sales Invoices                                    ║
+║  ☐ Edit Product Prices                                      ║
+║  ☐ Delete Invoices                                          ║
+║  ☐ Access Accounting                                        ║
+║                                                             ║
+║  Initial Password:                                          ║
+║  ● Auto-generate and send via email                         ║
+║  ○ Set manually: [________]                                 ║
+║                                                             ║
+║                              [Cancel]  [Send Invitation]    ║
+╚════════════════════════════════════════════════════════════╝
+```
+
+**Edit User Dialog:**
+```
+╔════════════════════════════════════════════════════════════╗
+║  Edit User: cashier1@vinabike.cl                            ║
+╠════════════════════════════════════════════════════════════╣
+║                                                             ║
+║  Email: cashier1@vinabike.cl (verified ✓)                   ║
+║                                                             ║
+║  Role:  [Cashier ▼]                                         ║
+║                                                             ║
+║  Status: ● Active  ○ Suspended                              ║
+║                                                             ║
+║  Permissions:                                               ║
+║  ─────────────────────────────────────────────────────────  ║
+║  Sales & POS:                                               ║
+║    ☑ Access POS                                             ║
+║    ☑ Create Invoices                                        ║
+║    ☑ Process Payments                                       ║
+║    ☐ Delete Invoices                                        ║
+║    ☐ Apply Discounts > 10%                                  ║
+║                                                             ║
+║  Inventory:                                                 ║
+║    ☑ View Products                                          ║
+║    ☐ Edit Product Prices                                    ║
+║    ☐ Adjust Stock Levels                                    ║
+║    ☐ Delete Products                                        ║
+║                                                             ║
+║  Accounting:                                                ║
+║    ☐ View Reports                                           ║
+║    ☐ Create Journal Entries                                 ║
+║    ☐ Close Fiscal Periods                                   ║
+║                                                             ║
+║  Administration:                                            ║
+║    ☐ Manage Users                                           ║
+║    ☐ Edit Company Settings                                  ║
+║                                                             ║
+║  Linked Employee: [María López (EMP-005)          ▼]        ║
+║                                                             ║
+║  Reset Password: [Send password reset email]                ║
+║                                                             ║
+║  Last Login: 2025-10-23 14:35                               ║
+║  Created: 2025-09-01                                        ║
+║                                                             ║
+║                    [Delete User]  [Cancel]  [Save Changes]  ║
+╚════════════════════════════════════════════════════════════╝
+```
+
+---
+
+## 🔗 RRHH Integration
+
+### **RRHH → Employees List (showing user account status)**
+
+```
+╔════════════════════════════════════════════════════════════╗
+║  RRHH > Employees                                           ║
+╠════════════════════════════════════════════════════════════╣
+║                                                             ║
+║  Active Employees (8)                   [+ New Employee]    ║
+║                                                             ║
+║  ┌──────────────────────────────────────────────────────┐  ║
+║  │ Name          │ Position  │ User Account │ Actions   │  ║
+║  ├──────────────────────────────────────────────────────┤  ║
+║  │ Carlos Admin  │ Manager   │ ✓ Linked     │ [View]    │  ║
+║  │ María López   │ Cashier   │ ✓ Linked     │ [View]    │  ║
+║  │ Juan Pérez    │ Mechanic  │ ✓ Linked     │ [View]    │  ║
+║  │ Ana Torres    │ Cashier   │ ⚠ No account │ [View]    │  ║
+║  │ Pedro Silva   │ Cleaner   │ - No access  │ [View]    │  ║
+║  └──────────────────────────────────────────────────────┘  ║
+╚════════════════════════════════════════════════════════════╝
+```
+
+**Employee Detail → User Account Tab:**
+```
+╔════════════════════════════════════════════════════════════╗
+║  Employee Details: Ana Torres                               ║
+╠════════════════════════════════════════════════════════════╣
+║                                                             ║
+║  Personal Info | Contract | Attendance | User Account       ║
+║                                                             ║
+║  ─── User Account ─────────────────────────────────────     ║
+║                                                             ║
+║  Status: ⚠ No user account created                          ║
+║                                                             ║
+║  [+ Create User Account for Ana Torres]                     ║
+║                                                             ║
+║  Email: ana.torres@vinabike.cl                              ║
+║  Suggested Role: Cashier (based on position)                ║
+║                                                             ║
+║                              [Cancel]  [Create Account]     ║
+║                                                             ║
+╚════════════════════════════════════════════════════════════╝
+```
+
+---
+
+## 🛠️ Database Schema for User Management
+
+### **Additional Tables:**
+
+```sql
+-- User activity log
+CREATE TABLE user_activity_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID REFERENCES tenants(id) NOT NULL,
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
+  action TEXT NOT NULL, -- 'login', 'logout', 'role_changed', 'suspended', etc.
+  details JSONB,
+  performed_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Helper function to get tenant users
+CREATE OR REPLACE FUNCTION get_tenant_users(p_tenant_id UUID)
+RETURNS TABLE (
+  id UUID,
+  email TEXT,
+  role TEXT,
+  permissions JSONB,
+  is_active BOOLEAN,
+  last_sign_in TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE,
+  employee_id UUID,
+  employee_name TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    u.id,
+    u.email,
+    (u.raw_user_meta_data->>'role')::TEXT as role,
+    (u.raw_user_meta_data->'permissions')::JSONB as permissions,
+    u.banned_until IS NULL as is_active,
+    u.last_sign_in_at,
+    u.created_at,
+    e.id as employee_id,
+    e.name as employee_name
+  FROM auth.users u
+  LEFT JOIN employees e ON e.user_id = u.id AND e.tenant_id = p_tenant_id
+  WHERE (u.raw_user_meta_data->>'tenant_id')::UUID = p_tenant_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+---
+
+## 📋 Complete Migration Checklist
+
+### **Phase 1: Database Schema (2 hours)**
+- [ ] 1.1: Create tenants table
+- [ ] 1.2: Add tenant_id to ALL tables (25+ tables - see list below)
+- [ ] 1.3: Migrate existing data to your tenant
+- [ ] 1.4: Update auth.users metadata with tenant_id + role
+- [ ] 1.5: Create user_activity_log table
+- [ ] 1.6: Create get_tenant_users() function
+
+### **Phase 2: Row Level Security (2 hours)**
+- [ ] 2.1: Create auth.user_tenant_id() helper function
+- [ ] 2.2: Apply tenant isolation RLS policies (all tables)
+- [ ] 2.3: Apply role-based RLS policies (sensitive operations)
+- [ ] 2.4: Test RLS with different users/roles
+
+### **Phase 3: Flutter Backend Services (3 hours)**
+- [ ] 3.1: Create TenantService (get current tenant)
+- [ ] 3.2: Create UserManagementService (CRUD users)
+- [ ] 3.3: Update ALL existing services to include tenant_id on inserts
+- [ ] 3.4: Add role checking utilities (hasRole, isManager, etc.)
+- [ ] 3.5: Add TenantService to providers
+
+### **Phase 4: Settings Module - User Management (4 hours)**
+- [ ] 4.1: Create UserManagementPage (list users)
+- [ ] 4.2: Create UserInvitePage (invite new user)
+- [ ] 4.3: Create UserEditPage (edit role/permissions)
+- [ ] 4.4: Create permission checkbox widgets
+- [ ] 4.5: Integrate with email service (send invitations)
+- [ ] 4.6: Add to Settings navigation
+
+### **Phase 5: RRHH Integration (2 hours)**
+- [ ] 5.1: Add "User Account" tab to employee detail page
+- [ ] 5.2: Show user account status in employee list
+- [ ] 5.3: Allow creating user from employee record
+- [ ] 5.4: Link/unlink user accounts
+
+### **Phase 6: UI Role Guards (2 hours)**
+- [ ] 6.1: Add role-based button visibility (delete, edit, etc.)
+- [ ] 6.2: Hide admin-only menu items for non-managers
+- [ ] 6.3: Show role-appropriate dashboard
+- [ ] 6.4: Add "Access Denied" screens for unauthorized actions
+
+### **Phase 7: Testing (2 hours)**
+- [ ] 7.1: Create test tenant and users (manager, cashier, mechanic)
+- [ ] 7.2: Test tenant isolation (users can't see other tenants)
+- [ ] 7.3: Test role permissions (cashier can't delete invoices)
+- [ ] 7.4: Test user management (invite, edit, suspend)
+- [ ] 7.5: Test RRHH integration (link employee to user)
+- [ ] 7.6: Test all modules with different roles
+
+---
+
+## 🎯 Professional Implementation Plan
+
+### **Recommended Approach (Based on Best Practices)**
+
+**Option A: Incremental Rollout (RECOMMENDED)**
+1. ✅ Database schema first (Phase 1)
+2. ✅ RLS policies (Phase 2)
+3. ✅ Backend services (Phase 3)
+4. ✅ Test with your current user
+5. ✅ User Management GUI (Phase 4)
+6. ✅ Create 2-3 test users with different roles
+7. ✅ Test each module with different roles
+8. ✅ RRHH integration (Phase 5)
+9. ✅ UI role guards (Phase 6)
+10. ✅ Full testing (Phase 7)
+
+**Option B: All-at-once (RISKY - Not Recommended)**
+- Implement everything in one go
+- High risk of breaking existing functionality
+- Harder to debug issues
+
+**My Professional Opinion: Use Option A (Incremental)**
+
+**Why?**
+- ✅ Less risky (can rollback at any step)
+- ✅ Easier to debug (isolate issues)
+- ✅ Can keep using the app during migration
+- ✅ Test as you go
+
+**Estimated Timeline:**
+- **Total: 15-17 hours** (spread over 3-4 days)
+- Day 1: Database + RLS (4 hours)
+- Day 2: Backend services + Testing (5 hours)
+- Day 3: User Management GUI (4 hours)
+- Day 4: RRHH integration + UI guards + Final testing (4 hours)
+
+---
+
+## 📊 Complete Table List (25+ Tables to Update)
+
+**Core Modules:**
+```sql
+-- Inventory
+ALTER TABLE products ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE categories ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE stock_movements ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE warehouses ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+
+-- Sales
+ALTER TABLE sales_invoices ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE sales_invoice_items ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE sales_payments ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+
+-- Purchases
+ALTER TABLE suppliers ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE purchase_invoices ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE purchase_invoice_items ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE purchase_payments ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+
+-- CRM
+ALTER TABLE customers ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE customer_bikes ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+
+-- Accounting
+ALTER TABLE accounts ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE journal_entries ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE journal_entry_lines ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE fiscal_periods ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+
+-- HR (RRHH)
+ALTER TABLE employees ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE attendances ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE contracts ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE payroll ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+
+-- Website/Ecommerce
+ALTER TABLE website_settings ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE online_orders ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+ALTER TABLE website_blocks ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+
+-- Maintenance
+ALTER TABLE work_orders ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+
+-- Settings/System
+ALTER TABLE user_activity_log ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+```
 
 ---
 
