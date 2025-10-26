@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:go_router/go_router.dart';
 import '../../../shared/services/tenant_service.dart';
+import 'odoo_style_editor_page.dart';
+import '../templates/website_templates.dart';
 
 /// 🚀 Website Setup Wizard
 /// 
@@ -455,7 +458,7 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
           ),
         ],
         
-        // Success message
+        // Success message - SITE IS READY TO PREVIEW
         if (_websiteUrl != null && !_isDeploying) ...[
           Container(
             padding: const EdgeInsets.all(20),
@@ -469,7 +472,7 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
                 const Icon(Icons.check_circle, color: Colors.green, size: 48),
                 const SizedBox(height: 16),
                 Text(
-                  '¡Sitio web desplegado exitosamente!',
+                  '¡Sitio Web Configurado!',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Colors.green[700],
@@ -477,16 +480,33 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Tu tienda está disponible en:',
+                  'Tu sitio web está listo para ver en vista previa. Puedes personalizarlo en el editor.',
                   style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                Text(
+                  'Vista previa disponible en:',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 4),
                 SelectableText(
-                  _websiteUrl!,
+                  '${Uri.base.origin}/tienda',
                   style: theme.textTheme.bodyLarge?.copyWith(
                     color: theme.colorScheme.primary,
                     fontWeight: FontWeight.bold,
                   ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Nota: Para desplegar a Firebase (${_subdomainController.text}.web.app), un administrador debe ejecutar el script de despliegue.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.grey[600],
+                    fontStyle: FontStyle.italic,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
@@ -699,13 +719,30 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
         break;
         
       case 3:
-        // Finish wizard
+        // Finish wizard and show preview
         if (context.mounted) {
           Navigator.of(context).pop();
+          
+          // Navigate to store preview to see the configured template
+          context.go('/tienda');
+          
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('¡Configuración completada! Tu sitio web está listo.'),
+            SnackBar(
+              content: const Text('¡Sitio configurado! Ahora puedes personalizarlo en el editor.'),
               backgroundColor: Colors.green,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Abrir Editor',
+                textColor: Colors.white,
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const OdooStyleEditorPage(),
+                    ),
+                  );
+                },
+              ),
             ),
           );
         }
@@ -722,7 +759,7 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
   Future<void> _deployWebsite() async {
     setState(() {
       _isDeploying = true;
-      _deploymentStatus = 'Iniciando despliegue...';
+      _deploymentStatus = 'Guardando configuración del sitio...';
     });
 
     try {
@@ -735,36 +772,83 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
         throw Exception('No se encontró tenant_id');
       }
 
-      // Update company_settings with website configuration
-      setState(() => _deploymentStatus = 'Guardando configuración...');
-      await supabase.from('company_settings').upsert({
-        'tenant_id': tenantId,
-        'key': 'website_config',
-        'value': _shopNameController.text,
-        'website_subdomain': _subdomainController.text,
-        'website_status': 'pending',
-        'website_enabled': true,
-      });
+      // Step 1: Save website configuration columns (UPDATE table-level columns)
+      setState(() => _deploymentStatus = 'Guardando configuración básica...');
+      
+      // First, ensure we have at least one row for this tenant (needed for website columns)
+      final existingRows = await supabase
+        .from('company_settings')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .limit(1);
+      
+      if (existingRows.isEmpty) {
+        // Create initial row for this tenant
+        await supabase.from('company_settings').insert({
+          'tenant_id': tenantId,
+          'key': 'website_config',
+          'value': _shopNameController.text,
+        });
+      }
+      
+      // Now update website columns for this tenant (updates ALL rows for tenant)
+      await supabase
+        .from('company_settings')
+        .update({
+          'website_subdomain': _subdomainController.text,
+          'website_status': 'pending',
+          'website_enabled': true,
+          'website_url': 'https://${_subdomainController.text}.web.app',
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('tenant_id', tenantId);
 
-      // Request deployment (admin must run script manually for now)
-      setState(() => _deploymentStatus = 'Solicitando despliegue...');
-      
-      // For now, just mark as pending
-      // TODO: Integrate with Supabase Edge Function for automated deployment
-      
+      // Step 2: Save shop name as key-value setting
+      await supabase.from('company_settings').upsert(
+        {
+          'tenant_id': tenantId,
+          'key': 'website_shop_name',
+          'value': _shopNameController.text,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        onConflict: 'tenant_id,key',
+      );
+
+      // Step 3: Save template selection as key-value setting
+      await supabase.from('company_settings').upsert(
+        {
+          'tenant_id': tenantId,
+          'key': 'website_template',
+          'value': _selectedTemplate,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        onConflict: 'tenant_id,key',
+      );
+
+      // Step 4: Save description if provided
+      if (_descriptionController.text.isNotEmpty) {
+        await supabase.from('company_settings').upsert(
+          {
+            'tenant_id': tenantId,
+            'key': 'website_description',
+            'value': _descriptionController.text,
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+          onConflict: 'tenant_id,key',
+        );
+      }
+
+      // ✅ NEW: Save template HTML/CSS to database for GrapesJS editor
+      setState(() => _deploymentStatus = 'Guardando plantilla del sitio web...');
+      await _saveTemplateToDatabase(tenantId, _selectedTemplate);
+
+      // Request deployment - admin must run script manually
       setState(() {
-        _deploymentStatus = 'Despliegue completado';
+        _deploymentStatus = 'Sitio web configurado exitosamente';
         _websiteUrl = 'https://${_subdomainController.text}.web.app';
         _isDeploying = false;
         _currentStep = 3;
       });
-
-      // Update status to deployed
-      await supabase.from('company_settings').update({
-        'website_status': 'deployed',
-        'website_url': _websiteUrl,
-        'website_deployed_at': DateTime.now().toIso8601String(),
-      }).eq('tenant_id', tenantId).eq('key', 'website_config');
 
     } catch (e) {
       setState(() {
@@ -775,11 +859,40 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al desplegar: $e'),
+            content: Text('Error al configurar sitio: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
     }
+  }
+
+  /// Save template HTML/CSS to database for GrapesJS editor
+  Future<void> _saveTemplateToDatabase(String tenantId, String templateId) async {
+    final supabase = Supabase.instance.client;
+    
+    // Find the selected template
+    final template = WebsiteTemplates.all.firstWhere(
+      (t) => t.id == templateId,
+      orElse: () => WebsiteTemplates.all.first,
+    );
+    
+    // Delete existing home page for this tenant (fresh start)
+    await supabase
+      .from('website_pages')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .eq('page_name', 'home');
+    
+    // Save template HTML/CSS to database
+    await supabase.from('website_pages').insert({
+      'tenant_id': tenantId,
+      'page_name': 'home',
+      'html_content': template.htmlContent,
+      'css_content': template.cssContent,
+      'is_published': true,
+      'created_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toIso8601String(),
+    });
   }
 }

@@ -58,7 +58,7 @@ import '../../modules/hr/pages/kiosk_mode_page.dart';
 import '../../modules/website/pages/website_management_page.dart';
 
 // Public Store Pages
-import '../../public_store/pages/public_home_page.dart';
+import '../../public_store/pages/static_html_home_page.dart';
 import '../../public_store/pages/product_catalog_page.dart';
 import '../../public_store/pages/product_detail_page.dart';
 import '../../public_store/pages/cart_page.dart';
@@ -163,13 +163,13 @@ class AppRouter {
         // Accessible at /tienda/* for customers
         // ========================================
 
-        // Public Store Home
+        // Public Store Home (GrapesJS Static HTML Renderer)
         GoRoute(
           path: '/tienda',
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,
-            const PublicStoreWrapper(child: PublicHomePage()),
+            PublicStoreWrapper(child: StaticHTMLHomePage()),
           ),
         ),
 

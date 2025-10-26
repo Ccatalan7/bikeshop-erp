@@ -12,6 +12,7 @@ import 'website_settings_page.dart';
 import 'online_orders_page.dart';
 import 'odoo_style_editor_page.dart';
 import 'website_setup_wizard_page.dart';
+import 'grapesjs_editor_page.dart';
 
 /// Main hub for website content management
 class WebsiteManagementPage extends StatefulWidget {
@@ -120,7 +121,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                   const SizedBox(width: 12),
                   OutlinedButton.icon(
                     onPressed: () async {
-                      // Open in new browser tab (for web)
+                      // Open store in new browser tab (ONLY the store, not the whole app)
                       final uri = Uri.parse('${Uri.base.origin}/tienda');
                       if (await canLaunchUrl(uri)) {
                         await launchUrl(uri,
@@ -130,27 +131,14 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content:
-                                  Text('Usa Vista Previa para ver la tienda'),
+                                  Text('No se pudo abrir la tienda en nueva pestaña'),
                             ),
                           );
                         }
                       }
                     },
                     icon: const Icon(Icons.open_in_new),
-                    label: const Text('Abrir en Nueva Pestaña'),
-                  ),
-                  const SizedBox(width: 12),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              'Usa Vista Previa para ver el sitio en acción'),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.preview),
-                    label: const Text('Vista Previa'),
+                    label: const Text('Abrir Tienda en Nueva Pestaña'),
                   ),
                 ],
               ),
@@ -247,15 +235,25 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                     ),
                     const SizedBox(width: 20),
                     ElevatedButton.icon(
-                      onPressed: () {
+                      onPressed: () async {
+                        // Load existing home page if it exists
+                        final websiteService = context.read<WebsiteService>();
+                        final pageData = await websiteService.getHomePage();
+                        
+                        if (!context.mounted) return;
+                        
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const OdooStyleEditorPage(),
+                            builder: (_) => GrapesJSEditorPage(
+                              initialHtml: pageData?['html_content'] as String?,
+                              initialCss: pageData?['css_content'] as String?,
+                              pageId: pageData?['id'] as String?,
+                            ),
                           ),
                         );
                       },
-                      icon: const Icon(Icons.arrow_forward),
+                      icon: const Icon(Icons.edit),
                       label: const Text('Abrir Editor'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: theme.colorScheme.primary,
@@ -559,7 +557,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Tu sitio web está en cola para ser desplegado. Esto puede tomar algunos minutos.',
+                    'Tu sitio web está configurado y listo. Mientras esperas el despliegue, puedes seguir editando tu contenido.',
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
@@ -569,6 +567,23 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
               onPressed: () => deploymentService.loadConfiguration(),
               icon: const Icon(Icons.refresh),
               label: const Text('Actualizar'),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const OdooStyleEditorPage(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.edit),
+              label: const Text('Abrir Editor'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
             ),
           ],
         ),

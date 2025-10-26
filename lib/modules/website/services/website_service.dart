@@ -735,6 +735,71 @@ class WebsiteService extends ChangeNotifier {
   }
 
   // ============================================================================
+  // WEBSITE PAGES (GrapesJS)
+  // ============================================================================
+
+  /// Get home page HTML/CSS content for GrapesJS editor
+  Future<Map<String, dynamic>?> getHomePage() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return null;
+
+      final tenantId = user.userMetadata?['tenant_id'] as String?;
+      if (tenantId == null) return null;
+
+      final response = await _supabase
+        .from('website_pages')
+        .select()
+        .eq('tenant_id', tenantId)
+        .eq('page_name', 'home')
+        .maybeSingle();
+
+      return response;
+    } catch (e) {
+      debugPrint('Error loading home page: $e');
+      return null;
+    }
+  }
+
+  /// Save home page HTML/CSS content from GrapesJS editor
+  Future<void> saveHomePage({
+    required String htmlContent,
+    required String cssContent,
+    String? pageId,
+  }) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) throw Exception('Not authenticated');
+
+      final tenantId = user.userMetadata?['tenant_id'] as String?;
+      if (tenantId == null) throw Exception('No tenant ID found');
+
+      if (pageId != null) {
+        // Update existing page
+        await _supabase.from('website_pages').update({
+          'html_content': htmlContent,
+          'css_content': cssContent,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', pageId).eq('tenant_id', tenantId);
+      } else {
+        // Create new page
+        await _supabase.from('website_pages').insert({
+          'tenant_id': tenantId,
+          'page_name': 'home',
+          'html_content': htmlContent,
+          'css_content': cssContent,
+          'is_published': true,
+        });
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error saving home page: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================================
   // INITIALIZATION
   // ============================================================================
 

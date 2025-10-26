@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/constants/storage_constants.dart';
@@ -348,6 +349,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       );
 
       if (loadedBlocks.isEmpty) {
+        // No blocks yet - initialize with a simple blank hero block
         _initializeDefaultBlocks();
       } else {
         _blocks = loadedBlocks.map((blockData) {
@@ -381,6 +383,214 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         _saveToHistory();
       }
     }
+  }
+
+  /// Load wizard template if it was configured, otherwise show blank slate
+  Future<void> _loadWizardTemplateIfConfigured() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      
+      if (userId == null) {
+        _initializeBlankWebsite();
+        return;
+      }
+
+      // Get user's tenant_id
+      final userMetadata = supabase.auth.currentUser?.userMetadata;
+      final tenantId = userMetadata?['tenant_id'] as String?;
+      
+      if (tenantId == null) {
+        _initializeBlankWebsite();
+        return;
+      }
+
+      // Check if wizard was completed
+      final response = await supabase
+          .from('company_settings')
+          .select('value, website_status')
+          .eq('tenant_id', tenantId)
+          .eq('key', 'website_template')
+          .maybeSingle();
+
+      if (response != null && response['value'] != null) {
+        final template = response['value'] as String;
+        debugPrint('[OdooEditor] Loading wizard template: $template');
+        _initializeTemplateBlocks(template);
+      } else {
+        // No wizard configuration, show blank website
+        debugPrint('[OdooEditor] No wizard template found, showing blank website');
+        _initializeBlankWebsite();
+      }
+    } catch (e) {
+      debugPrint('[OdooEditor] Error loading wizard template: $e');
+      _initializeBlankWebsite();
+    }
+  }
+
+  /// Initialize blank website for new users
+  void _initializeBlankWebsite() {
+    _blocks = [
+      WebsiteBlock(
+        id: _uuid.v4(),
+        type: WebsiteBlockType.hero,
+        data: {
+          'title': 'Bienvenido a tu nueva tienda',
+          'subtitle': 'Personaliza este contenido usando el editor',
+          'button_text': 'Ver Productos',
+          'button_link': '/productos',
+          'background_color': '#2E7D32',
+          'text_color': '#FFFFFF',
+          'image_url': null,
+        },
+      ),
+    ];
+
+    if (_blocks.isNotEmpty) {
+      _selectedBlockId = _blocks.first.id;
+    }
+
+    _markAsChanged();
+  }
+
+  /// Initialize blocks based on wizard template selection
+  void _initializeTemplateBlocks(String template) {
+    switch (template) {
+      case 'modern-store':
+        _blocks = _getModernStoreTemplate();
+        break;
+      case 'bike-shop':
+        _blocks = _getBikeShopTemplate();
+        break;
+      case 'minimalist':
+        _blocks = _getMinimalistTemplate();
+        break;
+      default:
+        _initializeDefaultBlocks();
+        return;
+    }
+
+    if (_blocks.isNotEmpty) {
+      _selectedBlockId = _blocks.first.id;
+    }
+
+    _markAsChanged();
+  }
+
+  List<WebsiteBlock> _getModernStoreTemplate() {
+    return [
+      WebsiteBlock(
+        id: _uuid.v4(),
+        type: WebsiteBlockType.hero,
+        data: {
+          'title': '¡Bienvenido a Nuestra Tienda!',
+          'subtitle': 'Los mejores productos al mejor precio',
+          'button_text': 'Ver Catálogo',
+          'button_link': '/productos',
+          'background_color': '#1976D2',
+          'text_color': '#FFFFFF',
+        },
+      ),
+      WebsiteBlock(
+        id: _uuid.v4(),
+        type: WebsiteBlockType.products,
+        data: {
+          'title': 'Productos Destacados',
+          'subtitle': 'Nuestras mejores ofertas',
+          'columns': 3,
+          'show_prices': true,
+          'show_add_to_cart': true,
+        },
+      ),
+      WebsiteBlock(
+        id: _uuid.v4(),
+        type: WebsiteBlockType.services,
+        data: {
+          'title': 'Nuestros Servicios',
+          'services': [
+            {'icon': 'local_shipping', 'title': 'Envío Gratis', 'description': 'En compras sobre \$50.000'},
+            {'icon': 'verified_user', 'title': 'Compra Segura', 'description': '100% protegido'},
+            {'icon': 'support_agent', 'title': 'Soporte 24/7', 'description': 'Estamos para ayudarte'},
+          ],
+        },
+      ),
+      WebsiteBlock(
+        id: _uuid.v4(),
+        type: WebsiteBlockType.about,
+        data: {
+          'title': 'Sobre Nosotros',
+          'content': 'Somos una tienda comprometida con la calidad y el servicio al cliente.',
+        },
+      ),
+    ];
+  }
+
+  List<WebsiteBlock> _getBikeShopTemplate() {
+    return [
+      WebsiteBlock(
+        id: _uuid.v4(),
+        type: WebsiteBlockType.hero,
+        data: {
+          'title': 'Tu Tienda de Bicicletas',
+          'subtitle': 'Reparación, ventas y accesorios',
+          'button_text': 'Ver Bicicletas',
+          'button_link': '/productos',
+          'background_color': '#2E7D32',
+          'text_color': '#FFFFFF',
+        },
+      ),
+      WebsiteBlock(
+        id: _uuid.v4(),
+        type: WebsiteBlockType.services,
+        data: {
+          'title': 'Nuestros Servicios',
+          'services': [
+            {'icon': 'build', 'title': 'Reparación', 'description': 'Servicio técnico especializado'},
+            {'icon': 'pedal_bike', 'title': 'Ventas', 'description': 'Bicicletas de todas las marcas'},
+            {'icon': 'settings', 'title': 'Mantención', 'description': 'Planes de mantención preventiva'},
+          ],
+        },
+      ),
+      WebsiteBlock(
+        id: _uuid.v4(),
+        type: WebsiteBlockType.products,
+        data: {
+          'title': 'Productos Destacados',
+          'subtitle': 'Las mejores bicicletas y accesorios',
+          'columns': 3,
+          'show_prices': true,
+          'show_add_to_cart': true,
+        },
+      ),
+    ];
+  }
+
+  List<WebsiteBlock> _getMinimalistTemplate() {
+    return [
+      WebsiteBlock(
+        id: _uuid.v4(),
+        type: WebsiteBlockType.hero,
+        data: {
+          'title': 'Simplicidad y Calidad',
+          'subtitle': '',
+          'button_text': 'Explorar',
+          'button_link': '/productos',
+          'background_color': '#FFFFFF',
+          'text_color': '#000000',
+        },
+      ),
+      WebsiteBlock(
+        id: _uuid.v4(),
+        type: WebsiteBlockType.products,
+        data: {
+          'title': 'Productos',
+          'subtitle': '',
+          'columns': 4,
+          'show_prices': true,
+          'show_add_to_cart': false,
+        },
+      ),
+    ];
   }
 
   WebsiteBlockType _parseBlockType(String typeString) {
