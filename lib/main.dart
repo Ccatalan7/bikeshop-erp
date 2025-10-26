@@ -30,6 +30,7 @@ import 'modules/settings/services/appearance_service.dart';
 import 'modules/bikeshop/services/bikeshop_service.dart';
 import 'modules/hr/services/hr_service.dart';
 import 'modules/website/services/website_service.dart';
+import 'modules/website/services/website_deployment_service.dart';
 import 'modules/website/services/mercadopago_service.dart';
 import 'public_store/providers/cart_provider.dart';
 import 'public_store/services/customer_account_service.dart';
@@ -168,6 +169,7 @@ class VinabikeApp extends StatelessWidget {
                   Provider.of<TenantService>(context, listen: false),
                 )),
         ChangeNotifierProvider(create: (_) => WebsiteService()),
+        ChangeNotifierProvider(create: (_) => WebsiteDeploymentService()),
         ChangeNotifierProvider(create: (_) => MercadoPagoService()..initialize()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
   ChangeNotifierProvider(create: (_) => AddressAutocompleteService()),

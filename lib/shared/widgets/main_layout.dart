@@ -638,7 +638,17 @@ class _AppSidebarState extends State<AppSidebar> {
                 const SizedBox(height: 8),
                 _buildSectionDivider(context),
 
-                // Additional Modules (Disabled for now)
+                // Additional Modules
+                _buildSidebarItem(
+                  context,
+                  icon: Icons.language_outlined,
+                  activeIcon: Icons.language,
+                  title: 'Sitio Web',
+                  route: '/website',
+                  currentLocation: currentLocation,
+                  enabled: true,
+                ),
+
                 _buildSidebarItem(
                   context,
                   icon: Icons.build_outlined,
@@ -966,6 +976,15 @@ class AppDrawer extends StatelessWidget {
 
           // Secondary Modules
           _buildSectionHeader(context, 'OTROS MÓDULOS'),
+
+          _buildDrawerItem(
+            context,
+            icon: Icons.language,
+            title: 'Sitio Web',
+            route: '/website',
+            currentLocation: currentLocation,
+            enabled: true,
+          ),
 
           _buildDrawerItem(
             context,

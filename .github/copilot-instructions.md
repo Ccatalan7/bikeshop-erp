@@ -53,6 +53,39 @@ unique(name)             -- ❌ Wrong: global unique = shared data
 
 **If ANY answer is NO → STOP and fix it first**
 
+## Multi-Tenant Migration Status: ✅ COMPLETE
+
+**Production Status:** As of October 25, 2025, the multi-tenant migration is **COMPLETE and VERIFIED**.
+
+**Final Metrics:**
+- 69 total tables (1 system table: `tenants`)
+- 68 business tables with `tenant_id` column
+- 194 RLS policies (100% tenant-filtered)
+- 0 dangerous policies (zero cross-tenant leakage risk)
+- 0 tables without policies
+- **Verification Test:** `FINAL_MULTI_TENANT_VERIFICATION.sql` (12-test comprehensive suite)
+
+**Key Achievements:**
+- ✅ Complete data isolation per tenant
+- ✅ All RLS policies use `tenant_id = public.user_tenant_id()`
+- ✅ Zero NULL `tenant_id` values in production data
+- ✅ All tables indexed on `tenant_id`
+- ✅ All unique constraints scoped to `tenant_id`
+- ✅ Enterprise-grade security architecture
+
+**Reference Documents:**
+- `MULTI_TENANT_MIGRATION_COMPLETE.md` - Full migration report
+- `FINAL_MULTI_TENANT_VERIFICATION.sql` - Comprehensive verification test
+- `CORE_SCHEMA_SYNC_COMPLETE.md` - Schema synchronization report
+
+**When Adding New Tables:**
+1. ✅ Add `tenant_id uuid references tenants(id) on delete cascade not null`
+2. ✅ Create index: `create index idx_{table}_tenant on {table}(tenant_id);`
+3. ✅ Enable RLS: `alter table {table} enable row level security;`
+4. ✅ Add 4 policies (SELECT, INSERT, UPDATE, DELETE) all filtering by `tenant_id = user_tenant_id()`
+5. ✅ Add policy block to `core_schema.sql` following existing pattern (lines 9400-10114)
+6. ✅ Run `FINAL_MULTI_TENANT_VERIFICATION.sql` to verify
+
 ---
 
 # 🚨 CRITICAL RULE: DATABASE SCHEMA FILES
@@ -328,6 +361,136 @@ Include the following modules:
 
 # 🌐 Website Builder
 
+**CRITICAL: Multi-Tenant Website Deployment**
+
+Each tenant can have their own e-commerce website with a unique Firebase subdomain (e.g., `bikeshop1.web.app`).
+
+## Website Architecture
+
+**Deployment Model:** Single Firebase Project, Multiple Hosting Sites
+- One Firebase project hosts up to 36 tenant websites
+- Each tenant gets unique subdomain: `{tenant-subdomain}.web.app`
+- Same Flutter codebase serves all tenants (data filtered by `tenant_id`)
+- **Cost:** FREE (Firebase Hosting free tier)
+
+## Database Schema for Website Configuration
+
+The `company_settings` table includes website deployment columns:
+
+```sql
+-- Website configuration columns (already in core_schema.sql)
+website_enabled boolean default false
+website_subdomain text unique  -- e.g., "bikeshop-santiago"
+website_url text  -- e.g., "https://bikeshop-santiago.web.app"
+firebase_site_name text  -- Firebase Hosting site name
+website_deployed_at timestamptz  -- Last deployment timestamp
+website_status text  -- not_configured, pending, deployed, error
+```
+
+## Tenant Website Workflow
+
+### For Tenants (Shop Owners):
+1. Login to ERP → Settings → Website Setup
+2. Enter shop name (e.g., "Bike Shop Santiago")
+3. Subdomain auto-generates (e.g., "bike-shop-santiago")
+4. Click "Create My Website"
+5. Status changes to "pending"
+6. Wait for deployment (admin runs script)
+7. Receive notification when live
+8. Manage content via Website module
+
+### For Admin (Deployment):
+1. Receive website request notification
+2. Run deployment script: `.\scripts\deploy_tenant_website.ps1 -TenantId "UUID"`
+3. Script automatically:
+   - Creates Firebase Hosting site
+   - Builds Flutter web app
+   - Deploys to `{subdomain}.web.app`
+   - Updates database with URL and status
+4. Tenant receives notification
+
+## Deployment Scripts
+
+**PowerShell (Windows):**
+```powershell
+# Set environment variables
+$env:SUPABASE_URL = "https://your-project.supabase.co"
+$env:SUPABASE_SERVICE_KEY = "your-service-role-key"
+
+# Deploy tenant website
+.\scripts\deploy_tenant_website.ps1 -TenantId "UUID"
+```
+
+**Node.js (Cross-platform):**
+```bash
+export SUPABASE_URL="https://your-project.supabase.co"
+export SUPABASE_SERVICE_KEY="your-service-role-key"
+
+node scripts/deploy_tenant_website.js UUID
+```
+
+## URL-Based Tenant Detection
+
+The app detects which tenant's website is being accessed:
+
+```dart
+// In main.dart
+Future<void> main() async {
+  String? tenantSubdomain;
+  if (kIsWeb) {
+    final hostname = Uri.base.host; // e.g., "bikeshop1.web.app"
+    if (hostname.endsWith('.web.app')) {
+      tenantSubdomain = hostname.split('.').first;
+    }
+  }
+  
+  runApp(MyApp(tenantSubdomain: tenantSubdomain));
+}
+```
+
+Services then filter data by tenant:
+```dart
+// In services, load tenant_id from subdomain
+final tenantId = await getTenantIdFromSubdomain(tenantSubdomain);
+// All queries automatically filter by tenant_id via RLS
+```
+
+## Website Features Per Tenant
+
+Each tenant can customize:
+- Product catalog with images, descriptions, prices
+- Shop name and branding (logo, colors)
+- Homepage banners and featured products
+- Website content (About, Contact, etc.)
+- Online order processing
+- Payment gateway integration (MercadoPago)
+- Customer login and order history
+
+## Data Isolation
+
+- ✅ Each tenant sees ONLY their data (RLS policies)
+- ✅ Same codebase serves all tenants
+- ✅ Subdomain determines which tenant's data to show
+- ✅ Complete separation: products, orders, customers, settings
+
+## Reference Documentation
+
+- **Setup Guide:** `MULTI_TENANT_WEBSITE_SETUP_GUIDE.md`
+- **Quick Start:** `MULTI_TENANT_WEBSITE_QUICKSTART.md`
+- **Deployment Scripts:** `scripts/deploy_tenant_website.ps1`, `scripts/deploy_tenant_website.js`
+
+## When Creating Website Features
+
+1. ✅ Ensure data is tenant-scoped (filtered by `tenant_id`)
+2. ✅ Test with multiple tenant subdomains
+3. ✅ Verify URL detection works correctly
+4. ✅ Ensure RLS policies protect cross-tenant access
+5. ✅ Test deployment script with dummy tenant
+
+---
+
+# 🌐 Website Builder (Legacy Info)
+
 - Product catalog with images, descriptions, prices
 - Online orders sync with Inventory and Accounting
 - CMS for homepage, blog, promotions
@@ -442,3 +605,165 @@ Copilot must:
 - For very large datasets (100+ items), implement pagination or lazy loading with search.
 - Always place the search bar **above the list** (not hidden in a menu).
 - Respect localization: search must work with Spanish characters (ñ, á, é, í, ó, ú).
+
+---
+
+# 🚀 Firebase Hosting: Multi-Site Deployment
+
+## Firebase Project Configuration
+
+**Project:** `project-vinabike`  
+**Hosting Sites:**
+- `project-vinabike` (ERP admin interface)
+- `vinabike-store` (Public storefront - main)
+- Up to 34 additional tenant websites (e.g., `bikeshop1`, `bikeshop2`, etc.)
+
+## Deployment Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│         SINGLE FLUTTER CODEBASE                 │
+│   (Same build deployed to multiple sites)      │
+└─────────────────────────────────────────────────┘
+                     │
+         ┌───────────┴───────────┬──────────────┐
+         │                       │              │
+┌────────▼────────┐   ┌─────────▼────────┐    ...
+│ project-vinabike │   │ vinabike-store   │
+│  (Admin ERP)     │   │ (Public Store)   │
+│  .web.app        │   │ .web.app         │
+└──────────────────┘   └──────────────────┘
+         │                       │
+         └───────────┬───────────┘
+                     ▼
+         ┌───────────────────────┐
+         │   SUPABASE DATABASE   │
+         │  (RLS filters data)   │
+         └───────────────────────┘
+```
+
+## Deployment Commands
+
+**Build once:**
+```bash
+flutter build web --release --web-renderer canvaskit
+```
+
+**Deploy to specific site:**
+```bash
+# Deploy to admin ERP
+firebase deploy --only hosting:erp
+
+# Deploy to public store
+firebase deploy --only hosting:store
+
+# Deploy to specific tenant (using script)
+.\scripts\deploy_tenant_website.ps1 -TenantId "UUID"
+```
+
+**Deploy to all sites:**
+```bash
+firebase deploy --only hosting
+```
+
+## Firebase Configuration Files
+
+**firebase.json:**
+```json
+{
+  "hosting": [
+    {
+      "target": "erp",
+      "public": "build/web",
+      "rewrites": [{"source": "**", "destination": "/index.html"}]
+    },
+    {
+      "target": "store",
+      "public": "build/web",
+      "rewrites": [{"source": "**", "destination": "/index.html"}]
+    }
+  ]
+}
+```
+
+**.firebaserc:**
+```json
+{
+  "projects": {
+    "default": "project-vinabike"
+  },
+  "targets": {
+    "project-vinabike": {
+      "hosting": {
+        "erp": ["project-vinabike"],
+        "store": ["vinabike-store"]
+      }
+    }
+  }
+}
+```
+
+## Adding New Tenant Sites
+
+When deploying a new tenant website, the deployment script automatically:
+1. Creates Firebase Hosting site: `firebase hosting:sites:create {subdomain}`
+2. Configures target: `firebase target:apply hosting {subdomain} {subdomain}`
+3. Builds Flutter app: `flutter build web --release`
+4. Deploys to site: `firebase deploy --only hosting:{subdomain}`
+5. Updates database with URL and deployment status
+
+## URL Structure
+
+- **Admin ERP:** `https://project-vinabike.web.app`
+- **Public Store (main):** `https://vinabike-store.web.app`
+- **Tenant Websites:** `https://{tenant-subdomain}.web.app`
+
+## Cost and Limits
+
+- **Hosting:** FREE (10GB storage, 360MB/day transfer per site)
+- **SSL:** FREE (auto-included)
+- **Max sites per project:** 36
+- **Current sites:** 2 (erp + store) + tenant sites as needed
+
+---
+
+# 📝 Development & Deployment Best Practices
+
+## Before Any Database Change
+
+1. ✅ **READ** `core_schema.sql` to check for existing similar code
+2. ✅ **SEARCH** for existing functions/triggers/tables
+3. ✅ **VERIFY** tenant_id is included in new tables
+4. ✅ **ADD** RLS policies for new tables
+5. ✅ **TEST** with `FINAL_MULTI_TENANT_VERIFICATION.sql`
+6. ✅ **DEPLOY** updated `core_schema.sql` to Supabase
+
+## Before Any Flutter Change
+
+1. ✅ Verify database schema exists for the feature
+2. ✅ Check if models need updating
+3. ✅ Ensure services filter by `tenant_id`
+4. ✅ Test compilation locally
+5. ✅ Test on Windows, Web, and Android (if applicable)
+
+## Before Deploying to Firebase
+
+1. ✅ Run `flutter clean`
+2. ✅ Run `flutter pub get`
+3. ✅ Run `flutter build web --release`
+4. ✅ Verify build/web directory exists
+5. ✅ Test locally: `flutter run -d chrome`
+6. ✅ Deploy: `firebase deploy --only hosting:{target}`
+7. ✅ Verify deployment at live URL
+8. ✅ Test complete user flow on deployed site
+
+## Multi-Tenant Testing Checklist
+
+After any schema change:
+1. ✅ Run `FINAL_MULTI_TENANT_VERIFICATION.sql`
+2. ✅ Verify 0 dangerous policies
+3. ✅ Verify 0 tables without policies
+4. ✅ Test login as different tenants
+5. ✅ Verify data isolation (Tenant A can't see Tenant B's data)
+6. ✅ Test all CRUD operations per tenant
+7. ✅ Verify website subdomain detection works

@@ -266,8 +266,30 @@ create table if not exists company_settings (
   unique(tenant_id, key) -- Each tenant has their own settings
 );
 
+-- Add website configuration columns for multi-tenant website deployment
+do $$ begin
+  alter table company_settings add column if not exists website_enabled boolean default false;
+  alter table company_settings add column if not exists website_subdomain text unique;
+  alter table company_settings add column if not exists website_url text;
+  alter table company_settings add column if not exists firebase_site_name text;
+  alter table company_settings add column if not exists website_deployed_at timestamptz;
+  alter table company_settings add column if not exists website_status text default 'not_configured';
+  
+  comment on column company_settings.website_enabled is 'Whether tenant has activated their public website';
+  comment on column company_settings.website_subdomain is 'Unique subdomain for tenant website (e.g., bikeshop1)';
+  comment on column company_settings.website_url is 'Full URL of deployed website (e.g., https://bikeshop1.web.app)';
+  comment on column company_settings.firebase_site_name is 'Firebase Hosting site name';
+  comment on column company_settings.website_deployed_at is 'When website was last deployed';
+  comment on column company_settings.website_status is 'Current deployment status: not_configured, pending, deployed, error';
+exception
+  when undefined_table then raise notice '⚠ Table company_settings does not exist';
+  when duplicate_column then raise notice '⚠ Website columns already exist in company_settings';
+end $$;
+
 do $$ begin
   create index if not exists idx_company_settings_tenant on company_settings(tenant_id);
+  create index if not exists idx_company_settings_website_subdomain on company_settings(website_subdomain) where website_subdomain is not null;
+  create index if not exists idx_company_settings_website_status on company_settings(website_status);
 exception
   when undefined_table then raise notice '⚠ Table company_settings does not exist';
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in company_settings';
@@ -9993,6 +10015,123 @@ exception
   when undefined_table then raise notice '⚠ Table online_order_items does not exist yet';
   when undefined_column then raise notice '⚠ Column tenant_id missing in online_order_items';
   when duplicate_object then raise notice '⚠ Policies already exist for online_order_items';
+end $$;
+
+-- Contracts: Tenant isolation
+do $$ begin
+  create policy "contracts_select" on contracts for select using (tenant_id = public.user_tenant_id());
+  create policy "contracts_insert" on contracts for insert with check (tenant_id = public.user_tenant_id());
+  create policy "contracts_update" on contracts for update using (tenant_id = public.user_tenant_id());
+  create policy "contracts_delete" on contracts for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for contracts';
+exception
+  when undefined_table then raise notice '⚠ Table contracts does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in contracts';
+  when duplicate_object then raise notice '⚠ Policies already exist for contracts';
+end $$;
+
+-- Customer Addresses: Tenant isolation
+do $$ begin
+  create policy "customer_addresses_select" on customer_addresses for select using (tenant_id = public.user_tenant_id());
+  create policy "customer_addresses_insert" on customer_addresses for insert with check (tenant_id = public.user_tenant_id());
+  create policy "customer_addresses_update" on customer_addresses for update using (tenant_id = public.user_tenant_id());
+  create policy "customer_addresses_delete" on customer_addresses for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for customer_addresses';
+exception
+  when undefined_table then raise notice '⚠ Table customer_addresses does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in customer_addresses';
+  when duplicate_object then raise notice '⚠ Policies already exist for customer_addresses';
+end $$;
+
+-- Employee Contracts: Tenant isolation
+do $$ begin
+  create policy "employee_contracts_select" on employee_contracts for select using (tenant_id = public.user_tenant_id());
+  create policy "employee_contracts_insert" on employee_contracts for insert with check (tenant_id = public.user_tenant_id());
+  create policy "employee_contracts_update" on employee_contracts for update using (tenant_id = public.user_tenant_id());
+  create policy "employee_contracts_delete" on employee_contracts for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for employee_contracts';
+exception
+  when undefined_table then raise notice '⚠ Table employee_contracts does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in employee_contracts';
+  when duplicate_object then raise notice '⚠ Policies already exist for employee_contracts';
+end $$;
+
+-- Payments: Tenant isolation
+do $$ begin
+  create policy "payments_select" on payments for select using (tenant_id = public.user_tenant_id());
+  create policy "payments_insert" on payments for insert with check (tenant_id = public.user_tenant_id());
+  create policy "payments_update" on payments for update using (tenant_id = public.user_tenant_id());
+  create policy "payments_delete" on payments for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for payments';
+exception
+  when undefined_table then raise notice '⚠ Table payments does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in payments';
+  when duplicate_object then raise notice '⚠ Policies already exist for payments';
+end $$;
+
+-- Product Images: Tenant isolation
+do $$ begin
+  create policy "product_images_select" on product_images for select using (tenant_id = public.user_tenant_id());
+  create policy "product_images_insert" on product_images for insert with check (tenant_id = public.user_tenant_id());
+  create policy "product_images_update" on product_images for update using (tenant_id = public.user_tenant_id());
+  create policy "product_images_delete" on product_images for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for product_images';
+exception
+  when undefined_table then raise notice '⚠ Table product_images does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in product_images';
+  when duplicate_object then raise notice '⚠ Policies already exist for product_images';
+end $$;
+
+-- Service Packages: Tenant isolation
+do $$ begin
+  create policy "service_packages_select" on service_packages for select using (tenant_id = public.user_tenant_id());
+  create policy "service_packages_insert" on service_packages for insert with check (tenant_id = public.user_tenant_id());
+  create policy "service_packages_update" on service_packages for update using (tenant_id = public.user_tenant_id());
+  create policy "service_packages_delete" on service_packages for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for service_packages';
+exception
+  when undefined_table then raise notice '⚠ Table service_packages does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in service_packages';
+  when duplicate_object then raise notice '⚠ Policies already exist for service_packages';
+end $$;
+
+-- Warehouses: Tenant isolation
+do $$ begin
+  create policy "warehouses_select" on warehouses for select using (tenant_id = public.user_tenant_id());
+  create policy "warehouses_insert" on warehouses for insert with check (tenant_id = public.user_tenant_id());
+  create policy "warehouses_update" on warehouses for update using (tenant_id = public.user_tenant_id());
+  create policy "warehouses_delete" on warehouses for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for warehouses';
+exception
+  when undefined_table then raise notice '⚠ Table warehouses does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in warehouses';
+  when duplicate_object then raise notice '⚠ Policies already exist for warehouses';
+end $$;
+
+-- Work Orders: Tenant isolation
+do $$ begin
+  create policy "work_orders_select" on work_orders for select using (tenant_id = public.user_tenant_id());
+  create policy "work_orders_insert" on work_orders for insert with check (tenant_id = public.user_tenant_id());
+  create policy "work_orders_update" on work_orders for update using (tenant_id = public.user_tenant_id());
+  create policy "work_orders_delete" on work_orders for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for work_orders';
+exception
+  when undefined_table then raise notice '⚠ Table work_orders does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in work_orders';
+  when duplicate_object then raise notice '⚠ Policies already exist for work_orders';
+end $$;
+
+-- Work Schedules: Tenant isolation
+do $$ begin
+  create policy "work_schedules_select" on work_schedules for select using (tenant_id = public.user_tenant_id());
+  create policy "work_schedules_insert" on work_schedules for insert with check (tenant_id = public.user_tenant_id());
+  create policy "work_schedules_update" on work_schedules for update using (tenant_id = public.user_tenant_id());
+  create policy "work_schedules_delete" on work_schedules for delete using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for work_schedules';
+exception
+  when undefined_table then raise notice '⚠ Table work_schedules does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in work_schedules';
+  when duplicate_object then raise notice '⚠ Policies already exist for work_schedules';
 end $$;
 
 --------------------------------------------------------------------------------

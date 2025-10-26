@@ -4,12 +4,14 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
+import '../services/website_deployment_service.dart';
 import 'banners_management_page.dart';
 import 'featured_products_page.dart';
 import 'content_management_page.dart';
 import 'website_settings_page.dart';
 import 'online_orders_page.dart';
 import 'odoo_style_editor_page.dart';
+import 'website_setup_wizard_page.dart';
 
 /// Main hub for website content management
 class WebsiteManagementPage extends StatefulWidget {
@@ -30,7 +32,13 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
 
   Future<void> _initialize() async {
     final websiteService = context.read<WebsiteService>();
-    await websiteService.initialize();
+    final deploymentService = context.read<WebsiteDeploymentService>();
+    
+    await Future.wait([
+      websiteService.initialize(),
+      deploymentService.loadConfiguration(),
+    ]);
+    
     if (mounted) {
       setState(() => _isInitializing = false);
     }
@@ -145,6 +153,15 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                     label: const Text('Vista Previa'),
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 32),
+
+              // 🚀 DEPLOYMENT STATUS BANNER
+              Consumer<WebsiteDeploymentService>(
+                builder: (context, deploymentService, _) {
+                  return _buildDeploymentStatusBanner(theme, deploymentService);
+                },
               ),
 
               const SizedBox(height: 32),
@@ -420,6 +437,287 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildDeploymentStatusBanner(
+    ThemeData theme,
+    WebsiteDeploymentService deploymentService,
+  ) {
+    // Not configured - show setup wizard call-to-action
+    if (!deploymentService.isConfigured) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.blue.shade50,
+              Colors.purple.shade50,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: theme.colorScheme.primary.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.rocket_launch,
+                size: 48,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '🚀 ¡Despliega Tu Sitio Web!',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tu tienda online aún no está configurada. Despliégala en minutos con un dominio gratuito .web.app',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 20),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const WebsiteSetupWizardPage(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.settings_suggest),
+              label: const Text('Configurar Ahora'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 20,
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Pending deployment
+    if (deploymentService.isPending) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation(Colors.orange),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Despliegue Pendiente',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange.shade900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tu sitio web está en cola para ser desplegado. Esto puede tomar algunos minutos.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => deploymentService.loadConfiguration(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Actualizar'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Deployment failed
+    if (deploymentService.hasFailed) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red, size: 32),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Error en el Despliegue',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red.shade900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    deploymentService.errorMessage ?? 'Ocurrió un error desconocido',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const WebsiteSetupWizardPage(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Successfully deployed
+    if (deploymentService.isDeployed) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.green.shade50,
+              Colors.teal.shade50,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.green),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.check_circle, color: Colors.green, size: 32),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '✅ Sitio Web Activo',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green.shade900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (deploymentService.websiteUrl != null)
+                    SelectableText(
+                      deploymentService.websiteUrl!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  if (deploymentService.deployedAt != null)
+                    Text(
+                      'Desplegado: ${_formatDate(deploymentService.deployedAt!)}',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final url = deploymentService.websiteUrl;
+                if (url != null) {
+                  final uri = Uri.parse(url);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                }
+              },
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Visitar'),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const WebsiteSetupWizardPage(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.settings),
+              tooltip: 'Configuración de Despliegue',
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 
   Widget _buildManagementCard({
