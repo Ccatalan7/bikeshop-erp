@@ -235,22 +235,61 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                     const SizedBox(width: 20),
                     ElevatedButton.icon(
                       onPressed: () async {
-                        // Load existing home page if it exists
-                        final websiteService = context.read<WebsiteService>();
-                        final pageData = await websiteService.getHomePage();
-                        
-                        if (!context.mounted) return;
-                        
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => GrapesJSEditorPage(
-                              initialHtml: pageData?['html_content'] as String?,
-                              initialCss: pageData?['css_content'] as String?,
-                              pageId: pageData?['id'] as String?,
+                        try {
+                          // Load existing home page if it exists
+                          final websiteService = context.read<WebsiteService>();
+                          final pageData = await websiteService.getHomePage();
+                          
+                          if (!context.mounted) return;
+                          
+                          // If no page exists, guide user to run wizard first
+                          if (pageData == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: const Text(
+                                  'No hay página web creada. Por favor ejecuta el asistente primero.',
+                                ),
+                                backgroundColor: Colors.orange,
+                                action: SnackBarAction(
+                                  label: 'Ir al Asistente',
+                                  textColor: Colors.white,
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const WebsiteSetupWizardPage(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => GrapesJSEditorPage(
+                                initialHtml: pageData['html_content'] as String?,
+                                initialCss: pageData['css_content'] as String?,
+                                pageId: pageData['id'] as String?,
+                              ),
                             ),
-                          ),
-                        );
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Error al cargar el editor: ${e.toString()}',
+                              ),
+                              backgroundColor: Colors.red,
+                              duration: const Duration(seconds: 5),
+                            ),
+                          );
+                        }
                       },
                       icon: const Icon(Icons.edit),
                       label: const Text('Abrir Editor'),

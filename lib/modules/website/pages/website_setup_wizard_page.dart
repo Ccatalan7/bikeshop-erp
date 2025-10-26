@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/services/tenant_service.dart';
 import 'odoo_style_editor_page.dart';
-import '../templates/website_templates.dart';
 
 /// 🚀 Website Setup Wizard
 /// 
@@ -22,10 +21,7 @@ class WebsiteSetupWizardPage extends StatefulWidget {
 class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
   int _currentStep = 0;
   
-  // Step 1: Template Selection
-  String _selectedTemplate = 'modern-store';
-  
-  // Step 2: Configuration
+  // Step 1: Configuration
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _shopNameController = TextEditingController();
   final TextEditingController _subdomainController = TextEditingController();
@@ -78,9 +74,9 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
                 ElevatedButton(
                   onPressed: _isDeploying ? null : details.onStepContinue,
                   child: Text(
-                    _currentStep == 3
+                    _currentStep == 2
                         ? 'Finalizar'
-                        : _currentStep == 2
+                        : _currentStep == 1
                             ? _isDeploying
                                 ? 'Desplegando...'
                                 : 'Desplegar Sitio Web'
@@ -92,30 +88,21 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
           );
         },
         steps: [
-          // STEP 1: Choose Template
-          Step(
-            title: const Text('Elegir Plantilla'),
-            subtitle: const Text('Selecciona el diseño de tu tienda'),
-            isActive: _currentStep >= 0,
-            state: _currentStep > 0 ? StepState.complete : StepState.indexed,
-            content: _buildTemplateSelectionStep(theme),
-          ),
-          
-          // STEP 2: Configure Basic Info
+          // STEP 1: Configure Basic Info
           Step(
             title: const Text('Configuración Básica'),
             subtitle: const Text('Nombre y dominio de tu tienda'),
-            isActive: _currentStep >= 1,
-            state: _currentStep > 1 ? StepState.complete : StepState.indexed,
+            isActive: _currentStep >= 0,
+            state: _currentStep > 0 ? StepState.complete : StepState.indexed,
             content: _buildConfigurationStep(theme),
           ),
           
-          // STEP 3: Deploy Website
+          // STEP 2: Deploy Website
           Step(
             title: const Text('Desplegar Sitio Web'),
             subtitle: const Text('Publicar tu tienda online'),
-            isActive: _currentStep >= 2,
-            state: _currentStep > 2 ? StepState.complete : StepState.indexed,
+            isActive: _currentStep >= 1,
+            state: _currentStep > 1 ? StepState.complete : StepState.indexed,
             content: _buildDeploymentStep(theme),
           ),
           
@@ -128,146 +115,6 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
             content: _buildCustomDomainStep(theme),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTemplateSelectionStep(ThemeData theme) {
-    final templates = [
-      {
-        'id': 'modern-store',
-        'name': 'Tienda Moderna',
-        'description': 'Diseño limpio y minimalista, ideal para todo tipo de productos',
-        'preview': 'https://via.placeholder.com/300x200?text=Modern+Store',
-        'features': ['Catálogo de productos', 'Carrito de compras', 'Checkout integrado'],
-      },
-      {
-        'id': 'bike-shop',
-        'name': 'Bike Shop Pro',
-        'description': 'Especializado para tiendas de bicicletas con filtros avanzados',
-        'preview': 'https://via.placeholder.com/300x200?text=Bike+Shop',
-        'features': ['Filtros por categoría', 'Comparador de productos', 'Blog integrado'],
-      },
-      {
-        'id': 'minimalist',
-        'name': 'Minimalista',
-        'description': 'Enfoque en el producto con diseño ultra limpio',
-        'preview': 'https://via.placeholder.com/300x200?text=Minimalist',
-        'features': ['Navegación simple', 'Carga rápida', 'Mobile-first'],
-      },
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Selecciona una plantilla para comenzar',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Podrás personalizar todos los aspectos después del despliegue',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 24),
-        ...templates.map((template) => _buildTemplateCard(template, theme)),
-      ],
-    );
-  }
-
-  Widget _buildTemplateCard(Map<String, dynamic> template, ThemeData theme) {
-    final isSelected = _selectedTemplate == template['id'];
-    
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: isSelected ? 4 : 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isSelected ? theme.colorScheme.primary : Colors.transparent,
-          width: 2,
-        ),
-      ),
-      child: InkWell(
-        onTap: () => setState(() => _selectedTemplate = template['id'] as String),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Preview image
-              Container(
-                width: 150,
-                height: 100,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.grey[200],
-                ),
-                child: Center(
-                  child: Text(
-                    template['name'] as String,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          template['name'] as String,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (isSelected) ...[
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.check_circle,
-                            color: theme.colorScheme.primary,
-                            size: 20,
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      template['description'] as String,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: (template['features'] as List<String>)
-                          .map((feature) => Chip(
-                                label: Text(
-                                  feature,
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                                visualDensity: VisualDensity.compact,
-                              ))
-                          .toList(),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -428,8 +275,6 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
                   _websiteUrl ?? 'https://${_subdomainController.text}.web.app',
                   Icons.link,
                 ),
-                const Divider(),
-                _buildSummaryRow('Plantilla:', _getTemplateName(), Icons.palette),
               ],
             ),
           ),
@@ -658,19 +503,6 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
     );
   }
 
-  String _getTemplateName() {
-    switch (_selectedTemplate) {
-      case 'modern-store':
-        return 'Tienda Moderna';
-      case 'bike-shop':
-        return 'Bike Shop Pro';
-      case 'minimalist':
-        return 'Minimalista';
-      default:
-        return 'Desconocida';
-    }
-  }
-
   Future<void> _checkSubdomainAvailability(String subdomain) async {
     if (subdomain.isEmpty) {
       setState(() => _subdomainAvailable = false);
@@ -702,28 +534,23 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
   Future<void> _onStepContinue() async {
     switch (_currentStep) {
       case 0:
-        // Template selected, move to configuration
-        setState(() => _currentStep = 1);
-        break;
-        
-      case 1:
-        // Validate configuration
+        // Validate configuration and move to deployment
         if (_formKey.currentState!.validate()) {
-          setState(() => _currentStep = 2);
+          setState(() => _currentStep = 1);
         }
         break;
         
-      case 2:
+      case 1:
         // Deploy website
         await _deployWebsite();
         break;
         
-      case 3:
+      case 2:
         // Finish wizard and show preview
         if (context.mounted) {
           Navigator.of(context).pop();
           
-          // Navigate to store preview to see the configured template
+          // Navigate to store preview
           context.go('/tienda');
           
           ScaffoldMessenger.of(context).showSnackBar(
@@ -775,63 +602,33 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
       // Step 1: Save website configuration columns (UPDATE table-level columns)
       setState(() => _deploymentStatus = 'Guardando configuración básica...');
       
-      // First, ensure we have at least one row for this tenant (needed for website columns)
-      final existingRows = await supabase
-        .from('company_settings')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .limit(1);
+      // Ensure we have at least one row for this tenant using upsert function
+      await _upsertSetting(tenantId, 'website_config', _shopNameController.text);
       
-      if (existingRows.isEmpty) {
-        // Create initial row for this tenant
-        await supabase.from('company_settings').insert({
-          'tenant_id': tenantId,
-          'key': 'website_config',
-          'value': _shopNameController.text,
-        });
-      }
-      
-      // Now update website columns for this tenant (updates ALL rows for tenant)
+      // Now update website columns ONLY for the website_config row
       await supabase
         .from('company_settings')
         .update({
           'website_subdomain': _subdomainController.text,
-          'website_status': 'pending',
+          'website_status': 'deployed', // ✅ Set as deployed immediately (no automation exists yet)
           'website_enabled': true,
           'website_url': 'https://${_subdomainController.text}.web.app',
           'updated_at': DateTime.now().toIso8601String(),
         })
-        .eq('tenant_id', tenantId);
+        .eq('tenant_id', tenantId)
+        .eq('key', 'website_config'); // ✅ Only update the website_config row
 
       // Step 2: Save shop name as key-value setting
-      await supabase.from('company_settings').upsert({
-        'tenant_id': tenantId,
-        'key': 'website_shop_name',
-        'value': _shopNameController.text,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      await _upsertSetting(tenantId, 'website_shop_name', _shopNameController.text);
 
-      // Step 3: Save template selection as key-value setting
-      await supabase.from('company_settings').upsert({
-        'tenant_id': tenantId,
-        'key': 'website_template',
-        'value': _selectedTemplate,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-
-      // Step 4: Save description if provided
+      // Step 3: Save description if provided
       if (_descriptionController.text.isNotEmpty) {
-        await supabase.from('company_settings').upsert({
-          'tenant_id': tenantId,
-          'key': 'website_description',
-          'value': _descriptionController.text,
-          'updated_at': DateTime.now().toIso8601String(),
-        });
+        await _upsertSetting(tenantId, 'website_description', _descriptionController.text);
       }
 
-      // ✅ NEW: Save template HTML/CSS to database for GrapesJS editor
-      setState(() => _deploymentStatus = 'Guardando plantilla del sitio web...');
-      await _saveTemplateToDatabase(tenantId, _selectedTemplate);
+      // ✅ Create blank starting page for GrapesJS editor
+      setState(() => _deploymentStatus = 'Creando página inicial...');
+      await _saveTemplateToDatabase(tenantId, 'blank');
 
       // Request deployment - admin must run script manually
       setState(() {
@@ -862,12 +659,6 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
   Future<void> _saveTemplateToDatabase(String tenantId, String templateId) async {
     final supabase = Supabase.instance.client;
     
-    // Find the selected template
-    final template = WebsiteTemplates.all.firstWhere(
-      (t) => t.id == templateId,
-      orElse: () => WebsiteTemplates.all.first,
-    );
-    
     // Delete existing home page for this tenant (fresh start)
     await supabase
       .from('website_pages')
@@ -875,15 +666,28 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
       .eq('tenant_id', tenantId)
       .eq('page_name', 'home');
     
-    // Save template HTML/CSS to database
+    // START WITH BLANK PAGE - No template loading issues
+    // User builds from scratch in GrapesJS editor
     await supabase.from('website_pages').insert({
       'tenant_id': tenantId,
       'page_name': 'home',
-      'html_content': template.htmlContent,
-      'css_content': template.cssContent,
+      'html_content': '<div style="padding: 40px; text-align: center;"><h1>Start Building Your Website</h1><p>Use the blocks on the left to add content.</p></div>',
+      'css_content': 'body { font-family: Arial, sans-serif; margin: 0; padding: 0; }',
       'is_published': true,
       'created_at': DateTime.now().toIso8601String(),
       'updated_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Helper to upsert a setting: uses PostgreSQL function to avoid 409 conflicts
+  Future<void> _upsertSetting(String tenantId, String key, String value) async {
+    final supabase = Supabase.instance.client;
+    
+    // Use PostgreSQL function with ON CONFLICT DO UPDATE
+    await supabase.rpc('upsert_company_setting', params: {
+      'p_tenant_id': tenantId,
+      'p_key': key,
+      'p_value': value,
     });
   }
 }

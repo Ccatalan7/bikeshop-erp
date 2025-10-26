@@ -8,7 +8,7 @@ import '../providers/cart_provider.dart';
 import '../theme/public_store_theme.dart';
 import 'floating_whatsapp_button.dart';
 import 'customer_account_menu.dart';
-import '../../modules/website/pages/odoo_style_editor_page.dart';
+import '../../modules/website/pages/grapesjs_editor_page.dart';
 import '../../modules/website/services/website_service.dart';
 
 class PublicStoreLayout extends StatefulWidget {
@@ -134,15 +134,40 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               bottom: 24,
               right: hasWhatsApp ? 104 : 24,
               child: FloatingActionButton.extended(
-                onPressed: () {
-                  Navigator.of(context)
-                      .push(
-                    MaterialPageRoute(
-                      builder: (context) => const OdooStyleEditorPage(),
-                    ),
-                  )
-                      .then((_) {
+                onPressed: () async {
+                  // Load existing home page for GrapesJS editor
+                  final websiteService = context.read<WebsiteService>();
+                  final pageData = await websiteService.getHomePage();
+                  
+                  print('🔍 [Editar Sitio] Page data: $pageData');
+                  
+                  if (pageData == null) {
+                    // No page found - show error
                     if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No se encontró contenido del sitio web. Ejecuta el wizard primero.'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                  
+                  if (!mounted) return;
+                  
+                  // Open GrapesJS editor with current page data
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => GrapesJSEditorPage(
+                        initialHtml: pageData['html_content'] as String?,
+                        initialCss: pageData['css_content'] as String?,
+                        pageId: pageData['id'] as String?,
+                      ),
+                    ),
+                  ).then((_) {
+                    if (!mounted) return;
+                    // Refresh page data after editing
                     final service = context.read<WebsiteService>();
                     service.loadBlocks();
                     service.loadSettings();

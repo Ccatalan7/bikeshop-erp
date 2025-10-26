@@ -48,16 +48,17 @@ class WebsiteTemplates {
     cssContent: _bikeShopCSS,
   );
 
-  /// Minimalist Template - Clean, simple design
+  /// Minimalist Template - Clean, elegant design
   static const minimalist = WebsiteTemplate(
     id: 'minimalist',
     name: 'Minimalista',
-    description: 'Diseño limpio y simple, enfocado en productos',
-    features: ['Hero simple', 'Grid de productos amplio', 'Sin distracciones'],
+    description: 'Diseño limpio y elegante con enfoque en el producto',
+    features: ['Hero simple', 'Productos destacados', 'Diseño limpio'],
     htmlContent: _minimalistHTML,
     cssContent: _minimalistCSS,
   );
 
+  /// All available templates
   static const List<WebsiteTemplate> all = [
     modernStore,
     bikeShop,
