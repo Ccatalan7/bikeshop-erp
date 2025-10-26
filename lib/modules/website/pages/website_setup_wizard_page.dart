@@ -804,38 +804,29 @@ class _WebsiteSetupWizardPageState extends State<WebsiteSetupWizardPage> {
         .eq('tenant_id', tenantId);
 
       // Step 2: Save shop name as key-value setting
-      await supabase.from('company_settings').upsert(
-        {
-          'tenant_id': tenantId,
-          'key': 'website_shop_name',
-          'value': _shopNameController.text,
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        onConflict: 'tenant_id,key',
-      );
+      await supabase.from('company_settings').upsert({
+        'tenant_id': tenantId,
+        'key': 'website_shop_name',
+        'value': _shopNameController.text,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
 
       // Step 3: Save template selection as key-value setting
-      await supabase.from('company_settings').upsert(
-        {
-          'tenant_id': tenantId,
-          'key': 'website_template',
-          'value': _selectedTemplate,
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        onConflict: 'tenant_id,key',
-      );
+      await supabase.from('company_settings').upsert({
+        'tenant_id': tenantId,
+        'key': 'website_template',
+        'value': _selectedTemplate,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
 
       // Step 4: Save description if provided
       if (_descriptionController.text.isNotEmpty) {
-        await supabase.from('company_settings').upsert(
-          {
-            'tenant_id': tenantId,
-            'key': 'website_description',
-            'value': _descriptionController.text,
-            'updated_at': DateTime.now().toIso8601String(),
-          },
-          onConflict: 'tenant_id,key',
-        );
+        await supabase.from('company_settings').upsert({
+          'tenant_id': tenantId,
+          'key': 'website_description',
+          'value': _descriptionController.text,
+          'updated_at': DateTime.now().toIso8601String(),
+        });
       }
 
       // ✅ NEW: Save template HTML/CSS to database for GrapesJS editor

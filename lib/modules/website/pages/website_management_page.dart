@@ -10,7 +10,6 @@ import 'featured_products_page.dart';
 import 'content_management_page.dart';
 import 'website_settings_page.dart';
 import 'online_orders_page.dart';
-import 'odoo_style_editor_page.dart';
 import 'website_setup_wizard_page.dart';
 import 'grapesjs_editor_page.dart';
 
@@ -567,23 +566,6 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
               onPressed: () => deploymentService.loadConfiguration(),
               icon: const Icon(Icons.refresh),
               label: const Text('Actualizar'),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const OdooStyleEditorPage(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.edit),
-              label: const Text('Abrir Editor'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-              ),
             ),
           ],
         ),
