@@ -14,16 +14,77 @@ create extension if not exists "pgcrypto";
 create table if not exists tenants (
   id uuid primary key default gen_random_uuid(),
   shop_name text not null,
-  subdomain text unique, -- For future multi-domain support (e.g., vinabike.bikeshop.app)
+  subdomain text unique, -- For multi-domain support (e.g., vinabike.bikeshop-erp.app)
   owner_email text,
   plan text default 'free' check (plan in ('free', 'pro', 'enterprise')),
   is_active boolean default true,
   logo_url text,
+  custom_domain text, -- For custom domain support (e.g., www.vinabike.cl)
   currency text default 'CLP',
   timezone text default 'America/Santiago',
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+-- Add custom_domain column if it doesn't exist (for existing databases)
+do $$ begin
+  alter table tenants add column if not exists custom_domain text;
+exception
+  when duplicate_column then null;
+end $$;
+
+-- Add index on custom_domain for faster lookups
+create index if not exists idx_tenants_custom_domain on tenants(custom_domain);
+
+-- Add constraint: subdomain must be URL-safe (lowercase alphanumeric and hyphens)
+do $$ begin
+  alter table tenants add constraint subdomain_format 
+    check (subdomain ~ '^[a-z0-9][a-z0-9-]*[a-z0-9]$');
+exception
+  when duplicate_object then null;
+end $$;
+
+-- Reserved subdomains table: Prevent tenants from using system subdomains
+create table if not exists reserved_subdomains (
+  subdomain text primary key,
+  reason text not null,
+  created_at timestamp with time zone not null default now()
+);
+
+-- Populate reserved subdomains
+insert into reserved_subdomains (subdomain, reason) values
+  ('www', 'System reserved'),
+  ('api', 'System reserved'),
+  ('admin', 'System reserved'),
+  ('app', 'System reserved'),
+  ('mail', 'System reserved'),
+  ('ftp', 'System reserved'),
+  ('store', 'System reserved'),
+  ('shop', 'System reserved'),
+  ('dashboard', 'System reserved'),
+  ('login', 'System reserved'),
+  ('signup', 'System reserved'),
+  ('auth', 'System reserved'),
+  ('cdn', 'System reserved'),
+  ('static', 'System reserved'),
+  ('assets', 'System reserved')
+on conflict (subdomain) do nothing;
+
+-- User profiles: Link auth.users to tenants with roles
+create table if not exists user_profiles (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  role text not null check (role in ('admin', 'manager', 'cashier', 'mechanic', 'accountant')),
+  permissions jsonb not null default '{}'::jsonb,
+  is_active boolean default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(user_id, tenant_id)
+);
+
+create index if not exists idx_user_profiles_user on user_profiles(user_id);
+create index if not exists idx_user_profiles_tenant on user_profiles(tenant_id);
 
 -- User activity log: Track user actions within each tenant
 create table if not exists user_activity_log (
@@ -1529,11 +1590,7 @@ end;
 $$ language plpgsql;
 
 create or replace function public.create_sales_payment_journal_entry(p_payment public.sales_payments)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
+returns void as $$
 declare
   v_invoice record;
   v_entry_id uuid := gen_random_uuid();
@@ -1668,14 +1725,10 @@ begin
     now()
   );
 end;
-$$;
+$$ language plpgsql security definer set search_path = public;
 
 create or replace function public.delete_sales_payment_journal_entry(p_payment_id uuid)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
+returns void as $$
 begin
   if p_payment_id is null then
     return;
@@ -1685,7 +1738,7 @@ begin
    where source_module = 'sales_payments'
      and source_reference = p_payment_id::text;
 end;
-$$;
+$$ language plpgsql security definer set search_path = public;
 
 -- ============================================================================
 -- PURCHASE PAYMENT JOURNAL ENTRY FUNCTIONS (Mirror sales payment pattern)
@@ -9225,7 +9278,7 @@ end;
 $$;
 
 --------------------------------------------------------------------------------
--- HELPER FUNCTION: Get current user's tenant_id from database
+-- HELPER FUNCTION: Get current user's tenant_id from user_profiles
 --------------------------------------------------------------------------------
 create or replace function public.user_tenant_id()
 returns uuid
@@ -9234,13 +9287,36 @@ stable
 security definer
 set search_path = public
 as $$
-  select coalesce(
-    (raw_app_meta_data->>'tenant_id')::uuid,
-    (raw_user_meta_data->>'tenant_id')::uuid
-  )
-  from auth.users
-  where id = auth.uid();
+  select tenant_id 
+  from user_profiles 
+  where user_id = auth.uid() 
+  limit 1;
 $$;
+
+--------------------------------------------------------------------------------
+-- RLS POLICIES: User Profiles
+--------------------------------------------------------------------------------
+alter table user_profiles enable row level security;
+
+-- Drop existing policies first to allow clean redeployment
+drop policy if exists "Users can view their own profiles" on user_profiles;
+drop policy if exists "Admins can manage profiles in their tenant" on user_profiles;
+
+-- Users can view their own profiles
+create policy "Users can view their own profiles" on user_profiles
+  for select
+  using (auth.uid() = user_id);
+
+-- Admins can manage all profiles in their tenant
+create policy "Admins can manage profiles in their tenant" on user_profiles
+  for all
+  using (
+    tenant_id = (
+      select tenant_id from user_profiles 
+      where user_id = auth.uid() and role = 'admin'
+      limit 1
+    )
+  );
 
 --------------------------------------------------------------------------------
 -- ROW LEVEL SECURITY POLICIES: Tenant Isolation
@@ -10106,11 +10182,17 @@ $$;
 -- Drop existing trigger if it exists
 drop trigger if exists on_auth_user_created on auth.users;
 
+-- DISABLED: Old automatic tenant creation trigger
+-- Now using TenantSignupService in Flutter app instead
+-- This allows better control over tenant creation (shop name, subdomain, default data)
+
+/*
 -- Create trigger on new user signup
 create trigger on_auth_user_created
   before insert on auth.users
   for each row
   execute function public.handle_new_user();
+*/
 
 -- ============================================================================
 -- MISSING TABLES - Add tenant_id to tables created manually in Supabase
@@ -10764,6 +10846,77 @@ do $$ begin
   create policy work_order_items_tenant_isolation on work_order_items
     for all using (tenant_id = public.user_tenant_id());
 exception when others then null; end $$;
+
+--------------------------------------------------------------------------------
+-- PUBLIC STORE RLS POLICIES
+-- Allow anonymous (unauthenticated) users to read tenant-scoped data
+-- These policies enable public-facing storefronts to work without auth
+--------------------------------------------------------------------------------
+
+-- Drop existing policies first
+drop policy if exists "public_products_select" on products;
+drop policy if exists "public_categories_select" on categories;
+drop policy if exists "public_website_banners_select" on website_banners;
+drop policy if exists "public_website_content_select" on website_content;
+drop policy if exists "public_website_settings_select" on website_settings;
+drop policy if exists "public_orders_insert" on orders;
+drop policy if exists "public_order_items_insert" on order_items;
+drop policy if exists "public_featured_products_select" on featured_products;
+drop policy if exists "public_product_brands_select" on product_brands;
+
+-- Products: Public read access (only active, in-stock products)
+create policy "public_products_select" on products 
+  for select 
+  to anon
+  using (is_active = true and inventory_qty > 0);
+
+-- Categories: Public read access
+create policy "public_categories_select" on categories 
+  for select 
+  to anon
+  using (true);
+
+-- Website banners: Public read access (only active)
+create policy "public_website_banners_select" on website_banners 
+  for select 
+  to anon
+  using (active = true);
+
+-- Website content: Public read access (all content)
+create policy "public_website_content_select" on website_content 
+  for select 
+  to anon
+  using (true);
+
+-- Website settings: Public read access
+create policy "public_website_settings_select" on website_settings 
+  for select 
+  to anon
+  using (true);
+
+-- Orders: Anonymous users can create orders (guest checkout)
+create policy "public_orders_insert" on orders 
+  for insert 
+  to anon
+  with check (true);
+
+-- Order items: Anonymous users can create order items
+create policy "public_order_items_insert" on order_items 
+  for insert 
+  to anon
+  with check (true);
+
+-- Featured products: Public read access
+create policy "public_featured_products_select" on featured_products 
+  for select 
+  to anon
+  using (active = true);
+
+-- Product brands: Public read access
+create policy "public_product_brands_select" on product_brands 
+  for select 
+  to anon
+  using (true);
 
 notify pgrst, 'reload schema';
 

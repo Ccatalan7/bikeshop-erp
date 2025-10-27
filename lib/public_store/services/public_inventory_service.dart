@@ -1,0 +1,343 @@
+import 'package:flutter/foundation.dart' hide Category;
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../shared/models/product.dart';
+import '../../modules/inventory/models/category_models.dart';
+
+/// Public-facing inventory service for the storefront
+/// 
+/// This service does NOT require authentication - it works for anonymous users.
+/// Instead of using the authenticated user's tenant_id, it accepts tenant_id
+/// as a parameter (from subdomain detection).
+/// 
+/// Use this service ONLY in public store pages (product catalog, product detail).
+/// For admin/authenticated pages, use the regular InventoryProvider.
+/// 
+/// Example usage:
+/// ```dart
+/// final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+/// if (tenantId != null) {
+///   final products = await publicInventoryService.getProductsForTenant(
+///     tenantId: tenantId,
+///   );
+/// }
+/// ```
+class PublicInventoryService extends ChangeNotifier {
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  // Cache products and categories to reduce DB calls
+  final Map<String, List<Product>> _productsCache = {};
+  final Map<String, List<Category>> _categoriesCache = {};
+  final Map<String, DateTime> _cacheTimestamps = {};
+  
+  // Cache duration: 5 minutes
+  static const _cacheDuration = Duration(minutes: 5);
+
+  /// Check if cache is still valid
+  bool _isCacheValid(String key) {
+    final timestamp = _cacheTimestamps[key];
+    if (timestamp == null) return false;
+    return DateTime.now().difference(timestamp) < _cacheDuration;
+  }
+
+  /// Get products for specific tenant (public access)
+  /// 
+  /// Parameters:
+  /// - [tenantId]: The tenant ID (from subdomain detection)
+  /// - [categoryId]: Optional - filter by category
+  /// - [searchQuery]: Optional - search by name or SKU
+  /// - [onlyInStock]: Show only products with inventory_qty > 0 (default: true)
+  /// - [minPrice]: Optional - filter products with price >= minPrice
+  /// - [maxPrice]: Optional - filter products with price <= maxPrice
+  /// - [limit]: Max number of results (default: 100)
+  /// - [offset]: Pagination offset (default: 0)
+  /// 
+  /// Returns list of products or empty list on error
+  Future<List<Product>> getProductsForTenant({
+    required String tenantId,
+    String? categoryId,
+    String? searchQuery,
+    bool onlyInStock = true,
+    double? minPrice,
+    double? maxPrice,
+    int limit = 100,
+    int offset = 0,
+  }) async {
+    try {
+      // Check cache first (only if no filters applied)
+      final cacheKey = 'products_$tenantId';
+      if (categoryId == null && 
+          searchQuery == null && 
+          onlyInStock && 
+          minPrice == null && 
+          maxPrice == null &&
+          offset == 0 &&
+          _isCacheValid(cacheKey)) {
+        debugPrint('📦 PublicInventoryService: Returning cached products for tenant $tenantId');
+        return _productsCache[cacheKey] ?? [];
+      }
+
+      debugPrint('🔍 PublicInventoryService: Fetching products for tenant: $tenantId');
+
+      // Build base query
+      var query = _supabase
+          .from('products')
+          .select()
+          .eq('tenant_id', tenantId);
+
+      // RLS policy already filters for is_active=true and inventory_qty>0 for anon users
+      // Apply additional filters
+
+      if (categoryId != null && categoryId.isNotEmpty) {
+        query = query.eq('category_id', categoryId);
+      }
+
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        // Search in name, SKU, or description
+        query = query.or(
+          'name.ilike.%$searchQuery%,'
+          'sku.ilike.%$searchQuery%,'
+          'description.ilike.%$searchQuery%'
+        );
+      }
+
+      if (minPrice != null) {
+        query = query.gte('price', minPrice);
+      }
+
+      if (maxPrice != null) {
+        query = query.lte('price', maxPrice);
+      }
+
+      // Apply ordering and pagination last
+      final response = await query
+          .order('name', ascending: true)
+          .range(offset, offset + limit - 1);
+      
+      final products = (response as List)
+          .map((json) => Product.fromJson(json))
+          .toList();
+
+      debugPrint('✅ PublicInventoryService: Found ${products.length} products');
+
+      // Cache results if no filters (default view)
+      if (categoryId == null && 
+          searchQuery == null && 
+          onlyInStock && 
+          minPrice == null && 
+          maxPrice == null &&
+          offset == 0) {
+        _productsCache[cacheKey] = products;
+        _cacheTimestamps[cacheKey] = DateTime.now();
+      }
+
+      return products;
+    } catch (e) {
+      debugPrint('❌ PublicInventoryService: Error fetching products: $e');
+      return [];
+    }
+  }
+
+  /// Get categories for specific tenant (public access)
+  /// 
+  /// Parameters:
+  /// - [tenantId]: The tenant ID (from subdomain detection)
+  /// 
+  /// Returns list of categories or empty list on error
+  Future<List<Category>> getCategoriesForTenant({
+    required String tenantId,
+  }) async {
+    try {
+      // Check cache first
+      final cacheKey = 'categories_$tenantId';
+      if (_isCacheValid(cacheKey)) {
+        debugPrint('📦 PublicInventoryService: Returning cached categories for tenant $tenantId');
+        return _categoriesCache[cacheKey] ?? [];
+      }
+
+      debugPrint('🔍 PublicInventoryService: Fetching categories for tenant: $tenantId');
+
+      final response = await _supabase
+          .from('categories')
+          .select()
+          .eq('tenant_id', tenantId)
+          .order('name', ascending: true);
+
+      final categories = (response as List)
+          .map((json) => Category.fromJson(json))
+          .toList();
+
+      debugPrint('✅ PublicInventoryService: Found ${categories.length} categories');
+
+      // Cache results
+      _categoriesCache[cacheKey] = categories;
+      _cacheTimestamps[cacheKey] = DateTime.now();
+
+      return categories;
+    } catch (e) {
+      debugPrint('❌ PublicInventoryService: Error fetching categories: $e');
+      return [];
+    }
+  }
+
+  /// Get single product by ID (public access)
+  /// 
+  /// Parameters:
+  /// - [productId]: The product ID
+  /// - [tenantId]: The tenant ID (for verification)
+  /// 
+  /// Returns product or null if not found/error
+  Future<Product?> getProductById({
+    required String productId,
+    required String tenantId,
+  }) async {
+    try {
+      debugPrint('🔍 PublicInventoryService: Fetching product $productId for tenant $tenantId');
+
+      final response = await _supabase
+          .from('products')
+          .select()
+          .eq('id', productId)
+          .eq('tenant_id', tenantId)
+          .maybeSingle();
+
+      if (response == null) {
+        debugPrint('⚠️ PublicInventoryService: Product $productId not found');
+        return null;
+      }
+
+      final product = Product.fromJson(response);
+      debugPrint('✅ PublicInventoryService: Found product: ${product.name}');
+      return product;
+    } catch (e) {
+      debugPrint('❌ PublicInventoryService: Error fetching product: $e');
+      return null;
+    }
+  }
+
+  /// Get featured products for specific tenant (public access)
+  /// 
+  /// Parameters:
+  /// - [tenantId]: The tenant ID (from subdomain detection)
+  /// - [limit]: Max number of featured products (default: 10)
+  /// 
+  /// Returns list of featured products or empty list on error
+  Future<List<Product>> getFeaturedProductsForTenant({
+    required String tenantId,
+    int limit = 10,
+  }) async {
+    try {
+      debugPrint('🔍 PublicInventoryService: Fetching featured products for tenant: $tenantId');
+
+      // Query featured_products table
+      final featuredResponse = await _supabase
+          .from('featured_products')
+          .select('product_id')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .order('display_order', ascending: true)
+          .limit(limit);
+
+      final productIds = (featuredResponse as List)
+          .map((item) => item['product_id'] as String)
+          .toList();
+
+      if (productIds.isEmpty) {
+        debugPrint('⚠️ PublicInventoryService: No featured products found');
+        return [];
+      }
+
+      // Fetch actual product details
+      final productsResponse = await _supabase
+          .from('products')
+          .select()
+          .inFilter('id', productIds)
+          .eq('tenant_id', tenantId);
+
+      final products = (productsResponse as List)
+          .map((json) => Product.fromJson(json))
+          .toList();
+
+      debugPrint('✅ PublicInventoryService: Found ${products.length} featured products');
+      return products;
+    } catch (e) {
+      debugPrint('❌ PublicInventoryService: Error fetching featured products: $e');
+      return [];
+    }
+  }
+
+  /// Get product count for specific tenant
+  /// 
+  /// Useful for pagination
+  Future<int> getProductCountForTenant({
+    required String tenantId,
+    String? categoryId,
+    String? searchQuery,
+  }) async {
+    try {
+      var query = _supabase
+          .from('products')
+          .select()
+          .eq('tenant_id', tenantId);
+
+      if (categoryId != null && categoryId.isNotEmpty) {
+        query = query.eq('category_id', categoryId);
+      }
+
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        query = query.or(
+          'name.ilike.%$searchQuery%,'
+          'sku.ilike.%$searchQuery%,'
+          'description.ilike.%$searchQuery%'
+        );
+      }
+
+      final response = await query.count();
+      final count = response.count;
+      
+      debugPrint('📊 PublicInventoryService: Product count = $count');
+      return count;
+    } catch (e) {
+      debugPrint('❌ PublicInventoryService: Error counting products: $e');
+      return 0;
+    }
+  }
+
+  /// Clear cache for specific tenant
+  /// 
+  /// Call this when products/categories are updated
+  void clearCache({String? tenantId}) {
+    if (tenantId != null) {
+      _productsCache.remove('products_$tenantId');
+      _categoriesCache.remove('categories_$tenantId');
+      _cacheTimestamps.remove('products_$tenantId');
+      _cacheTimestamps.remove('categories_$tenantId');
+      debugPrint('🗑️ PublicInventoryService: Cleared cache for tenant $tenantId');
+    } else {
+      _productsCache.clear();
+      _categoriesCache.clear();
+      _cacheTimestamps.clear();
+      debugPrint('🗑️ PublicInventoryService: Cleared all cache');
+    }
+    notifyListeners();
+  }
+
+  /// Refresh products for specific tenant
+  /// 
+  /// Forces a cache refresh
+  Future<List<Product>> refreshProductsForTenant({
+    required String tenantId,
+  }) async {
+    clearCache(tenantId: tenantId);
+    return getProductsForTenant(tenantId: tenantId);
+  }
+
+  /// Refresh categories for specific tenant
+  /// 
+  /// Forces a cache refresh
+  Future<List<Category>> refreshCategoriesForTenant({
+    required String tenantId,
+  }) async {
+    clearCache(tenantId: tenantId);
+    return getCategoriesForTenant(tenantId: tenantId);
+  }
+}

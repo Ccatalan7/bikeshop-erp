@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
+import '../services/tenant_signup_service.dart';
 import '../widgets/app_button.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -18,6 +19,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _shopNameController = TextEditingController(); // NEW: Shop name for signup
+  final _phoneController = TextEditingController();     // NEW: Optional phone number
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _isRegisterMode = false;
@@ -27,6 +30,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _shopNameController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -85,13 +90,59 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Step 1: Create user account
       final authService = Provider.of<AuthService>(context, listen: false);
       await authService.createUserWithEmailAndPassword(
         _emailController.text.trim(),
         _passwordController.text,
       );
 
+      // Step 2: Get the newly created user's ID
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) {
+        throw Exception('No se pudo obtener el ID del usuario');
+      }
+
+      // Step 3: Create tenant and initialize default data
+      final tenantSignupService = TenantSignupService();
+      final tenant = await tenantSignupService.createTenantForUser(
+        userId: userId,
+        email: _emailController.text.trim(),
+        shopName: _shopNameController.text.trim(),
+        phoneNumber: _phoneController.text.trim().isEmpty 
+            ? null 
+            : _phoneController.text.trim(),
+      );
+
+      if (tenant == null) {
+        // Failed to create tenant - show error and sign out
+        await authService.signOut();
+        throw Exception('Error al crear la tienda. Por favor intente nuevamente.');
+      }
+
+      // Step 4: Show success message with store URL
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '🎉 ¡Cuenta creada exitosamente!',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text('Tu tienda: ${tenant.shopName}'),
+                Text('URL: https://${tenant.subdomain}.bikeshop-erp.app'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+
+        // Navigate to dashboard
         context.go('/dashboard');
       }
     } on AuthException catch (e) {
@@ -222,6 +273,41 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 48),
+
+                  // Shop Name Field (only in register mode)
+                  if (_isRegisterMode) ...[
+                    TextFormField(
+                      controller: _shopNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre de tu Tienda',
+                        prefixIcon: Icon(Icons.store),
+                        hintText: 'Ej: Vinabike',
+                        helperText: 'Se usará para crear tu URL: nombre.bikeshop-erp.app',
+                      ),
+                      validator: (value) {
+                        if (!_isRegisterMode) return null;
+                        if (value == null || value.isEmpty) {
+                          return 'Por favor ingrese el nombre de su tienda';
+                        }
+                        if (value.length < 3) {
+                          return 'El nombre debe tener al menos 3 caracteres';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Teléfono (Opcional)',
+                        prefixIcon: Icon(Icons.phone),
+                        hintText: 'Ej: +56912345678',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
                   // Email Field
                   TextFormField(

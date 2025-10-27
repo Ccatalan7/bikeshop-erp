@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/public_store_theme.dart';
-import '../../shared/services/inventory_service.dart';
+import '../services/public_inventory_service.dart';
+import '../providers/public_store_tenant_provider.dart';
 import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../providers/cart_provider.dart';
@@ -35,8 +36,26 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
     setState(() => _isLoading = true);
 
     try {
-      final inventoryService = context.read<InventoryService>();
-      _allProducts = await inventoryService.getProducts();
+      // Get tenant from provider (detected from subdomain)
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      final tenantId = tenantProvider.tenantId;
+
+      if (tenantId == null) {
+        debugPrint('[ProductCatalogPage] No tenant detected - cannot load products');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      debugPrint('[ProductCatalogPage] Loading products for tenant: $tenantId');
+
+      // Use public inventory service (works for anonymous users)
+      final publicInventoryService = context.read<PublicInventoryService>();
+      _allProducts = await publicInventoryService.getProductsForTenant(
+        tenantId: tenantId,
+        onlyInStock: true, // Only show products with inventory
+      );
+
+      debugPrint('[ProductCatalogPage] Loaded ${_allProducts.length} products');
 
       // Calculate price range
       if (_allProducts.isNotEmpty) {
