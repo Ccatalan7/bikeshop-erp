@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "🚀 Deploy to Firebase (Both Sites)",
+			"type": "shell",
+			"command": "flutter build web --release && firebase deploy --only hosting",
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

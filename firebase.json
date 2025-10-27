@@ -31,7 +31,10 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.exe",
+        "**/*.wasm",
+        "**/*.mjs"
       ],
       "rewrites": [
         {
@@ -46,7 +49,10 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.exe",
+        "**/*.wasm",
+        "**/*.mjs"
       ],
       "rewrites": [
         {
