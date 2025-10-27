@@ -90,23 +90,71 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Step 1: Create user account
-      final authService = Provider.of<AuthService>(context, listen: false);
-      await authService.createUserWithEmailAndPassword(
-        _emailController.text.trim(),
-        _passwordController.text,
+      final supabase = Supabase.instance.client;
+      
+      // Step 1: Sign up user with shop metadata (for database trigger)
+      final response = await supabase.auth.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        data: {
+          'shop_name': _shopNameController.text.trim(),
+          'subdomain': _shopNameController.text.trim()
+              .toLowerCase()
+              .replaceAll(RegExp(r'[^a-z0-9]'), ''), // Generate subdomain from shop name
+        },
       );
 
-      // Step 2: Get the newly created user's ID
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) {
-        throw Exception('No se pudo obtener el ID del usuario');
+      // Step 2: Check if user was created
+      final user = response.user;
+      if (user == null) {
+        throw Exception('Error al crear la cuenta. Por favor intente con otro correo.');
       }
 
-      // Step 3: Create tenant and initialize default data
+      // Step 3: Check if email confirmation is required
+      final session = response.session;
+      if (session == null) {
+        // Email confirmation required - show message and don't create tenant yet
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '📧 Confirma tu correo electrónico',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Te enviamos un correo a: ${_emailController.text}'),
+                  const SizedBox(height: 4),
+                  const Text('Por favor, haz clic en el enlace de confirmación.'),
+                  const SizedBox(height: 4),
+                  const Text('Después podrás iniciar sesión y configurar tu tienda.'),
+                ],
+              ),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 8),
+            ),
+          );
+
+          // Return to login mode
+          setState(() {
+            _isRegisterMode = false;
+            _emailController.clear();
+            _passwordController.clear();
+            _confirmPasswordController.clear();
+            _shopNameController.clear();
+            _phoneController.clear();
+          });
+        }
+        return;
+      }
+
+      // Step 4: User is auto-confirmed (session exists) - create tenant
       final tenantSignupService = TenantSignupService();
       final tenant = await tenantSignupService.createTenantForUser(
-        userId: userId,
+        userId: user.id,
         email: _emailController.text.trim(),
         shopName: _shopNameController.text.trim(),
         phoneNumber: _phoneController.text.trim().isEmpty 
@@ -116,11 +164,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (tenant == null) {
         // Failed to create tenant - show error and sign out
-        await authService.signOut();
+        await supabase.auth.signOut();
         throw Exception('Error al crear la tienda. Por favor intente nuevamente.');
       }
 
-      // Step 4: Show success message with store URL
+      // Step 5: Show success message with store URL
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -130,15 +178,16 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const Text(
                   '🎉 ¡Cuenta creada exitosamente!',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
+                const SizedBox(height: 8),
+                Text('🏪 Tu tienda: ${tenant.shopName}'),
                 const SizedBox(height: 4),
-                Text('Tu tienda: ${tenant.shopName}'),
-                Text('URL: https://${tenant.subdomain}.bikeshop-erp.app'),
+                Text('🌐 URL: https://${tenant.subdomain}.bikeshop-erp.app'),
               ],
             ),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 5),
+            duration: const Duration(seconds: 6),
           ),
         );
 

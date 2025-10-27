@@ -9301,22 +9301,22 @@ alter table user_profiles enable row level security;
 -- Drop existing policies first to allow clean redeployment
 drop policy if exists "Users can view their own profiles" on user_profiles;
 drop policy if exists "Admins can manage profiles in their tenant" on user_profiles;
+drop policy if exists "Users can create their own profile during signup" on user_profiles;
 
 -- Users can view their own profiles
 create policy "Users can view their own profiles" on user_profiles
   for select
   using (auth.uid() = user_id);
 
+-- Users can create their own profile during signup (for tenant creation)
+create policy "Users can create their own profile during signup" on user_profiles
+  for insert
+  with check (auth.uid() = user_id);
+
 -- Admins can manage all profiles in their tenant
 create policy "Admins can manage profiles in their tenant" on user_profiles
   for all
-  using (
-    tenant_id = (
-      select tenant_id from user_profiles 
-      where user_id = auth.uid() and role = 'admin'
-      limit 1
-    )
-  );
+  using (tenant_id = user_tenant_id());
 
 --------------------------------------------------------------------------------
 -- ROW LEVEL SECURITY POLICIES: Tenant Isolation
@@ -9465,9 +9465,23 @@ exception
 end $$;
 
 -- Tenants table: Users can only see their own tenant
+-- Special policy: Allow INSERT for authenticated users (for signup)
 do $$ begin
-  create policy "tenant_select_own" on tenants for select using (id = public.user_tenant_id());
-  create policy "tenant_update_own" on tenants for update using (id = public.user_tenant_id());
+  create policy "tenant_select_own" on tenants for select using (
+    exists (
+      select 1 from user_profiles 
+      where user_profiles.tenant_id = tenants.id 
+        and user_profiles.user_id = auth.uid()
+    )
+  );
+  create policy "tenant_insert_authenticated" on tenants for insert with check (auth.uid() IS NOT NULL);
+  create policy "tenant_update_own" on tenants for update using (
+    exists (
+      select 1 from user_profiles 
+      where user_profiles.tenant_id = tenants.id 
+        and user_profiles.user_id = auth.uid()
+    )
+  );
   raise notice '✓ Created RLS policies for tenants';
 exception
   when undefined_table then raise notice '⚠ Table tenants does not exist yet';
@@ -10089,6 +10103,9 @@ declare
   v_tenant_id uuid;
   v_invitation record;
   v_shop_name text;
+  v_subdomain text;
+  v_subdomain_base text;
+  v_counter integer := 1;
 begin
   -- Check if user was invited (has pending invitation)
   select * into v_invitation
@@ -10105,24 +10122,14 @@ begin
     -- ========================================================================
     v_tenant_id := v_invitation.tenant_id;
     
-    new.raw_app_meta_data := jsonb_build_object(
-      'tenant_id', v_tenant_id,
-      'role', v_invitation.role,
-      'permissions', v_invitation.permissions
-    );
+    -- Create user_profile entry linking user to tenant
+    insert into user_profiles (user_id, tenant_id, role, is_active)
+    values (new.id, v_tenant_id, v_invitation.role, true);
     
     -- Mark invitation as accepted
     update user_invitations
     set status = 'accepted', accepted_at = now()
     where id = v_invitation.id;
-    
-    -- Log activity
-    insert into user_activity_log (tenant_id, user_id, action, details, performed_by)
-    values (v_tenant_id, new.id, 'user_joined', jsonb_build_object(
-      'email', new.email,
-      'role', v_invitation.role,
-      'invited_by', v_invitation.invited_by
-    ), v_invitation.invited_by);
     
     raise notice 'User % joined tenant % via invitation', new.email, v_tenant_id;
   else
@@ -10133,14 +10140,33 @@ begin
     -- Extract shop name from signup data or email
     v_shop_name := coalesce(
       new.raw_user_meta_data->>'shop_name',
-      new.raw_user_meta_data->>'name',
-      split_part(new.email, '@', 1)
-    ) || '''s Shop';
+      split_part(new.email, '@', 1) || '''s Shop'
+    );
+    
+    -- Generate base subdomain from shop name or email
+    v_subdomain_base := coalesce(
+      new.raw_user_meta_data->>'subdomain',
+      lower(regexp_replace(split_part(new.email, '@', 1), '[^a-z0-9]', '', 'g'))
+    );
+    
+    v_subdomain := v_subdomain_base;
+    
+    -- Handle duplicate subdomains by appending counter
+    while exists (select 1 from tenants where subdomain = v_subdomain) loop
+      v_subdomain := v_subdomain_base || v_counter;
+      v_counter := v_counter + 1;
+      
+      -- Prevent infinite loop
+      if v_counter > 100 then
+        raise exception 'Could not generate unique subdomain for %', new.email;
+      end if;
+    end loop;
     
     -- Create new tenant
-    insert into tenants (shop_name, owner_email, plan, is_active, currency, timezone)
+    insert into tenants (shop_name, subdomain, owner_email, plan, is_active, currency, timezone)
     values (
       v_shop_name,
+      v_subdomain,
       new.email,
       'free',  -- Start with free plan
       true,
@@ -10149,30 +10175,11 @@ begin
     )
     returning id into v_tenant_id;
     
-    -- Assign as manager with full permissions
-    new.raw_app_meta_data := jsonb_build_object(
-      'tenant_id', v_tenant_id,
-      'role', 'manager',
-      'permissions', jsonb_build_object(
-        'access_pos', true,
-        'manage_inventory', true,
-        'view_reports', true,
-        'manage_accounting', true,
-        'manage_users', true,
-        'delete_invoices', true,
-        'edit_prices', true,
-        'access_hr', true
-      )
-    );
+    -- Create user_profile entry linking user to tenant as admin
+    insert into user_profiles (user_id, tenant_id, role, is_active)
+    values (new.id, v_tenant_id, 'admin', true);
     
-    -- Log activity
-    insert into user_activity_log (tenant_id, user_id, action, details)
-    values (v_tenant_id, new.id, 'tenant_created', jsonb_build_object(
-      'email', new.email,
-      'shop_name', v_shop_name
-    ));
-    
-    raise notice 'Created new tenant % for user %', v_tenant_id, new.email;
+    raise notice 'Created new tenant % for user % with subdomain %', v_tenant_id, new.email, v_subdomain;
   end if;
 
   return new;
@@ -10182,17 +10189,15 @@ $$;
 -- Drop existing trigger if it exists
 drop trigger if exists on_auth_user_created on auth.users;
 
--- DISABLED: Old automatic tenant creation trigger
--- Now using TenantSignupService in Flutter app instead
--- This allows better control over tenant creation (shop name, subdomain, default data)
+-- ENABLED: Automatic tenant creation trigger
+-- This automatically creates tenant + user_profile when users sign up
+-- Works for both auto-confirm and email confirmation flows
 
-/*
--- Create trigger on new user signup
+-- Create trigger on new user signup (AFTER INSERT so user ID exists)
 create trigger on_auth_user_created
-  before insert on auth.users
+  after insert on auth.users
   for each row
   execute function public.handle_new_user();
-*/
 
 -- ============================================================================
 -- MISSING TABLES - Add tenant_id to tables created manually in Supabase

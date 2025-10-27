@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/website_models.dart';
 import '../../../shared/models/product.dart';
+import '../../../shared/services/tenant_service.dart';
 
 /// Service for managing website content, banners, featured products, and online orders
 class WebsiteService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
+  final TenantService _tenantService = TenantService();
 
   List<WebsiteBanner> _banners = [];
   List<FeaturedProduct> _featuredProducts = [];
@@ -60,7 +62,13 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> saveBanner(WebsiteBanner banner) async {
     try {
+      final tenantId = await _tenantService.getTenantId(); // ✅ Use async version
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant_id del usuario');
+      }
+
       final data = banner.toJson();
+      data['tenant_id'] = tenantId; // ✅ Add tenant_id
       data['updated_at'] = DateTime.now().toIso8601String();
 
       await _supabase.from('website_banners').upsert(data);
@@ -215,6 +223,11 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> addFeaturedProduct(String productId) async {
     try {
+      final tenantId = await _tenantService.getTenantId(); // ✅ Use async version
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant_id del usuario');
+      }
+
       // Get current max order index
       int maxOrder = 0;
       if (_featuredProducts.isNotEmpty) {
@@ -224,6 +237,7 @@ class WebsiteService extends ChangeNotifier {
       }
 
       await _supabase.from('featured_products').insert({
+        'tenant_id': tenantId, // ✅ Add tenant_id
         'product_id': productId,
         'active': true,
         'order_index': maxOrder + 1,
@@ -296,7 +310,13 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> saveContent(WebsiteContent content) async {
     try {
+      final tenantId = await _tenantService.getTenantId(); // ✅ Use async version
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant_id del usuario');
+      }
+
       final data = content.toJson();
+      data['tenant_id'] = tenantId; // ✅ Add tenant_id
       data['updated_at'] = DateTime.now().toIso8601String();
 
       await _supabase.from('website_content').upsert(data);

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/website_service.dart';
+import '../../../shared/services/tenant_service.dart';
+import '../../../shared/models/tenant.dart';
 
 /// Page for configuring website settings
 class WebsiteSettingsPage extends StatefulWidget {
@@ -44,6 +46,7 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
 
   bool _isLoading = false;
   bool _isSaving = false;
+  Tenant? _currentTenant;
 
   @override
   void initState() {
@@ -97,44 +100,63 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
       final service = context.read<WebsiteService>();
       await service.loadSettings();
 
+      // Load current tenant data
+      final tenantService = context.read<TenantService>();
+      final tenantData = await tenantService.getCurrentTenant();
+      
+      debugPrint('🔍 Tenant data loaded: $tenantData');
+      
+      if (tenantData != null && mounted) {
+        _currentTenant = Tenant.fromJson(tenantData);
+        debugPrint('✅ Tenant object created: ${_currentTenant?.shopName} (${_currentTenant?.subdomain})');
+      } else {
+        debugPrint('❌ Tenant data is NULL!');
+      }
+
       if (mounted) {
+        final tenantName = _currentTenant?.shopName ?? 'Mi Tienda';
+        final tenantSubdomain = _currentTenant?.subdomain ?? 'mitienda';
+        final tenantEmail = _currentTenant?.ownerEmail ?? 'contacto@mitienda.cl';
+        
+        debugPrint('📝 Using values: name=$tenantName, subdomain=$tenantSubdomain, email=$tenantEmail');
+        
         setState(() {
-          // Store info
+          // Store info - Use tenant data as defaults
           _storeNameController.text =
-              service.getSetting('store_name', 'Vinabike');
+              service.getSetting('store_name', tenantName);
           _storeUrlController.text =
-              service.getSetting('store_url', 'https://tienda.vinabike.cl');
+              service.getSetting('store_url', 'https://$tenantSubdomain.bikeshop-erp.app');
           _storeDescriptionController.text = service.getSetting(
               'store_description',
-              'Tienda de bicicletas y accesorios en Chile');
+              'Tienda de bicicletas y accesorios');
 
-          // Contact
+          // Contact - Use tenant data as defaults
           _contactEmailController.text =
-              service.getSetting('contact_email', 'contacto@vinabike.cl');
+              service.getSetting('contact_email', tenantEmail);
           _contactPhoneController.text =
-              service.getSetting('contact_phone', '+56 2 2345 6789');
+              service.getSetting('contact_phone', '');
           _contactAddressController.text = service.getSetting(
-              'contact_address', 'Av. Providencia 123, Santiago');
+              'contact_address', '');
           _whatsappController.text =
-              service.getSetting('whatsapp', '+56912345678');
+              service.getSetting('whatsapp', '');
 
           // Social media
           _facebookController.text =
-              service.getSetting('facebook', 'vinabikechile');
+              service.getSetting('facebook', '');
           _instagramController.text =
-              service.getSetting('instagram', '@vinabikecl');
-          _twitterController.text = service.getSetting('twitter', '@vinabike');
+              service.getSetting('instagram', '');
+          _twitterController.text = service.getSetting('twitter', '');
           _youtubeController.text =
-              service.getSetting('youtube', '@vinabikechannel');
+              service.getSetting('youtube', '');
 
-          // SEO
+          // SEO - Use tenant data as defaults
           _metaTitleController.text = service.getSetting(
-              'meta_title', 'Vinabike - Tienda de Bicicletas');
+              'meta_title', '$tenantName - Tienda de Bicicletas');
           _metaDescriptionController.text = service.getSetting(
               'meta_description',
-              'Las mejores bicicletas y accesorios en Chile. Envío a todo el país.');
+              'Tienda de bicicletas y accesorios. Envío a todo el país.');
           _metaKeywordsController.text = service.getSetting('meta_keywords',
-              'bicicletas, mtb, ruta, accesorios, ciclismo, chile');
+              'bicicletas, mtb, ruta, accesorios, ciclismo');
 
           // Feature toggles
           _enableOrders = service.getSetting('enable_orders', 'true') == 'true';

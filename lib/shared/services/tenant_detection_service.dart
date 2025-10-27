@@ -8,13 +8,27 @@ class TenantDetectionService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   /// Main domain patterns for subdomain extraction
-  /// Update these when deploying to production
+  /// Works with ANY hosting provider (Firebase, Vercel, Netlify, custom domains, etc.)
+  /// Add your production domain here when deploying
   static const List<String> mainDomains = [
+    // Production domain (add your domain here)
     'bikeshop-erp.app',
+    
+    // Vercel preview/production domains
     'bikeshop-erp.vercel.app',
+    
+    // Firebase Hosting domains
     'project-vinabike.web.app',
+    'project-vinabike.firebaseapp.com',
     'vinabike-store.web.app',
+    'vinabike-store.firebaseapp.com',
+    
+    // Netlify domains (if using Netlify)
+    'bikeshop-erp.netlify.app',
+    
+    // Development
     'localhost',
+    '127.0.0.1',
   ];
 
   /// Extract subdomain from current URL

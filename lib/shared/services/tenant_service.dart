@@ -10,15 +10,42 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class TenantService extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
 
-  /// Get the current user's tenant_id from their metadata
+  /// Get the current user's tenant_id from user_profiles table
+  /// This is the single source of truth for tenant_id
+  Future<String?> getTenantId() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return null;
+    
+    try {
+      final response = await _supabase
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+      
+      if (response == null) return null;
+      return response['tenant_id'] as String?;
+    } catch (e) {
+      debugPrint('❌ Error getting tenant_id: $e');
+      return null;
+    }
+  }
+
+  /// Get the current user's tenant_id (synchronous - from cache)
+  /// For immediate use, but may be null if not cached
+  /// Prefer using getTenantId() for reliable results
   String? get currentTenantId {
     final user = _supabase.auth.currentUser;
     if (user == null) return null;
     
+    // Try to get from metadata first (cached)
     final metadata = user.userMetadata;
-    if (metadata == null) return null;
+    if (metadata != null && metadata['tenant_id'] != null) {
+      return metadata['tenant_id'] as String?;
+    }
     
-    return metadata['tenant_id'] as String?;
+    // If not in metadata, need to query database (use getTenantId() instead)
+    return null;
   }
 
   /// Get the current user's role
@@ -76,9 +103,9 @@ class TenantService extends ChangeNotifier {
 
   /// Fetch current tenant details
   Future<Map<String, dynamic>?> getCurrentTenant() async {
-    final tenantId = currentTenantId;
+    final tenantId = await getTenantId(); // ✅ Use async version
     if (tenantId == null) {
-      debugPrint('❌ No tenant_id found in user metadata');
+      debugPrint('❌ No tenant_id found for current user');
       return null;
     }
 
@@ -89,6 +116,7 @@ class TenantService extends ChangeNotifier {
           .eq('id', tenantId)
           .single();
 
+      debugPrint('✅ Loaded tenant: ${response['shop_name']} (${response['subdomain']})');
       return response;
     } catch (e) {
       debugPrint('❌ Error fetching tenant: $e');

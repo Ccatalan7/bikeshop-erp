@@ -638,6 +638,17 @@ class _AppSidebarState extends State<AppSidebar> {
                 const SizedBox(height: 8),
                 _buildSectionDivider(context),
 
+                // Website Module
+                _buildSidebarItem(
+                  context,
+                  icon: Icons.language_outlined,
+                  activeIcon: Icons.language,
+                  title: 'Sitio Web',
+                  route: '/website',
+                  currentLocation: currentLocation,
+                  enabled: true,
+                ),
+
                 // Additional Modules (Disabled for now)
                 _buildSidebarItem(
                   context,
