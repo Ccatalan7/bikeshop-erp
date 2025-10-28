@@ -38,7 +38,13 @@ class TenantService extends ChangeNotifier {
     final user = _supabase.auth.currentUser;
     if (user == null) return null;
     
-    // Try to get from metadata first (cached)
+    // CRITICAL FIX: Try app_metadata first (set by database trigger)
+    final appMetadata = user.appMetadata;
+    if (appMetadata['tenant_id'] != null) {
+      return appMetadata['tenant_id'] as String?;
+    }
+    
+    // Try to get from user_metadata second (cached)
     final metadata = user.userMetadata;
     if (metadata != null && metadata['tenant_id'] != null) {
       return metadata['tenant_id'] as String?;
@@ -110,11 +116,18 @@ class TenantService extends ChangeNotifier {
     }
 
     try {
+      debugPrint('🔍 Fetching tenant with id: $tenantId');
       final response = await _supabase
           .from('tenants')
           .select()
           .eq('id', tenantId)
-          .single();
+          .maybeSingle(); // ✅ Use maybeSingle() instead of single() - returns null if not found
+
+      if (response == null) {
+        debugPrint('⚠️ No tenant found with id: $tenantId');
+        debugPrint('⚠️ This user may need to create a tenant or be assigned to one');
+        return null;
+      }
 
       debugPrint('✅ Loaded tenant: ${response['shop_name']} (${response['subdomain']})');
       return response;

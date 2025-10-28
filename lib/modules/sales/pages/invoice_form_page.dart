@@ -9,6 +9,7 @@ import '../../../shared/models/product.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -288,6 +289,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         (customer) => customer.id == invoice.customerId,
         orElse: () => Customer(
           id: invoice.customerId,
+          tenantId: '', // Display-only fallback
           name: invoice.customerName ?? 'Cliente',
           rut: invoice.customerRut ?? '',
           email: null,
@@ -677,9 +679,15 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       );
       return;
     }
+    
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null) {
+      throw Exception('User does not have a tenant_id. Cannot proceed.');
+    }
 
     final invoice = Invoice(
       id: _loadedInvoice?.id,
+      tenantId: tenantId,
       invoiceNumber: _invoiceNumberController.text.trim(),
       customerId: customerId,
       customerName: _selectedCustomer!.name,

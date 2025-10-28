@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/services/image_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/models/product.dart';
@@ -37,19 +38,42 @@ import '../models/website_block_type.dart';
 // Block data model
 class WebsiteBlock {
   final String id;
+  final String? tenantId; // Optional because it's added by WebsiteService
   final WebsiteBlockType type;
   final Map<String, dynamic> data;
   bool isVisible;
 
   WebsiteBlock({
     required this.id,
+    this.tenantId,
     required this.type,
     required this.data,
     this.isVisible = true,
   });
 
+  factory WebsiteBlock.fromJson(Map<String, dynamic> json) {
+    return WebsiteBlock(
+      id: json['id']?.toString() ?? '',
+      tenantId: json['tenant_id']?.toString(),
+      type: parseWebsiteBlockType(json['block_type']?.toString() ?? 'hero'),
+      data: Map<String, dynamic>.from(json['block_data'] ?? {}),
+      isVisible: json['is_visible'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      if (tenantId != null) 'tenant_id': tenantId,
+      'block_type': type.name,
+      'block_data': data,
+      'is_visible': isVisible,
+    };
+  }
+
   WebsiteBlock copyWith({
     String? id,
+    String? tenantId,
     WebsiteBlockType? type,
     Map<String, dynamic>? data,
     bool? isVisible,
@@ -60,6 +84,7 @@ class WebsiteBlock {
 
     return WebsiteBlock(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       type: type ?? this.type,
       data: data != null ? cloneData(data) : cloneData(this.data),
       isVisible: isVisible ?? this.isVisible,
@@ -914,7 +939,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
     return MainLayout(
       child: Scaffold(
-        backgroundColor: theme.colorScheme.surfaceContainerLowest,
+        backgroundColor: Colors.white,
         appBar: _buildAppBar(theme),
         body: Row(
           children: [
@@ -924,9 +949,15 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
               child: _buildPreviewPanel(theme),
             ),
 
-            // RIGHT: 3-Tab Edit Panel
-            SizedBox(
+            // RIGHT: 3-Tab Edit Panel - One solid piece
+            Container(
               width: 380,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  left: BorderSide(color: Colors.grey.shade300, width: 1),
+                ),
+              ),
               child: _buildEditPanel(theme),
             ),
           ],
@@ -939,44 +970,57 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     return AppBar(
       title: Row(
         children: [
-          const Text('🎨 Editor Odoo-Style'),
+          const Text(
+            'Editor Visual',
+            style: TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(width: 12),
           if (_hasChanges)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.orange.shade100,
-                borderRadius: BorderRadius.circular(4),
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.orange.shade200),
               ),
-              child: const Text(
+              child: Text(
                 'Sin guardar',
                 style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.orange,
-                    fontWeight: FontWeight.bold),
+                  fontSize: 11,
+                  color: Colors.orange.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           if (_autoSaveEnabled && !_hasChanges)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.green.shade100,
-                borderRadius: BorderRadius.circular(4),
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.green.shade200),
               ),
-              child: const Text(
+              child: Text(
                 'Auto-guardado ✓',
                 style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.green,
-                    fontWeight: FontWeight.bold),
+                  fontSize: 11,
+                  color: Colors.green.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
         ],
       ),
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: Colors.white,
+      foregroundColor: Colors.black87,
       elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.grey.shade300,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
+        icon: const Icon(Icons.arrow_back, color: Colors.black87),
         onPressed: () {
           if (_hasChanges) {
             _showUnsavedChangesDialog();
@@ -994,30 +1038,49 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       actions: [
         // Undo/Redo
         IconButton(
-          icon: const Icon(Icons.undo),
+          icon: const Icon(Icons.undo, color: Colors.black87),
           onPressed: _historyIndex > 0 ? _undo : null,
           tooltip: 'Deshacer',
         ),
         IconButton(
-          icon: const Icon(Icons.redo),
+          icon: const Icon(Icons.redo, color: Colors.black87),
           onPressed: _historyIndex < _history.length - 1 ? _redo : null,
           tooltip: 'Rehacer',
         ),
 
-        const VerticalDivider(),
+        Container(
+          width: 1,
+          height: 30,
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          color: Colors.grey.shade300,
+        ),
 
         // Auto-save toggle
         Tooltip(
           message: 'Auto-guardado',
-          child: Switch(
-            value: _autoSaveEnabled,
-            onChanged: (value) => setState(() => _autoSaveEnabled = value),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Auto-guardar',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Switch(
+                value: _autoSaveEnabled,
+                onChanged: (value) => setState(() => _autoSaveEnabled = value),
+                activeColor: theme.colorScheme.primary,
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 16),
 
         // Preview - More prominent button
-        ElevatedButton.icon(
+        FilledButton.icon(
           onPressed: _isSaving
               ? null
               : () async {
@@ -1033,7 +1096,6 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                     await Future.wait([
                       websiteService.loadBlocks(),
                       websiteService.loadSettings(),
-                      websiteService.loadBanners(),
                       websiteService.loadFeaturedProducts(),
                     ]);
 
@@ -1061,15 +1123,15 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                 },
           icon: const Icon(Icons.visibility),
           label: const Text('Vista Previa'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green.shade600,
+          style: FilledButton.styleFrom(
+            backgroundColor: theme.colorScheme.primary,
             foregroundColor: Colors.white,
           ),
         ),
         const SizedBox(width: 8),
 
         // Save
-        ElevatedButton.icon(
+        FilledButton.icon(
           onPressed: _hasChanges && !_isSaving ? () => _saveChanges() : null,
           icon: _isSaving
               ? const SizedBox(
@@ -1080,7 +1142,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                 )
               : const Icon(Icons.save),
           label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
-          style: ElevatedButton.styleFrom(
+          style: FilledButton.styleFrom(
             backgroundColor:
                 _hasChanges ? theme.colorScheme.primary : Colors.grey,
             foregroundColor: Colors.white,
@@ -1093,7 +1155,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
   Widget _buildPreviewPanel(ThemeData theme) {
     return Container(
-      color: theme.colorScheme.surfaceContainerLow,
+      color: Colors.white,
       child: Column(
         children: [
           // Preview toolbar
@@ -1110,99 +1172,102 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
   Widget _buildPreviewToolbar(ThemeData theme) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF37474F), // Dark blue-grey for better contrast
-        border: Border(bottom: BorderSide(color: Colors.grey.shade700)),
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade300, width: 1),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.touch_app, size: 20, color: Colors.white),
+          Icon(Icons.touch_app, size: 20, color: theme.colorScheme.primary),
           const SizedBox(width: 12),
           Text(
-            '👆 Haz clic en los bloques para editarlos',
+            'Haz clic en los bloques para editarlos',
             style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
             ),
           ),
           const Spacer(),
 
           // Device selector
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.black26,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                  value: 'mobile',
-                  icon: Icon(Icons.smartphone, size: 16),
-                  label: Text('Móvil'),
-                ),
-                ButtonSegment(
-                  value: 'tablet',
-                  icon: Icon(Icons.tablet, size: 16),
-                  label: Text('Tablet'),
-                ),
-                ButtonSegment(
-                  value: 'desktop',
-                  icon: Icon(Icons.computer, size: 16),
-                  label: Text('Desktop'),
-                ),
-              ],
-              selected: {_previewMode},
-              onSelectionChanged: (Set<String> newSelection) {
-                setState(() => _previewMode = newSelection.first);
-              },
-              style: ButtonStyle(
-                backgroundColor: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return Colors.blue;
-                  }
-                  return Colors.transparent;
-                }),
-                foregroundColor: WidgetStateProperty.all(Colors.white),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(
+                value: 'mobile',
+                icon: Icon(Icons.smartphone, size: 16),
+                label: Text('Móvil'),
               ),
+              ButtonSegment(
+                value: 'tablet',
+                icon: Icon(Icons.tablet, size: 16),
+                label: Text('Tablet'),
+              ),
+              ButtonSegment(
+                value: 'desktop',
+                icon: Icon(Icons.computer, size: 16),
+                label: Text('Desktop'),
+              ),
+            ],
+            selected: {_previewMode},
+            onSelectionChanged: (Set<String> newSelection) {
+              setState(() => _previewMode = newSelection.first);
+            },
+            style: ButtonStyle(
+              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return theme.colorScheme.primary;
+                }
+                return Colors.grey.shade100;
+              }),
+              foregroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.white;
+                }
+                return Colors.black87;
+              }),
             ),
           ),
 
-          const SizedBox(width: 20),
+          const SizedBox(width: 16),
 
           // Zoom controls
           Container(
             decoration: BoxDecoration(
-              color: Colors.black26,
+              color: Colors.grey.shade100,
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  icon:
-                      const Icon(Icons.zoom_out, size: 20, color: Colors.white),
+                  icon: Icon(Icons.zoom_out, size: 18, color: Colors.black87),
                   onPressed: () => setState(() =>
                       _previewZoom = (_previewZoom - 0.1).clamp(0.5, 2.0)),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Text(
                   '${(_previewZoom * 100).toInt()}%',
                   style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w500),
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 IconButton(
-                  icon:
-                      const Icon(Icons.zoom_in, size: 20, color: Colors.white),
+                  icon: Icon(Icons.zoom_in, size: 18, color: Colors.black87),
                   onPressed: () => setState(() =>
                       _previewZoom = (_previewZoom + 0.1).clamp(0.5, 2.0)),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
               ],
             ),
@@ -1213,8 +1278,15 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           Tooltip(
             message: 'Opciones de vista',
             child: IconButton(
-              icon: const Icon(Icons.tune, color: Colors.white, size: 20),
+              icon: Icon(Icons.tune, color: Colors.black87, size: 20),
               onPressed: _openPreviewOptions,
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.grey.shade100,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(color: Colors.grey.shade300),
+                ),
+              ),
             ),
           ),
         ],
@@ -1782,37 +1854,28 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   // ============================================================================
 
   Widget _buildEditPanel(ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(left: BorderSide(color: theme.dividerColor)),
-      ),
-      child: Column(
-        children: [
-          // Tab bar
-          _buildTabBar(theme),
+    return Column(
+      children: [
+        // Tab bar
+        Row(
+          children: [
+            _buildTab('agregar', '➕ Agregar', theme),
+            _buildTab('editar', '✏️ Editar', theme),
+            _buildTab('tema', '🎨 Tema', theme),
+          ],
+        ),
 
-          // Tab content
-          Expanded(
-            child: _buildTabContent(theme),
-          ),
-        ],
-      ),
-    );
-  }
+        // Divider after tabs - simple container for exact control
+        Container(
+          height: 1,
+          color: Colors.grey.shade300,
+        ),
 
-  Widget _buildTabBar(ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: theme.dividerColor)),
-      ),
-      child: Row(
-        children: [
-          _buildTab('agregar', '➕ Agregar', theme),
-          _buildTab('editar', '✏️ Editar', theme),
-          _buildTab('tema', '🎨 Tema', theme),
-        ],
-      ),
+        // Tab content
+        Expanded(
+          child: _buildTabContent(theme),
+        ),
+      ],
     );
   }
 
@@ -1824,25 +1887,23 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: isActive
-                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+            color: Colors.white,
+            border: isActive
+                ? Border(
+                    bottom: BorderSide(
+                      color: theme.colorScheme.primary,
+                      width: 3,
+                    ),
+                  )
                 : null,
-            border: Border(
-              bottom: BorderSide(
-                color:
-                    isActive ? theme.colorScheme.primary : Colors.transparent,
-                width: 3,
-              ),
-            ),
           ),
           child: Text(
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-              color: isActive
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurface,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+              color: isActive ? theme.colorScheme.primary : Colors.black87,
+              fontSize: 14,
             ),
           ),
         ),
@@ -4357,6 +4418,19 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     setState(() => _isSavingPreset = true);
 
     final service = context.read<WebsiteService>();
+    final tenantService = context.read<TenantService>();
+    
+    // Get tenant ID
+    final tenantId = await tenantService.getTenantId();
+    if (tenantId == null) {
+      if (!mounted) return;
+      setState(() => _isSavingPreset = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('❌ Error: No se encontró ID de tenant')),
+      );
+      return;
+    }
+    
     ThemePreset? existing;
 
     for (final preset in _themePresets) {
@@ -4384,6 +4458,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           )
         : ThemePreset(
             id: _uuid.v4(),
+            tenantId: tenantId,
             name: name,
             description: null,
             primaryColor: _primaryColor.toARGB32(),

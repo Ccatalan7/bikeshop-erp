@@ -71,7 +71,6 @@ class _PegasTablePageState extends State<PegasTablePage>
   String _viewMode =
       'active'; // active, ready_for_delivery, waiting_payment, delivered, all
   static const double _statusFilterMenuWidth = 240;
-  static const double _viewSegmentWidth = 118;
 
   @override
   void initState() {
@@ -377,13 +376,12 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.grey[850]!,
-            Colors.grey[800]!,
-          ],
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.grey.shade300,
+            width: 1,
+          ),
         ),
       ),
       child: Column(
@@ -393,22 +391,8 @@ class _PegasTablePageState extends State<PegasTablePage>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.blue[700]!,
-                      Colors.blue[600]!,
-                    ],
-                  ),
+                  color: Theme.of(context).colorScheme.primary,
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.blue.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: const Icon(Icons.construction,
                     size: 32, color: Colors.white),
@@ -422,7 +406,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Colors.black87,
                     ),
                   ),
                   Row(
@@ -430,12 +414,12 @@ class _PegasTablePageState extends State<PegasTablePage>
                       Icon(
                         Icons.analytics_outlined,
                         size: 14,
-                        color: Colors.blue[300],
+                        color: Colors.grey.shade600,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         '${_filteredJobs.length} trabajos mostrados',
-                        style: TextStyle(color: Colors.blue[200], fontSize: 14),
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                       ),
                     ],
                   ),
@@ -484,16 +468,16 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.grey[850],
+        color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[700]!, width: 1),
+        border: Border.all(color: Colors.grey.shade300, width: 1),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Icon(icon, color: color, size: 18),
@@ -505,14 +489,14 @@ class _PegasTablePageState extends State<PegasTablePage>
               Text(
                 label,
                 style: TextStyle(
-                  color: Colors.grey[400],
+                  color: Colors.grey.shade600,
                   fontSize: 12,
                 ),
               ),
               Text(
                 count.toString(),
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: Colors.black87,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
@@ -532,15 +516,11 @@ class _PegasTablePageState extends State<PegasTablePage>
     return ButtonSegment<String>(
       value: value,
       icon: Icon(icon, size: 16),
-      label: SizedBox(
-        width: _viewSegmentWidth,
-        child: Center(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
+      label: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 13),
       ),
     );
   }
@@ -549,14 +529,13 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.grey.shade300,
+            width: 1,
           ),
-        ],
+        ),
       ),
       child: Column(
         children: [
@@ -602,16 +581,17 @@ class _PegasTablePageState extends State<PegasTablePage>
 
               // Search with live suggestions
               Expanded(
+                flex: 4,
                 child: TextField(
-                  style: TextStyle(color: Colors.grey[100]),
+                  style: const TextStyle(color: Colors.black87),
                   decoration: InputDecoration(
                     hintText:
-                        '🔍 Buscar: N° trabajo, cliente, teléfono, bici...',
-                    hintStyle: TextStyle(color: Colors.grey[500]),
-                    prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
+                        'Buscar: N° trabajo, cliente, teléfono, bici...',
+                    hintStyle: TextStyle(color: Colors.grey.shade500),
+                    prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
                     suffixIcon: _searchTerm.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Icons.clear, color: Colors.grey[400]),
+                            icon: Icon(Icons.clear, color: Colors.grey.shade600),
                             onPressed: () {
                               setState(() => _searchTerm = '');
                               _applyFiltersAndSort();
@@ -620,21 +600,21 @@ class _PegasTablePageState extends State<PegasTablePage>
                         : null,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey[700]!),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey[700]!),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide:
-                          BorderSide(color: Colors.blue[400]!, width: 2),
+                          BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
                     ),
                     filled: true,
-                    fillColor: Colors.grey[850],
+                    fillColor: Colors.white,
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                        horizontal: 16, vertical: 8),
                     isDense: true,
                   ),
                   onChanged: (value) {
@@ -1674,6 +1654,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     try {
       final updatedJob = MechanicJob(
         id: job.id,
+        tenantId: job.tenantId,
         customerId: job.customerId,
         bikeId: job.bikeId,
         jobNumber: job.jobNumber,
@@ -1718,6 +1699,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     try {
       final updatedJob = MechanicJob(
         id: job.id,
+        tenantId: job.tenantId,
         customerId: job.customerId,
         bikeId: job.bikeId,
         jobNumber: job.jobNumber,

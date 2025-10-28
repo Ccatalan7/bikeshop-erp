@@ -2,12 +2,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cross_file/cross_file.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/app_button.dart';
-import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/crm_models.dart';
@@ -135,9 +134,15 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
 
         finalImageUrl = uploadUrl;
       }
+      
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        throw Exception('User does not have a tenant_id. Cannot proceed.');
+      }
 
       final customer = Customer(
         id: _existingCustomer?.id,
+        tenantId: tenantId,
         name: _nameController.text.trim(),
         rut: _rutController.text.trim(),
         email: _emailController.text.trim().isEmpty

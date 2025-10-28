@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/main_layout.dart';
-import '../../../shared/widgets/app_button.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
 import 'purchase_payment_form_page.dart';
@@ -256,7 +254,6 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
 
   Widget _buildTimeline() {
     final isPrepayment = _invoice!.prepaymentModel;
-    final status = _invoice!.status;
 
     // Different order for prepayment vs standard
     final steps = isPrepayment
@@ -650,6 +647,24 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
         break;
     }
 
+    // Add delete button for draft or cancelled invoices
+    if (status == PurchaseInvoiceStatus.draft ||
+        status == PurchaseInvoiceStatus.cancelled) {
+      buttons.add(
+        OutlinedButton.icon(
+          icon: const Icon(Icons.delete, color: Colors.red),
+          label: const Text(
+            'Eliminar Factura',
+            style: TextStyle(color: Colors.red),
+          ),
+          onPressed: _deleteInvoice,
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Colors.red),
+          ),
+        ),
+      );
+    }
+
     if (buttons.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -931,6 +946,60 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  Future<void> _deleteInvoice() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar Factura'),
+        content: const Text(
+          '¿Está seguro que desea eliminar esta factura?\n\n'
+          'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _isProcessing = true);
+      try {
+        await _purchaseService.deletePurchaseInvoice(widget.invoiceId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Factura eliminada exitosamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Navigate back to purchase invoices list
+          context.pop(true); // Pass true to indicate deletion occurred
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al eliminar factura: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isProcessing = false);
+        }
       }
     }
   }

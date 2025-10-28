@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../shared/models/payment_method.dart';
 import '../../../shared/services/payment_method_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
@@ -114,10 +115,21 @@ class _PaymentFormState extends State<PaymentForm> {
     final effectiveAmount = amount > balance ? balance : amount;
 
     final salesService = context.read<SalesService>();
+    
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: No se pudo obtener el tenant ID')),
+        );
+      }
+      return;
+    }
 
     setState(() => _isSaving = true);
     try {
       final payment = Payment(
+        tenantId: tenantId,
         invoiceId: widget.invoice.id!,
         invoiceReference: widget.invoice.invoiceNumber.isNotEmpty
             ? widget.invoice.invoiceNumber

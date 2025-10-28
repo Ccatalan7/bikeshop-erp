@@ -5,6 +5,31 @@
 create extension if not exists "pgcrypto";
 
 --------------------------------------------------------------------------------
+-- ⚙️ REQUIRED SUPABASE DASHBOARD CONFIGURATION (After deploying this schema)
+--------------------------------------------------------------------------------
+-- 
+-- 1. PASSWORD RESET CONFIGURATION:
+--    Navigate to: Authentication → URL Configuration in Supabase Dashboard
+--    
+--    Add these Redirect URLs:
+--    - For Web (Production): https://your-domain.com/#/reset-password
+--    - For Web (Localhost): http://localhost:8080/#/reset-password
+--    - For Mobile (Deep Link): io.supabase.vinabikeerp://reset-password/
+--    
+--    These URLs allow users to reset their password via email link.
+--    The Flutter app handles the /reset-password route automatically.
+--
+-- 2. SITE URL:
+--    Set your production domain as the Site URL
+--    Example: https://vinabike.cl or https://app.yourdomain.com
+--
+-- 3. EMAIL TEMPLATES (Optional - Customize in Dashboard):
+--    Authentication → Email Templates → Reset Password
+--    The default template works, but you can customize with your branding.
+--
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- MULTI-TENANT ARCHITECTURE
 --------------------------------------------------------------------------------
 -- Tenants table: Each tenant represents a bike shop (e.g., Vinabike, Shop A, Shop B)
@@ -191,6 +216,7 @@ end $$;
 
 create table if not exists customers (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   name text not null,
   email text unique,
   auth_user_id uuid references auth.users(id) on delete set null,
@@ -274,6 +300,7 @@ end $$;
 -- Customer addresses table for multiple shipping addresses
 create table if not exists customer_addresses (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   customer_id uuid not null references customers(id) on delete cascade,
   label text not null, -- e.g., "Home", "Work", "Mom's House"
   recipient_name text not null,
@@ -377,6 +404,7 @@ end $$;
 
 create table if not exists products (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   name text not null,
   sku text unique,
   price numeric(12,2) not null default 0,
@@ -659,8 +687,9 @@ create index if not exists idx_products_hs_code on products(hs_code);
 -- Step 1: Create the new product_categories table if it doesn't exist
 create table if not exists product_categories (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   name text not null,
-  full_path text not null unique, -- e.g., "Accesorios / Asientos / Tija"
+  full_path text not null, -- e.g., "Accesorios / Asientos / Tija"
   parent_id uuid references product_categories(id) on delete cascade,
   level integer not null default 0, -- 0 = root, 1 = child, 2 = grandchild, etc.
   description text,
@@ -668,7 +697,8 @@ create table if not exists product_categories (
   is_active boolean not null default true,
   sort_order integer not null default 0,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, full_path) -- Each tenant can have same category paths
 );
 
 -- Step 2: Create indexes for product_categories
@@ -792,6 +822,7 @@ create index if not exists idx_products_category_id on products(category_id);
  
 create table if not exists suppliers (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   name text not null,
   rut text,
   email text,
@@ -846,10 +877,24 @@ begin
 end $$;
 
 create index if not exists idx_suppliers_name on suppliers using gin (to_tsvector('spanish', coalesce(name, '')));
+create index if not exists idx_suppliers_tenant on suppliers(tenant_id);
+
+-- Add unique constraint for tenant_id + name (multi-tenant isolation)
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'suppliers'::regclass
+    and conname = 'suppliers_tenant_name_unique'
+  ) then
+    alter table suppliers add constraint suppliers_tenant_name_unique unique (tenant_id, name);
+  end if;
+end $$;
 
 create table if not exists accounts (
   id uuid primary key default gen_random_uuid(),
-  code text not null unique,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  code text not null,
   name text not null,
   type text not null
     check (type in ('asset','liability','equity','income','expense','tax')),
@@ -866,10 +911,15 @@ create table if not exists accounts (
   parent_id uuid references accounts(id),
   is_active boolean not null default true,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, code) -- Each tenant can have same account codes
 );
 
+-- Add tenant_id index for accounts
+create index if not exists idx_accounts_tenant on accounts(tenant_id);
+
 alter table public.accounts
+  add column if not exists tenant_id uuid references tenants(id) on delete cascade,
   add column if not exists code text,
   add column if not exists name text,
   add column if not exists type text,
@@ -897,6 +947,7 @@ begin
   end;
 end $$;
 
+-- ⚠️ MULTI-TENANT: Ensure accounts have unique code PER TENANT (not globally)
 do $$
 begin
   if not exists (
@@ -904,10 +955,10 @@ begin
       from pg_constraint
      where conrelid = 'public.accounts'::regclass
        and contype = 'u'
-       and conname = 'accounts_code_key'
+       and conname = 'accounts_tenant_id_code_key'
   ) then
     alter table public.accounts
-      add constraint accounts_code_key unique (code);
+      add constraint accounts_tenant_id_code_key unique (tenant_id, code);
   end if;
 end $$;
 
@@ -1199,38 +1250,54 @@ begin
   perform public.migrate_accounts_to_uuid();
 end $$;
 
-insert into public.accounts (code, name, type, category, description)
-values
-  ('1101', 'Caja General', 'asset', 'currentAsset', 'Efectivo disponible en caja y fondos inmediatos.'),
-  ('1110', 'Bancos - Cuenta Corriente', 'asset', 'currentAsset', 'Saldos disponibles en cuentas corrientes bancarias.'),
-  ('1190', 'Otros Activos Corrientes', 'asset', 'currentAsset', 'Activos circulantes no clasificados en otra cuenta específica.'),
-  ('1130', 'Cuentas por Cobrar Comerciales', 'asset', 'currentAsset', 'Saldos pendientes de cobro a clientes por ventas a crédito.'),
-  ('510000', 'Costo de Ventas', 'expense', 'costOfGoodsSold', 'Costos directos asociados a la venta de productos y servicios.'),
-  ('610100', 'Sueldos y Salarios', 'expense', 'operatingExpense', 'Remuneraciones del personal y pagos de nómina.'),
-  ('610200', 'Cotizaciones Previsionales y Salud', 'expense', 'operatingExpense', 'Aportes previsionales, salud y seguros obligatorios del personal.'),
-  ('610300', 'Honorarios Profesionales', 'expense', 'operatingExpense', 'Servicios profesionales externos y consultorías.'),
-  ('620100', 'Arriendo de Locales', 'expense', 'operatingExpense', 'Pagos de arriendo de oficinas, locales y bodegas.'),
-  ('620200', 'Servicios Básicos', 'expense', 'operatingExpense', 'Consumo de electricidad, agua, gas y otros servicios básicos.'),
-  ('620300', 'Telefonía e Internet', 'expense', 'operatingExpense', 'Planes de telefonía fija, móvil y servicios de internet.'),
-  ('620400', 'Mantención y Reparaciones', 'expense', 'operatingExpense', 'Gastos de mantenimiento preventivo y correctivo de infraestructura y equipos.'),
-  ('620500', 'Suministros de Oficina', 'expense', 'operatingExpense', 'Materiales de oficina, papelería e insumos administrativos.'),
-  ('630100', 'Marketing y Publicidad', 'expense', 'operatingExpense', 'Campañas de marketing, publicidad y promoción de la marca.'),
-  ('630200', 'Comisiones y Servicios de Venta', 'expense', 'operatingExpense', 'Comisiones pagadas a vendedores y servicios relacionados con ventas.'),
-  ('640100', 'Gastos de Viaje y Viáticos', 'expense', 'operatingExpense', 'Traslados, alojamiento y viáticos del personal.'),
-  ('640200', 'Capacitación y Desarrollo', 'expense', 'operatingExpense', 'Programas de formación, cursos y certificaciones del personal.'),
-  ('650100', 'Seguros Generales', 'expense', 'operatingExpense', 'Primas de seguros patrimoniales, de responsabilidad y otros.'),
-  ('650200', 'Impuestos y Contribuciones Municipales', 'expense', 'taxExpense', 'Patentes, contribuciones y otros impuestos municipales.'),
-  ('660100', 'Intereses y Gastos Financieros', 'expense', 'financialExpense', 'Intereses de créditos, comisiones bancarias y costos financieros.'),
-  ('670100', 'Depreciación y Amortización', 'expense', 'operatingExpense', 'Gastos por depreciación de activos fijos y amortización de intangibles.'),
-  ('680100', 'Gastos Varios', 'expense', 'operatingExpense', 'Gastos generales menores no clasificados en otras cuentas específicas.')
-on conflict (code) do update
-set
-  name = excluded.name,
-  type = excluded.type,
-  category = excluded.category,
-  description = coalesce(excluded.description, accounts.description),
-  is_active = true,
-  updated_at = now();
+-- Note: Default accounts are now seeded per-tenant via trigger (see handle_new_tenant function)
+-- This legacy INSERT is skipped if the accounts table has multi-tenant structure
+do $$
+begin
+  -- Check if accounts table has the old structure (no tenant_id unique constraint)
+  if not exists (
+    select 1 from information_schema.table_constraints 
+    where table_name = 'accounts' 
+      and constraint_type = 'UNIQUE'
+      and constraint_name like '%tenant%'
+  ) then
+    -- Old single-tenant structure: insert default accounts
+    insert into public.accounts (code, name, type, category, description)
+    values
+      ('1101', 'Caja General', 'asset', 'currentAsset', 'Efectivo disponible en caja y fondos inmediatos.'),
+      ('1110', 'Bancos - Cuenta Corriente', 'asset', 'currentAsset', 'Saldos disponibles en cuentas corrientes bancarias.'),
+      ('1190', 'Otros Activos Corrientes', 'asset', 'currentAsset', 'Activos circulantes no clasificados en otra cuenta específica.'),
+      ('1130', 'Cuentas por Cobrar Comerciales', 'asset', 'currentAsset', 'Saldos pendientes de cobro a clientes por ventas a crédito.'),
+      ('510000', 'Costo de Ventas', 'expense', 'costOfGoodsSold', 'Costos directos asociados a la venta de productos y servicios.'),
+      ('610100', 'Sueldos y Salarios', 'expense', 'operatingExpense', 'Remuneraciones del personal y pagos de nómina.'),
+      ('610200', 'Cotizaciones Previsionales y Salud', 'expense', 'operatingExpense', 'Aportes previsionales, salud y seguros obligatorios del personal.'),
+      ('610300', 'Honorarios Profesionales', 'expense', 'operatingExpense', 'Servicios profesionales externos y consultorías.'),
+      ('620100', 'Arriendo de Locales', 'expense', 'operatingExpense', 'Pagos de arriendo de oficinas, locales y bodegas.'),
+      ('620200', 'Servicios Básicos', 'expense', 'operatingExpense', 'Consumo de electricidad, agua, gas y otros servicios básicos.'),
+      ('620300', 'Telefonía e Internet', 'expense', 'operatingExpense', 'Planes de telefonía fija, móvil y servicios de internet.'),
+      ('620400', 'Mantención y Reparaciones', 'expense', 'operatingExpense', 'Gastos de mantenimiento preventivo y correctivo de infraestructura y equipos.'),
+      ('620500', 'Suministros de Oficina', 'expense', 'operatingExpense', 'Materiales de oficina, papelería e insumos administrativos.'),
+      ('630100', 'Marketing y Publicidad', 'expense', 'operatingExpense', 'Campañas de marketing, publicidad y promoción de la marca.'),
+      ('630200', 'Comisiones y Servicios de Venta', 'expense', 'operatingExpense', 'Comisiones pagadas a vendedores y servicios relacionados con ventas.'),
+      ('640100', 'Gastos de Viaje y Viáticos', 'expense', 'operatingExpense', 'Traslados, alojamiento y viáticos del personal.'),
+      ('640200', 'Capacitación y Desarrollo', 'expense', 'operatingExpense', 'Programas de formación, cursos y certificaciones del personal.'),
+      ('650100', 'Seguros Generales', 'expense', 'operatingExpense', 'Primas de seguros patrimoniales, de responsabilidad y otros.'),
+      ('650200', 'Impuestos y Contribuciones Municipales', 'expense', 'taxExpense', 'Patentes, contribuciones y otros impuestos municipales.'),
+      ('660100', 'Intereses y Gastos Financieros', 'expense', 'financialExpense', 'Intereses de créditos, comisiones bancarias y costos financieros.'),
+      ('670100', 'Depreciación y Amortización', 'expense', 'operatingExpense', 'Gastos por depreciación de activos fijos y amortización de intangibles.'),
+      ('680100', 'Gastos Varios', 'expense', 'operatingExpense', 'Gastos generales menores no clasificados en otras cuentas específicas.')
+    on conflict (code) do update
+    set
+      name = excluded.name,
+      type = excluded.type,
+      category = excluded.category,
+      description = coalesce(excluded.description, accounts.description),
+      is_active = true,
+      updated_at = now();
+  else
+    raise notice 'Skipping default accounts INSERT - multi-tenant structure detected. Accounts will be seeded per-tenant.';
+  end if;
+end $$;
 
 create or replace function public.ensure_account(
   p_code text,
@@ -1255,7 +1322,94 @@ begin
     return null;
   end if;
 
-  if p_parent_code is not null then
+  -- Get current tenant_id (will be null for non-authenticated contexts)
+  declare
+    v_tenant_id uuid := public.user_tenant_id();
+  begin
+    -- Lookup parent account (must be in same tenant)
+    if p_parent_code is not null and v_tenant_id is not null then
+      select id
+        into v_parent_id
+        from public.accounts
+       where tenant_id = v_tenant_id
+         and code = p_parent_code
+       limit 1;
+    elsif p_parent_code is not null and v_tenant_id is null then
+      -- Backward compatibility for single-tenant
+      select id
+        into v_parent_id
+        from public.accounts
+       where code = p_parent_code
+       limit 1;
+    end if;
+    if v_tenant_id is null then
+      -- For backward compatibility: try old single-tenant structure
+      insert into public.accounts (code, name, type, category, description, parent_id)
+      values (p_code, p_name, p_type, p_category, p_description, v_parent_id)
+      on conflict (code) do update
+        set name = excluded.name,
+            type = excluded.type,
+            category = excluded.category,
+            description = coalesce(excluded.description, accounts.description),
+            parent_id = coalesce(excluded.parent_id, accounts.parent_id),
+            is_active = true,
+            updated_at = now()
+      returning id into v_account_id;
+    else
+      -- Multi-tenant structure: use (tenant_id, code) unique constraint
+      insert into public.accounts (tenant_id, code, name, type, category, description, parent_id)
+      values (v_tenant_id, p_code, p_name, p_type, p_category, p_description, v_parent_id)
+      on conflict (tenant_id, code) do update
+        set name = excluded.name,
+            type = excluded.type,
+            category = excluded.category,
+            description = coalesce(excluded.description, accounts.description),
+            parent_id = coalesce(excluded.parent_id, accounts.parent_id),
+            is_active = true,
+            updated_at = now()
+      returning id into v_account_id;
+    end if;
+  end;
+
+  return v_account_id;
+end;
+$$;
+
+-- Overloaded version that accepts explicit tenant_id (for use in triggers)
+create or replace function public.ensure_account(
+  p_tenant_id uuid,
+  p_code text,
+  p_name text,
+  p_type text,
+  p_category text,
+  p_description text default null,
+  p_parent_code text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_account_id uuid;
+  v_parent_id uuid;
+begin
+  perform public.migrate_accounts_to_uuid();
+
+  if p_code is null then
+    return null;
+  end if;
+
+  -- Lookup parent account (must be in same tenant)
+  if p_parent_code is not null and p_tenant_id is not null then
+    select id
+      into v_parent_id
+      from public.accounts
+     where tenant_id = p_tenant_id
+       and code = p_parent_code
+     limit 1;
+  elsif p_parent_code is not null and p_tenant_id is null then
+    -- Backward compatibility for single-tenant
     select id
       into v_parent_id
       from public.accounts
@@ -1263,17 +1417,33 @@ begin
      limit 1;
   end if;
 
-  insert into public.accounts (code, name, type, category, description, parent_id)
-  values (p_code, p_name, p_type, p_category, p_description, v_parent_id)
-  on conflict (code) do update
-    set name = excluded.name,
-        type = excluded.type,
-        category = excluded.category,
-        description = coalesce(excluded.description, accounts.description),
-        parent_id = coalesce(excluded.parent_id, accounts.parent_id),
-        is_active = true,
-        updated_at = now()
-  returning id into v_account_id;
+  if p_tenant_id is null then
+    -- For backward compatibility: try old single-tenant structure
+    insert into public.accounts (code, name, type, category, description, parent_id)
+    values (p_code, p_name, p_type, p_category, p_description, v_parent_id)
+    on conflict (code) do update
+      set name = excluded.name,
+          type = excluded.type,
+          category = excluded.category,
+          description = coalesce(excluded.description, accounts.description),
+          parent_id = coalesce(excluded.parent_id, accounts.parent_id),
+          is_active = true,
+          updated_at = now()
+    returning id into v_account_id;
+  else
+    -- Multi-tenant structure: use (tenant_id, code) unique constraint
+    insert into public.accounts (tenant_id, code, name, type, category, description, parent_id)
+    values (p_tenant_id, p_code, p_name, p_type, p_category, p_description, v_parent_id)
+    on conflict (tenant_id, code) do update
+      set name = excluded.name,
+          type = excluded.type,
+          category = excluded.category,
+          description = coalesce(excluded.description, accounts.description),
+          parent_id = coalesce(excluded.parent_id, accounts.parent_id),
+          is_active = true,
+          updated_at = now()
+    returning id into v_account_id;
+  end if;
 
   return v_account_id;
 end;
@@ -1281,6 +1451,7 @@ $$;
 
 create table if not exists sales_invoices (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   invoice_number text not null,
   customer_id uuid references customers(id) on delete set null,
   customer_name text,
@@ -1303,7 +1474,8 @@ create table if not exists sales_invoices (
   balance numeric(12,2) not null default 0,
   items jsonb not null default '[]'::jsonb,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, invoice_number) -- Each tenant can have same invoice numbers
 );
 
 do $$
@@ -1390,13 +1562,147 @@ end $$;
 create index if not exists idx_payment_methods_sort_order on payment_methods(sort_order);
 create index if not exists idx_payment_methods_account_id on payment_methods(account_id);
 
--- Note: Payment methods will be seeded via trigger when tenant is created
+-- ============================================================================
+-- SEED DEFAULT PAYMENT METHODS FOR A TENANT
+-- ============================================================================
+-- This function seeds default payment methods for a tenant
+-- Should be called when a new tenant is created or manually for existing tenants
+drop function if exists public.seed_payment_methods_for_tenant(uuid);
+
+create or replace function public.seed_payment_methods_for_tenant(p_tenant_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_cash_account_id uuid;
+  v_bank_account_id uuid;
+  v_count int;
+begin
+  -- Disable RLS temporarily for this function
+  perform set_config('request.jwt.claim.sub', p_tenant_id::text, true);
+  
+  -- Find or create cash account (1101 - Caja)
+  select id into v_cash_account_id
+  from accounts
+  where tenant_id = p_tenant_id
+    and code = '1101'
+  limit 1;
+
+  if v_cash_account_id is null then
+    insert into accounts (tenant_id, code, name, type, category, is_active)
+    values (p_tenant_id, '1101', 'Caja', 'asset', 'currentAsset', true)
+    returning id into v_cash_account_id;
+    raise notice 'Created cash account: %', v_cash_account_id;
+  else
+    raise notice 'Found existing cash account: %', v_cash_account_id;
+  end if;
+
+  -- Find or create bank account (1110 - Banco)
+  select id into v_bank_account_id
+  from accounts
+  where tenant_id = p_tenant_id
+    and code = '1110'
+  limit 1;
+
+  if v_bank_account_id is null then
+    insert into accounts (tenant_id, code, name, type, category, is_active)
+    values (p_tenant_id, '1110', 'Banco', 'asset', 'currentAsset', true)
+    returning id into v_bank_account_id;
+    raise notice 'Created bank account: %', v_bank_account_id;
+  else
+    raise notice 'Found existing bank account: %', v_bank_account_id;
+  end if;
+
+  -- Insert default payment methods (only if they don't exist)
+  v_count := 0;
+  
+  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'CASH') then
+    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
+    values (p_tenant_id, 'CASH', 'Efectivo', v_cash_account_id, false, 'cash', 1, true);
+    v_count := v_count + 1;
+    raise notice 'Created payment method: Efectivo';
+  end if;
+
+  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'TRANSFER') then
+    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
+    values (p_tenant_id, 'TRANSFER', 'Transferencia', v_bank_account_id, true, 'bank', 2, true);
+    v_count := v_count + 1;
+    raise notice 'Created payment method: Transferencia';
+  end if;
+
+  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'CHECK') then
+    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
+    values (p_tenant_id, 'CHECK', 'Cheque', v_bank_account_id, true, 'receipt', 3, true);
+    v_count := v_count + 1;
+    raise notice 'Created payment method: Cheque';
+  end if;
+
+  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'CARD') then
+    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
+    values (p_tenant_id, 'CARD', 'Tarjeta de Crédito/Débito', v_bank_account_id, false, 'credit_card', 4, true);
+    v_count := v_count + 1;
+    raise notice 'Created payment method: Tarjeta';
+  end if;
+
+  return format('✓ Created %s payment methods for tenant %s', v_count, p_tenant_id);
+end;
+$$;
+
+-- ============================================================================
+-- AUTO-SEED PAYMENT METHODS FOR NEW TENANTS (Trigger)
+-- ============================================================================
+-- This trigger automatically seeds payment methods when a new tenant is created
+-- Ensures every tenant starts with default payment methods configured
+
+create or replace function public.handle_new_tenant()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  -- Seed default payment methods for the new tenant
+  perform public.seed_payment_methods_for_tenant(NEW.id);
+  
+  raise notice '✓ Initialized new tenant: % (ID: %)', NEW.name, NEW.id;
+  return NEW;
+end;
+$$;
+
+-- Create trigger to auto-seed payment methods on tenant creation
+drop trigger if exists trg_tenant_initialization on tenants;
+create trigger trg_tenant_initialization
+  after insert on tenants
+  for each row
+  execute function public.handle_new_tenant();
+
+-- ============================================================================
+-- MANUAL SEEDING FOR EXISTING TENANTS
+-- ============================================================================
+-- For existing tenants that were created before this trigger was added,
+-- run this manually to seed their payment methods:
+--
+-- SELECT public.seed_payment_methods_for_tenant(public.user_tenant_id());
+--
+-- Or seed ALL existing tenants at once:
+--
+-- DO $$
+-- DECLARE
+--   tenant_record RECORD;
+-- BEGIN
+--   FOR tenant_record IN SELECT id FROM tenants LOOP
+--     PERFORM public.seed_payment_methods_for_tenant(tenant_record.id);
+--   END LOOP;
+-- END $$;
+-- ============================================================================
 
 -- ============================================================================
 -- SALES PAYMENTS TABLE (Updated to use payment_method_id)
 -- ============================================================================
 create table if not exists sales_payments (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   invoice_id uuid not null references sales_invoices(id) on delete cascade,
   invoice_reference text,
   payment_method_id uuid not null references payment_methods(id),
@@ -1603,10 +1909,13 @@ declare
   v_receivable_account_code text := '1130';
   v_receivable_account_name text := 'Cuentas por Cobrar Comerciales';
   v_description text;
+  v_tenant_id uuid;
 begin
   if p_payment.invoice_id is null then
     return;
   end if;
+
+  v_tenant_id := p_payment.tenant_id;
 
   select exists (
            select 1
@@ -1664,6 +1973,7 @@ begin
 
   insert into public.journal_entries (
     id,
+    tenant_id,
     entry_number,
     entry_date,
     description,
@@ -1677,6 +1987,7 @@ begin
     updated_at
   ) values (
     v_entry_id,
+    v_tenant_id,
     concat('PAY-', to_char(now(), 'YYYYMMDDHH24MISS')),
     coalesce(p_payment.date, now()),
     v_description,
@@ -1692,6 +2003,7 @@ begin
 
   insert into public.journal_lines (
     id,
+    tenant_id,
     entry_id,
     account_id,
     account_code,
@@ -1703,6 +2015,7 @@ begin
     updated_at
   ) values (
     gen_random_uuid(),
+    v_tenant_id,
     v_entry_id,
     v_cash_account_id,
     v_cash_account_code,
@@ -1714,6 +2027,7 @@ begin
     now()
   ), (
     gen_random_uuid(),
+    v_tenant_id,
     v_entry_id,
     v_receivable_account_id,
     v_receivable_account_code,
@@ -1869,9 +2183,10 @@ declare
   v_payable_account_code text := '2101';
   v_payable_account_name text := 'Cuentas por Pagar Proveedores';
   v_description text;
+  v_tenant_id uuid;
 begin
   -- Fetch payment data from table instead of using composite type parameter
-  select id, invoice_id, amount, date, payment_method_id
+  select id, invoice_id, amount, date, payment_method_id, tenant_id
     into v_payment
     from public.purchase_payments
    where id = p_payment_id;
@@ -1879,6 +2194,8 @@ begin
   if not found or v_payment.invoice_id is null then
     return;
   end if;
+
+  v_tenant_id := v_payment.tenant_id;
 
   select exists (
            select 1
@@ -1936,6 +2253,7 @@ begin
 
   insert into public.journal_entries (
     id,
+    tenant_id,
     entry_number,
     entry_date,
     description,
@@ -1949,6 +2267,7 @@ begin
     updated_at
   ) values (
     v_entry_id,
+    v_tenant_id,
     concat('PPAY-', to_char(now(), 'YYYYMMDDHH24MISS')),
     coalesce(v_payment.date, now()),
     v_description,
@@ -1965,6 +2284,7 @@ begin
   -- DR: Accounts Payable (reduce liability)
   insert into public.journal_lines (
     id,
+    tenant_id,
     entry_id,
     account_id,
     account_code,
@@ -1976,6 +2296,7 @@ begin
     updated_at
   ) values (
     gen_random_uuid(),
+    v_tenant_id,
     v_entry_id,
     v_payable_account_id,
     v_payable_account_code,
@@ -1990,6 +2311,7 @@ begin
   -- CR: Cash/Bank account (reduce asset)
   insert into public.journal_lines (
     id,
+    tenant_id,
     entry_id,
     account_id,
     account_code,
@@ -2001,6 +2323,7 @@ begin
     updated_at
   ) values (
     gen_random_uuid(),
+    v_tenant_id,
     v_entry_id,
     v_cash_account_id,
     v_cash_account_code,
@@ -2324,13 +2647,13 @@ declare
   v_receivable_account_name text := 'Cuentas por Cobrar Comerciales';
   v_receivable_account_id uuid;
   v_revenue_account_code text := '4100';
-  v_revenue_account_name text := 'Ingresos por Ventas';
+  v_revenue_account_name text := 'Ingresos Operacionales';
   v_revenue_account_id uuid;
   v_iva_account_code text := '2150';
   v_iva_account_name text := 'IVA Débito Fiscal';
   v_iva_account_id uuid;
-  v_inventory_account_code text := '1150';
-  v_inventory_account_name text := 'Inventarios de Mercaderías';
+  v_inventory_account_code text := '1105';
+  v_inventory_account_name text := 'Inventarios';
   v_inventory_account_id uuid;
   v_cogs_account_code text := '5100';
   v_cogs_account_name text := 'Costo de Ventas';
@@ -2342,6 +2665,7 @@ declare
   v_iva numeric(12,2);
   v_total numeric(12,2);
   v_total_cost numeric(12,2);
+  v_tenant_id uuid;
 begin
   if p_invoice.id is null then
     return;
@@ -2350,6 +2674,8 @@ begin
   if coalesce(p_invoice.status, 'draft') in ('draft', 'cancelled') then
     return;
   end if;
+
+  v_tenant_id := p_invoice.tenant_id;
 
   select exists (
            select 1
@@ -2430,6 +2756,7 @@ begin
 
   insert into public.journal_entries (
     id,
+    tenant_id,
     entry_number,
     entry_date,
     description,
@@ -2443,6 +2770,7 @@ begin
     updated_at
   ) values (
     v_entry_id,
+    v_tenant_id,
     concat('INV-', to_char(now(), 'YYYYMMDDHH24MISS')),
     coalesce(p_invoice.date, now()),
     v_description,
@@ -2458,6 +2786,7 @@ begin
 
   insert into public.journal_lines (
     id,
+    tenant_id,
     entry_id,
     account_id,
     account_code,
@@ -2469,6 +2798,7 @@ begin
     updated_at
   ) values (
     gen_random_uuid(),
+    v_tenant_id,
     v_entry_id,
     v_receivable_account_id,
     v_receivable_account_code,
@@ -2483,6 +2813,7 @@ begin
   if v_subtotal <> 0 then
     insert into public.journal_lines (
       id,
+      tenant_id,
       entry_id,
       account_id,
       account_code,
@@ -2494,6 +2825,7 @@ begin
       updated_at
     ) values (
       gen_random_uuid(),
+      v_tenant_id,
       v_entry_id,
       v_revenue_account_id,
       v_revenue_account_code,
@@ -2509,6 +2841,7 @@ begin
   if v_iva <> 0 then
     insert into public.journal_lines (
       id,
+      tenant_id,
       entry_id,
       account_id,
       account_code,
@@ -2520,6 +2853,7 @@ begin
       updated_at
     ) values (
       gen_random_uuid(),
+      v_tenant_id,
       v_entry_id,
       v_iva_account_id,
       v_iva_account_code,
@@ -2535,6 +2869,7 @@ begin
   if v_total_cost > 0 then
     insert into public.journal_lines (
       id,
+      tenant_id,
       entry_id,
       account_id,
       account_code,
@@ -2546,6 +2881,7 @@ begin
       updated_at
     ) values (
       gen_random_uuid(),
+      v_tenant_id,
       v_entry_id,
       v_cogs_account_id,
       v_cogs_account_code,
@@ -2557,6 +2893,7 @@ begin
       now()
     ), (
       gen_random_uuid(),
+      v_tenant_id,
       v_entry_id,
       v_inventory_account_id,
       v_inventory_account_code,
@@ -2774,6 +3111,7 @@ end $$;
 
 create table if not exists purchase_invoices (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   invoice_number text not null,
   supplier_id uuid references suppliers(id) on delete set null,
   supplier_name text,
@@ -2792,8 +3130,15 @@ create table if not exists purchase_invoices (
   prepayment_model boolean not null default false,
   items jsonb not null default '[]'::jsonb,
   additional_costs jsonb not null default '[]'::jsonb,
+  sent_date timestamp with time zone,
+  confirmed_date timestamp with time zone,
+  received_date timestamp with time zone,
+  paid_date timestamp with time zone,
+  supplier_invoice_number text,
+  supplier_invoice_date timestamp with time zone,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, invoice_number) -- Each tenant can have same invoice numbers
 );
 
 alter table public.purchase_invoices
@@ -2819,7 +3164,13 @@ alter table public.purchase_invoices
   add column if not exists tax numeric(12,2) not null default 0,
   add column if not exists paid_amount numeric(12,2) not null default 0,
   add column if not exists balance numeric(12,2) not null default 0,
-  add column if not exists prepayment_model boolean not null default false;
+  add column if not exists prepayment_model boolean not null default false,
+  add column if not exists sent_date timestamp with time zone,
+  add column if not exists confirmed_date timestamp with time zone,
+  add column if not exists received_date timestamp with time zone,
+  add column if not exists paid_date timestamp with time zone,
+  add column if not exists supplier_invoice_number text,
+  add column if not exists supplier_invoice_date timestamp with time zone;
 
 do $$
 begin
@@ -2865,6 +3216,7 @@ create index if not exists idx_purchase_invoices_invoice_number
 -- ============================================================================
 create table if not exists purchase_payments (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   invoice_id uuid not null references purchase_invoices(id) on delete cascade,
   invoice_reference text,
   payment_method_id uuid not null references payment_methods(id),
@@ -3111,7 +3463,8 @@ end $$;
 
 create table if not exists expenses (
   id uuid primary key default gen_random_uuid(),
-  expense_number text not null unique,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  expense_number text not null,
   category_id uuid references expense_categories(id),
   supplier_id uuid references suppliers(id) on delete set null,
   supplier_name text,
@@ -3146,7 +3499,8 @@ create table if not exists expenses (
   tags text[] default '{}',
   created_by uuid references auth.users(id),
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, expense_number) -- Each tenant can have same expense numbers
 );
 
 alter table public.expenses
@@ -3241,6 +3595,7 @@ create index if not exists idx_expenses_payment_status on expenses(payment_statu
 
 create table if not exists expense_lines (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   expense_id uuid not null references expenses(id) on delete cascade,
   line_index integer not null default 0,
   account_id uuid not null references accounts(id),
@@ -3265,6 +3620,7 @@ create index if not exists idx_expense_lines_account_id
 
 create table if not exists expense_payments (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   expense_id uuid not null references expenses(id) on delete cascade,
   payment_method_id uuid references payment_methods(id),
   payment_account_id uuid references accounts(id),
@@ -3371,8 +3727,7 @@ begin
       before insert or update on public.expenses
       for each row execute procedure public.prepare_expense_record();
   end if;
-end;
-$$;
+end $$;
 
 create or replace function public.prepare_expense_line()
 returns trigger
@@ -3430,8 +3785,7 @@ begin
       before insert or update on public.expense_lines
       for each row execute procedure public.prepare_expense_line();
   end if;
-end;
-$$;
+end $$;
 
 do $$
 begin
@@ -3445,8 +3799,7 @@ begin
       after insert or update or delete on public.expense_lines
       for each row execute procedure public.handle_expense_line_change();
   end if;
-end;
-$$;
+end $$;
 
 create or replace function public.prepare_expense_payment()
 returns trigger
@@ -3479,8 +3832,7 @@ begin
       before insert or update on public.expense_payments
       for each row execute procedure public.prepare_expense_payment();
   end if;
-end;
-$$;
+end $$;
 
 create or replace function public.recalculate_expense_totals(p_expense_id uuid)
 returns void
@@ -4113,8 +4465,7 @@ begin
       after insert or update or delete on public.expenses
       for each row execute procedure public.process_expense_change();
   end if;
-end;
-$$;
+end $$;
 
 create or replace function public.handle_expense_payment_change()
 returns trigger
@@ -4156,8 +4507,7 @@ begin
       after insert or update or delete on public.expense_payments
       for each row execute procedure public.handle_expense_payment_change();
   end if;
-end;
-$$;
+end $$;
 
 -- ================================================
 -- Trigger for expense_lines changes
@@ -4213,11 +4563,11 @@ begin
       after insert or update or delete on public.expense_lines
       for each row execute procedure public.handle_expense_line_change();
   end if;
-end;
-$$;
+end $$;
 
 create table if not exists stock_movements (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   product_id uuid not null references products(id) on delete cascade,
   warehouse_id uuid,
   type text not null check (type in ('IN','OUT','INVENTORY_ADJUST','TRANSFER_OUT','TRANSFER_IN')),
@@ -4232,6 +4582,7 @@ create table if not exists stock_movements (
 
 create table if not exists journal_entries (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   entry_number text not null,
   entry_date timestamp with time zone not null default now(),
   description text not null,
@@ -4260,11 +4611,11 @@ begin
       null;
     end;
   end if;
-end;
-$$;
+end $$;
 
 create table if not exists journal_lines (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   entry_id uuid not null references journal_entries(id) on delete cascade,
   account_id uuid not null,
   account_code text not null,
@@ -4584,6 +4935,7 @@ end $$;
 create table if not exists order_items (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
+  tenant_id uuid references tenants(id) on delete cascade not null,
   order_id uuid not null references orders(id) on delete cascade,
   product_id uuid not null references products(id) on delete restrict,
   quantity integer not null,
@@ -4852,10 +5204,14 @@ declare
   v_payable_account_id uuid;
   v_description text;
 begin
+  raise notice '🔵 START create_purchase_invoice_journal_entry for invoice %', p_invoice.id;
+  
   if p_invoice.id is null then
-    raise notice 'create_purchase_invoice_journal_entry: invoice ID is null, returning';
+    raise notice '❌ Invoice ID is null, returning';
     return;
   end if;
+  
+  raise notice '✅ Invoice ID: %, tenant_id: %', p_invoice.id, p_invoice.tenant_id;
 
   -- Check if journal entry already exists
   select exists (
@@ -4866,12 +5222,17 @@ begin
   ) into v_exists;
 
   if v_exists then
-    raise notice 'create_purchase_invoice_journal_entry: entry already exists for invoice %', p_invoice.id;
+    raise notice '⚠️ Entry already exists for invoice %, skipping', p_invoice.id;
     return;
   end if;
+  
+  raise notice '✅ No existing entry found, proceeding...';
 
   -- Ensure accounts exist
+  raise notice '🔵 Ensuring accounts exist...';
+  
   v_inventory_account_id := public.ensure_account(
+    p_invoice.tenant_id,
     '1105',
     'Inventarios',
     'asset',
@@ -4879,8 +5240,10 @@ begin
     'Valor del inventario de productos',
     null
   );
+  raise notice '✅ Inventory account: %', v_inventory_account_id;
 
   v_iva_account_id := public.ensure_account(
+    p_invoice.tenant_id,
     '1107',
     'IVA Crédito Fiscal',
     'asset',
@@ -4888,8 +5251,10 @@ begin
     'IVA pagado en compras, recuperable',
     null
   );
+  raise notice '✅ IVA account: %', v_iva_account_id;
 
   v_payable_account_id := public.ensure_account(
+    p_invoice.tenant_id,
     '2101',
     'Cuentas por Pagar Proveedores',
     'liability',
@@ -4897,15 +5262,19 @@ begin
     'Obligaciones con proveedores',
     null
   );
+  raise notice '✅ Payable account: %', v_payable_account_id;
 
   v_description := format('Factura compra %s - %s', 
     p_invoice.invoice_number, 
     coalesce(p_invoice.supplier_name, 'Proveedor')
   );
+  
+  raise notice '🔵 Creating journal entry header...';
 
   -- Create journal entry header
   insert into public.journal_entries (
     id,
+    tenant_id,
     entry_number,
     entry_date,
     description,
@@ -4919,6 +5288,7 @@ begin
     updated_at
   ) values (
     v_entry_id,
+    p_invoice.tenant_id,
     concat('PINV-', to_char(now(), 'YYYYMMDDHH24MISS')),
     coalesce(p_invoice.date, now()),
     v_description,
@@ -4937,6 +5307,7 @@ begin
     id,
     entry_id,
     account_id,
+    tenant_id,
     account_code,
     account_name,
     description,
@@ -4948,6 +5319,7 @@ begin
     gen_random_uuid(),
     v_entry_id,
     v_inventory_account_id,
+    p_invoice.tenant_id,
     '1105',
     'Inventarios',
     v_description,
@@ -4962,6 +5334,7 @@ begin
     id,
     entry_id,
     account_id,
+    tenant_id,
     account_code,
     account_name,
     description,
@@ -4973,10 +5346,11 @@ begin
     gen_random_uuid(),
     v_entry_id,
     v_iva_account_id,
+    p_invoice.tenant_id,
     '1107',
     'IVA Crédito Fiscal',
     v_description,
-    p_invoice.iva_amount,
+    p_invoice.tax,
     0,
     now(),
     now()
@@ -4987,6 +5361,7 @@ begin
     id,
     entry_id,
     account_id,
+    tenant_id,
     account_code,
     account_name,
     description,
@@ -4998,6 +5373,7 @@ begin
     gen_random_uuid(),
     v_entry_id,
     v_payable_account_id,
+    p_invoice.tenant_id,
     '2101',
     'Cuentas por Pagar Proveedores',
     v_description,
@@ -5006,8 +5382,9 @@ begin
     now(),
     now()
   );
-
-  raise notice 'create_purchase_invoice_journal_entry: created entry for invoice %', p_invoice.id;
+  
+  raise notice '✅ Journal entry created successfully for invoice %', p_invoice.id;
+  raise notice '🎉 DONE - Entry ID: %, Total: %', v_entry_id, p_invoice.total;
 end;
 $$;
 
@@ -5214,6 +5591,7 @@ alter table journal_entries enable row level security;
 alter table journal_lines enable row level security;
 alter table suppliers enable row level security;
 alter table purchase_invoices enable row level security;
+alter table bikes enable row level security;
 
 -- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
@@ -6016,11 +6394,12 @@ $$;
 -- Stores registered bicycles linked to customers
 create table if not exists bikes (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   customer_id uuid not null references customers(id) on delete cascade,
   brand text,
   model text,
   year integer,
-  serial_number text unique,
+  serial_number text,
   color text,
   frame_size text,
   wheel_size text,
@@ -6028,13 +6407,15 @@ create table if not exists bikes (
   purchase_date date,
   purchase_price numeric(12,2),
   warranty_until date,
-  qr_code text unique, -- For quick bike lookup via QR scan
+  qr_code text, -- For quick bike lookup via QR scan
   notes text,
   image_url text, -- Primary image
   image_urls text[] not null default array[]::text[], -- Multiple images
   is_active boolean not null default true,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, serial_number), -- Each tenant can have same serial numbers
+  unique(tenant_id, qr_code) -- Each tenant can have same QR codes
 );
 
 -- Migration: Add missing columns to bikes table
@@ -6328,6 +6709,7 @@ end $$;
 -- Parts/products used in a job
 create table if not exists mechanic_job_items (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   job_id uuid not null references mechanic_jobs(id) on delete cascade,
   product_id uuid references products(id) on delete set null,
   product_name text not null, -- Cached in case product is deleted
@@ -6381,6 +6763,7 @@ create index if not exists idx_mechanic_job_items_product_id on mechanic_job_ite
 -- Labor hours tracked per job
 create table if not exists mechanic_job_labor (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   job_id uuid not null references mechanic_jobs(id) on delete cascade,
   technician_id uuid references customers(id) on delete set null, -- Will be employee_id when HR exists
   technician_name text not null,
@@ -6439,6 +6822,7 @@ create index if not exists idx_mechanic_job_labor_service_product on mechanic_jo
 -- Audit trail / history of status changes and events
 create table if not exists mechanic_job_timeline (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   job_id uuid not null references mechanic_jobs(id) on delete cascade,
   event_type text not null check (event_type in (
     'created',
@@ -6604,6 +6988,7 @@ declare
   v_item_counter integer := 0;
   v_job_item record;
   v_labor_record record;
+  v_tenant_id uuid;
 begin
   -- Get job details
   select * into v_job
@@ -6614,6 +6999,8 @@ begin
     raise notice 'Job % not found', p_job_id;
     return null;
   end if;
+  
+  v_tenant_id := v_job.tenant_id;
   
   -- Ensure job totals are current before creating invoice
   perform public.recalculate_mechanic_job_costs(p_job_id);
@@ -6724,6 +7111,7 @@ begin
   
   -- Create the invoice
   insert into public.sales_invoices (
+    tenant_id,
     invoice_number,
     customer_id,
     customer_name,
@@ -6741,6 +7129,7 @@ begin
     created_at,
     updated_at
   ) values (
+    v_tenant_id,
     v_invoice_number,
     v_customer.id,
     v_customer.name,
@@ -7349,11 +7738,11 @@ begin
   end if;
 
   -- Get or create necessary accounts
-  v_revenue_account_id := public.ensure_account('410000', 'Service Revenue', 'income', 'operatingIncome');
-  v_cogs_account_id := public.ensure_account('510000', 'Cost of Services', 'expense', 'costOfGoodsSold');
-  v_inventory_account_id := public.ensure_account('140000', 'Inventory', 'asset', 'currentAsset');
+  v_revenue_account_id := public.ensure_account('4100', 'Ingresos Operacionales', 'income', 'operatingIncome');
+  v_cogs_account_id := public.ensure_account('5100', 'Costo de Ventas', 'expense', 'costOfGoodsSold');
+  v_inventory_account_id := public.ensure_account('1105', 'Inventarios', 'asset', 'currentAsset');
   v_tax_payable_account_id := public.ensure_account('210200', 'IVA por Pagar', 'liability', 'currentLiability');
-  v_ar_account_id := public.ensure_account('110200', 'Accounts Receivable', 'asset', 'currentAsset');
+  v_ar_account_id := public.ensure_account('1130', 'Cuentas por Cobrar Comerciales', 'asset', 'currentAsset');
 
   -- Create journal entry
   insert into journal_entries (
@@ -8283,6 +8672,7 @@ create index if not exists idx_contracts_dates on employee_contracts(start_date,
 -- Attendances table (Odoo-style check-in/check-out tracking)
 create table if not exists attendances (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   employee_id uuid not null references employees(id) on delete cascade,
   check_in timestamp with time zone not null,
   check_out timestamp with time zone,
@@ -8677,6 +9067,7 @@ end $$;
 create table if not exists online_order_items (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
+  tenant_id uuid references tenants(id) on delete cascade not null,
   order_id uuid references online_orders(id) on delete cascade,
   product_id uuid references products(id) on delete set null,
   product_name text not null, -- Store name for historical record
@@ -8939,23 +9330,39 @@ begin
   end if;
 end $$;
 
--- Seed default website settings
-insert into website_settings (key, value, description) values
-  ('store_name', 'Vinabike', 'Nombre de la tienda'),
-  ('store_tagline', 'Bicicletas y Accesorios en Chile', 'Eslogan de la tienda'),
-  ('store_email', 'contacto@vinabike.cl', 'Email de contacto'),
-  ('store_phone', '+56 9 XXXX XXXX', 'Teléfono de contacto'),
-  ('store_address', 'Santiago, Chile', 'Dirección de la tienda'),
-  ('shipping_cost', '5000', 'Costo de envío por defecto (CLP)'),
-  ('free_shipping_threshold', '50000', 'Monto mínimo para envío gratis (CLP)'),
-  ('google_analytics_id', '', 'Google Analytics tracking ID'),
-  ('facebook_pixel_id', '', 'Facebook Pixel ID'),
-  ('meta_description', 'Tienda online de bicicletas y accesorios en Chile', 'Meta descripción para SEO'),
-  ('meta_keywords', 'bicicletas, bikes, chile, ciclismo, accesorios', 'Palabras clave para SEO'),
-  ('mercadopago_public_key', '', 'MercadoPago Public Key (TEST-xxxx for sandbox)'),
-  ('mercadopago_access_token', '', 'MercadoPago Access Token (TEST-xxxx for sandbox)'),
-  ('mercadopago_test_mode', 'true', 'MercadoPago modo prueba (true/false)')
-on conflict (key) do nothing;
+-- Note: Default website settings are now seeded per-tenant via TenantSignupService
+-- This legacy INSERT is skipped for multi-tenant databases
+-- Settings will be created when a new tenant signs up
+do $$
+begin
+  -- Only insert if website_settings table doesn't have tenant_id unique constraint
+  if not exists (
+    select 1 from information_schema.table_constraints 
+    where table_name = 'website_settings' 
+      and constraint_type = 'UNIQUE'
+      and constraint_name like '%tenant%'
+  ) then
+    -- Old single-tenant structure: insert default settings
+    insert into website_settings (key, value, description) values
+      ('store_name', 'Vinabike', 'Nombre de la tienda'),
+      ('store_tagline', 'Bicicletas y Accesorios en Chile', 'Eslogan de la tienda'),
+      ('store_email', 'contacto@vinabike.cl', 'Email de contacto'),
+      ('store_phone', '+56 9 XXXX XXXX', 'Teléfono de contacto'),
+      ('store_address', 'Santiago, Chile', 'Dirección de la tienda'),
+      ('shipping_cost', '5000', 'Costo de envío por defecto (CLP)'),
+      ('free_shipping_threshold', '50000', 'Monto mínimo para envío gratis (CLP)'),
+      ('google_analytics_id', '', 'Google Analytics tracking ID'),
+      ('facebook_pixel_id', '', 'Facebook Pixel ID'),
+      ('meta_description', 'Tienda online de bicicletas y accesorios en Chile', 'Meta descripción para SEO'),
+      ('meta_keywords', 'bicicletas, bikes, chile, ciclismo, accesorios', 'Palabras clave para SEO'),
+      ('mercadopago_public_key', '', 'MercadoPago Public Key (TEST-xxxx for sandbox)'),
+      ('mercadopago_access_token', '', 'MercadoPago Access Token (TEST-xxxx for sandbox)'),
+      ('mercadopago_test_mode', 'true', 'MercadoPago modo prueba (true/false)')
+    on conflict (key) do nothing;
+  else
+    raise notice 'Skipping default website_settings INSERT - multi-tenant structure detected. Settings will be seeded per-tenant.';
+  end if;
+end $$;
 
 -- Seed default homepage content
 insert into website_content (id, title, content) values
@@ -9188,7 +9595,7 @@ end $$;
 
 -- Function to extract tenant_id from JWT (in public schema, not auth)
 -- Function to get all users in a tenant (for user management UI)
-create or replace function get_tenant_users(p_tenant_id uuid)
+create or replace function public.get_tenant_users(p_tenant_id uuid)
 returns table (
   id uuid,
   email text,
@@ -9202,22 +9609,24 @@ returns table (
 )
 language plpgsql
 security definer
+set search_path = public
 as $$
 begin
   return query
   select 
     u.id,
     u.email::text,
-    (u.raw_app_meta_data->>'role')::text as role,
-    (u.raw_app_meta_data->'permissions')::jsonb as permissions,
-    u.banned_until is null as is_active,
+    coalesce(up.role, 'viewer')::text as role,
+    coalesce(up.permissions, '{}'::jsonb) as permissions,
+    coalesce(up.is_active, true) as is_active,
     u.last_sign_in_at,
     u.created_at,
     e.id as employee_id,
     (e.first_name || ' ' || e.last_name) as employee_name
   from auth.users u
+  inner join user_profiles up on up.user_id = u.id
   left join employees e on e.user_id = u.id and e.tenant_id = p_tenant_id
-  where (u.raw_app_meta_data->>'tenant_id')::uuid = p_tenant_id
+  where up.tenant_id = p_tenant_id
   order by u.created_at desc;
 end;
 $$;
@@ -9282,16 +9691,26 @@ $$;
 --------------------------------------------------------------------------------
 create or replace function public.user_tenant_id()
 returns uuid
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public
 as $$
-  select tenant_id 
+declare
+  v_tenant_id uuid;
+begin
+  -- Bypass RLS by using security definer with explicit query
+  select tenant_id into v_tenant_id
   from user_profiles 
   where user_id = auth.uid() 
   limit 1;
+  
+  return v_tenant_id;
+end;
 $$;
+
+-- Grant execute to authenticated users
+grant execute on function public.user_tenant_id() to authenticated;
 
 --------------------------------------------------------------------------------
 -- RLS POLICIES: User Profiles
@@ -9326,8 +9745,9 @@ begin
   raise notice 'Applying Row Level Security policies...';
 
   -- Enable RLS on all tables (only if they exist)
+  -- ⚠️ TENANTS TABLE: RLS DISABLED - causes circular dependency issues with user_tenant_id()
   if exists (select 1 from information_schema.tables where table_name = 'tenants') then
-    alter table tenants enable row level security;
+    alter table tenants disable row level security;
   end if;
   
   if exists (select 1 from information_schema.tables where table_name = 'user_activity_log') then
@@ -9468,19 +9888,11 @@ end $$;
 -- Special policy: Allow INSERT for authenticated users (for signup)
 do $$ begin
   create policy "tenant_select_own" on tenants for select using (
-    exists (
-      select 1 from user_profiles 
-      where user_profiles.tenant_id = tenants.id 
-        and user_profiles.user_id = auth.uid()
-    )
+    id = public.user_tenant_id()
   );
   create policy "tenant_insert_authenticated" on tenants for insert with check (auth.uid() IS NOT NULL);
   create policy "tenant_update_own" on tenants for update using (
-    exists (
-      select 1 from user_profiles 
-      where user_profiles.tenant_id = tenants.id 
-        and user_profiles.user_id = auth.uid()
-    )
+    id = public.user_tenant_id()
   );
   raise notice '✓ Created RLS policies for tenants';
 exception
@@ -9578,18 +9990,40 @@ end $$;
 
 -- Sales Invoices: Tenant isolation
 do $$ begin
-  create policy "sales_invoices_select" on sales_invoices for select using (tenant_id = public.user_tenant_id());
-  create policy "sales_invoices_insert" on sales_invoices for insert with check (tenant_id = public.user_tenant_id());
-  create policy "sales_invoices_update" on sales_invoices for update using (tenant_id = public.user_tenant_id());
-  create policy "sales_invoices_delete" on sales_invoices for delete using (
-    tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager' -- Only managers can delete
-  );
-  raise notice '✓ Created RLS policies for sales_invoices';
+  if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'sales_invoices') then
+    alter table sales_invoices enable row level security;
+    
+    drop policy if exists "sales_invoices_select" on sales_invoices;
+    drop policy if exists "sales_invoices_insert" on sales_invoices;
+    drop policy if exists "sales_invoices_update" on sales_invoices;
+    drop policy if exists "sales_invoices_delete" on sales_invoices;
+    
+    create policy "sales_invoices_select" on sales_invoices 
+      for select 
+      to authenticated
+      using (tenant_id = public.user_tenant_id());
+      
+    create policy "sales_invoices_insert" on sales_invoices 
+      for insert 
+      to authenticated
+      with check (tenant_id = public.user_tenant_id());
+      
+    create policy "sales_invoices_update" on sales_invoices 
+      for update 
+      to authenticated
+      using (tenant_id = public.user_tenant_id());
+      
+    create policy "sales_invoices_delete" on sales_invoices 
+      for delete 
+      to authenticated
+      using (tenant_id = public.user_tenant_id());
+      
+    raise notice '✓ Created RLS policies for sales_invoices';
+  else
+    raise notice '⚠ Table sales_invoices does not exist yet';
+  end if;
 exception
-  when undefined_table then raise notice '⚠ Table sales_invoices does not exist yet';
   when undefined_column then raise notice '⚠ Column tenant_id missing in sales_invoices';
-  when duplicate_object then raise notice '⚠ Policies already exist for sales_invoices';
 end $$;
 
 -- Sales Invoice Items: Tenant isolation (if table exists)
@@ -9608,17 +10042,40 @@ end $$;
 
 -- Sales Payments: Tenant isolation
 do $$ begin
-  create policy "sales_payments_select" on sales_payments for select using (tenant_id = public.user_tenant_id());
-  create policy "sales_payments_insert" on sales_payments for insert with check (tenant_id = public.user_tenant_id());
-  create policy "sales_payments_delete" on sales_payments for delete using (
-    tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-  );
-  raise notice '✓ Created RLS policies for sales_payments';
+  if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'sales_payments') then
+    alter table sales_payments enable row level security;
+    
+    drop policy if exists "sales_payments_select" on sales_payments;
+    drop policy if exists "sales_payments_insert" on sales_payments;
+    drop policy if exists "sales_payments_update" on sales_payments;
+    drop policy if exists "sales_payments_delete" on sales_payments;
+    
+    create policy "sales_payments_select" on sales_payments 
+      for select 
+      to authenticated
+      using (tenant_id = public.user_tenant_id());
+      
+    create policy "sales_payments_insert" on sales_payments 
+      for insert 
+      to authenticated
+      with check (tenant_id = public.user_tenant_id());
+      
+    create policy "sales_payments_update" on sales_payments 
+      for update 
+      to authenticated
+      using (tenant_id = public.user_tenant_id());
+      
+    create policy "sales_payments_delete" on sales_payments 
+      for delete 
+      to authenticated
+      using (tenant_id = public.user_tenant_id());
+      
+    raise notice '✓ Created RLS policies for sales_payments';
+  else
+    raise notice '⚠ Table sales_payments does not exist yet';
+  end if;
 exception
-  when undefined_table then raise notice '⚠ Table sales_payments does not exist yet';
   when undefined_column then raise notice '⚠ Column tenant_id missing in sales_payments';
-  when duplicate_object then raise notice '⚠ Policies already exist for sales_payments';
 end $$;
 
 -- Suppliers: Tenant isolation
@@ -9636,18 +10093,40 @@ end $$;
 
 -- Purchase Invoices: Tenant isolation
 do $$ begin
-  create policy "purchase_invoices_select" on purchase_invoices for select using (tenant_id = public.user_tenant_id());
-  create policy "purchase_invoices_insert" on purchase_invoices for insert with check (tenant_id = public.user_tenant_id());
-  create policy "purchase_invoices_update" on purchase_invoices for update using (tenant_id = public.user_tenant_id());
-  create policy "purchase_invoices_delete" on purchase_invoices for delete using (
-    tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
-  );
-  raise notice '✓ Created RLS policies for purchase_invoices';
+  if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'purchase_invoices') then
+    alter table purchase_invoices enable row level security;
+    
+    drop policy if exists "purchase_invoices_select" on purchase_invoices;
+    drop policy if exists "purchase_invoices_insert" on purchase_invoices;
+    drop policy if exists "purchase_invoices_update" on purchase_invoices;
+    drop policy if exists "purchase_invoices_delete" on purchase_invoices;
+    
+    create policy "purchase_invoices_select" on purchase_invoices 
+      for select 
+      to authenticated
+      using (tenant_id = public.user_tenant_id());
+      
+    create policy "purchase_invoices_insert" on purchase_invoices 
+      for insert 
+      to authenticated
+      with check (tenant_id = public.user_tenant_id());
+      
+    create policy "purchase_invoices_update" on purchase_invoices 
+      for update 
+      to authenticated
+      using (tenant_id = public.user_tenant_id());
+      
+    create policy "purchase_invoices_delete" on purchase_invoices 
+      for delete 
+      to authenticated
+      using (tenant_id = public.user_tenant_id());
+      
+    raise notice '✓ Created RLS policies for purchase_invoices';
+  else
+    raise notice '⚠ Table purchase_invoices does not exist yet';
+  end if;
 exception
-  when undefined_table then raise notice '⚠ Table purchase_invoices does not exist yet';
   when undefined_column then raise notice '⚠ Column tenant_id missing in purchase_invoices';
-  when duplicate_object then raise notice '⚠ Policies already exist for purchase_invoices';
 end $$;
 
 -- Purchase Invoice Items: Tenant isolation (if table exists)
@@ -9666,12 +10145,33 @@ end $$;
 
 -- Purchase Payments: Tenant isolation
 do $$ begin
-  create policy "purchase_payments_select" on purchase_payments for select using (tenant_id = public.user_tenant_id());
-  create policy "purchase_payments_insert" on purchase_payments for insert with check (tenant_id = public.user_tenant_id());
-  create policy "purchase_payments_delete" on purchase_payments for delete using (
-    tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
-  );
+  alter table purchase_payments enable row level security;
+  
+  drop policy if exists "purchase_payments_select" on purchase_payments;
+  drop policy if exists "purchase_payments_insert" on purchase_payments;
+  drop policy if exists "purchase_payments_update" on purchase_payments;
+  drop policy if exists "purchase_payments_delete" on purchase_payments;
+  
+  create policy "purchase_payments_select" on purchase_payments 
+    for select 
+    to authenticated
+    using (tenant_id = public.user_tenant_id());
+    
+  create policy "purchase_payments_insert" on purchase_payments 
+    for insert 
+    to authenticated
+    with check (tenant_id = public.user_tenant_id());
+    
+  create policy "purchase_payments_update" on purchase_payments 
+    for update 
+    to authenticated
+    using (tenant_id = public.user_tenant_id());
+    
+  create policy "purchase_payments_delete" on purchase_payments 
+    for delete 
+    to authenticated
+    using (tenant_id = public.user_tenant_id());
+    
   raise notice '✓ Created RLS policies for purchase_payments';
 exception
   when undefined_table then raise notice '⚠ Table purchase_payments does not exist yet';
@@ -9719,11 +10219,11 @@ end $$;
 do $$ begin
   create policy "journal_entries_select" on journal_entries for select using (
     tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+    (auth.jwt() -> 'user_metadata' ->> 'role') in ('admin', 'manager', 'accountant')
   );
   create policy "journal_entries_insert" on journal_entries for insert with check (
     tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') in ('manager', 'accountant')
+    (auth.jwt() -> 'user_metadata' ->> 'role') in ('admin', 'manager', 'accountant')
   );
   raise notice '✓ Created RLS policies for journal_entries';
 exception
@@ -9738,11 +10238,11 @@ begin
   if exists (select 1 from information_schema.tables where table_name = 'journal_entry_lines') then
     execute 'create policy "journal_entry_lines_select" on journal_entry_lines for select using (
       tenant_id = public.user_tenant_id() and
-      (auth.jwt() -> ''user_metadata'' ->> ''role'') in (''manager'', ''accountant'')
+      (auth.jwt() -> ''user_metadata'' ->> ''role'') in (''admin'', ''manager'', ''accountant'')
     )';
     execute 'create policy "journal_entry_lines_insert" on journal_entry_lines for insert with check (
       tenant_id = public.user_tenant_id() and
-      (auth.jwt() -> ''user_metadata'' ->> ''role'') in (''manager'', ''accountant'')
+      (auth.jwt() -> ''user_metadata'' ->> ''role'') in (''admin'', ''manager'', ''accountant'')
     )';
   end if;
 end $$;
@@ -9763,16 +10263,13 @@ end $$;
 do $$ begin
   create policy "employees_select" on employees for select using (tenant_id = public.user_tenant_id());
   create policy "employees_insert" on employees for insert with check (
-    tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+    tenant_id = public.user_tenant_id()
   );
   create policy "employees_update" on employees for update using (
-    tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+    tenant_id = public.user_tenant_id()
   );
   create policy "employees_delete" on employees for delete using (
-    tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+    tenant_id = public.user_tenant_id()
   );
   raise notice '✓ Created RLS policies for employees';
 exception
@@ -9786,6 +10283,7 @@ do $$ begin
   create policy "attendances_select" on attendances for select using (tenant_id = public.user_tenant_id());
   create policy "attendances_insert" on attendances for insert with check (tenant_id = public.user_tenant_id());
   create policy "attendances_update" on attendances for update using (tenant_id = public.user_tenant_id());
+  create policy "attendances_delete" on attendances for delete using (tenant_id = public.user_tenant_id());
   raise notice '✓ Created RLS policies for attendances';
 exception
   when undefined_table then raise notice '⚠ Table attendances does not exist yet';
@@ -9795,11 +10293,14 @@ end $$;
 
 -- Website Settings: Tenant isolation
 do $$ begin
-  create policy "website_settings_select" on website_settings for select using (tenant_id = public.user_tenant_id());
-  create policy "website_settings_insert" on website_settings for insert with check (tenant_id = public.user_tenant_id());
+  create policy "website_settings_select" on website_settings for select using (
+    tenant_id in (select tenant_id from user_profiles where user_id = auth.uid())
+  );
+  create policy "website_settings_insert" on website_settings for insert with check (
+    tenant_id in (select tenant_id from user_profiles where user_id = auth.uid())
+  );
   create policy "website_settings_update" on website_settings for update using (
-    tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
+    tenant_id in (select tenant_id from user_profiles where user_id = auth.uid())
   );
   raise notice '✓ Created RLS policies for website_settings';
 exception
@@ -9992,10 +10493,18 @@ end $$;
 
 -- Website Blocks: Tenant isolation
 do $$ begin
-  create policy "website_blocks_select" on website_blocks for select using (tenant_id = public.user_tenant_id());
-  create policy "website_blocks_insert" on website_blocks for insert with check (tenant_id = public.user_tenant_id());
-  create policy "website_blocks_update" on website_blocks for update using (tenant_id = public.user_tenant_id());
-  create policy "website_blocks_delete" on website_blocks for delete using (tenant_id = public.user_tenant_id());
+  create policy "website_blocks_select" on website_blocks for select using (
+    tenant_id in (select tenant_id from user_profiles where user_id = auth.uid())
+  );
+  create policy "website_blocks_insert" on website_blocks for insert with check (
+    tenant_id in (select tenant_id from user_profiles where user_id = auth.uid())
+  );
+  create policy "website_blocks_update" on website_blocks for update using (
+    tenant_id in (select tenant_id from user_profiles where user_id = auth.uid())
+  );
+  create policy "website_blocks_delete" on website_blocks for delete using (
+    tenant_id in (select tenant_id from user_profiles where user_id = auth.uid())
+  );
   raise notice '✓ Created RLS policies for website_blocks';
 exception
   when undefined_table then raise notice '⚠ Table website_blocks does not exist yet';
@@ -10017,15 +10526,33 @@ end $$;
 
 -- Payment Methods: Tenant isolation
 do $$ begin
-  create policy "payment_methods_select" on payment_methods for select using (tenant_id = public.user_tenant_id());
-  create policy "payment_methods_insert" on payment_methods for insert with check (
-    tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-  );
-  create policy "payment_methods_update" on payment_methods for update using (
-    tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-  );
+  alter table payment_methods enable row level security;
+  
+  drop policy if exists "payment_methods_select" on payment_methods;
+  drop policy if exists "payment_methods_insert" on payment_methods;
+  drop policy if exists "payment_methods_update" on payment_methods;
+  drop policy if exists "payment_methods_delete" on payment_methods;
+  
+  create policy "payment_methods_select" on payment_methods 
+    for select 
+    to authenticated
+    using (tenant_id = public.user_tenant_id());
+    
+  create policy "payment_methods_insert" on payment_methods 
+    for insert 
+    to authenticated
+    with check (tenant_id = public.user_tenant_id());
+    
+  create policy "payment_methods_update" on payment_methods 
+    for update 
+    to authenticated
+    using (tenant_id = public.user_tenant_id());
+    
+  create policy "payment_methods_delete" on payment_methods 
+    for delete 
+    to authenticated
+    using (tenant_id = public.user_tenant_id());
+    
   raise notice '✓ Created RLS policies for payment_methods';
 exception
   when undefined_table then raise notice '⚠ Table payment_methods does not exist yet';
@@ -10126,6 +10653,14 @@ begin
     insert into user_profiles (user_id, tenant_id, role, is_active)
     values (new.id, v_tenant_id, v_invitation.role, true);
     
+    -- Update user metadata to include tenant_id and role
+    update auth.users
+    set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object(
+      'tenant_id', v_tenant_id,
+      'role', v_invitation.role
+    )
+    where id = new.id;
+    
     -- Mark invitation as accepted
     update user_invitations
     set status = 'accepted', accepted_at = now()
@@ -10178,6 +10713,14 @@ begin
     -- Create user_profile entry linking user to tenant as admin
     insert into user_profiles (user_id, tenant_id, role, is_active)
     values (new.id, v_tenant_id, 'admin', true);
+    
+    -- Update user metadata to include tenant_id and role
+    update auth.users
+    set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object(
+      'tenant_id', v_tenant_id,
+      'role', 'admin'
+    )
+    where id = new.id;
     
     raise notice 'Created new tenant % for user % with subdomain %', v_tenant_id, new.email, v_subdomain;
   end if;
@@ -10856,72 +11399,129 @@ exception when others then null; end $$;
 -- PUBLIC STORE RLS POLICIES
 -- Allow anonymous (unauthenticated) users to read tenant-scoped data
 -- These policies enable public-facing storefronts to work without auth
+-- 
+-- SECURITY NOTE: These policies allow anonymous read access, but the application
+-- layer (PublicInventoryService) MUST filter by tenant_id using .eq('tenant_id', tenantId)
+-- to prevent cross-tenant data leakage. These policies provide defense-in-depth
+-- but rely on app-layer filtering for tenant isolation.
 --------------------------------------------------------------------------------
 
 -- Drop existing policies first
 drop policy if exists "public_products_select" on products;
 drop policy if exists "public_categories_select" on categories;
+drop policy if exists "public_product_categories_select" on product_categories;
 drop policy if exists "public_website_banners_select" on website_banners;
 drop policy if exists "public_website_content_select" on website_content;
 drop policy if exists "public_website_settings_select" on website_settings;
 drop policy if exists "public_orders_insert" on orders;
 drop policy if exists "public_order_items_insert" on order_items;
+drop policy if exists "public_online_orders_insert" on online_orders;
+drop policy if exists "public_online_order_items_insert" on online_order_items;
 drop policy if exists "public_featured_products_select" on featured_products;
 drop policy if exists "public_product_brands_select" on product_brands;
 
 -- Products: Public read access (only active, in-stock products)
+-- App must filter by tenant_id explicitly
 create policy "public_products_select" on products 
   for select 
   to anon
   using (is_active = true and inventory_qty > 0);
 
--- Categories: Public read access
-create policy "public_categories_select" on categories 
+-- Product Categories: Public read access (hierarchical categories)
+-- App must filter by tenant_id explicitly
+create policy "public_product_categories_select" on product_categories 
   for select 
   to anon
-  using (true);
+  using (is_active = true);
+
+-- Legacy Categories: Public read access (if table exists)
+-- App must filter by tenant_id explicitly
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_name = 'categories') then
+    execute 'create policy "public_categories_select" on categories for select to anon using (true)';
+  end if;
+end $$;
 
 -- Website banners: Public read access (only active)
+-- App must filter by tenant_id explicitly
 create policy "public_website_banners_select" on website_banners 
   for select 
   to anon
   using (active = true);
 
--- Website content: Public read access (all content)
-create policy "public_website_content_select" on website_content 
-  for select 
-  to anon
-  using (true);
+-- Website content: Public read access (tenant-isolated)
+-- App must filter by tenant_id explicitly for multi-tenant routing
+do $$ begin
+  drop policy if exists "public_website_content_select" on website_content;
+  create policy "public_website_content_select" on website_content 
+    for select 
+    to anon
+    using (tenant_id is not null); -- Defense-in-depth: require valid tenant
+exception
+  when undefined_table then raise notice '⚠ Table website_content does not exist';
+end $$;
 
 -- Website settings: Public read access
+-- App must filter by tenant_id explicitly
 create policy "public_website_settings_select" on website_settings 
   for select 
   to anon
   using (true);
 
--- Orders: Anonymous users can create orders (guest checkout)
-create policy "public_orders_insert" on orders 
-  for insert 
-  to anon
-  with check (true);
-
--- Order items: Anonymous users can create order items
-create policy "public_order_items_insert" on order_items 
-  for insert 
-  to anon
-  with check (true);
-
 -- Featured products: Public read access
+-- App must filter by tenant_id explicitly
 create policy "public_featured_products_select" on featured_products 
   for select 
   to anon
   using (active = true);
 
 -- Product brands: Public read access
+-- App must filter by tenant_id explicitly
 create policy "public_product_brands_select" on product_brands 
   for select 
   to anon
-  using (true);
+  using (is_active = true);
+
+-- ⚠️ WRITE POLICIES FOR GUEST CHECKOUT
+-- These allow anonymous users to create orders
+-- The app MUST validate tenant_id matches the storefront subdomain
+-- TODO: Consider adding trigger validation for tenant_id on INSERT
+
+-- Online Orders: Anonymous users can create orders (guest checkout)
+-- SECURITY: App must set correct tenant_id from subdomain detection
+create policy "public_online_orders_insert" on online_orders 
+  for insert 
+  to anon
+  with check (
+    tenant_id is not null and
+    status in ('pending', 'processing')
+  );
+
+-- Online Order Items: Anonymous users can create order items
+-- SECURITY: App must set correct tenant_id from subdomain detection
+create policy "public_online_order_items_insert" on online_order_items 
+  for insert 
+  to anon
+  with check (tenant_id is not null);
+
+-- Legacy Orders: Anonymous users can create orders (if table is used for POS+online)
+-- SECURITY: App must set correct tenant_id from subdomain detection
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_name = 'orders') then
+    execute 'create policy "public_orders_insert" on orders for insert to anon with check (tenant_id is not null)';
+  end if;
+end $$;
+
+-- Legacy Order Items: Anonymous users can create order items
+-- SECURITY: App must set correct tenant_id from subdomain detection
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_name = 'order_items') then
+    execute 'create policy "public_order_items_insert" on order_items for insert to anon with check (tenant_id is not null)';
+  end if;
+end $$;
 
 notify pgrst, 'reload schema';
 

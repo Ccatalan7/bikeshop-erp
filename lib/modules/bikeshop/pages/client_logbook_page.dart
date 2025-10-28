@@ -335,8 +335,10 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
   Bike _getBikeForJob(MechanicJob job) {
     final bike = _bikeIndex[job.bikeId];
     if (bike != null) return bike;
+    // Fallback bike for display only (not saved to DB)
     return Bike(
       id: job.bikeId,
+      tenantId: '', // Fallback only - this bike won't be saved
       customerId: job.customerId,
       brand: 'Bicicleta',
       model: 'sin datos',
@@ -504,6 +506,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
             const SizedBox(height: 16),
             Expanded(
               child: TabBarView(
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   _buildSummaryTab(),
                   _buildBikesTab(),

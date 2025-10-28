@@ -103,26 +103,16 @@ class UserManagementService {
     }
 
     try {
-      await _supabase.auth.admin.updateUserById(
-        userId,
-        attributes: AdminUserAttributes(
-          userMetadata: {
-            'tenant_id': tenantId, // Keep same tenant
+      // Update user_profiles table directly (no admin API needed)
+      await _supabase
+          .from('user_profiles')
+          .update({
             'role': newRole,
             'permissions': newPermissions,
-          },
-        ),
-      );
-
-      // Log the action
-      await _logUserAction(
-        userId: userId,
-        action: 'role_changed',
-        details: {
-          'new_role': newRole,
-          'changed_by': _supabase.auth.currentUser?.id,
-        },
-      );
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('user_id', userId)
+          .eq('tenant_id', tenantId); // Ensure same tenant
 
       debugPrint('✅ User role updated: $userId → $newRole');
     } catch (e) {

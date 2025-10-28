@@ -55,6 +55,190 @@ unique(name)             -- ❌ Wrong: global unique = shared data
 
 ---
 
+# 🚨 TROUBLESHOOTING: MULTI-TENANT ISSUES
+
+**When ANY feature breaks after multi-tenant migration, follow this checklist:**
+
+## 1. Check Database Functions First
+Most common issue: Functions creating records without `tenant_id`
+
+```sql
+-- ❌ WRONG: Missing tenant_id
+insert into journal_entries (entry_number, total, ...) values (...);
+
+-- ✅ CORRECT: Include tenant_id
+declare
+  v_tenant_id uuid;
+begin
+  v_tenant_id := p_invoice.tenant_id;  -- Get from input parameter
+  insert into journal_entries (tenant_id, entry_number, total, ...) values (v_tenant_id, ...);
+end;
+```
+
+**Common broken functions:**
+- `create_sales_invoice_journal_entry()` → Must include `tenant_id` in all INSERTs
+- `create_purchase_invoice_journal_entry()` → Must include `tenant_id` in all INSERTs
+- `create_sales_payment_journal_entry()` → Must include `tenant_id` in all INSERTs
+- `create_purchase_payment_journal_entry()` → Must include `tenant_id` in all INSERTs
+- `create_invoice_from_mechanic_job()` → Must include `tenant_id` when creating invoice
+
+**Fix pattern:**
+1. Add `v_tenant_id uuid;` to function variables
+2. Get tenant_id from parameter: `v_tenant_id := p_record.tenant_id;`
+3. Add `tenant_id` column to ALL INSERT statements
+4. Deploy updated `core_schema.sql`
+
+## 2. Check RLS Policies
+Symptoms: "new row violates row-level security policy" or empty results
+
+```sql
+-- ❌ WRONG: Missing 'to authenticated'
+create policy "table_select" on table_name for select 
+  using (tenant_id = public.user_tenant_id());
+
+-- ✅ CORRECT: Include 'to authenticated'
+create policy "table_select" on table_name 
+  for select 
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+```
+
+**Fix ALL CRUD policies for each table:**
+```sql
+alter table table_name enable row level security;
+
+drop policy if exists "table_select" on table_name;
+drop policy if exists "table_insert" on table_name;
+drop policy if exists "table_update" on table_name;
+drop policy if exists "table_delete" on table_name;
+
+create policy "table_select" on table_name for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+  
+create policy "table_insert" on table_name for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+  
+create policy "table_update" on table_name for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+  
+create policy "table_delete" on table_name for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+```
+
+**Remove role-based restrictions during testing:**
+- ❌ `(auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'` → Blocks regular users
+- ✅ Just use `tenant_id = public.user_tenant_id()` → All authenticated users in same tenant
+
+## 3. Check Flutter Code
+Symptoms: Insert fails, "tenant_id cannot be null"
+
+```dart
+// ❌ WRONG: Missing tenant_id
+final paymentData = {
+  'invoice_id': invoiceId,
+  'amount': amount,
+  'date': date.toIso8601String(),
+};
+
+// ✅ CORRECT: Include tenant_id
+final userId = Supabase.instance.client.auth.currentUser?.id;
+final profileResponse = await Supabase.instance.client
+    .from('user_profiles')
+    .select('tenant_id')
+    .eq('user_id', userId)
+    .single();
+final tenantId = profileResponse['tenant_id'] as String;
+
+final paymentData = {
+  'tenant_id': tenantId,  // ⚠️ CRITICAL
+  'invoice_id': invoiceId,
+  'amount': amount,
+  'date': date.toIso8601String(),
+};
+```
+
+**Or use TenantService:**
+```dart
+final tenantId = await TenantService().getTenantId();
+final data = {
+  'tenant_id': tenantId,
+  // ... other fields
+};
+```
+
+## 4. Debugging Steps (In Order)
+
+**Step 1: Check if query returns data**
+```sql
+-- Run in Supabase SQL Editor as authenticated user
+SELECT auth.uid() as my_user_id, public.user_tenant_id() as my_tenant_id;
+SELECT * FROM table_name WHERE tenant_id = public.user_tenant_id();
+```
+
+**Step 2: Check RLS policies exist**
+```sql
+SELECT tablename, policyname, roles, cmd 
+FROM pg_policies 
+WHERE tablename = 'table_name';
+```
+Expected: 4 policies (SELECT, INSERT, UPDATE, DELETE) with `{authenticated}` role
+
+**Step 3: Check function includes tenant_id**
+```sql
+-- Search for INSERT statements in function
+SELECT routine_definition 
+FROM information_schema.routines 
+WHERE routine_name = 'function_name';
+```
+All INSERTs must include `tenant_id` column
+
+**Step 4: Check Flutter includes tenant_id**
+- Add debug print: `debugPrint('📦 Insert data: $data');`
+- Verify `tenant_id` is in the printed map
+- Check if `tenant_id` value is not null
+
+## 5. Common Error Messages & Fixes
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `new row violates row-level security policy` | RLS blocking INSERT/UPDATE | Add `to authenticated` to policy, ensure `tenant_id` included in data |
+| `Column tenant_id cannot be null` | Flutter not sending tenant_id | Fetch tenant_id from user_profiles, include in INSERT |
+| `Query returned empty` | RLS filtering out data | Check user's tenant_id matches data's tenant_id |
+| `Payment method not found` | Empty payment_methods table | Run `seed_payment_methods_for_tenant()` function |
+| `Cannot delete` | Role restriction in policy | Remove role check, use only tenant_id check |
+| Function returns NULL | Missing tenant_id in function | Add `v_tenant_id` variable, include in all INSERTs |
+
+## 6. Quick Fix Checklist
+
+When a feature is broken:
+- [ ] Database function includes `tenant_id` in ALL INSERTs?
+- [ ] RLS policies have `to authenticated`?
+- [ ] RLS policies for ALL operations (SELECT, INSERT, UPDATE, DELETE)?
+- [ ] Flutter code fetches and includes `tenant_id`?
+- [ ] Redeploy `core_schema.sql` after function fixes?
+- [ ] Restart Flutter app after schema deployment?
+- [ ] Test with actual user (not service role in SQL Editor)?
+
+## 7. Testing Multi-Tenant Isolation
+
+**Always verify tenant isolation:**
+```sql
+-- Create test data for current tenant
+INSERT INTO test_table (tenant_id, name) 
+VALUES (public.user_tenant_id(), 'My Data');
+
+-- Switch to different user (different tenant)
+-- Verify you CANNOT see the other tenant's data
+SELECT * FROM test_table;  -- Should only see your tenant's data
+```
+
+**Critical: SQL Editor runs as service role (bypasses RLS)**
+- Testing in SQL Editor shows ALL tenants' data
+- Always test from Flutter app as authenticated user
+- Use `auth.uid()` and `public.user_tenant_id()` to verify user context
+
+---
+
 # 🚨 CRITICAL RULE: DATABASE SCHEMA FILES
 
 **⚠️ SCHEMA IS SPLIT INTO 3 FILES FOR DEPLOYMENT!**

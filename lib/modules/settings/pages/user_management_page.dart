@@ -43,6 +43,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
       final users = await _userService.getTenantUsers();
       final tenant = await _tenantService.getCurrentTenant();
       
+      if (tenant == null) {
+        setState(() {
+          _errorMessage = 'No se encontró el tenant. Por favor contacta al administrador.';
+          _isLoading = false;
+        });
+        return;
+      }
+      
       setState(() {
         _users = users;
         _currentTenant = tenant;

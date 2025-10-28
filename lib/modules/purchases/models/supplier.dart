@@ -1,5 +1,6 @@
 class Supplier {
   final int? id;
+  final String tenantId;
   final String name;
   final String? rut;
   final String? email;
@@ -13,6 +14,7 @@ class Supplier {
 
   const Supplier({
     this.id,
+    required this.tenantId,
     required this.name,
     this.rut,
     this.email,
@@ -28,6 +30,7 @@ class Supplier {
   factory Supplier.fromJson(Map<String, dynamic> json) {
     return Supplier(
       id: json['id'] as int?,
+      tenantId: json['tenant_id']?.toString() ?? '',
       name: json['name'] as String,
       rut: json['rut'] as String?,
       email: json['email'] as String?,
@@ -48,6 +51,7 @@ class Supplier {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'name': name,
       'rut': rut,
       'email': email,
@@ -63,6 +67,7 @@ class Supplier {
 
   Supplier copyWith({
     int? id,
+    String? tenantId,
     String? name,
     String? rut,
     String? email,
@@ -76,6 +81,7 @@ class Supplier {
   }) {
     return Supplier(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       name: name ?? this.name,
       rut: rut ?? this.rut,
       email: email ?? this.email,

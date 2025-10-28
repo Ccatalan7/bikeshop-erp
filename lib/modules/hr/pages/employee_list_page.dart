@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
 
@@ -331,7 +332,7 @@ class _EmployeeCard extends StatelessWidget {
     if (employee.departmentId == null) return 'Sin departamento';
     final dept = departments.firstWhere(
       (d) => d.id == employee.departmentId,
-      orElse: () => Department(name: 'Desconocido', code: ''),
+      orElse: () => Department(tenantId: '', name: 'Desconocido', code: ''),
     );
     return dept.name;
   }
@@ -574,9 +575,15 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
 
     try {
       final hrService = context.read<HRService>();
+      
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        throw Exception('User does not have a tenant_id. Cannot proceed.');
+      }
 
       final employee = Employee(
         id: widget.employee?.id,
+        tenantId: tenantId,
         employeeNumber: _employeeNumberController.text,
         firstName: _firstNameController.text,
         lastName: _lastNameController.text,

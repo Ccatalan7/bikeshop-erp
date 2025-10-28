@@ -1,5 +1,6 @@
 class JournalEntry {
   final String? id;
+  final String tenantId;
   final String entryNumber;
   final DateTime date;
   final String description;
@@ -15,6 +16,7 @@ class JournalEntry {
 
   const JournalEntry({
     this.id,
+    required this.tenantId,
     required this.entryNumber,
     required this.date,
     required this.description,
@@ -32,6 +34,7 @@ class JournalEntry {
   factory JournalEntry.fromJson(Map<String, dynamic> json) {
     return JournalEntry(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       entryNumber: json['entry_number'] as String,
       date: _parseDate(
           json['entry_date'] ?? json['date']), // Support both column names
@@ -62,6 +65,7 @@ class JournalEntry {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'entry_number': entryNumber,
       'entry_date': date.toIso8601String(), // Use new column name
       'notes': description, // Use new column name
@@ -79,6 +83,7 @@ class JournalEntry {
 
   JournalEntry copyWith({
     String? id,
+    String? tenantId,
     String? entryNumber,
     DateTime? date,
     String? description,
@@ -94,6 +99,7 @@ class JournalEntry {
   }) {
     return JournalEntry(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       entryNumber: entryNumber ?? this.entryNumber,
       date: date ?? this.date,
       description: description ?? this.description,

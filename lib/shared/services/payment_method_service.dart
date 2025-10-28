@@ -27,20 +27,30 @@ class PaymentMethodService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Debug: Check if user is authenticated
+      final user = _supabase.auth.currentUser;
+      debugPrint('🔐 Current user: ${user?.id ?? "NOT AUTHENTICATED"}');
+      
       final response = await _supabase
           .from('payment_methods')
           .select()
           .eq('is_active', true)
           .order('sort_order', ascending: true);
 
+      debugPrint('📦 Raw response: $response');
+      
       _paymentMethods = (response as List)
           .map((json) => PaymentMethod.fromJson(json as Map<String, dynamic>))
           .toList();
 
       debugPrint(
           'PaymentMethodService: Loaded ${_paymentMethods.length} payment methods');
-    } catch (e) {
+      for (var pm in _paymentMethods) {
+        debugPrint('  - ${pm.name} (${pm.code})');
+      }
+    } catch (e, stack) {
       debugPrint('PaymentMethodService.loadPaymentMethods error: $e');
+      debugPrint('Stack trace: $stack');
       _error = 'No se pudieron cargar los métodos de pago.';
       _paymentMethods = [];
     } finally {

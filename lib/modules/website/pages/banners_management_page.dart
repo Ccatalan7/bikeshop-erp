@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
+import '../../../shared/services/tenant_service.dart';
 
 /// Page for managing website banners (hero images, promotional banners)
 class BannersManagementPage extends StatefulWidget {
@@ -553,10 +554,17 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
 
     try {
       final service = context.read<WebsiteService>();
+      final tenantService = context.read<TenantService>();
+      
+      final tenantId = await tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant found. Please log in again.');
+      }
 
       final banner = WebsiteBanner(
         id: widget.banner?.id ??
             DateTime.now().millisecondsSinceEpoch.toString(),
+        tenantId: tenantId,
         title: _titleController.text.trim(),
         subtitle: _subtitleController.text.trim().isEmpty
             ? null

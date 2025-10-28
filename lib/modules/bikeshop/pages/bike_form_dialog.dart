@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
 import '../../../shared/services/image_service.dart';
+import '../../../shared/services/tenant_service.dart';
 
 class BikeFormDialog extends StatefulWidget {
   final String customerId;
@@ -195,8 +196,17 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         });
       }
 
+      // Get tenant ID from auth context
+      final tenantService = Provider.of<TenantService>(context, listen: false);
+      final tenantId = await tenantService.getTenantId();
+      
+      if (tenantId == null || tenantId.isEmpty) {
+        throw Exception('User does not have a tenant_id. Cannot create bike.');
+      }
+
       final bike = Bike(
         id: widget.bike?.id,
+        tenantId: tenantId,
         customerId: widget.customerId,
         brand: _brandController.text.trim(),
         model: _modelController.text.trim(),

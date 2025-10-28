@@ -34,6 +34,7 @@ class _UserEditDialogState extends State<UserEditDialog> {
 
   Map<String, bool> _getDefaultPermissions(String role) {
     switch (role) {
+      case 'admin':
       case 'manager':
         return {
           'access_pos': true,
@@ -170,6 +171,7 @@ class _UserEditDialogState extends State<UserEditDialog> {
                   prefixIcon: Icon(Icons.badge),
                 ),
                 items: const [
+                  DropdownMenuItem(value: 'admin', child: Text('Administrador')),
                   DropdownMenuItem(value: 'manager', child: Text('Gerente')),
                   DropdownMenuItem(value: 'cashier', child: Text('Cajero')),
                   DropdownMenuItem(value: 'mechanic', child: Text('Mecánico')),

@@ -8,6 +8,7 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/models/payment_method.dart';
 import '../../../shared/services/payment_method_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../accounting/models/account.dart';
 import '../../accounting/services/accounting_service.dart';
 import '../models/expense.dart';
@@ -180,6 +181,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
   Account accountFallback(ExpenseLine line) {
     return Account(
       id: line.accountId,
+      tenantId: '', // Display-only fallback
       code: line.accountCode,
       name: line.accountName,
       type: AccountType.expense,
@@ -844,6 +846,11 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
       );
       return;
     }
+    
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null) {
+      throw Exception('User does not have a tenant_id. Cannot proceed.');
+    }
 
     final net = _parseDouble(_netAmountController.text);
     final taxRate = _parseDouble(_taxRateController.text);
@@ -856,6 +863,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
     try {
       final expense = Expense(
         id: _existingExpense?.id,
+        tenantId: tenantId,
         expenseNumber: _expenseNumberController.text.trim(),
         categoryId: _selectedCategoryId,
         category: _existingExpense?.category,

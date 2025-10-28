@@ -1,5 +1,6 @@
 class ProductBrand {
   final String? id;
+  final String tenantId; // uuid - MULTI-TENANT ISOLATION
   final String name;
   final String? description;
   final String? website;
@@ -10,6 +11,7 @@ class ProductBrand {
 
   ProductBrand({
     this.id,
+    required this.tenantId,
     required this.name,
     this.description,
     this.website,
@@ -23,6 +25,7 @@ class ProductBrand {
   factory ProductBrand.fromJson(Map<String, dynamic> json) {
     return ProductBrand(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       name: json['name'] ?? '',
       description: json['description'],
       website: json['website'],
@@ -36,6 +39,7 @@ class ProductBrand {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'name': name,
       'description': description,
       'website': website,
@@ -48,6 +52,7 @@ class ProductBrand {
 
   ProductBrand copyWith({
     String? id,
+    String? tenantId,
     String? name,
     String? description,
     String? website,
@@ -58,6 +63,7 @@ class ProductBrand {
   }) {
     return ProductBrand(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       name: name ?? this.name,
       description: description ?? this.description,
       website: website ?? this.website,

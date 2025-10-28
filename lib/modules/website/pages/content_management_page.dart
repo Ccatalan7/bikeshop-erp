@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
+import '../../../shared/services/tenant_service.dart';
 
 /// Page for managing website content (text blocks, pages, etc.)
 class ContentManagementPage extends StatefulWidget {
@@ -779,9 +780,16 @@ class _ContentEditorPageState extends State<_ContentEditorPage> {
 
     try {
       final service = context.read<WebsiteService>();
+      final tenantService = context.read<TenantService>();
+      
+      final tenantId = await tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant found. Please log in again.');
+      }
 
       final content = WebsiteContent(
         id: widget.section.id,
+        tenantId: tenantId,
         title: widget.section.title,
         content: _contentController.text,
         updatedAt: DateTime.now(),

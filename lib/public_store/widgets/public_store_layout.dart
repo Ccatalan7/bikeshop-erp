@@ -146,7 +146,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     final service = context.read<WebsiteService>();
                     service.loadBlocks();
                     service.loadSettings();
-                    service.loadBanners();
                     service.loadFeaturedProducts();
                   });
                 },

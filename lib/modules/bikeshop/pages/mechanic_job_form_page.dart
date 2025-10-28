@@ -8,6 +8,7 @@ import '../../../modules/crm/models/crm_models.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/services/inventory_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
@@ -347,10 +348,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     try {
       final bikeshopService =
           Provider.of<BikeshopService>(context, listen: false);
+      
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        throw Exception('User does not have a tenant_id. Cannot proceed.');
+      }
 
       // Create MechanicJob object
       final job = MechanicJob(
         id: widget.jobId,
+        tenantId: tenantId,
         jobNumber:
             _existingJob?.jobNumber ?? '', // Will be auto-generated if empty
         customerId: _selectedCustomer!.id!,
@@ -410,6 +417,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final unitPrice = item.unitPrice;
         final jobItem = MechanicJobItem(
           jobId: jobId,
+          tenantId: tenantId,
           productId: item.product.id,
           productName: item.product.name,
           productSku: item.product.sku,
@@ -438,6 +446,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             : item.serviceProduct?.name;
         final jobLabor = MechanicJobLabor(
           jobId: jobId,
+          tenantId: tenantId,
           technicianName: 'Mecánico', // TODO: Get from current user
           description: description,
           hoursWorked: hoursWorked,

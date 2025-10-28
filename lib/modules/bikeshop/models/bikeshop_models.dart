@@ -70,6 +70,7 @@ enum BikeType {
 
 class Bike {
   final String? id;
+  final String tenantId;
   final String customerId;
   final String? brand;
   final String? model;
@@ -92,6 +93,7 @@ class Bike {
 
   Bike({
     this.id,
+    required this.tenantId,
     required this.customerId,
     this.brand,
     this.model,
@@ -117,6 +119,7 @@ class Bike {
   factory Bike.fromJson(Map<String, dynamic> json) {
     return Bike(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       customerId: json['customer_id']?.toString() ?? '',
       brand: json['brand'] as String?,
       model: json['model'] as String?,
@@ -151,6 +154,7 @@ class Bike {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'customer_id': customerId,
       'brand': brand,
       'model': model,
@@ -175,6 +179,7 @@ class Bike {
 
   Bike copyWith({
     String? id,
+    String? tenantId,
     String? customerId,
     String? brand,
     String? model,
@@ -197,6 +202,7 @@ class Bike {
   }) {
     return Bike(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       customerId: customerId ?? this.customerId,
       brand: brand ?? this.brand,
       model: model ?? this.model,
@@ -361,6 +367,7 @@ enum JobPriority {
 
 class MechanicJob {
   final String? id;
+  final String tenantId;
   final String jobNumber;
   final String customerId;
   final String bikeId;
@@ -399,6 +406,7 @@ class MechanicJob {
 
   MechanicJob({
     this.id,
+    required this.tenantId,
     required this.jobNumber,
     required this.customerId,
     required this.bikeId,
@@ -441,6 +449,7 @@ class MechanicJob {
   factory MechanicJob.fromJson(Map<String, dynamic> json) {
     return MechanicJob(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       jobNumber: json['job_number']?.toString() ?? '',
       customerId: json['customer_id']?.toString() ?? '',
       bikeId: json['bike_id']?.toString() ?? '',
@@ -486,6 +495,7 @@ class MechanicJob {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       if (jobNumber.isNotEmpty)
         'job_number':
             jobNumber, // Only include if not empty (let DB generate it)
@@ -528,6 +538,7 @@ class MechanicJob {
 
   MechanicJob copyWith({
     String? id,
+    String? tenantId,
     String? jobNumber,
     String? customerId,
     String? bikeId,
@@ -566,6 +577,7 @@ class MechanicJob {
   }) {
     return MechanicJob(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       jobNumber: jobNumber ?? this.jobNumber,
       customerId: customerId ?? this.customerId,
       bikeId: bikeId ?? this.bikeId,
@@ -626,6 +638,7 @@ class MechanicJob {
 
 class MechanicJobItem {
   final String? id;
+  final String tenantId;
   final String jobId;
   final String? productId;
   final String productName;
@@ -638,6 +651,7 @@ class MechanicJobItem {
 
   MechanicJobItem({
     this.id,
+    required this.tenantId,
     required this.jobId,
     this.productId,
     required this.productName,
@@ -652,6 +666,7 @@ class MechanicJobItem {
   factory MechanicJobItem.fromJson(Map<String, dynamic> json) {
     return MechanicJobItem(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       jobId: json['job_id']?.toString() ?? '',
       productId: json['product_id']?.toString(),
       productName: json['product_name']?.toString() ?? '',
@@ -667,6 +682,7 @@ class MechanicJobItem {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'job_id': jobId,
       'product_id': productId,
       'product_name': productName,
@@ -686,6 +702,7 @@ class MechanicJobItem {
 
 class MechanicJobLabor {
   final String? id;
+  final String tenantId;
   final String jobId;
   final String? technicianId;
   final String technicianName;
@@ -699,6 +716,7 @@ class MechanicJobLabor {
 
   MechanicJobLabor({
     this.id,
+    required this.tenantId,
     required this.jobId,
     this.technicianId,
     required this.technicianName,
@@ -715,6 +733,7 @@ class MechanicJobLabor {
   factory MechanicJobLabor.fromJson(Map<String, dynamic> json) {
     return MechanicJobLabor(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       jobId: json['job_id']?.toString() ?? '',
       technicianId: json['technician_id']?.toString(),
       technicianName: json['technician_name']?.toString() ?? '',
@@ -732,6 +751,7 @@ class MechanicJobLabor {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'job_id': jobId,
       'technician_id': technicianId,
       'technician_name': technicianName,
@@ -819,6 +839,7 @@ enum TimelineEventType {
 
 class MechanicJobTimeline {
   final String? id;
+  final String tenantId;
   final String jobId;
   final TimelineEventType eventType;
   final String? oldValue;
@@ -830,6 +851,7 @@ class MechanicJobTimeline {
 
   MechanicJobTimeline({
     this.id,
+    required this.tenantId,
     required this.jobId,
     required this.eventType,
     this.oldValue,
@@ -843,6 +865,7 @@ class MechanicJobTimeline {
   factory MechanicJobTimeline.fromJson(Map<String, dynamic> json) {
     return MechanicJobTimeline(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       jobId: json['job_id']?.toString() ?? '',
       eventType: TimelineEventType.fromDbValue(json['event_type'] as String?),
       oldValue: json['old_value'] as String?,
@@ -857,6 +880,7 @@ class MechanicJobTimeline {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'job_id': jobId,
       'event_type': eventType.dbValue,
       'old_value': oldValue,
@@ -875,6 +899,7 @@ class MechanicJobTimeline {
 
 class ServicePackage {
   final String? id;
+  final String tenantId; // uuid - MULTI-TENANT ISOLATION
   final String name;
   final String? description;
   final double estimatedDurationHours;
@@ -886,6 +911,7 @@ class ServicePackage {
 
   ServicePackage({
     this.id,
+    required this.tenantId,
     required this.name,
     this.description,
     this.estimatedDurationHours = 1,
@@ -900,6 +926,7 @@ class ServicePackage {
   factory ServicePackage.fromJson(Map<String, dynamic> json) {
     return ServicePackage(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       description: json['description'] as String?,
       estimatedDurationHours: double.tryParse(
@@ -919,6 +946,7 @@ class ServicePackage {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'name': name,
       'description': description,
       'estimated_duration_hours': estimatedDurationHours,

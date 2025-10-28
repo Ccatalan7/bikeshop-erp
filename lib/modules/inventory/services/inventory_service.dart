@@ -296,8 +296,14 @@ class InventoryService extends ChangeNotifier {
     String? notes,
   }) async {
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('User does not have a tenant_id. Cannot proceed.');
+      }
+      
       final movement = StockMovement(
         productId: productId,
+        tenantId: tenantId,
         quantity: quantity,
         type: type,
         reference: reference,

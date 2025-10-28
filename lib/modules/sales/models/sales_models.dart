@@ -25,6 +25,7 @@ DateTime _parseDate(dynamic value, {DateTime? fallback}) {
 
 class Invoice {
   final String? id;
+  final String tenantId;
   final String invoiceNumber;
   final String? customerId;
   final String? customerName;
@@ -44,6 +45,7 @@ class Invoice {
 
   Invoice({
     this.id,
+    required this.tenantId,
     this.customerId,
     this.invoiceNumber = '',
     this.customerName,
@@ -65,6 +67,7 @@ class Invoice {
 
   Invoice copyWith({
     String? id,
+    String? tenantId,
     String? customerId,
     String? invoiceNumber,
     String? customerName,
@@ -84,6 +87,7 @@ class Invoice {
   }) {
     return Invoice(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       customerId: customerId ?? this.customerId,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       customerName: customerName ?? this.customerName,
@@ -107,6 +111,7 @@ class Invoice {
     final rawItems = (json['items'] as List?) ?? const [];
     return Invoice(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       customerId: json['customer_id']?.toString(),
       invoiceNumber: json['invoice_number']?.toString() ?? '',
       customerName: json['customer_name']?.toString(),
@@ -133,6 +138,7 @@ class Invoice {
   Map<String, dynamic> toFirestoreMap() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'customer_id': customerId,
       'invoice_number': invoiceNumber,
       'customer_name': customerName,
@@ -267,6 +273,7 @@ class InvoiceItem {
 /// CRITICAL: Uses payment_method_id (uuid) to reference payment_methods table
 class Payment {
   final String? id; // uuid
+  final String tenantId; // uuid - MULTI-TENANT ISOLATION
   final String invoiceId; // uuid - references sales_invoices(id)
   final String? invoiceReference; // invoice number for display
   final String paymentMethodId; // uuid - references payment_methods(id)
@@ -279,6 +286,7 @@ class Payment {
 
   Payment({
     this.id,
+    required this.tenantId,
     required this.invoiceId,
     this.invoiceReference,
     required this.paymentMethodId,
@@ -293,6 +301,7 @@ class Payment {
 
   Payment copyWith({
     String? id,
+    String? tenantId,
     String? invoiceId,
     String? invoiceReference,
     String? paymentMethodId,
@@ -305,6 +314,7 @@ class Payment {
   }) {
     return Payment(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       invoiceId: invoiceId ?? this.invoiceId,
       invoiceReference: invoiceReference ?? this.invoiceReference,
       paymentMethodId: paymentMethodId ?? this.paymentMethodId,
@@ -320,6 +330,7 @@ class Payment {
   factory Payment.fromJson(Map<String, dynamic> json) {
     return Payment(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       invoiceId: json['invoice_id']?.toString() ?? '',
       invoiceReference: json['invoice_reference'] as String?,
       paymentMethodId: json['payment_method_id']?.toString() ?? '',
@@ -335,6 +346,7 @@ class Payment {
   Map<String, dynamic> toFirestoreMap() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'invoice_id': invoiceId,
       'invoice_reference': invoiceReference,
       'payment_method_id': paymentMethodId,

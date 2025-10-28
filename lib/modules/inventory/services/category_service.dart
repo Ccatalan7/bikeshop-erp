@@ -79,9 +79,8 @@ class CategoryService extends ChangeNotifier {
         throw Exception('Ya existe una categoría con esta ruta: ${category.fullPath}');
       }
 
-      // Add tenant_id to category data
-      final categoryData = _tenantService.addTenantId(category.toJson());
-      final data = await _db.insert('product_categories', categoryData);
+      // Category already has tenant_id from the form - no need to add it again
+      final data = await _db.insert('product_categories', category.toJson());
       return models.Category.fromJson(data);
     } catch (e) {
       if (kDebugMode) print('Error creating category: $e');
@@ -190,32 +189,44 @@ class CategoryService extends ChangeNotifier {
         return;
       }
 
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('User does not have a tenant_id. Cannot proceed.');
+      }
+
       final defaultCategories = [
         models.Category(
+            tenantId: tenantId,
             name: 'Bicicletas',
             fullPath: 'Bicicletas',
             description: 'Bicicletas completas de todos los tipos'),
         models.Category(
+            tenantId: tenantId,
             name: 'Repuestos',
             fullPath: 'Repuestos',
             description: 'Piezas y componentes para bicicletas'),
         models.Category(
+            tenantId: tenantId,
             name: 'Accesorios',
             fullPath: 'Accesorios',
             description: 'Accesorios y complementos para ciclistas'),
         models.Category(
+            tenantId: tenantId,
             name: 'Ropa',
             fullPath: 'Ropa',
             description: 'Vestimenta y equipamiento para ciclistas'),
         models.Category(
+            tenantId: tenantId,
             name: 'Herramientas',
             fullPath: 'Herramientas',
             description: 'Herramientas para mantenimiento y reparación'),
         models.Category(
+            tenantId: tenantId,
             name: 'Mantenimiento',
             fullPath: 'Mantenimiento',
             description: 'Productos para mantenimiento y limpieza'),
         models.Category(
+            tenantId: tenantId,
             name: 'Otros', 
             fullPath: 'Otros',
             description: 'Productos diversos no clasificados'),
@@ -358,8 +369,14 @@ class CategoryService extends ChangeNotifier {
             }
           }
 
+          final tenantId = await _tenantService.getTenantId();
+          if (tenantId == null) {
+            throw Exception('User does not have a tenant_id. Cannot proceed.');
+          }
+
           // Create category
           final category = models.Category(
+            tenantId: tenantId,
             name: name,
             fullPath: trimmedPath,
             parentId: parentId,

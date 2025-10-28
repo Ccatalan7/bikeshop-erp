@@ -389,7 +389,62 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 8),
+                    // Delete button (always visible for testing)
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Eliminar factura'),
+                            content: Text(
+                              '¿Eliminar factura ${invoice.invoiceNumber}?\n\n'
+                              'Esta acción no se puede deshacer.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancelar'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: FilledButton.styleFrom(
+                                    backgroundColor: Colors.red),
+                                child: const Text('Eliminar'),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirmed == true) {
+                          try {
+                            await _purchaseService
+                                .deletePurchaseInvoice(invoice.id!);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content:
+                                      Text('Factura eliminada exitosamente'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                              _loadInvoices(refresh: true);
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error al eliminar: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        }
+                      },
+                      tooltip: 'Eliminar',
+                    ),
                     const Icon(Icons.chevron_right),
                   ],
                 ),

@@ -2,6 +2,7 @@ import '../../../shared/models/product.dart';
 
 class POSCartItem {
   final String id;
+  final String tenantId;
   final Product product;
   final int quantity;
   final double unitPrice;
@@ -10,6 +11,7 @@ class POSCartItem {
 
   const POSCartItem({
     required this.id,
+    required this.tenantId,
     required this.product,
     required this.quantity,
     required this.unitPrice,
@@ -21,6 +23,7 @@ class POSCartItem {
   factory POSCartItem.fromJson(Map<String, dynamic> json) {
     return POSCartItem(
       id: json['id'] ?? '',
+      tenantId: json['tenant_id']?.toString() ?? '',
       product: Product.fromJson(json['product']),
       quantity: json['quantity'] ?? 1,
       unitPrice: (json['unit_price'] ?? 0).toDouble(),
@@ -32,6 +35,7 @@ class POSCartItem {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'product': product.toJson(),
       'quantity': quantity,
       'unit_price': unitPrice,
@@ -43,6 +47,7 @@ class POSCartItem {
   // Helper methods
   POSCartItem copyWith({
     String? id,
+    String? tenantId,
     Product? product,
     int? quantity,
     double? unitPrice,
@@ -51,6 +56,7 @@ class POSCartItem {
   }) {
     return POSCartItem(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       product: product ?? this.product,
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,

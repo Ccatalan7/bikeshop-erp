@@ -1,5 +1,6 @@
 class Category {
   final String? id;
+  final String tenantId; // uuid - MULTI-TENANT ISOLATION
   final String name;
   final String fullPath; // "Accesorios / Asientos / Tija"
   final String? parentId;
@@ -13,6 +14,7 @@ class Category {
 
   Category({
     this.id,
+    required this.tenantId,
     required this.name,
     required this.fullPath,
     this.parentId,
@@ -44,6 +46,7 @@ class Category {
   factory Category.fromJson(Map<String, dynamic> json) {
     return Category(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       name: json['name'],
       fullPath: json['full_path'] ?? json['name'],
       parentId: json['parent_id']?.toString(),
@@ -60,6 +63,7 @@ class Category {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'name': name,
       'full_path': fullPath,
       if (parentId != null) 'parent_id': parentId,
@@ -75,6 +79,7 @@ class Category {
 
   Category copyWith({
     String? id,
+    String? tenantId,
     String? name,
     String? fullPath,
     String? parentId,
@@ -88,6 +93,7 @@ class Category {
   }) {
     return Category(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       name: name ?? this.name,
       fullPath: fullPath ?? this.fullPath,
       parentId: parentId ?? this.parentId,

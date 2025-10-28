@@ -8,9 +8,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/constants/storage_constants.dart';
-import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/error_reporting_service.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -579,7 +579,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       (c) => c.id == _selectedCategoryId,
       orElse: () => _categories.isNotEmpty
           ? _categories.first
-          : category_models.Category(id: null, name: 'PRD', fullPath: 'PRD'),
+          : category_models.Category(id: null, tenantId: '', name: 'PRD', fullPath: 'PRD'),
     );
 
     final categorySegment = category.name
@@ -621,6 +621,11 @@ class _ProductFormPageState extends State<ProductFormPage> {
     debugPrint("[DIAGNOSTIC] _saveProduct: Save process started.");
 
     try {
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        throw Exception('User does not have a tenant_id. Cannot proceed.');
+      }
+      
       String? finalImageUrl = _imageUrl;
 
       // --- ARCHITECTURAL FIX ---
@@ -690,6 +695,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       final baseProduct = _existingProduct ??
           Product(
             id: null,
+            tenantId: tenantId,
             name: name,
             sku: sku,
             description: rawDescription.isEmpty ? null : rawDescription,
@@ -1130,6 +1136,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
                       (c) => c.id == _selectedCategoryId,
                       orElse: () => category_models.Category(
                         id: '',
+                        tenantId: '', // Display-only fallback
                         name: 'Categoría no encontrada',
                         fullPath: 'Categoría no encontrada',
                         createdAt: DateTime.now(),

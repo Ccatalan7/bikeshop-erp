@@ -2,6 +2,7 @@ import '../../../shared/models/product.dart' show ProductDimensions;
 
 class Product {
   final String? id;
+  final String tenantId;
   final String name;
   final String sku;
   final String? description;
@@ -51,6 +52,7 @@ class Product {
 
   Product({
     this.id,
+    required this.tenantId,
     required this.name,
     required this.sku,
     this.description,
@@ -103,6 +105,7 @@ class Product {
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       name: json['name'],
       sku: json['sku'],
       description: json['description'],
@@ -180,6 +183,7 @@ class Product {
 
   Map<String, dynamic> toJson() {
     final json = {
+      'tenant_id': tenantId,
       'name': name,
       'sku': sku,
       'description': description,
@@ -241,6 +245,7 @@ class Product {
 
   Product copyWith({
     String? id,
+    String? tenantId,
     String? name,
     String? sku,
     String? description,
@@ -292,6 +297,7 @@ class Product {
   }) {
     return Product(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       name: name ?? this.name,
       sku: sku ?? this.sku,
       description: description ?? this.description,
@@ -362,6 +368,7 @@ enum ProductCategory {
 
 class StockMovement {
   final String? id;
+  final String tenantId;
   final String productId;
   final String? productName;
   final String? productSku;
@@ -376,6 +383,7 @@ class StockMovement {
 
   StockMovement({
     this.id,
+    required this.tenantId,
     required this.productId,
     this.productName,
     this.productSku,
@@ -392,6 +400,7 @@ class StockMovement {
   factory StockMovement.fromJson(Map<String, dynamic> json) {
     return StockMovement(
       id: json['id'],
+      tenantId: json['tenant_id']?.toString() ?? '',
       productId: json['product_id'],
       productName: json['product_name'],
       productSku: json['product_sku'],
@@ -411,6 +420,7 @@ class StockMovement {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'product_id': productId,
       'quantity': quantity,
       'type': type.toString().split('.').last,
@@ -436,6 +446,7 @@ enum StockMovementType {
 
 class Warehouse {
   final int? id;
+  final String tenantId; // uuid - MULTI-TENANT ISOLATION
   final String name;
   final String? description;
   final String? address;
@@ -445,6 +456,7 @@ class Warehouse {
 
   Warehouse({
     this.id,
+    required this.tenantId,
     required this.name,
     this.description,
     this.address,
@@ -456,6 +468,7 @@ class Warehouse {
   factory Warehouse.fromJson(Map<String, dynamic> json) {
     return Warehouse(
       id: json['id'],
+      tenantId: json['tenant_id']?.toString() ?? '',
       name: json['name'],
       description: json['description'],
       address: json['address'],
@@ -468,6 +481,7 @@ class Warehouse {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'name': name,
       'description': description,
       'address': address,

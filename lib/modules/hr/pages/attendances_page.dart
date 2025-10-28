@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -85,6 +86,10 @@ class _AttendancesPageState extends State<AttendancesPage> {
       }
 
       if (!mounted) return;
+
+      if (kDebugMode) {
+        print('📊 Loaded ${attendances.length} attendances for ${employees.length} employees');
+      }
 
       setState(() {
         _employees = employees;
@@ -225,6 +230,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
     final employee = _employees.firstWhere(
       (e) => e.id == attendance.employeeId,
       orElse: () => Employee(
+        tenantId: '', // Display-only fallback
         employeeNumber: 'Unknown',
         firstName: 'Empleado',
         lastName: 'Desconocido',
@@ -263,19 +269,29 @@ class _AttendancesPageState extends State<AttendancesPage> {
         onDelete: () async {
           try {
             final hrService = context.read<HRService>();
+            final messenger = ScaffoldMessenger.of(context);
+            final navigator = Navigator.of(context);
+            
             await hrService.deleteAttendance(attendance.id!);
+            
+            // Close dialog first
+            navigator.pop();
+            
+            // Reload data
             if (!mounted) return;
-            Navigator.of(context).pop();
-            _loadData(); // Refresh data
-            ScaffoldMessenger.of(context).showSnackBar(
+            await _loadData();
+            
+            // Show success message
+            messenger.showSnackBar(
               const SnackBar(
                 content: Text('Asistencia eliminada correctamente'),
                 backgroundColor: Colors.orange,
               ),
             );
           } catch (e) {
+            final messenger = ScaffoldMessenger.of(context);
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
+            messenger.showSnackBar(
               SnackBar(
                 content: Text('Error al eliminar: $e'),
                 backgroundColor: Colors.red,
@@ -666,6 +682,35 @@ class _AttendancesPageState extends State<AttendancesPage> {
     );
   }
 
+  String _getWeeklyTotalTooltip(Employee employee, List<DateTime> days) {
+    final attendances = _attendancesByEmployee[employee.id] ?? [];
+    
+    // Calculate total hours for the current view period
+    Duration totalDuration = Duration.zero;
+    
+    for (final attendance in attendances) {
+      if (attendance.checkOut != null) {
+        totalDuration += attendance.checkOut!.difference(attendance.checkIn);
+      } else if (attendance.isOngoing) {
+        totalDuration += DateTime.now().difference(attendance.checkIn);
+      }
+    }
+    
+    final hours = totalDuration.inHours;
+    final minutes = totalDuration.inMinutes % 60;
+    
+    String viewPeriod;
+    if (_currentView == TimeView.week) {
+      viewPeriod = 'Semana';
+    } else if (_currentView == TimeView.month) {
+      viewPeriod = 'Mes';
+    } else {
+      viewPeriod = 'Año';
+    }
+    
+    return '$viewPeriod: ${hours}h ${minutes}m';
+  }
+
   Widget _buildEmployeeRow(
       Employee employee, List<DateTime> days, int employeeIndex) {
     final color = _getEmployeeColor(employeeIndex);
@@ -676,57 +721,62 @@ class _AttendancesPageState extends State<AttendancesPage> {
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
-          Container(
-            width: 200,
-            height: cellHeight,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[50],
-              border: Border.all(
-                  color: isDark ? Colors.grey[800]! : Colors.grey[300]!),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: color,
-                  radius: 20,
-                  child: employee.photoUrl != null
-                      ? ClipOval(
-                          child: Image.network(employee.photoUrl!,
-                              fit: BoxFit.cover))
-                      : Text(
-                          employee.initials,
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        employee.fullName,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        employee.jobTitle,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+          Tooltip(
+            message: _getWeeklyTotalTooltip(employee, days),
+            preferBelow: false,
+            verticalOffset: 20,
+            child: Container(
+              width: 200,
+              height: cellHeight,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[50],
+                border: Border.all(
+                    color: isDark ? Colors.grey[800]! : Colors.grey[300]!),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: color,
+                    radius: 20,
+                    child: employee.photoUrl != null
+                        ? ClipOval(
+                            child: Image.network(employee.photoUrl!,
+                                fit: BoxFit.cover))
+                        : Text(
+                            employee.initials,
+                            style: const TextStyle(
+                                color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          employee.fullName,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          employee.jobTitle,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           ...days.map((day) => _buildAttendanceCell(employee, day, color)),
@@ -783,17 +833,20 @@ class _AttendancesPageState extends State<AttendancesPage> {
         children: attendances.map((attendance) {
           // Calculate worked duration (this goes OUTSIDE parentheses)
           String workedDuration;
-          if (attendance.isOngoing) {
+          if (attendance.checkOut != null) {
+            // Completed shift: calculate actual time worked
+            final duration = attendance.checkOut!.difference(attendance.checkIn);
+            final hours = duration.inHours;
+            final minutes = duration.inMinutes % 60;
+            workedDuration = '$hours:${minutes.toString().padLeft(2, '0')}';
+          } else if (attendance.isOngoing) {
+            // Ongoing shift: calculate time elapsed so far
             final duration = DateTime.now().difference(attendance.checkIn);
             final hours = duration.inHours;
             final minutes = duration.inMinutes % 60;
             workedDuration = '$hours:${minutes.toString().padLeft(2, '0')}';
-          } else if (attendance.workedHours != null) {
-            final totalMinutes = (attendance.workedHours! * 60).round();
-            final hours = totalMinutes ~/ 60;
-            final minutes = totalMinutes % 60;
-            workedDuration = '$hours:${minutes.toString().padLeft(2, '0')}';
           } else {
+            // No check-out and not ongoing
             workedDuration = '--:--';
           }
 

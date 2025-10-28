@@ -1137,6 +1137,7 @@ class _ProductListPageState extends State<ProductListPage> {
       (c) => c.id == product.categoryId,
       orElse: () => Category(
         id: product.categoryId!,
+        tenantId: '', // Display-only fallback
         name: 'Categoría sin nombre',
         fullPath: 'Categoría sin nombre',
       ),

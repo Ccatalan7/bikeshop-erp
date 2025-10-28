@@ -9,6 +9,7 @@ import '../../../shared/models/product.dart';
 import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -252,6 +253,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       (supplier) => supplier.id == invoice.supplierId,
       orElse: () => shared_supplier.Supplier(
         id: invoice.supplierId ?? '',
+        tenantId: invoice.tenantId, // Use invoice's tenant_id
         name: invoice.supplierName ?? 'Proveedor',
         createdAt: invoice.createdAt,
         updatedAt: invoice.updatedAt,
@@ -500,8 +502,16 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       return;
     }
 
+    final tenantService = context.read<TenantService>();
+    final tenantId = await tenantService.getTenantId();
+    
+    if (tenantId == null) {
+      throw Exception('No tenant found. Please log in again.');
+    }
+
     final invoice = PurchaseInvoice(
       id: _loadedInvoice?.id,
+      tenantId: tenantId,
       invoiceNumber: _invoiceNumberController.text.trim().isEmpty
           ? _buildSuggestedNumber()
           : _invoiceNumberController.text.trim(),

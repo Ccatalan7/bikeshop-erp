@@ -2,6 +2,7 @@
 /// CRITICAL: Uses payment_method_id (uuid) to reference payment_methods table
 class PurchasePayment {
   final String? id; // uuid
+  final String tenantId; // uuid - tenant isolation
   final String invoiceId; // uuid - references purchase_invoices(id)
   final String? invoiceNumber; // for display
   final String? supplierName; // for display
@@ -15,6 +16,7 @@ class PurchasePayment {
 
   PurchasePayment({
     this.id,
+    required this.tenantId,
     required this.invoiceId,
     this.invoiceNumber,
     this.supplierName,
@@ -31,6 +33,7 @@ class PurchasePayment {
   factory PurchasePayment.fromJson(Map<String, dynamic> json) {
     return PurchasePayment(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       invoiceId: json['invoice_id']?.toString() ?? '',
       invoiceNumber: json['invoice_number'] as String?,
       supplierName: json['supplier_name'] as String?,
@@ -47,6 +50,7 @@ class PurchasePayment {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'invoice_id': invoiceId,
       'invoice_number': invoiceNumber,
       'supplier_name': supplierName,
@@ -60,6 +64,7 @@ class PurchasePayment {
 
   PurchasePayment copyWith({
     String? id,
+    String? tenantId,
     String? invoiceId,
     String? invoiceNumber,
     String? supplierName,
@@ -73,6 +78,7 @@ class PurchasePayment {
   }) {
     return PurchasePayment(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       invoiceId: invoiceId ?? this.invoiceId,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       supplierName: supplierName ?? this.supplierName,

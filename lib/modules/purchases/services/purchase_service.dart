@@ -74,7 +74,13 @@ class PurchaseService extends ChangeNotifier {
 
   Future<shared_supplier.Supplier> createSupplier(String name) async {
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant_id del usuario');
+      }
+      
       final result = await _db.insert('suppliers', {
+        'tenant_id': tenantId,
         'name': name,
       });
       final supplier = shared_supplier.Supplier.fromJson(result);
@@ -89,7 +95,15 @@ class PurchaseService extends ChangeNotifier {
   Future<shared_supplier.Supplier> saveSupplier(
       shared_supplier.Supplier supplier) async {
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant_id del usuario');
+      }
+      
       final payload = supplier.toJson();
+      // Ensure tenant_id is set
+      payload['tenant_id'] = tenantId;
+      
       if (supplier.id.isEmpty) {
         final inserted = await _db.insert('suppliers', payload..remove('id'));
         final created = shared_supplier.Supplier.fromJson(inserted);
@@ -172,25 +186,56 @@ class PurchaseService extends ChangeNotifier {
   }
 
   Future<void> deletePurchaseInvoice(String id) async {
+    debugPrint('🗑️ DELETE PURCHASE INVOICE CALLED - ID: $id');
+    
     try {
-      // Check if invoice exists and get its status
-      final invoice = await getPurchaseInvoice(id);
-      if (invoice == null) {
-        throw Exception('Factura no encontrada');
+      final client = Supabase.instance.client;
+
+      // Delete associated journal entries first (if any)
+      debugPrint('🔍 Searching for journal entries...');
+      try {
+        final journalEntries = await client
+            .from('journal_entries')
+            .select()
+            .eq('source_module', 'purchases')
+            .eq('source_reference', id);
+
+        debugPrint('📊 Found ${journalEntries.length} journal entries');
+        
+        if (journalEntries.isNotEmpty) {
+          debugPrint('🗑️ Deleting ${journalEntries.length} journal entries...');
+          for (final entry in journalEntries) {
+            debugPrint('  Deleting journal entry: ${entry['id']}');
+            await client.from('journal_entries').delete().eq('id', entry['id']);
+          }
+          debugPrint('✅ Journal entries deleted');
+        }
+      } catch (e) {
+        debugPrint('⚠️ Warning: Could not delete journal entries: $e');
       }
 
-      // Only allow deletion of draft invoices
-      if (invoice.status != PurchaseInvoiceStatus.draft) {
-        throw Exception('Solo se pueden eliminar facturas en estado Borrador. '
-            'Esta factura está en estado: ${invoice.status.displayName}. '
-            'Usa "Volver a Borrador" primero si necesitas eliminarla.');
-      }
-
-      await _db.delete('purchase_invoices', id);
+      // Delete the purchase invoice
+      debugPrint('🗑️ Deleting purchase invoice from database...');
+      final response = await client
+          .from('purchase_invoices')
+          .delete()
+          .eq('id', id)
+          .select(); // Request response to verify deletion
+      
+      debugPrint('📊 Delete response: $response');
+      debugPrint('✅ Purchase invoice deleted from database');
+      
+      // Clear cache and reload
+      debugPrint('🔄 Clearing cache and refreshing invoice list...');
+      _invoiceCache = const []; // Clear cache
+      _invoicesLoaded = false;
       await getPurchaseInvoices(forceRefresh: true);
+      debugPrint('🔔 Notifying listeners...');
       notifyListeners();
+      debugPrint('✅ DELETE COMPLETE!');
     } catch (e) {
-      throw Exception('No se pudo eliminar la factura: $e');
+      debugPrint('❌ DELETE ERROR: $e');
+      rethrow;
     }
   }
 
@@ -201,10 +246,30 @@ class PurchaseService extends ChangeNotifier {
     PurchaseInvoiceStatus status,
   ) async {
     try {
+      final now = DateTime.now().toUtc().toIso8601String();
       final payload = {
         'status': status.name,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': now,
       };
+
+      // Set the appropriate workflow date field based on status
+      switch (status) {
+        case PurchaseInvoiceStatus.sent:
+          payload['sent_date'] = now;
+          break;
+        case PurchaseInvoiceStatus.confirmed:
+          payload['confirmed_date'] = now;
+          break;
+        case PurchaseInvoiceStatus.received:
+          payload['received_date'] = now;
+          break;
+        case PurchaseInvoiceStatus.paid:
+          payload['paid_date'] = now;
+          break;
+        default:
+          // For draft and cancelled, don't set any workflow date
+          break;
+      }
 
       final result = await _db.update('purchase_invoices', invoiceId, payload);
       final updated = PurchaseInvoice.fromJson(result);
@@ -385,7 +450,7 @@ class PurchaseService extends ChangeNotifier {
         'status': 'confirmed',
         'confirmed_date': DateTime.now().toUtc().toIso8601String(),
         'supplier_invoice_number': supplierInvoiceNumber,
-        'supplier_invoice_date': supplierInvoiceDate.toIso8601String(),
+        'supplier_invoice_date': supplierInvoiceDate.toUtc().toIso8601String(),
       }).eq('id', invoiceId);
 
       await getPurchaseInvoices(forceRefresh: true);

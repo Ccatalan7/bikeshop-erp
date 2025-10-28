@@ -1,5 +1,6 @@
 class PurchaseOrder {
   final int? id;
+  final String tenantId;
   final String orderNumber;
   final int supplierId;
   final DateTime date;
@@ -18,6 +19,7 @@ class PurchaseOrder {
 
   const PurchaseOrder({
     this.id,
+    required this.tenantId,
     required this.orderNumber,
     required this.supplierId,
     required this.date,
@@ -36,6 +38,7 @@ class PurchaseOrder {
   factory PurchaseOrder.fromJson(Map<String, dynamic> json) {
     return PurchaseOrder(
       id: json['id'] as int?,
+      tenantId: json['tenant_id']?.toString() ?? '',
       orderNumber: json['order_number'] as String,
       supplierId: json['supplier_id'] as int,
       date: DateTime.parse(json['date'] as String),
@@ -65,6 +68,7 @@ class PurchaseOrder {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'order_number': orderNumber,
       'supplier_id': supplierId,
       'date': date.toIso8601String(),
@@ -81,6 +85,7 @@ class PurchaseOrder {
 
   PurchaseOrder copyWith({
     int? id,
+    String? tenantId,
     String? orderNumber,
     int? supplierId,
     DateTime? date,
@@ -97,6 +102,7 @@ class PurchaseOrder {
   }) {
     return PurchaseOrder(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       orderNumber: orderNumber ?? this.orderNumber,
       supplierId: supplierId ?? this.supplierId,
       date: date ?? this.date,

@@ -125,6 +125,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     final now = DateTime.now();
     final supplier = Supplier(
       id: _existing?.id ?? '',
+      tenantId: _existing?.tenantId ?? '', // Will be set by service
       name: _nameController.text.trim(),
       email: _emailController.text.trim().isEmpty
           ? null

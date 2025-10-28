@@ -10,6 +10,7 @@ import '../widgets/payment_method_selector.dart';
 import '../../crm/models/crm_models.dart' as crm_models;
 import '../../crm/services/customer_service.dart';
 import '../../../shared/models/customer.dart' as shared_customer;
+import '../../../shared/services/tenant_service.dart';
 
 class POSPaymentPage extends StatefulWidget {
   const POSPaymentPage({super.key});
@@ -101,8 +102,15 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
     });
 
     try {
+      final tenantService = Provider.of<TenantService>(context, listen: false);
+      final tenantId = await tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant ID');
+      }
+
       final payment = POSPayment(
         id: _uuid.v4(),
+        tenantId: tenantId,
         method: _selectedPaymentMethod!,
         amount: _amountReceived,
         createdAt: DateTime.now(),

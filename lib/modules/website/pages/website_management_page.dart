@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
-import 'banners_management_page.dart';
 import 'featured_products_page.dart';
 import 'content_management_page.dart';
 import 'website_settings_page.dart';
@@ -47,33 +46,14 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
     }
 
     return MainLayout(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Gestión de Sitio Web'),
-          backgroundColor: theme.colorScheme.surface,
-          elevation: 0,
-        ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+              // Clean Professional Header
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.language,
-                      size: 40,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -95,75 +75,73 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  ElevatedButton.icon(
+                  // Single Preview Button - Navigate to /tienda
+                  FilledButton.icon(
                     onPressed: () {
-                      // Navigate to public store preview
                       context.go('/tienda');
                     },
                     icon: const Icon(Icons.visibility),
                     label: const Text('Vista Previa'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.colorScheme.primary,
-                      foregroundColor: Colors.white,
+                    style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 16),
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
+                  // Open in New Tab - Only for web platform
                   OutlinedButton.icon(
                     onPressed: () async {
-                      // Open in new browser tab (for web)
                       final uri = Uri.parse('${Uri.base.origin}/tienda');
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri,
-                            mode: LaunchMode.externalApplication);
-                      } else {
+                      try {
+                        await launchUrl(
+                          uri,
+                          mode: LaunchMode.externalApplication,
+                        );
+                      } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content:
-                                  Text('Usa Vista Previa para ver la tienda'),
+                              content: Text(
+                                'No se pudo abrir en nueva pestaña. Usa Vista Previa.',
+                              ),
                             ),
                           );
                         }
                       }
                     },
                     icon: const Icon(Icons.open_in_new),
-                    label: const Text('Abrir en Nueva Pestaña'),
-                  ),
-                  const SizedBox(width: 12),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              'Usa Vista Previa para ver el sitio en acción'),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.preview),
-                    label: const Text('Vista Previa'),
+                    label: const Text('Nueva Pestaña'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
+                    ),
                   ),
                 ],
               ),
 
               const SizedBox(height: 32),
 
-              // 🎨 VISUAL EDITOR CARD (Featured)
+              // 🎨 VISUAL EDITOR CARD - Clean and Professional
               Container(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(32),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
                       theme.colorScheme.primaryContainer,
                       theme.colorScheme.secondaryContainer,
                     ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: theme.colorScheme.primary.withOpacity(0.3),
-                      blurRadius: 10,
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      blurRadius: 20,
                       offset: const Offset(0, 4),
                     ),
                   ],
@@ -171,65 +149,49 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Icon(
-                        Icons.edit_note_rounded,
+                        Icons.palette_outlined,
                         size: 48,
                         color: theme.colorScheme.primary,
                       ),
                     ),
-                    const SizedBox(width: 20),
+                    const SizedBox(width: 24),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                '🎨 Editor Visual',
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.onPrimaryContainer,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.shade600,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text(
-                                  'NUEVO',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ],
+                          Text(
+                            'Editor Visual de Sitio Web',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.onPrimaryContainer,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Edita tu sitio web con vista previa en tiempo real. '
-                            'Cambia textos, colores, imágenes y ve los resultados al instante.',
+                            'Edita tu sitio web con vista previa en tiempo real. Cambia textos, colores, imágenes y ve los resultados al instante.',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSecondaryContainer,
+                              height: 1.5,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 20),
-                    ElevatedButton.icon(
+                    const SizedBox(width: 24),
+                    FilledButton.icon(
                       onPressed: () {
                         Navigator.push(
                           context,
@@ -238,9 +200,9 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                           ),
                         );
                       },
-                      icon: const Icon(Icons.arrow_forward),
+                      icon: const Icon(Icons.edit_rounded),
                       label: const Text('Abrir Editor'),
-                      style: ElevatedButton.styleFrom(
+                      style: FilledButton.styleFrom(
                         backgroundColor: theme.colorScheme.primary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
@@ -249,7 +211,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                         ),
                         textStyle: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -268,21 +230,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                 mainAxisSpacing: 16,
                 childAspectRatio: 1.5,
                 children: [
-                  _buildManagementCard(
-                    context: context,
-                    title: 'Banners',
-                    subtitle: 'Imágenes destacadas del inicio',
-                    icon: Icons.image,
-                    color: Colors.purple,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const BannersManagementPage(),
-                        ),
-                      );
-                    },
-                  ),
+                  // Banners module removed - use Editor instead (hero/carousel blocks)
                   _buildManagementCard(
                     context: context,
                     title: 'Productos Destacados',
@@ -365,47 +313,60 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
               // Quick Stats
               Consumer<WebsiteService>(
                 builder: (context, service, _) {
+                  final activeBlocks = service.blocks.where((b) => b['is_visible'] == true).length;
+                  final activeFeatured = service.featuredProducts.where((fp) => fp.active).length;
+                  final pendingOrders = service.orders.where((o) => o.status == 'pending').length;
+                  final totalOrders = service.orders.length;
+
                   return Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: theme.colorScheme.outlineVariant,
+                        width: 1,
+                      ),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Estadísticas Rápidas',
+                            'Estadísticas',
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 24),
                           Row(
                             children: [
                               _buildStatItem(
                                 context,
-                                'Banners Activos',
-                                '${service.banners.where((b) => b.active).length}',
-                                Icons.image,
+                                'Bloques Activos',
+                                activeBlocks.toString(),
+                                Icons.view_module_outlined,
                               ),
                               const SizedBox(width: 32),
                               _buildStatItem(
                                 context,
                                 'Productos Destacados',
-                                '${service.featuredProducts.where((fp) => fp.active).length}',
-                                Icons.star,
+                                activeFeatured.toString(),
+                                Icons.star_outline,
                               ),
                               const SizedBox(width: 32),
                               _buildStatItem(
                                 context,
                                 'Pedidos Pendientes',
-                                '${service.orders.where((o) => o.status == 'pending').length}',
-                                Icons.shopping_bag,
+                                pendingOrders.toString(),
+                                Icons.pending_actions_outlined,
                               ),
                               const SizedBox(width: 32),
                               _buildStatItem(
                                 context,
-                                'Pedidos Totales',
-                                '${service.orders.length}',
-                                Icons.receipt,
+                                'Total Pedidos',
+                                totalOrders.toString(),
+                                Icons.receipt_long_outlined,
                               ),
                             ],
                           ),
@@ -418,8 +379,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildManagementCard({
@@ -433,35 +393,48 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
     final theme = Theme.of(context);
 
     return Card(
+      elevation: 0,
       clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: theme.colorScheme.outlineVariant,
+          width: 1,
+        ),
+      ),
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, size: 32, color: color),
               ),
-              const Spacer(),
-              Text(
-                title,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -479,29 +452,37 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
     final theme = Theme.of(context);
 
     return Expanded(
-      child: Row(
-        children: [
-          Icon(icon, color: theme.colorScheme.primary, size: 24),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              icon,
+              color: theme.colorScheme.primary,
+              size: 24,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.primary,
               ),
-              Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }

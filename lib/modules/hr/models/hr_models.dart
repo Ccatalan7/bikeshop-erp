@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 // ============================================================================
 class Department {
   final String? id;
+  final String tenantId; // uuid - MULTI-TENANT ISOLATION
   final String name;
   final String code;
   final String? managerId;
@@ -18,6 +19,7 @@ class Department {
 
   Department({
     this.id,
+    required this.tenantId,
     required this.name,
     required this.code,
     this.managerId,
@@ -31,6 +33,7 @@ class Department {
   factory Department.fromMap(Map<String, dynamic> map) {
     return Department(
       id: map['id'],
+      tenantId: map['tenant_id']?.toString() ?? '',
       name: map['name'] ?? '',
       code: map['code'] ?? '',
       managerId: map['manager_id'],
@@ -48,6 +51,7 @@ class Department {
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'name': name,
       'code': code,
       if (managerId != null) 'manager_id': managerId,
@@ -60,6 +64,7 @@ class Department {
 
   Department copyWith({
     String? id,
+    String? tenantId,
     String? name,
     String? code,
     String? managerId,
@@ -70,6 +75,7 @@ class Department {
   }) {
     return Department(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       name: name ?? this.name,
       code: code ?? this.code,
       managerId: managerId ?? this.managerId,
@@ -90,6 +96,7 @@ enum EmployeeStatus { active, inactive, onLeave, terminated }
 
 class Employee {
   final String? id;
+  final String tenantId;
   final String? userId;
   final String employeeNumber;
   final String firstName;
@@ -119,6 +126,7 @@ class Employee {
 
   Employee({
     this.id,
+    required this.tenantId,
     this.userId,
     required this.employeeNumber,
     required this.firstName,
@@ -148,6 +156,7 @@ class Employee {
   factory Employee.fromMap(Map<String, dynamic> map) {
     return Employee(
       id: map['id'],
+      tenantId: map['tenant_id']?.toString() ?? '',
       userId: map['user_id'],
       employeeNumber: map['employee_number'] ?? '',
       firstName: map['first_name'] ?? '',
@@ -185,6 +194,7 @@ class Employee {
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       if (userId != null) 'user_id': userId,
       'employee_number': employeeNumber,
       'first_name': firstName,
@@ -268,6 +278,7 @@ class Employee {
 
   Employee copyWith({
     String? id,
+    String? tenantId,
     String? userId,
     String? employeeNumber,
     String? firstName,
@@ -293,6 +304,7 @@ class Employee {
   }) {
     return Employee(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       userId: userId ?? this.userId,
       employeeNumber: employeeNumber ?? this.employeeNumber,
       firstName: firstName ?? this.firstName,
@@ -625,6 +637,7 @@ enum AttendanceStatus { ongoing, completed, approved, rejected }
 
 class Attendance {
   final String? id;
+  final String tenantId; // uuid - MULTI-TENANT ISOLATION
   final String employeeId;
   final DateTime checkIn;
   final DateTime? checkOut;
@@ -648,6 +661,7 @@ class Attendance {
 
   Attendance({
     this.id,
+    required this.tenantId,
     required this.employeeId,
     required this.checkIn,
     this.checkOut,
@@ -668,10 +682,11 @@ class Attendance {
   factory Attendance.fromMap(Map<String, dynamic> map) {
     return Attendance(
       id: map['id'],
+      tenantId: map['tenant_id']?.toString() ?? '',
       employeeId: map['employee_id'] ?? '',
-      checkIn: DateTime.parse(map['check_in']),
+      checkIn: DateTime.parse(map['check_in']).toLocal(),
       checkOut:
-          map['check_out'] != null ? DateTime.parse(map['check_out']) : null,
+          map['check_out'] != null ? DateTime.parse(map['check_out']).toLocal() : null,
       workedHours: map['worked_hours']?.toDouble(),
       overtimeHours: map['overtime_hours']?.toDouble(),
       breakMinutes: map['break_minutes'] ?? 0,
@@ -681,13 +696,13 @@ class Attendance {
       status: _statusFromString(map['status']),
       approvedBy: map['approved_by'],
       approvedAt: map['approved_at'] != null
-          ? DateTime.parse(map['approved_at'])
+          ? DateTime.parse(map['approved_at']).toLocal()
           : null,
       createdAt: map['created_at'] != null
-          ? DateTime.parse(map['created_at'])
+          ? DateTime.parse(map['created_at']).toLocal()
           : DateTime.now(),
       updatedAt: map['updated_at'] != null
-          ? DateTime.parse(map['updated_at'])
+          ? DateTime.parse(map['updated_at']).toLocal()
           : DateTime.now(),
     );
   }
@@ -695,9 +710,10 @@ class Attendance {
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'employee_id': employeeId,
-      'check_in': checkIn.toIso8601String(),
-      if (checkOut != null) 'check_out': checkOut!.toIso8601String(),
+      'check_in': checkIn.toUtc().toIso8601String(),
+      if (checkOut != null) 'check_out': checkOut!.toUtc().toIso8601String(),
       if (workedHours != null) 'worked_hours': workedHours,
       if (overtimeHours != null) 'overtime_hours': overtimeHours,
       'break_minutes': breakMinutes,
@@ -706,9 +722,9 @@ class Attendance {
       if (notes != null) 'notes': notes,
       'status': _statusToString(status),
       if (approvedBy != null) 'approved_by': approvedBy,
-      if (approvedAt != null) 'approved_at': approvedAt!.toIso8601String(),
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      if (approvedAt != null) 'approved_at': approvedAt!.toUtc().toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -740,6 +756,7 @@ class Attendance {
 
   Attendance copyWith({
     String? id,
+    String? tenantId,
     String? employeeId,
     DateTime? checkIn,
     DateTime? checkOut,
@@ -757,6 +774,7 @@ class Attendance {
   }) {
     return Attendance(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       employeeId: employeeId ?? this.employeeId,
       checkIn: checkIn ?? this.checkIn,
       checkOut: checkOut ?? this.checkOut,
@@ -779,6 +797,7 @@ class Attendance {
 // ATTENDANCE SUMMARY MODEL (for reports)
 // ============================================================================
 class AttendanceSummary {
+  final String tenantId;
   final int totalDays;
   final double totalHours;
   final double totalOvertime;
@@ -787,6 +806,7 @@ class AttendanceSummary {
   final int earlyDepartures;
 
   AttendanceSummary({
+    required this.tenantId,
     required this.totalDays,
     required this.totalHours,
     required this.totalOvertime,
@@ -797,6 +817,7 @@ class AttendanceSummary {
 
   factory AttendanceSummary.fromMap(Map<String, dynamic> map) {
     return AttendanceSummary(
+      tenantId: map['tenant_id']?.toString() ?? '',
       totalDays: map['total_days'] ?? 0,
       totalHours: (map['total_hours'] ?? 0).toDouble(),
       totalOvertime: (map['total_overtime'] ?? 0).toDouble(),

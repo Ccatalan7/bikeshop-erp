@@ -7,6 +7,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/constants/storage_constants.dart';
 import '../models/category_models.dart';
 import '../services/category_service.dart';
@@ -179,8 +180,19 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
         level = 0;
       }
       
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: No se pudo obtener el tenant ID')),
+          );
+        }
+        return;
+      }
+
       final category = Category(
         id: _existingCategory?.id,
+        tenantId: tenantId,
         name: categoryName,
         fullPath: fullPath,
         parentId: parentId,

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../models/brand_models.dart';
@@ -94,8 +95,19 @@ class _BrandFormPageState extends State<BrandFormPage> {
         }
       }
 
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: No se pudo obtener el tenant ID')),
+          );
+        }
+        return;
+      }
+
       final brand = ProductBrand(
         id: _existingBrand?.id,
+        tenantId: tenantId,
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim().isEmpty
             ? null

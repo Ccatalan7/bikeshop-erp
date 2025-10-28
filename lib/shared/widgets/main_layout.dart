@@ -59,11 +59,6 @@ const List<MenuSubItem> _customersMenuItems = [
     title: 'Nuevo cliente',
     route: '/clientes/nuevo',
   ),
-  MenuSubItem(
-    icon: Icons.pedal_bike,
-    title: 'Bicicletas registradas',
-    route: '/clientes/bicicletas',
-  ),
 ];
 
 const String _customersSectionKey = 'customers';
@@ -78,6 +73,11 @@ const List<MenuSubItem> _workshopMenuItems = [
     icon: Icons.add_circle_outline,
     title: 'Nueva pega',
     route: '/taller/pegas/nueva',
+  ),
+  MenuSubItem(
+    icon: Icons.pedal_bike,
+    title: 'Bicicletas registradas',
+    route: '/taller/bicicletas',
   ),
   MenuSubItem(
     icon: Icons.calendar_today_outlined,

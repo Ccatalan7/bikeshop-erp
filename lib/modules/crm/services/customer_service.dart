@@ -165,7 +165,11 @@ class CustomerService extends ChangeNotifier {
   Future<void> _createInitialLoyalty(String customerId) async {
     try {
       if (customerId.isEmpty) return;
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) return;
+      
       final loyalty = Loyalty(
+        tenantId: tenantId,
         customerId: customerId,
         points: 0,
         tier: LoyaltyTier.bronze,
@@ -181,7 +185,9 @@ class CustomerService extends ChangeNotifier {
 
   Future<void> addLoyaltyPoints(String customerId, int points) async {
     try {
-      if (customerId.isEmpty) return;
+      if (customerId.isEmpty) {
+        throw Exception('Cliente inválido');
+      }
       final loyalty = await getCustomerLoyalty(customerId);
       if (loyalty == null) {
         await _createInitialLoyalty(customerId);
@@ -190,10 +196,8 @@ class CustomerService extends ChangeNotifier {
       }
 
       final newPoints = loyalty.points + points;
-      final newTier = Loyalty(
-        customerId: customerId,
-        points: newPoints,
-      ).calculateTier();
+      final tempLoyalty = loyalty.copyWith(points: newPoints);
+      final newTier = tempLoyalty.calculateTier();
 
       final updatedLoyalty = loyalty.copyWith(
         points: newPoints,
@@ -224,10 +228,8 @@ class CustomerService extends ChangeNotifier {
       }
 
       final newPoints = loyalty.points - points;
-      final newTier = Loyalty(
-        customerId: customerId,
-        points: newPoints,
-      ).calculateTier();
+      final tempLoyalty = loyalty.copyWith(points: newPoints);
+      final newTier = tempLoyalty.calculateTier();
 
       final updatedLoyalty = loyalty.copyWith(
         points: newPoints,

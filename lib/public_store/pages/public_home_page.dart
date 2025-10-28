@@ -21,7 +21,7 @@ class PublicHomePage extends StatefulWidget {
 
 class _PublicHomePageState extends State<PublicHomePage> {
   bool _isLoading = true;
-  List<WebsiteBanner> _banners = [];
+  List<Map<String, dynamic>> _heroBlocks = []; // Changed from _banners to _heroBlocks
   List<Product> _featuredProducts = [];
 
   static const List<String> _responsiveBreakpoints = [
@@ -116,9 +116,14 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
       await websiteService.loadBlocks();
 
-      await websiteService.loadBanners();
-      _banners =
-          websiteService.banners.where((banner) => banner.active).toList();
+      // Extract hero blocks (visible only) from website_blocks
+      _heroBlocks = websiteService.blocks
+          .where((block) {
+            final blockType = block['block_type']?.toString() ?? '';
+            final isVisible = block['is_visible'] == true;
+            return (blockType == 'hero' || blockType == 'carousel') && isVisible;
+          })
+          .toList();
 
       await websiteService.loadFeaturedProducts();
       final featuredEntries =
@@ -418,7 +423,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
   }
 
   Widget _buildHeroSection(Color primaryColor, Color accentColor) {
-    if (_banners.isEmpty) {
+    if (_heroBlocks.isEmpty) {
       return Container(
         height: 480,
         width: double.infinity,
@@ -468,8 +473,15 @@ class _PublicHomePageState extends State<PublicHomePage> {
       );
     }
 
-    final banner = _banners.first;
-    final hasImage = banner.imageUrl != null && banner.imageUrl!.isNotEmpty;
+    // Get first hero block
+    final heroBlock = _heroBlocks.first;
+    final blockData = heroBlock['block_data'] as Map<String, dynamic>? ?? {};
+    
+    final title = blockData['title']?.toString() ?? 'Tu tienda de bicicletas favorita';
+    final subtitle = blockData['subtitle']?.toString() ?? '';
+    final buttonText = blockData['buttonText']?.toString() ?? 'Ver Catálogo';
+    final backgroundImage = blockData['backgroundImage']?.toString();
+    final hasImage = backgroundImage != null && backgroundImage.isNotEmpty;
 
     return Container(
       height: 480,
@@ -477,7 +489,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
       decoration: BoxDecoration(
         image: hasImage
             ? DecorationImage(
-                image: NetworkImage(banner.imageUrl!),
+                image: NetworkImage(backgroundImage),
                 fit: BoxFit.cover,
               )
             : null,
@@ -506,31 +518,27 @@ class _PublicHomePageState extends State<PublicHomePage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                banner.title,
+                title,
                 style: Theme.of(context).textTheme.displayLarge?.copyWith(
                       color: Colors.white,
                     ),
                 textAlign: TextAlign.center,
               ),
-              if (banner.subtitle != null && banner.subtitle!.isNotEmpty) ...[
+              if (subtitle.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text(
-                  banner.subtitle!,
+                  subtitle,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         color: Colors.white70,
                       ),
                   textAlign: TextAlign.center,
                 ),
               ],
-              if (banner.ctaText != null && banner.ctaText!.isNotEmpty) ...[
+              if (buttonText.isNotEmpty) ...[
                 const SizedBox(height: 32),
                 ElevatedButton(
                   onPressed: () {
-                    final link =
-                        banner.ctaLink != null && banner.ctaLink!.isNotEmpty
-                            ? banner.ctaLink!
-                            : '/tienda/productos';
-                    context.go(link);
+                    context.go('/tienda/productos');
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: accentColor,
@@ -540,7 +548,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
                       vertical: 20,
                     ),
                   ),
-                  child: Text(banner.ctaText!.toUpperCase()),
+                  child: Text(buttonText.toUpperCase()),
                 ),
               ],
             ],

@@ -1,5 +1,6 @@
 class Account {
   final String? id;
+  final String tenantId;
   final String code;
   final String name;
   final AccountType type;
@@ -12,6 +13,7 @@ class Account {
 
   const Account({
     this.id,
+    required this.tenantId,
     required this.code,
     required this.name,
     required this.type,
@@ -25,6 +27,7 @@ class Account {
   factory Account.fromJson(Map<String, dynamic> json) {
     return Account(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       code: json['code'] as String,
       name: json['name'] as String,
       type: AccountType.values.firstWhere(
@@ -45,6 +48,7 @@ class Account {
 
   Map<String, dynamic> toJson() {
     final data = <String, dynamic>{
+      'tenant_id': tenantId,
       'code': code,
       'name': name,
       'type': type.name,
@@ -65,6 +69,7 @@ class Account {
 
   Account copyWith({
     String? id,
+    String? tenantId,
     String? code,
     String? name,
     AccountType? type,
@@ -77,6 +82,7 @@ class Account {
   }) {
     return Account(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       code: code ?? this.code,
       name: name ?? this.name,
       type: type ?? this.type,

@@ -68,6 +68,12 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
           }
           _isLoadingPaymentMethods = false;
         });
+        
+        // Debug: Print loaded payment methods
+        debugPrint('✅ Loaded ${_paymentMethods.length} payment methods');
+        for (var method in _paymentMethods) {
+          debugPrint('  - ${method.name} (${method.id})');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -78,6 +84,7 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
             backgroundColor: Colors.red,
           ),
         );
+        debugPrint('❌ Error loading payment methods: $e');
       }
     }
   }
@@ -149,8 +156,27 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
     setState(() => _isSaving = true);
 
     try {
+      // Get current user's tenant_id
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) {
+        throw Exception('Usuario no autenticado');
+      }
+
+      // Get tenant_id from user_profiles
+      final profileResponse = await Supabase.instance.client
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('user_id', userId)
+          .single();
+
+      final tenantId = profileResponse['tenant_id'] as String?;
+      if (tenantId == null) {
+        throw Exception('No se encontró tenant_id para el usuario');
+      }
+
       // Create payment record - use correct column names from core_schema.sql
       final paymentData = {
+        'tenant_id': tenantId, // ⚠️ CRITICAL: Required for RLS policy
         'invoice_id':
             widget.invoiceId, // Correct column name (not purchase_invoice_id)
         'date': _paymentDate.toIso8601String(),
@@ -371,34 +397,58 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
             const SizedBox(height: 16),
 
             // Payment Method (Dynamic from database)
-            DropdownButtonFormField<PaymentMethod>(
-              value: _selectedPaymentMethod,
-              decoration: const InputDecoration(
-                labelText: 'Método de Pago *',
-                prefixIcon: Icon(Icons.payment),
-              ),
-              items: _paymentMethods.map((method) {
-                return DropdownMenuItem<PaymentMethod>(
-                  value: method,
-                  child: Row(
+            if (_paymentMethods.isEmpty)
+              Card(
+                color: Colors.orange[100],
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
                     children: [
-                      Icon(_getPaymentMethodIcon(method.icon), size: 20),
-                      const SizedBox(width: 8),
-                      Text(method.name),
+                      const Icon(Icons.warning, color: Colors.orange, size: 32),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'No hay métodos de pago configurados',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Por favor, configure los métodos de pago en Configuración → Métodos de Pago',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                      ),
                     ],
                   ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() => _selectedPaymentMethod = value);
-              },
-              validator: (value) {
-                if (value == null) {
-                  return 'Seleccione un método de pago';
-                }
-                return null;
-              },
-            ),
+                ),
+              )
+            else
+              DropdownButtonFormField<PaymentMethod>(
+                value: _selectedPaymentMethod,
+                decoration: const InputDecoration(
+                  labelText: 'Método de Pago *',
+                  prefixIcon: Icon(Icons.payment),
+                ),
+                items: _paymentMethods.map((method) {
+                  return DropdownMenuItem<PaymentMethod>(
+                    value: method,
+                    child: Row(
+                      children: [
+                        Icon(_getPaymentMethodIcon(method.icon), size: 20),
+                        const SizedBox(width: 8),
+                        Text(method.name),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: _isSaving ? null : (value) {
+                  setState(() => _selectedPaymentMethod = value);
+                },
+                validator: (value) {
+                  if (value == null) {
+                    return 'Seleccione un método de pago';
+                  }
+                  return null;
+                },
+              ),
             const SizedBox(height: 16),
 
             // Reference field (conditional based on payment method)

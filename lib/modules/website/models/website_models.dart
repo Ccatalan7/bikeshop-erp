@@ -3,6 +3,7 @@ library;
 
 class WebsiteBanner {
   final String id;
+  final String tenantId;
   final String title;
   final String? subtitle;
   final String? imageUrl;
@@ -16,6 +17,7 @@ class WebsiteBanner {
 
   WebsiteBanner({
     required this.id,
+    required this.tenantId,
     required this.title,
     this.subtitle,
     this.imageUrl,
@@ -31,6 +33,7 @@ class WebsiteBanner {
   factory WebsiteBanner.fromJson(Map<String, dynamic> json) {
     return WebsiteBanner(
       id: json['id'] as String,
+      tenantId: json['tenant_id']?.toString() ?? '',
       title: json['title'] as String,
       subtitle: json['subtitle'] as String?,
       imageUrl: json['image_url'] as String?,
@@ -47,6 +50,7 @@ class WebsiteBanner {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'title': title,
       'subtitle': subtitle,
       'image_url': imageUrl,
@@ -62,6 +66,7 @@ class WebsiteBanner {
 
   WebsiteBanner copyWith({
     String? id,
+    String? tenantId,
     String? title,
     String? subtitle,
     String? imageUrl,
@@ -75,6 +80,7 @@ class WebsiteBanner {
   }) {
     return WebsiteBanner(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       title: title ?? this.title,
       subtitle: subtitle ?? this.subtitle,
       imageUrl: imageUrl ?? this.imageUrl,
@@ -91,6 +97,7 @@ class WebsiteBanner {
 
 class FeaturedProduct {
   final String id;
+  final String tenantId;
   final String productId;
   final bool active;
   final int orderIndex;
@@ -98,6 +105,7 @@ class FeaturedProduct {
 
   FeaturedProduct({
     required this.id,
+    required this.tenantId,
     required this.productId,
     required this.active,
     required this.orderIndex,
@@ -107,6 +115,7 @@ class FeaturedProduct {
   factory FeaturedProduct.fromJson(Map<String, dynamic> json) {
     return FeaturedProduct(
       id: json['id'] as String,
+      tenantId: json['tenant_id']?.toString() ?? '',
       productId: json['product_id'] as String,
       active: json['active'] as bool? ?? true,
       orderIndex: json['order_index'] as int? ?? 0,
@@ -117,6 +126,7 @@ class FeaturedProduct {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'product_id': productId,
       'active': active,
       'order_index': orderIndex,
@@ -127,12 +137,14 @@ class FeaturedProduct {
 
 class WebsiteContent {
   final String id;
+  final String tenantId;
   final String title;
   final String? content;
   final DateTime updatedAt;
 
   WebsiteContent({
     required this.id,
+    required this.tenantId,
     required this.title,
     this.content,
     required this.updatedAt,
@@ -141,6 +153,7 @@ class WebsiteContent {
   factory WebsiteContent.fromJson(Map<String, dynamic> json) {
     return WebsiteContent(
       id: json['id'] as String,
+      tenantId: json['tenant_id']?.toString() ?? '',
       title: json['title'] as String,
       content: json['content'] as String?,
       updatedAt: DateTime.parse(json['updated_at'] as String),
@@ -150,6 +163,7 @@ class WebsiteContent {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'title': title,
       'content': content,
       'updated_at': updatedAt.toIso8601String(),
@@ -159,6 +173,7 @@ class WebsiteContent {
 
 class ThemePreset {
   final String id;
+  final String tenantId;
   final String name;
   final String? description;
   final int primaryColor;
@@ -176,6 +191,7 @@ class ThemePreset {
 
   const ThemePreset({
     required this.id,
+    required this.tenantId,
     required this.name,
     this.description,
     required this.primaryColor,
@@ -231,6 +247,7 @@ class ThemePreset {
 
     return ThemePreset(
       id: (json['id'] ?? '').toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       name: (json['name'] ?? 'Preset sin título').toString(),
       description: json['description'] as String?,
       primaryColor: parseColor(json['primaryColor'], 0xFF2E7D32),
@@ -251,6 +268,7 @@ class ThemePreset {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'name': name,
       'description': description,
       'primaryColor': primaryColor,
@@ -270,6 +288,7 @@ class ThemePreset {
 
   ThemePreset copyWith({
     String? id,
+    String? tenantId,
     String? name,
     String? description,
     int? primaryColor,
@@ -287,6 +306,7 @@ class ThemePreset {
   }) {
     return ThemePreset(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       name: name ?? this.name,
       description: description ?? this.description,
       primaryColor: primaryColor ?? this.primaryColor,
@@ -307,6 +327,7 @@ class ThemePreset {
 
 class WebsiteSetting {
   final String id;
+  final String tenantId;
   final String key;
   final String? value;
   final String? description;
@@ -314,6 +335,7 @@ class WebsiteSetting {
 
   WebsiteSetting({
     required this.id,
+    required this.tenantId,
     required this.key,
     this.value,
     this.description,
@@ -323,6 +345,7 @@ class WebsiteSetting {
   factory WebsiteSetting.fromJson(Map<String, dynamic> json) {
     return WebsiteSetting(
       id: json['id'] as String,
+      tenantId: json['tenant_id']?.toString() ?? '',
       key: json['key'] as String,
       value: json['value'] as String?,
       description: json['description'] as String?,
@@ -333,6 +356,7 @@ class WebsiteSetting {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'key': key,
       'value': value,
       'description': description,
@@ -343,6 +367,7 @@ class WebsiteSetting {
 
 class OnlineOrder {
   final String id;
+  final String tenantId;
   final String orderNumber;
   final String? customerId;
   final String customerEmail;
@@ -379,6 +404,7 @@ class OnlineOrder {
 
   OnlineOrder({
     required this.id,
+    required this.tenantId,
     required this.orderNumber,
     this.customerId,
     required this.customerEmail,
@@ -409,6 +435,7 @@ class OnlineOrder {
   factory OnlineOrder.fromJson(Map<String, dynamic> json) {
     return OnlineOrder(
       id: json['id'] as String,
+      tenantId: json['tenant_id']?.toString() ?? '',
       orderNumber: json['order_number'] as String,
       customerId: json['customer_id'] as String?,
       customerEmail: json['customer_email'] as String,
@@ -446,6 +473,7 @@ class OnlineOrder {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'order_number': orderNumber,
       'customer_id': customerId,
       'customer_email': customerEmail,
@@ -475,6 +503,7 @@ class OnlineOrder {
 
   OnlineOrder copyWith({
     String? id,
+    String? tenantId,
     String? orderNumber,
     String? customerId,
     String? customerEmail,
@@ -503,6 +532,7 @@ class OnlineOrder {
   }) {
     return OnlineOrder(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       orderNumber: orderNumber ?? this.orderNumber,
       customerId: customerId ?? this.customerId,
       customerEmail: customerEmail ?? this.customerEmail,

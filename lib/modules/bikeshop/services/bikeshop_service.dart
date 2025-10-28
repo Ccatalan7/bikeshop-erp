@@ -475,6 +475,11 @@ class BikeshopService extends ChangeNotifier {
       final package = await getServicePackageById(packageId);
       if (package == null) throw Exception('Paquete de servicio no encontrado');
 
+      // Get tenant_id from parent job
+      final jobData = await _db.selectById('mechanic_jobs', jobId);
+      if (jobData == null) throw Exception('Trabajo mecánico no encontrado');
+      final tenantId = jobData['tenant_id']?.toString() ?? '';
+
       // Create items from package
       for (final item in package.items) {
         final productId = item['product_id']?.toString();
@@ -489,6 +494,7 @@ class BikeshopService extends ChangeNotifier {
                 double.tryParse(productData['price']?.toString() ?? '0') ?? 0;
             final jobItem = MechanicJobItem(
               jobId: jobId,
+              tenantId: tenantId,
               productId: productId,
               productName: productData['name']?.toString() ?? '',
               productSku: productData['sku']?.toString(),
@@ -505,6 +511,7 @@ class BikeshopService extends ChangeNotifier {
       if (package.baseLaborCost > 0) {
         final labor = MechanicJobLabor(
           jobId: jobId,
+          tenantId: tenantId,
           technicianName: 'Sin asignar',
           description: package.name,
           hoursWorked: package.estimatedDurationHours,

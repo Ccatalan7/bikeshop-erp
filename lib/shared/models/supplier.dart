@@ -2,6 +2,7 @@ import '../utils/chilean_utils.dart';
 
 class Supplier {
   final String id;
+  final String tenantId; // MULTI-TENANT ISOLATION
   final String name;
   final String? email;
   final String? phone;
@@ -22,6 +23,7 @@ class Supplier {
 
   const Supplier({
     required this.id,
+    required this.tenantId,
     required this.name,
     this.email,
     this.phone,
@@ -44,6 +46,7 @@ class Supplier {
   factory Supplier.fromJson(Map<String, dynamic> json) {
     return Supplier(
       id: json['id'] as String,
+      tenantId: json['tenant_id'] as String,
       name: json['name'] as String,
       email: json['email'] as String?,
       phone: json['phone'] as String?,
@@ -73,6 +76,7 @@ class Supplier {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'name': name,
       'email': email,
       'phone': phone,
@@ -95,6 +99,7 @@ class Supplier {
 
   Supplier copyWith({
     String? id,
+    String? tenantId,
     String? name,
     String? email,
     String? phone,
@@ -115,6 +120,7 @@ class Supplier {
   }) {
     return Supplier(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       name: name ?? this.name,
       email: email ?? this.email,
       phone: phone ?? this.phone,

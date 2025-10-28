@@ -34,9 +34,13 @@ class WebsiteService extends ChangeNotifier {
   String? get error => _error;
 
   // ============================================================================
-  // BANNERS
+  // BANNERS (DEPRECATED - Use website_blocks instead)
   // ============================================================================
+  // Note: These methods are kept for backward compatibility with old code
+  // but are no longer used in the public store. Hero sections now use
+  // website_blocks with block_type='hero' or 'carousel'.
 
+  @Deprecated('Use loadBlocks() and filter for block_type="hero" instead')
   Future<void> loadBanners() async {
     _isLoading = true;
     _error = null;
@@ -60,6 +64,7 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  @Deprecated('Use saveBlocks() with block_type="hero" instead')
   Future<void> saveBanner(WebsiteBanner banner) async {
     try {
       final tenantId = await _tenantService.getTenantId(); // ✅ Use async version
@@ -82,6 +87,7 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  @Deprecated('Use deleteBlock() instead')
   Future<void> deleteBanner(String id) async {
     try {
       await _supabase.from('website_banners').delete().eq('id', id);
@@ -95,6 +101,7 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  @Deprecated('Block reordering is handled via saveBlocks()')
   Future<void> reorderBanners(List<WebsiteBanner> reorderedBanners) async {
     try {
       for (int i = 0; i < reorderedBanners.length; i++) {
@@ -122,9 +129,16 @@ class WebsiteService extends ChangeNotifier {
     if (!_isInitializing) notifyListeners();
 
     try {
+      // Get current tenant_id
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+
       final response = await _supabase
           .from('website_blocks')
           .select()
+          .eq('tenant_id', tenantId) // ✅ Filter by tenant
           .order('order_index', ascending: true);
 
       final data = List<Map<String, dynamic>>.from(response as List);
@@ -145,11 +159,17 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> saveBlocks(List<Map<String, dynamic>> blocks) async {
     try {
-      // Delete all existing blocks
+      // Get tenant_id for multi-tenant isolation
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant ID found');
+      }
+
+      // Delete all existing blocks FOR THIS TENANT ONLY
       await _supabase
           .from('website_blocks')
           .delete()
-          .neq('id', '00000000-0000-0000-0000-000000000000');
+          .eq('tenant_id', tenantId);
 
       // Insert new blocks
       if (blocks.isNotEmpty) {
@@ -159,6 +179,7 @@ class WebsiteService extends ChangeNotifier {
 
           return {
             'id': block['id'],
+            'tenant_id': tenantId, // ✅ Add tenant_id for RLS
             'block_type': block['type'],
             'block_data': block['data'],
             'is_visible': block['isVisible'] ?? true,
@@ -348,7 +369,15 @@ class WebsiteService extends ChangeNotifier {
     if (!_isInitializing) notifyListeners();
 
     try {
-      final response = await _supabase.from('website_settings').select();
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant ID available');
+      }
+
+      final response = await _supabase
+          .from('website_settings')
+          .select()
+          .eq('tenant_id', tenantId);
 
       _settings = {};
       for (final row in response as List) {
@@ -452,18 +481,56 @@ class WebsiteService extends ChangeNotifier {
     }
 
     try {
-      final timestamp = DateTime.now().toIso8601String();
-      final payload = values.entries.map((entry) {
-        return {
-          'key': entry.key,
-          'value': entry.value?.toString() ?? '',
-          'updated_at': timestamp,
-        };
-      }).toList();
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant ID available');
+      }
 
-    await _supabase
-      .from('website_settings')
-      .upsert(payload, onConflict: 'key');
+      final timestamp = DateTime.now().toIso8601String();
+      
+      // Update or insert each setting individually
+      for (final entry in values.entries) {
+        try {
+          // Try UPDATE first (most common case after initial setup)
+          final updateResult = await _supabase
+            .from('website_settings')
+            .update({
+              'value': entry.value?.toString() ?? '',
+              'updated_at': timestamp,
+            })
+            .eq('tenant_id', tenantId)
+            .eq('key', entry.key)
+            .select();
+          
+          // If no rows were updated, insert new row
+          if (updateResult.isEmpty) {
+            await _supabase
+              .from('website_settings')
+              .insert({
+                'key': entry.key,
+                'value': entry.value?.toString() ?? '',
+                'tenant_id': tenantId,
+                'updated_at': timestamp,
+              });
+          }
+        } catch (e) {
+          debugPrint('⚠️ Error upserting setting ${entry.key}: $e');
+          // If INSERT fails due to conflict, try UPDATE again (race condition)
+          if (e.toString().contains('409') || e.toString().contains('Conflict')) {
+            await _supabase
+              .from('website_settings')
+              .update({
+                'value': entry.value?.toString() ?? '',
+                'updated_at': timestamp,
+              })
+              .eq('tenant_id', tenantId)
+              .eq('key', entry.key);
+          } else {
+            rethrow;
+          }
+        }
+      }
+      
       await loadSettings();
     } catch (e) {
       _error = '$errorContext: $e';
@@ -762,7 +829,6 @@ class WebsiteService extends ChangeNotifier {
     _isInitializing = true;
     try {
       await Future.wait([
-        loadBanners(),
         loadFeaturedProducts(),
         loadContents(),
         loadSettings(),

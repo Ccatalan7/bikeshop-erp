@@ -11,6 +11,7 @@ import '../../inventory/services/category_service.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../services/pos_service.dart';
 import '../widgets/product_tile.dart';
@@ -103,7 +104,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     
     // Search for product by SKU or barcode
     final product = inventoryService.products.cast<Product?>().firstWhere(
-      (p) => p!.sku?.toLowerCase() == barcode.toLowerCase() ||
+      (p) => p!.sku.toLowerCase() == barcode.toLowerCase() ||
              p.barcode?.toLowerCase() == barcode.toLowerCase(),
       orElse: () => null,
     );
@@ -1065,8 +1066,15 @@ class _CashierPanelState extends State<_CashierPanel> {
     });
 
     try {
+      final tenantService = Provider.of<TenantService>(context, listen: false);
+      final tenantId = await tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant ID');
+      }
+
       final payment = POSPayment(
         id: _uuid.v4(),
+        tenantId: tenantId,
         method: _selectedPaymentMethod!,
         amount: _amountReceived,
         createdAt: DateTime.now(),

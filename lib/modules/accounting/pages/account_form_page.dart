@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../models/account.dart';
 import '../services/accounting_service.dart';
 
@@ -128,9 +129,15 @@ class _AccountFormPageState extends State<AccountFormPage> {
 
     try {
       final accountingService = context.read<AccountingService>();
+      final tenantId = await TenantService().getTenantId();
+      
+      if (tenantId == null) {
+        throw Exception('User does not have a tenant_id. Cannot proceed.');
+      }
 
       final account = Account(
         id: _existingAccount?.id,
+        tenantId: tenantId,
         code: _codeController.text.trim(),
         name: _nameController.text.trim(),
         type: _selectedType,

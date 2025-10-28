@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
 import '../services/tenant_signup_service.dart';
 import '../widgets/app_button.dart';
+import '../widgets/forgot_password_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -406,6 +407,23 @@ class _LoginScreenState extends State<LoginScreen> {
                       return null;
                     },
                   ),
+                  
+                  // Forgot Password Link (only in login mode)
+                  if (!_isRegisterMode) ...[
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => const ForgotPasswordDialog(),
+                          );
+                        },
+                        child: const Text('¿Olvidaste tu contraseña?'),
+                      ),
+                    ),
+                  ],
+                  
                   const SizedBox(height: 24),
 
                   if (_isRegisterMode) ...[

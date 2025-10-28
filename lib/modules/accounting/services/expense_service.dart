@@ -59,7 +59,7 @@ class ExpenseService extends ChangeNotifier {
       final cached = _expenses.firstWhere(
         (expense) => expense.id == id,
         orElse: () =>
-            Expense(expenseNumber: '', issueDate: DateTime.now()),
+            Expense(expenseNumber: '', issueDate: DateTime.now(), tenantId: ''),
       );
       if (cached.id == id && !forceRefresh) {
         return await _hydrateExpense(cached);

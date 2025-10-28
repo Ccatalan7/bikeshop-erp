@@ -14,6 +14,7 @@ enum ExpenseDocumentType { invoice, receipt, ticket, reimbursement, other }
 class Expense {
   Expense({
     this.id,
+    required this.tenantId,
     required this.expenseNumber,
     this.categoryId,
     this.category,
@@ -54,6 +55,7 @@ class Expense {
   });
 
   final String? id;
+  final String tenantId;
   final String expenseNumber;
   final String? categoryId;
   final ExpenseCategory? category;
@@ -95,6 +97,7 @@ class Expense {
   factory Expense.fromJson(Map<String, dynamic> json) {
     return Expense(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       expenseNumber: json['expense_number']?.toString() ?? '',
       categoryId: json['category_id']?.toString(),
       supplierId: json['supplier_id']?.toString(),
@@ -133,6 +136,7 @@ class Expense {
 
   Expense copyWith({
     String? id,
+    String? tenantId,
     String? expenseNumber,
     String? categoryId,
     ExpenseCategory? category,
@@ -173,6 +177,7 @@ class Expense {
   }) {
     return Expense(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       expenseNumber: expenseNumber ?? this.expenseNumber,
       categoryId: categoryId ?? this.categoryId,
       category: category ?? this.category,
@@ -216,6 +221,7 @@ class Expense {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'expense_number': expenseNumber,
       'category_id': categoryId,
       'supplier_id': supplierId,

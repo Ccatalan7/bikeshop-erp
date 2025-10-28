@@ -23,6 +23,7 @@ DateTime _parseDate(dynamic value, {DateTime? fallback}) {
 
 class PurchaseInvoice {
   final String? id;
+  final String tenantId;
   final String invoiceNumber;
   final String? supplierId;
   final String? supplierName;
@@ -53,6 +54,7 @@ class PurchaseInvoice {
 
   PurchaseInvoice({
     this.id,
+    required this.tenantId,
     required this.invoiceNumber,
     required this.supplierId,
     this.supplierName,
@@ -84,6 +86,7 @@ class PurchaseInvoice {
 
   PurchaseInvoice copyWith({
     String? id,
+    String? tenantId,
     String? invoiceNumber,
     String? supplierId,
     String? supplierName,
@@ -112,6 +115,7 @@ class PurchaseInvoice {
   }) {
     return PurchaseInvoice(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       supplierId: supplierId ?? this.supplierId,
       supplierName: supplierName ?? this.supplierName,
@@ -146,6 +150,7 @@ class PurchaseInvoice {
     final extraCosts = (json['additional_costs'] as List?) ?? const [];
     return PurchaseInvoice(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       invoiceNumber: json['invoice_number']?.toString() ?? '',
       supplierId: json['supplier_id']?.toString(),
       supplierName: json['supplier_name'] as String?,
@@ -191,6 +196,7 @@ class PurchaseInvoice {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
+      'tenant_id': tenantId,
       'invoice_number': invoiceNumber,
       'supplier_id': supplierId,
       'supplier_name': supplierName,

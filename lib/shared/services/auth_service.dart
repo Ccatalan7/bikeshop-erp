@@ -118,8 +118,40 @@ class AuthService extends ChangeNotifier {
     _syncAuth(_client.auth.currentSession);
   }
 
+  /// Send password reset email with redirect URL
   Future<void> sendPasswordResetEmail(String email) async {
-    await _client.auth.resetPasswordForEmail(email);
+    // Determine redirect URL based on platform
+    String? redirectTo;
+    
+    if (kIsWeb) {
+      // For web, redirect back to the current origin with reset-password path
+      final origin = Uri.base.origin;
+      redirectTo = '$origin/#/reset-password';
+      if (kDebugMode) {
+        print('🔐 Password reset redirect URL: $redirectTo');
+      }
+    } else {
+      // For desktop/mobile, use deep link
+      redirectTo = 'io.supabase.vinabikeerp://reset-password/';
+    }
+
+    await _client.auth.resetPasswordForEmail(
+      email,
+      redirectTo: redirectTo,
+    );
+  }
+
+  /// Update user password (must be called after password reset link click)
+  Future<void> updatePassword(String newPassword) async {
+    final response = await _client.auth.updateUser(
+      UserAttributes(password: newPassword),
+    );
+    
+    if (response.user == null) {
+      throw AuthException('Error al actualizar la contraseña.');
+    }
+    
+    _syncAuth(_client.auth.currentSession);
   }
 
   void _syncAuth(Session? session) {

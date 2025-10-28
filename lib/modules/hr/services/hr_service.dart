@@ -474,7 +474,13 @@ class HRService extends ChangeNotifier {
         throw Exception('El empleado ya tiene una asistencia activa');
       }
 
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('User does not have a tenant_id. Cannot proceed.');
+      }
+
       final attendance = Attendance(
+        tenantId: tenantId,
         employeeId: employeeId,
         checkIn: DateTime.now(),
         locationCheckIn: location ?? 'Oficina',
@@ -616,7 +622,13 @@ class HRService extends ChangeNotifier {
     String? notes,
   }) async {
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('User does not have a tenant_id. Cannot proceed.');
+      }
+
       final attendance = Attendance(
+        tenantId: tenantId,
         employeeId: employeeId,
         checkIn: checkIn,
         checkOut: checkOut,

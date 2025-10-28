@@ -6,6 +6,7 @@ import '../../../shared/models/customer.dart';
 import '../../../shared/models/payment_method.dart' as pm;
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/payment_method_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../sales/models/sales_models.dart' as sales_models;
 import '../../sales/services/sales_service.dart';
 import '../models/payment_method.dart';
@@ -16,6 +17,7 @@ class POSService extends ChangeNotifier {
   InventoryService _inventoryService;
   SalesService _salesService;
   PaymentMethodService _paymentMethodService;
+  TenantService _tenantService;
   final Uuid _uuid = const Uuid();
 
   // Current sale state
@@ -27,14 +29,17 @@ class POSService extends ChangeNotifier {
     required InventoryService inventoryService,
     required SalesService salesService,
     required PaymentMethodService paymentMethodService,
+    required TenantService tenantService,
   })  : _inventoryService = inventoryService,
         _salesService = salesService,
-        _paymentMethodService = paymentMethodService;
+        _paymentMethodService = paymentMethodService,
+        _tenantService = tenantService;
 
   void updateDependencies({
     InventoryService? inventoryService,
     SalesService? salesService,
     PaymentMethodService? paymentMethodService,
+    TenantService? tenantService,
   }) {
     if (inventoryService != null) {
       _inventoryService = inventoryService;
@@ -44,6 +49,9 @@ class POSService extends ChangeNotifier {
     }
     if (paymentMethodService != null) {
       _paymentMethodService = paymentMethodService;
+    }
+    if (tenantService != null) {
+      _tenantService = tenantService;
     }
   }
 
@@ -72,34 +80,33 @@ class POSService extends ChangeNotifier {
     if (quantity <= 0) return false;
 
     // Check stock availability
-    final requiresStock =
-        product.productType == ProductType.product && product.trackStock;
-    if (requiresStock && product.stockQuantity < quantity) {
-      if (kDebugMode)
-        print('POSService: Insufficient stock for ${product.name}');
+    if (product.trackStock && product.stockQuantity < quantity) {
       return false;
     }
 
-    final existingItemIndex =
+    // Check if product already in cart
+    final existingIndex =
         _cartItems.indexWhere((item) => item.product.id == product.id);
 
-    if (existingItemIndex != -1) {
-      // Update existing item
-      final existingItem = _cartItems[existingItemIndex];
+    if (existingIndex != -1) {
+      // Update quantity if product exists
+      final existingItem = _cartItems[existingIndex];
       final newQuantity = existingItem.quantity + quantity;
 
-      if (requiresStock && product.stockQuantity < newQuantity) {
-        if (kDebugMode)
-          print('POSService: Insufficient stock for total quantity');
+      if (product.trackStock && product.stockQuantity < newQuantity) {
         return false;
       }
 
-      _cartItems[existingItemIndex] =
+      _cartItems[existingIndex] =
           existingItem.copyWith(quantity: newQuantity);
     } else {
       // Add new item
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) return false;
+
       final cartItem = POSCartItem(
         id: _uuid.v4(),
+        tenantId: tenantId,
         product: product,
         quantity: quantity,
         unitPrice: customPrice ?? product.price,
@@ -204,6 +211,11 @@ class POSService extends ChangeNotifier {
     notifyListeners();
 
     final timestamp = DateTime.now();
+    
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null) {
+      throw Exception('User does not have a tenant_id. Cannot proceed.');
+    }
 
     try {
       // CRITICAL: Ensure payment methods are loaded from database
@@ -235,6 +247,7 @@ class POSService extends ChangeNotifier {
       }).toList();
 
       final invoice = sales_models.Invoice(
+        tenantId: tenantId,
         customerId: _selectedCustomer?.id,
         invoiceNumber: invoiceNumber,
         customerName: _selectedCustomer?.name ?? 'Cliente Mostrador',
@@ -315,6 +328,7 @@ class POSService extends ChangeNotifier {
         }
 
         final salesPayment = sales_models.Payment(
+          tenantId: savedInvoice.tenantId, // Get from parent invoice
           invoiceId: invoiceId,
           invoiceReference: savedInvoice.invoiceNumber.isNotEmpty
               ? savedInvoice.invoiceNumber
@@ -333,6 +347,7 @@ class POSService extends ChangeNotifier {
 
       final transaction = POSTransaction(
         id: invoiceId,
+        tenantId: tenantId,
         cashierId: 'current_user', // TODO: enlazar con el usuario autenticado
         customerId: _selectedCustomer?.id,
         customer: _selectedCustomer,

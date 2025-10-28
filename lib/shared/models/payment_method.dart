@@ -1,6 +1,7 @@
 /// Payment method model matching payment_methods table in core_schema.sql
 class PaymentMethod {
   final String id; // uuid
+  final String tenantId; // uuid - MULTI-TENANT ISOLATION
   final String code; // 'cash', 'transfer', 'card', 'check'
   final String name; // 'Efectivo', 'Transferencia Bancaria', etc.
   final String accountId; // uuid - references accounts(id)
@@ -13,6 +14,7 @@ class PaymentMethod {
 
   PaymentMethod({
     required this.id,
+    required this.tenantId,
     required this.code,
     required this.name,
     required this.accountId,
@@ -28,6 +30,7 @@ class PaymentMethod {
   factory PaymentMethod.fromJson(Map<String, dynamic> json) {
     return PaymentMethod(
       id: json['id']?.toString() ?? '',
+      tenantId: json['tenant_id']?.toString() ?? '',
       code: json['code']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       accountId: json['account_id']?.toString() ?? '',
@@ -43,6 +46,7 @@ class PaymentMethod {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'code': code,
       'name': name,
       'account_id': accountId,
@@ -57,6 +61,7 @@ class PaymentMethod {
 
   PaymentMethod copyWith({
     String? id,
+    String? tenantId,
     String? code,
     String? name,
     String? accountId,
@@ -69,6 +74,7 @@ class PaymentMethod {
   }) {
     return PaymentMethod(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       code: code ?? this.code,
       name: name ?? this.name,
       accountId: accountId ?? this.accountId,

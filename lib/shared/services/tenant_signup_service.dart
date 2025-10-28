@@ -106,21 +106,21 @@ class TenantSignupService {
   /// Initialize default data for new tenant
   /// 
   /// Creates:
-  /// - Default payment methods (Efectivo, Transferencia, Mercado Pago)
+  /// - Default chart of accounts (MUST be created first - required by payment methods)
+  /// - Default payment methods (linked to accounting accounts)
   /// - Default product categories (Bicicletas, Repuestos, Accesorios)
-  /// - Default chart of accounts (basic accounting structure)
   Future<void> _initializeDefaultData(String tenantId) async {
     try {
       debugPrint('📦 TenantSignupService: Initializing default data for tenant $tenantId');
 
-      // 1. Create default payment methods
+      // 1. Create default chart of accounts FIRST (required by payment methods)
+      await _createDefaultAccounts(tenantId);
+
+      // 2. Create default payment methods (requires account_id from accounts)
       await _createDefaultPaymentMethods(tenantId);
 
-      // 2. Create default categories
+      // 3. Create default categories
       await _createDefaultCategories(tenantId);
-
-      // 3. Create default chart of accounts
-      await _createDefaultAccounts(tenantId);
 
       debugPrint('✅ TenantSignupService: Default data initialized');
     } catch (e) {
@@ -130,47 +130,86 @@ class TenantSignupService {
   }
 
   /// Create default payment methods
+  /// CRITICAL: Accounts must be created first, as payment methods reference account_id
   Future<void> _createDefaultPaymentMethods(String tenantId) async {
+    // Fetch the cash and bank accounts created in _createDefaultAccounts
+    final cashAccount = await _supabase
+        .from('accounts')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('code', '1101') // Caja General
+        .maybeSingle();
+
+    final bankAccount = await _supabase
+        .from('accounts')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('code', '1110') // Bancos - Cuenta Corriente
+        .maybeSingle();
+
+    if (cashAccount == null || bankAccount == null) {
+      throw Exception('❌ Cash or Bank account not found. Accounts must be created before payment methods.');
+    }
+
+    final cashAccountId = cashAccount['id'] as String;
+    final bankAccountId = bankAccount['id'] as String;
+
     final paymentMethods = [
       {
         'tenant_id': tenantId,
+        'code': 'cash',
         'name': 'Efectivo',
-        'type': 'cash',
+        'account_id': cashAccountId,
+        'requires_reference': false,
+        'icon': 'payments',
+        'sort_order': 1,
         'is_active': true,
-        'description': 'Pago en efectivo',
       },
       {
         'tenant_id': tenantId,
+        'code': 'bank_transfer',
         'name': 'Transferencia Bancaria',
-        'type': 'bank_transfer',
+        'account_id': bankAccountId,
+        'requires_reference': true,
+        'icon': 'account_balance',
+        'sort_order': 2,
         'is_active': true,
-        'description': 'Transferencia electrónica',
       },
       {
         'tenant_id': tenantId,
-        'name': 'Mercado Pago',
-        'type': 'mercadopago',
-        'is_active': false, // Disabled by default (requires configuration)
-        'description': 'Pagos online con Mercado Pago',
-      },
-      {
-        'tenant_id': tenantId,
+        'code': 'debit_card',
         'name': 'Tarjeta de Débito',
-        'type': 'debit_card',
+        'account_id': bankAccountId,
+        'requires_reference': false,
+        'icon': 'credit_card',
+        'sort_order': 3,
         'is_active': true,
-        'description': 'Tarjeta de débito',
       },
       {
         'tenant_id': tenantId,
+        'code': 'credit_card',
         'name': 'Tarjeta de Crédito',
-        'type': 'credit_card',
+        'account_id': bankAccountId,
+        'requires_reference': false,
+        'icon': 'credit_card',
+        'sort_order': 4,
         'is_active': true,
-        'description': 'Tarjeta de crédito',
+      },
+      {
+        'tenant_id': tenantId,
+        'code': 'mercadopago',
+        'name': 'Mercado Pago',
+        'account_id': bankAccountId,
+        'requires_reference': true,
+        'icon': 'payment',
+        'sort_order': 5,
+        'is_active': false, // Disabled by default (requires configuration)
       },
     ];
 
     await _supabase.from('payment_methods').insert(paymentMethods);
     debugPrint('✅ Created ${paymentMethods.length} default payment methods');
+    debugPrint('   💰 Linked to accounting accounts (Cash: $cashAccountId, Bank: $bankAccountId)');
   }
 
   /// Create default product categories
@@ -223,126 +262,313 @@ class TenantSignupService {
   }
 
   /// Create default chart of accounts
+  /// CRITICAL: Account codes must match those used in database functions (ensure_account calls)
+  /// This chart follows Chilean accounting standards and integrates with all ERP modules
   Future<void> _createDefaultAccounts(String tenantId) async {
     final accounts = [
-      // Assets (1.xxx)
+      // ============================================================================
+      // ASSETS (1xxx) - Activos
+      // ============================================================================
+      
+      // Current Assets - Activos Corrientes
       {
         'tenant_id': tenantId,
-        'code': '1.1.001',
-        'name': 'Caja',
+        'code': '1101',
+        'name': 'Caja General',
         'type': 'asset',
+        'category': 'currentAsset',
+        'description': 'Efectivo disponible en caja y fondos inmediatos',
         'is_active': true,
       },
       {
         'tenant_id': tenantId,
-        'code': '1.1.002',
-        'name': 'Banco',
+        'code': '1110',
+        'name': 'Bancos - Cuenta Corriente',
         'type': 'asset',
+        'category': 'currentAsset',
+        'description': 'Saldos disponibles en cuentas corrientes bancarias',
         'is_active': true,
       },
       {
         'tenant_id': tenantId,
-        'code': '1.2.001',
-        'name': 'Cuentas por Cobrar',
+        'code': '1130',
+        'name': 'Cuentas por Cobrar Comerciales',
         'type': 'asset',
+        'category': 'currentAsset',
+        'description': 'Saldos pendientes de cobro a clientes por ventas a crédito',
         'is_active': true,
       },
       {
         'tenant_id': tenantId,
-        'code': '1.3.001',
-        'name': 'Inventario',
+        'code': '1105',
+        'name': 'Inventarios',
         'type': 'asset',
+        'category': 'currentAsset',
+        'description': 'Valor del inventario de productos y repuestos',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '1107',
+        'name': 'IVA Crédito Fiscal',
+        'type': 'asset',
+        'category': 'currentAsset',
+        'description': 'IVA pagado en compras, recuperable',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '1190',
+        'name': 'Otros Activos Corrientes',
+        'type': 'asset',
+        'category': 'currentAsset',
+        'description': 'Activos circulantes no clasificados en otra cuenta específica',
         'is_active': true,
       },
 
-      // Liabilities (2.xxx)
+      // ============================================================================
+      // LIABILITIES (2xxx) - Pasivos
+      // ============================================================================
+      
+      // Current Liabilities - Pasivos Corrientes
       {
         'tenant_id': tenantId,
-        'code': '2.1.001',
-        'name': 'Cuentas por Pagar',
+        'code': '2101',
+        'name': 'Cuentas por Pagar Proveedores',
         'type': 'liability',
+        'category': 'currentLiability',
+        'description': 'Obligaciones con proveedores',
         'is_active': true,
       },
       {
         'tenant_id': tenantId,
-        'code': '2.2.001',
+        'code': '2150',
+        'name': 'IVA Débito Fiscal',
+        'type': 'liability',
+        'category': 'currentLiability',
+        'description': 'IVA generado en ventas',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '210200',
         'name': 'IVA por Pagar',
         'type': 'liability',
+        'category': 'currentLiability',
+        'description': 'IVA a pagar al SII',
         'is_active': true,
       },
 
-      // Equity (3.xxx)
+      // ============================================================================
+      // EQUITY (3xxx) - Patrimonio
+      // ============================================================================
       {
         'tenant_id': tenantId,
-        'code': '3.1.001',
+        'code': '3101',
         'name': 'Capital',
         'type': 'equity',
+        'category': 'capital',
+        'description': 'Capital aportado por los socios',
         'is_active': true,
       },
       {
         'tenant_id': tenantId,
-        'code': '3.2.001',
+        'code': '3201',
         'name': 'Utilidades Retenidas',
         'type': 'equity',
+        'category': 'retainedEarnings',
+        'description': 'Utilidades acumuladas de ejercicios anteriores',
         'is_active': true,
       },
 
-      // Revenue (4.xxx)
+      // ============================================================================
+      // REVENUE (4xxx) - Ingresos
+      // ============================================================================
       {
         'tenant_id': tenantId,
-        'code': '4.1.001',
-        'name': 'Ventas',
-        'type': 'revenue',
-        'is_active': true,
-      },
-      {
-        'tenant_id': tenantId,
-        'code': '4.1.002',
-        'name': 'Servicios',
-        'type': 'revenue',
+        'code': '4100',
+        'name': 'Ingresos Operacionales',
+        'type': 'income',
+        'category': 'operatingIncome',
+        'description': 'Ingresos operacionales por ventas y servicios',
         'is_active': true,
       },
 
-      // Expenses (5.xxx)
+      // ============================================================================
+      // EXPENSES (5xxx) - Gastos
+      // ============================================================================
+      
+      // Cost of Goods Sold
       {
         'tenant_id': tenantId,
-        'code': '5.1.001',
+        'code': '5100',
         'name': 'Costo de Ventas',
         'type': 'expense',
+        'category': 'costOfGoodsSold',
+        'description': 'Costo de ventas de productos y servicios',
         'is_active': true,
       },
+
+      // Operating Expenses - Gastos Operacionales
       {
         'tenant_id': tenantId,
-        'code': '5.2.001',
+        'code': '610100',
         'name': 'Sueldos y Salarios',
         'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Remuneraciones del personal y pagos de nómina',
         'is_active': true,
       },
       {
         'tenant_id': tenantId,
-        'code': '5.2.002',
-        'name': 'Arriendo',
+        'code': '610200',
+        'name': 'Cotizaciones Previsionales y Salud',
         'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Aportes previsionales, salud y seguros obligatorios del personal',
         'is_active': true,
       },
       {
         'tenant_id': tenantId,
-        'code': '5.2.003',
+        'code': '610300',
+        'name': 'Honorarios Profesionales',
+        'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Servicios profesionales externos y consultorías',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '620100',
+        'name': 'Arriendo de Locales',
+        'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Pagos de arriendo de oficinas, locales y bodegas',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '620200',
         'name': 'Servicios Básicos',
         'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Consumo de electricidad, agua, gas y otros servicios básicos',
         'is_active': true,
       },
       {
         'tenant_id': tenantId,
-        'code': '5.3.001',
-        'name': 'Gastos Generales',
+        'code': '620300',
+        'name': 'Telefonía e Internet',
         'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Planes de telefonía fija, móvil y servicios de internet',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '620400',
+        'name': 'Mantención y Reparaciones',
+        'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Gastos de mantenimiento preventivo y correctivo de infraestructura y equipos',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '620500',
+        'name': 'Suministros de Oficina',
+        'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Materiales de oficina, papelería e insumos administrativos',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '630100',
+        'name': 'Marketing y Publicidad',
+        'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Campañas de marketing, publicidad y promoción de la marca',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '630200',
+        'name': 'Comisiones y Servicios de Venta',
+        'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Comisiones pagadas a vendedores y servicios relacionados con ventas',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '640100',
+        'name': 'Gastos de Viaje y Viáticos',
+        'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Traslados, alojamiento y viáticos del personal',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '640200',
+        'name': 'Capacitación y Desarrollo',
+        'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Programas de formación, cursos y certificaciones del personal',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '650100',
+        'name': 'Seguros Generales',
+        'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Primas de seguros patrimoniales, de responsabilidad y otros',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '650200',
+        'name': 'Impuestos y Contribuciones Municipales',
+        'type': 'expense',
+        'category': 'taxExpense',
+        'description': 'Patentes, contribuciones y otros impuestos municipales',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '660100',
+        'name': 'Intereses y Gastos Financieros',
+        'type': 'expense',
+        'category': 'financialExpense',
+        'description': 'Intereses de créditos, comisiones bancarias y costos financieros',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '670100',
+        'name': 'Depreciación y Amortización',
+        'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Gastos por depreciación de activos fijos y amortización de intangibles',
+        'is_active': true,
+      },
+      {
+        'tenant_id': tenantId,
+        'code': '680100',
+        'name': 'Gastos Varios',
+        'type': 'expense',
+        'category': 'operatingExpense',
+        'description': 'Gastos generales menores no clasificados en otras cuentas específicas',
         'is_active': true,
       },
     ];
 
     await _supabase.from('accounts').insert(accounts);
     debugPrint('✅ Created ${accounts.length} default accounts');
+    debugPrint('   📊 Chart of accounts aligned with database functions');
+    debugPrint('   ✅ All ensure_account() codes present');
   }
 
   /// Check if user already has a tenant

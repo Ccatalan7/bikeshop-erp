@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../widgets/main_layout.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/login_screen.dart';
+import '../screens/reset_password_screen.dart';
 import '../services/auth_service.dart';
 import '../../modules/accounting/pages/account_list_page.dart';
 import '../../modules/accounting/pages/account_form_page.dart';
@@ -21,6 +22,7 @@ import '../../modules/crm/pages/customer_bike_directory_page.dart';
 import '../../modules/bikeshop/pages/client_logbook_page.dart';
 import '../../modules/bikeshop/pages/pegas_table_page.dart';
 import '../../modules/bikeshop/pages/mechanic_job_form_page.dart';
+import '../../modules/bikeshop/pages/workshop_calendar_page.dart';
 import '../../modules/inventory/pages/product_list_page.dart';
 import '../../modules/inventory/pages/product_form_page.dart';
 import '../../modules/inventory/pages/product_import_page.dart';
@@ -139,9 +141,15 @@ class AppRouter {
 
         final isLoggedIn = authService.isAuthenticated;
         final loggingIn = state.matchedLocation == '/login';
+        final resettingPassword = state.matchedLocation == '/reset-password';
 
         // Allow access to public store routes without authentication
         if (isPublicRoute) {
+          return null;
+        }
+
+        // Allow access to password reset without authentication
+        if (resettingPassword) {
           return null;
         }
 
@@ -306,6 +314,16 @@ class AppRouter {
             context,
             state,
             const LoginScreen(),
+          ),
+        ),
+
+        // Password Reset
+        GoRoute(
+          path: '/reset-password',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const ResetPasswordScreen(),
           ),
         ),
 
@@ -482,14 +500,6 @@ class AppRouter {
             );
           },
         ),
-        GoRoute(
-          path: '/clientes/bicicletas',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
-            context,
-            state,
-            const CustomerBikeDirectoryPage(),
-          ),
-        ),
 
         // Taller Module
         GoRoute(
@@ -521,6 +531,22 @@ class AppRouter {
               MechanicJobFormPage(jobId: jobId),
             );
           },
+        ),
+        GoRoute(
+          path: '/taller/bicicletas',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const CustomerBikeDirectoryPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/taller/calendario',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const WorkshopCalendarPage(),
+          ),
         ),
 
         // Inventory Module

@@ -11,6 +11,7 @@ enum POSTransactionStatus {
 
 class POSTransaction {
   final String id;
+  final String tenantId;
   final String cashierId;
   final String? customerId;
   final Customer? customer;
@@ -29,6 +30,7 @@ class POSTransaction {
 
   const POSTransaction({
     required this.id,
+    required this.tenantId,
     required this.cashierId,
     this.customerId,
     this.customer,
@@ -50,6 +52,7 @@ class POSTransaction {
   factory POSTransaction.fromJson(Map<String, dynamic> json) {
     return POSTransaction(
       id: json['id'] ?? '',
+      tenantId: json['tenant_id']?.toString() ?? '',
       cashierId: json['cashier_id'] ?? '',
       customerId: json['customer_id'],
       customer:
@@ -85,6 +88,7 @@ class POSTransaction {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'cashier_id': cashierId,
       'customer_id': customerId,
       'customer': customer?.toJson(),
@@ -106,6 +110,7 @@ class POSTransaction {
   // Helper methods
   POSTransaction copyWith({
     String? id,
+    String? tenantId,
     String? cashierId,
     String? customerId,
     Customer? customer,
@@ -124,6 +129,7 @@ class POSTransaction {
   }) {
     return POSTransaction(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       cashierId: cashierId ?? this.cashierId,
       customerId: customerId ?? this.customerId,
       customer: customer ?? this.customer,
@@ -167,6 +173,7 @@ class POSTransaction {
 
 class POSPayment {
   final String id;
+  final String tenantId;
   final PaymentMethod method;
   final double amount;
   final String? reference; // Card transaction ID, voucher number, etc.
@@ -174,6 +181,7 @@ class POSPayment {
 
   const POSPayment({
     required this.id,
+    required this.tenantId,
     required this.method,
     required this.amount,
     this.reference,
@@ -184,6 +192,7 @@ class POSPayment {
   factory POSPayment.fromJson(Map<String, dynamic> json) {
     return POSPayment(
       id: json['id'] ?? '',
+      tenantId: json['tenant_id']?.toString() ?? '',
       method: PaymentMethod.fromJson(json['method']),
       amount: (json['amount'] ?? 0).toDouble(),
       reference: json['reference'],
@@ -195,6 +204,7 @@ class POSPayment {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'method': method.toJson(),
       'amount': amount,
       'reference': reference,

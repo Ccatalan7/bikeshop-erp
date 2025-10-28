@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../models/account.dart';
 import '../models/journal_entry.dart';
 import 'chart_of_accounts_service.dart';
@@ -119,6 +120,11 @@ class JournalEntryService extends ChangeNotifier {
     await ensureLoaded();
 
     _validateJournalEntry(lines);
+    
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null) {
+      throw Exception('User does not have a tenant_id. Cannot proceed.');
+    }
 
     final totalDebit =
         lines.fold<double>(0.0, (sum, line) => sum + line.debitAmount);
@@ -126,6 +132,7 @@ class JournalEntryService extends ChangeNotifier {
         lines.fold<double>(0.0, (sum, line) => sum + line.creditAmount);
 
     return JournalEntry(
+      tenantId: tenantId,
       entryNumber: _generateEntryNumber(),
       date: date,
       description: description,

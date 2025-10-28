@@ -14,6 +14,7 @@ DateTime _parseDate(dynamic value) {
 
 class Customer {
   final String? id;
+  final String tenantId;
   final String name;
   final String rut;
   final String? email;
@@ -27,6 +28,7 @@ class Customer {
 
   Customer({
     this.id,
+    required this.tenantId,
     required this.name,
     required this.rut,
     this.email,
@@ -43,6 +45,7 @@ class Customer {
   factory Customer.fromJson(Map<String, dynamic> json) {
     return Customer(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       name: json['name'] ?? '',
       rut: json['rut'] ?? '',
       email: json['email'] as String?,
@@ -58,6 +61,7 @@ class Customer {
 
   Map<String, dynamic> toJson() {
     final json = {
+      'tenant_id': tenantId,
       'name': name,
       'rut': rut,
       'email': email,
@@ -80,6 +84,7 @@ class Customer {
 
   Customer copyWith({
     String? id,
+    String? tenantId,
     String? name,
     String? rut,
     String? email,
@@ -93,6 +98,7 @@ class Customer {
   }) {
     return Customer(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       name: name ?? this.name,
       rut: rut ?? this.rut,
       email: email ?? this.email,
@@ -119,6 +125,7 @@ class Customer {
 
 class Loyalty {
   final String? id;
+  final String tenantId;
   final String customerId;
   final int points;
   final LoyaltyTier tier;
@@ -126,6 +133,7 @@ class Loyalty {
 
   const Loyalty({
     this.id,
+    required this.tenantId,
     required this.customerId,
     this.points = 0,
     this.tier = LoyaltyTier.bronze,
@@ -135,6 +143,7 @@ class Loyalty {
   factory Loyalty.fromJson(Map<String, dynamic> json) {
     return Loyalty(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       customerId: json['customer_id']?.toString() ?? '',
       points: json['points'] as int? ?? 0,
       tier: LoyaltyTier.values.firstWhere(
@@ -150,6 +159,7 @@ class Loyalty {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'customer_id': customerId,
       'points': points,
       'tier': tier.toString().split('.').last,
@@ -159,6 +169,7 @@ class Loyalty {
 
   Loyalty copyWith({
     String? id,
+    String? tenantId,
     String? customerId,
     int? points,
     LoyaltyTier? tier,
@@ -166,6 +177,7 @@ class Loyalty {
   }) {
     return Loyalty(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       customerId: customerId ?? this.customerId,
       points: points ?? this.points,
       tier: tier ?? this.tier,
@@ -190,6 +202,7 @@ enum LoyaltyTier {
 
 class BikeHistory {
   final String? id;
+  final String tenantId;
   final String customerId;
   final String brand;
   final String model;
@@ -203,6 +216,7 @@ class BikeHistory {
 
   const BikeHistory({
     this.id,
+    required this.tenantId,
     required this.customerId,
     required this.brand,
     required this.model,
@@ -219,6 +233,7 @@ class BikeHistory {
     final purchaseAmount = json['purchase_amount'];
     return BikeHistory(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
       customerId: json['customer_id']?.toString() ?? '',
       brand: json['brand'] ?? '',
       model: json['model'] ?? '',
@@ -237,6 +252,7 @@ class BikeHistory {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'tenant_id': tenantId,
       'customer_id': customerId,
       'brand': brand,
       'model': model,
@@ -252,6 +268,7 @@ class BikeHistory {
 
   BikeHistory copyWith({
     String? id,
+    String? tenantId,
     String? customerId,
     String? brand,
     String? model,
@@ -265,6 +282,7 @@ class BikeHistory {
   }) {
     return BikeHistory(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       customerId: customerId ?? this.customerId,
       brand: brand ?? this.brand,
       model: model ?? this.model,

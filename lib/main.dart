@@ -204,26 +204,29 @@ class VinabikeApp extends StatelessWidget {
           },
         ),
 
-        // POS service depends on Inventory, Sales, and PaymentMethod
-        ChangeNotifierProxyProvider3<InventoryService, SalesService,
-            PaymentMethodService, POSService>(
+        // POS service depends on Inventory, Sales, PaymentMethod, and Tenant
+        ChangeNotifierProxyProvider4<InventoryService, SalesService,
+            PaymentMethodService, TenantService, POSService>(
           create: (context) => POSService(
             inventoryService: context.read<InventoryService>(),
             salesService: context.read<SalesService>(),
             paymentMethodService: context.read<PaymentMethodService>(),
+            tenantService: context.read<TenantService>(),
           ),
           update: (context, inventoryService, salesService,
-              paymentMethodService, previous) {
+              paymentMethodService, tenantService, previous) {
             final service = previous ??
                 POSService(
                   inventoryService: inventoryService,
                   salesService: salesService,
                   paymentMethodService: paymentMethodService,
+                  tenantService: tenantService,
                 );
             service.updateDependencies(
               inventoryService: inventoryService,
               salesService: salesService,
               paymentMethodService: paymentMethodService,
+              tenantService: tenantService,
             );
             return service;
           },
