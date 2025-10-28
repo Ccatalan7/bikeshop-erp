@@ -3592,6 +3592,35 @@ create index if not exists idx_expenses_supplier_id on expenses(supplier_id);
 create index if not exists idx_expenses_category_id on expenses(category_id);
 create index if not exists idx_expenses_posting_status on expenses(posting_status);
 create index if not exists idx_expenses_payment_status on expenses(payment_status);
+create index if not exists idx_expenses_tenant on expenses(tenant_id);
+
+-- RLS policies for expenses table
+alter table expenses enable row level security;
+
+drop policy if exists "expenses_select" on expenses;
+drop policy if exists "expenses_insert" on expenses;
+drop policy if exists "expenses_update" on expenses;
+drop policy if exists "expenses_delete" on expenses;
+
+create policy "expenses_select" on expenses
+  for select
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "expenses_insert" on expenses
+  for insert
+  to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "expenses_update" on expenses
+  for update
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "expenses_delete" on expenses
+  for delete
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
 
 create table if not exists expense_lines (
   id uuid primary key default gen_random_uuid(),
@@ -3617,6 +3646,35 @@ create index if not exists idx_expense_lines_expense_id
   on expense_lines(expense_id);
 create index if not exists idx_expense_lines_account_id
   on expense_lines(account_id);
+create index if not exists idx_expense_lines_tenant on expense_lines(tenant_id);
+
+-- RLS policies for expense_lines table
+alter table expense_lines enable row level security;
+
+drop policy if exists "expense_lines_select" on expense_lines;
+drop policy if exists "expense_lines_insert" on expense_lines;
+drop policy if exists "expense_lines_update" on expense_lines;
+drop policy if exists "expense_lines_delete" on expense_lines;
+
+create policy "expense_lines_select" on expense_lines
+  for select
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "expense_lines_insert" on expense_lines
+  for insert
+  to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "expense_lines_update" on expense_lines
+  for update
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "expense_lines_delete" on expense_lines
+  for delete
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
 
 create table if not exists expense_payments (
   id uuid primary key default gen_random_uuid(),
@@ -6204,6 +6262,9 @@ as $$
   order by mw.period_start;
 $$;
 
+-- Grant execute permissions to authenticated users
+grant execute on function public.get_income_expense_timeseries(integer) to authenticated;
+
 -- Function 10.1b: Get income/expense time series aggregated by day
 -- Used for daily views (current week, current month, previous month)
 create or replace function public.get_income_expense_daily_timeseries(
@@ -6266,6 +6327,9 @@ as $$
   order by dw.period_start;
 $$;
 
+-- Grant execute permissions to authenticated users
+grant execute on function public.get_income_expense_daily_timeseries(timestamp with time zone, timestamp with time zone) to authenticated;
+
 -- Function 10.2: Top expense accounts for a period (for donut charts)
 create or replace function public.get_expense_breakdown(
   p_start_date timestamp with time zone,
@@ -6305,6 +6369,9 @@ begin
   limit greatest(p_limit, 1);
 end;
 $$;
+
+-- Grant execute permissions to authenticated users
+grant execute on function public.get_expense_breakdown(timestamp with time zone, timestamp with time zone, integer) to authenticated;
 
 -- Function 10: Get balance sheet data grouped by category
 -- Returns structured data ready for Balance Sheet report
@@ -7187,6 +7254,7 @@ declare
   v_quantity numeric(12,2);
   v_unit_price numeric(12,2);
   v_line_total numeric(12,2);
+  v_tenant_id uuid;
 begin
   -- Prevent circular sync: if we're already deep in triggers, skip
   if pg_trigger_depth() > 2 then
@@ -7214,6 +7282,9 @@ begin
     return;
   end if;
   
+  -- Get tenant_id from invoice
+  v_tenant_id := v_invoice.tenant_id;
+  
   -- Set a flag to prevent reverse sync
   perform set_config('app.syncing_invoice_to_job', 'true', true);
   
@@ -7236,6 +7307,7 @@ begin
       v_labor_cost := v_labor_cost + v_line_total;
 
       insert into mechanic_job_labor (
+        tenant_id,
         job_id,
         technician_name,
         description,
@@ -7247,6 +7319,7 @@ begin
         created_at,
         updated_at
       ) values (
+        v_tenant_id,
         v_job_id,
         'Factura',
         v_product_name,
@@ -7276,6 +7349,7 @@ begin
         v_labor_cost := v_labor_cost + v_line_total;
 
         insert into mechanic_job_labor (
+          tenant_id,
           job_id,
           technician_name,
           description,
@@ -7287,6 +7361,7 @@ begin
           created_at,
           updated_at
         ) values (
+          v_tenant_id,
           v_job_id,
           'Factura',
           coalesce(v_product_name, v_item->>'product_name'),
@@ -7304,6 +7379,7 @@ begin
       
         -- Insert into job items
         insert into mechanic_job_items (
+          tenant_id,
           job_id,
           product_id,
           product_name,
@@ -7313,6 +7389,7 @@ begin
           created_at,
           updated_at
         ) values (
+          v_tenant_id,
           v_job_id,
           v_product_id,
           v_item->>'product_name',

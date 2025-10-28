@@ -18,6 +18,7 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
   DateTime _selectedDate = DateTime.now();
   DateTime _focusedMonth = DateTime.now();
   List<MechanicJob> _jobs = [];
+  Map<String, String> _customerNames = {}; // Map of customer_id -> customer_name
   bool _isLoading = true;
   MechanicJob? _selectedJob;
   List<MechanicJobItem> _selectedJobItems = [];
@@ -37,9 +38,22 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
     setState(() => _isLoading = true);
     try {
       final bikeshopService = context.read<BikeshopService>();
+      final customerService = context.read<CustomerService>();
+      
       final jobs = await bikeshopService.getJobs();
+      final customers = await customerService.getCustomers();
+      
+      // Create customer name lookup map
+      final customerNameMap = <String, String>{};
+      for (final customer in customers) {
+        if (customer.id != null) {
+          customerNameMap[customer.id!] = customer.name;
+        }
+      }
+      
       setState(() {
         _jobs = jobs;
+        _customerNames = customerNameMap;
         _isLoading = false;
       });
     } catch (e) {
@@ -410,6 +424,8 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
         statusColor = Colors.grey;
     }
 
+    final customerName = _customerNames[job.customerId] ?? 'Cliente';
+
     return Card(
       elevation: 2,
       child: InkWell(
@@ -456,6 +472,18 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
                         .withOpacity(0.4),
                   ),
                 ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                customerName,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withOpacity(0.7),
+                    ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               if (job.clientRequest != null) ...[
                 const SizedBox(height: 8),

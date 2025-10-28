@@ -476,16 +476,21 @@ class _PegasListPageState extends State<PegasListPage> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _filteredJobs.length,
-      itemBuilder: (context, index) {
-        final job = _filteredJobs[index];
-        final customer = _customers[job.customerId];
-        final bike = _bikes[job.bikeId];
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1400),
+        child: ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: _filteredJobs.length,
+          itemBuilder: (context, index) {
+            final job = _filteredJobs[index];
+            final customer = _customers[job.customerId];
+            final bike = _bikes[job.bikeId];
 
-        return _buildJobCard(job, customer, bike);
-      },
+            return _buildJobCard(job, customer, bike);
+          },
+        ),
+      ),
     );
   }
 

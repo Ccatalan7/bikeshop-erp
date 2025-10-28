@@ -1,262 +1,521 @@
-# 🔧 Pega ↔ Invoice Bi-Directional Sync Fix
+# 🔧 PEGA ↔ INVOICE BIDIRECTIONAL SYNC FIX# 🔧 Pega ↔ Invoice Bi-Directional Sync Fix
 
-## 🚨 Problem Identified
 
-The Pega (mechanic_job) and Invoice (sales_invoices) relationship was **one-way only**:
+
+## 🐛 Problem## 🚨 Problem Identified
+
+
+
+The **bidirectional sync** between **pegas (mechanic jobs)** and **sales invoices** was broken after multi-tenant migration:The Pega (mechanic_job) and Invoice (sales_invoices) relationship was **one-way only**:
+
 - ✅ Creating invoice from pega worked
-- ❌ Changing invoice status → Pega didn't update
-- ❌ Modifying invoice items → Pega items didn't sync
-- ❌ Deleting invoice → Pega still showed "invoiced"
-- ❌ Adding/removing products in pega → Invoice didn't update
 
-**Root cause:** No database triggers to maintain the relationship when invoice changes!
+### What Used to Work:- ❌ Changing invoice status → Pega didn't update
 
----
+1. ✅ **Create pega with products** → Draft invoice created with those items- ❌ Modifying invoice items → Pega items didn't sync
 
-## ✅ Solution Implemented
+2. ✅ **Edit invoice (add/remove products)** → Pega updated to reflect changes- ❌ Deleting invoice → Pega still showed "invoiced"
 
-### 1. **New Database Functions in `core_schema.sql`:**
+3. ✅ **Edit pega (add/remove items)** → Invoice updated to reflect changes- ❌ Adding/removing products in pega → Invoice didn't update
 
-#### `sync_invoice_items_to_job(p_invoice_id)`
+
+
+### What Was Broken:**Root cause:** No database triggers to maintain the relationship when invoice changes!
+
+- ❌ **Invoice → Pega sync was failing** when editing an invoice
+
+- ✅ **Pega → Invoice sync was still working** (one direction only)---
+
+
+
+## 🔍 Root Cause## ✅ Solution Implemented
+
+
+
+The `sync_invoice_items_to_job()` function (triggered when invoice is updated) was **missing `tenant_id`** in all INSERT statements:### 1. **New Database Functions in `core_schema.sql`:**
+
+
+
+### Location: `supabase/sql/core_schema.sql` (lines 7171-7350)#### `sync_invoice_items_to_job(p_invoice_id)`
+
 - **Purpose:** Syncs invoice items back to `mechanic_job_items`
-- **When called:** Every time invoice is created or updated
-- **What it does:**
-  - Deletes old job items
-  - Recreates them from invoice.items jsonb
-  - Separates labor vs parts
-  - Updates job costs (labor_cost, parts_cost, total_cost, tax_amount)
 
-#### `sync_invoice_status_to_job(p_invoice_id)`
-- **Purpose:** Syncs invoice status & payment to job flags
-- **When called:** Every time invoice status or payments change
-- **What it does:**
-  - Updates `mechanic_jobs.is_paid` based on invoice.status = 'paid'
-  - Updates `mechanic_jobs.is_invoiced` = true
-  - Keeps pega UI in sync with invoice reality
+**Missing tenant_id in:**- **When called:** Every time invoice is created or updated
+
+1. ❌ INSERT into `mechanic_job_labor` (line ~7237) - for labor items without product_id- **What it does:**
+
+2. ❌ INSERT into `mechanic_job_labor` (line ~7272) - for service product items  - Deletes old job items
+
+3. ❌ INSERT into `mechanic_job_items` (line ~7306) - for physical parts  - Recreates them from invoice.items jsonb
+
+  - Separates labor vs parts
+
+### Why This Broke Sync:  - Updates job costs (labor_cost, parts_cost, total_cost, tax_amount)
+
+
+
+When you edit an invoice in the UI and save it:#### `sync_invoice_status_to_job(p_invoice_id)`
+
+1. Flutter calls `SalesService.saveInvoice()` → updates `sales_invoices` table- **Purpose:** Syncs invoice status & payment to job flags
+
+2. Database trigger `trg_sales_invoices_change` fires- **When called:** Every time invoice status or payments change
+
+3. Trigger calls `sync_invoice_items_to_job(p_invoice_id)`- **What it does:**
+
+4. Function deletes all existing job items/labor  - Updates `mechanic_jobs.is_paid` based on invoice.status = 'paid'
+
+5. Function attempts to INSERT new items from invoice  - Updates `mechanic_jobs.is_invoiced` = true
+
+6. ❌ **INSERT fails** because RLS policies require `tenant_id`  - Keeps pega UI in sync with invoice reality
+
+7. ❌ **Pega items remain empty** (deleted but not recreated)
 
 #### `handle_invoice_deleted_for_job()`
-- **Purpose:** Clears job reference when invoice is deleted
+
+## ✅ Solution- **Purpose:** Clears job reference when invoice is deleted
+
 - **When called:** BEFORE invoice deletion (trigger)
-- **What it does:**
+
+Updated `sync_invoice_items_to_job()` function to include `tenant_id` in all INSERT statements:- **What it does:**
+
   - Sets `mechanic_jobs.invoice_id` = null
-  - Sets `is_invoiced` = false, `is_paid` = false
+
+### Changes Made (5 locations in `core_schema.sql`):  - Sets `is_invoiced` = false, `is_paid` = false
+
   - Allows creating a new invoice for the pega
 
----
+**1. Added `v_tenant_id` variable:**
 
-### 2. **Updated Existing Functions:**
+```sql---
 
-#### `handle_sales_invoice_change()`
-**Added sync calls:**
-```sql
--- After INSERT:
+declare
+
+  v_job_id uuid;### 2. **Updated Existing Functions:**
+
+  v_invoice record;
+
+  v_tenant_id uuid;  -- ⚠️ ADDED#### `handle_sales_invoice_change()`
+
+  -- ... other variables**Added sync calls:**
+
+begin```sql
+
+```-- After INSERT:
+
 perform public.sync_invoice_items_to_job(NEW.id);
-perform public.sync_invoice_status_to_job(NEW.id);
 
--- After UPDATE:
-perform public.sync_invoice_items_to_job(NEW.id);
-perform public.sync_invoice_status_to_job(NEW.id);
-```
+**2. Get tenant_id from invoice:**perform public.sync_invoice_status_to_job(NEW.id);
 
-#### `recalculate_sales_invoice_payments()`
-**Replaced manual update with sync function:**
 ```sql
+
+-- Get invoice details-- After UPDATE:
+
+select * into v_invoiceperform public.sync_invoice_items_to_job(NEW.id);
+
+from sales_invoicesperform public.sync_invoice_status_to_job(NEW.id);
+
+where id = p_invoice_id;```
+
+
+
+-- Get tenant_id from invoice#### `recalculate_sales_invoice_payments()`
+
+v_tenant_id := v_invoice.tenant_id;  -- ⚠️ ADDED**Replaced manual update with sync function:**
+
+``````sql
+
 -- OLD (manual update):
-update mechanic_jobs set is_paid = ... where invoice_id = ...
 
--- NEW (uses sync function):
-perform public.sync_invoice_status_to_job(p_invoice_id);
-```
-
----
-
-### 3. **New Trigger:**
+**3. Fixed INSERT into mechanic_job_labor (labor items without product_id):**update mechanic_jobs set is_paid = ... where invoice_id = ...
 
 ```sql
-create trigger trg_invoice_deleted_clear_job
-  before delete on sales_invoices
-  for each row execute procedure public.handle_invoice_deleted_for_job();
-```
 
----
+insert into mechanic_job_labor (-- NEW (uses sync function):
 
-## 🔄 Complete Sync Flow
+  tenant_id,           -- ⚠️ ADDEDperform public.sync_invoice_status_to_job(p_invoice_id);
 
-### **Pega → Invoice (Already Working)**
-1. User adds products/services to pega
+  job_id,```
+
+  technician_name,
+
+  description,---
+
+  hours_worked,
+
+  hourly_rate,### 3. **New Trigger:**
+
+  total_cost,
+
+  service_product_id,```sql
+
+  work_date,create trigger trg_invoice_deleted_clear_job
+
+  created_at,  before delete on sales_invoices
+
+  updated_at  for each row execute procedure public.handle_invoice_deleted_for_job();
+
+) values (```
+
+  v_tenant_id,         -- ⚠️ ADDED
+
+  v_job_id,---
+
+  'Factura',
+
+  v_product_name,## 🔄 Complete Sync Flow
+
+  -- ... other values
+
+);### **Pega → Invoice (Already Working)**
+
+```1. User adds products/services to pega
+
 2. Clicks "Create Invoice"
-3. `create_invoice_from_mechanic_job()` runs
-4. Invoice created with all items
-5. `mechanic_jobs.invoice_id` is set
 
-### **Invoice → Pega (NOW FIXED!)**
+**4. Fixed INSERT into mechanic_job_labor (service product items):**3. `create_invoice_from_mechanic_job()` runs
 
-#### **Invoice Status Changes:**
-```
-Draft → Sent → Confirmed → Paid
-         ↓         ↓          ↓
-      Updates pega flags each time
-```
+```sql4. Invoice created with all items
 
-Every status change:
-1. `handle_sales_invoice_change()` trigger fires
-2. Calls `sync_invoice_status_to_job()`
-3. Updates `is_paid` flag in pega
-4. Pega UI shows correct payment status
+insert into mechanic_job_labor (5. `mechanic_jobs.invoice_id` is set
 
-#### **Invoice Items Modified:**
-```
-Add product to invoice
-    ↓
-Sync to mechanic_job_items
-    ↓
-Pega details show new product
-```
+  tenant_id,           -- ⚠️ ADDED
 
-Every invoice update:
-1. `handle_sales_invoice_change()` trigger fires
-2. Calls `sync_invoice_items_to_job()`
-3. Deletes old job items
+  job_id,### **Invoice → Pega (NOW FIXED!)**
+
+  -- ... other columns
+
+) values (#### **Invoice Status Changes:**
+
+  v_tenant_id,         -- ⚠️ ADDED```
+
+  v_job_id,Draft → Sent → Confirmed → Paid
+
+  -- ... other values         ↓         ↓          ↓
+
+);      Updates pega flags each time
+
+``````
+
+
+
+**5. Fixed INSERT into mechanic_job_items (physical parts):**Every status change:
+
+```sql1. `handle_sales_invoice_change()` trigger fires
+
+insert into mechanic_job_items (2. Calls `sync_invoice_status_to_job()`
+
+  tenant_id,           -- ⚠️ ADDED3. Updates `is_paid` flag in pega
+
+  job_id,4. Pega UI shows correct payment status
+
+  product_id,
+
+  product_name,#### **Invoice Items Modified:**
+
+  quantity,```
+
+  unit_price,Add product to invoice
+
+  notes,    ↓
+
+  created_at,Sync to mechanic_job_items
+
+  updated_at    ↓
+
+) values (Pega details show new product
+
+  v_tenant_id,         -- ⚠️ ADDED```
+
+  v_job_id,
+
+  v_product_id,Every invoice update:
+
+  -- ... other values1. `handle_sales_invoice_change()` trigger fires
+
+);2. Calls `sync_invoice_items_to_job()`
+
+```3. Deletes old job items
+
 4. Recreates from invoice.items
-5. Recalculates costs (parts, labor, tax, total)
 
-#### **Invoice Deleted:**
-```
-Delete invoice
+## 📋 Deployment Steps5. Recalculates costs (parts, labor, tax, total)
+
+
+
+1. **Deploy the updated schema:**#### **Invoice Deleted:**
+
+   - Open Supabase Dashboard → SQL Editor```
+
+   - Copy the entire `supabase/sql/core_schema.sql` fileDelete invoice
+
+   - Execute in SQL Editor    ↓
+
+   - Or deploy via migration scriptClear pega reference
+
     ↓
-Clear pega reference
-    ↓
-User can create new invoice
+
+2. **Restart Flutter app** (to clear any cached data)User can create new invoice
+
 ```
+
+3. **Test the sync** (see verification checklist below)
 
 Before deletion:
-1. `trg_invoice_deleted_clear_job` trigger fires
+
+## 🔄 How Bidirectional Sync Works1. `trg_invoice_deleted_clear_job` trigger fires
+
 2. Clears `mechanic_jobs.invoice_id`
-3. Sets `is_invoiced = false`, `is_paid = false`
+
+### Invoice → Pega Sync (Now Fixed ✅)3. Sets `is_invoiced = false`, `is_paid = false`
+
 4. Pega shows "Crear" button again
 
----
+**Trigger:** `trg_sales_invoices_change` on `sales_invoices` table  
+
+**Function:** `handle_sales_invoice_change()` (lines 2928-3065)  ---
+
+**Called:** `sync_invoice_items_to_job(NEW.id)` (lines 2972, 3031)
 
 ## 🧪 Testing Scenarios
 
-### **Scenario 1: Status Flow Test**
-1. Create pega with products
-2. Create invoice (status = draft)
-3. **Check:** Pega shows invoice link ✅
-4. Change invoice to "Sent"
-5. **Check:** Pega still shows link ✅
-6. Change invoice to "Confirmed"
+**What it does:**
+
+1. Finds the linked pega via `mechanic_jobs.invoice_id`### **Scenario 1: Status Flow Test**
+
+2. Sets sync flag to prevent circular updates1. Create pega with products
+
+3. Deletes all existing job items and labor2. Create invoice (status = draft)
+
+4. Recreates them from invoice.items JSONB array3. **Check:** Pega shows invoice link ✅
+
+5. Detects product type (part vs service) and creates appropriate records4. Change invoice to "Sent"
+
+6. Recalculates job costs5. **Check:** Pega still shows link ✅
+
+7. Clears sync flag6. Change invoice to "Confirmed"
+
 7. **Check:** Pega still shows link ✅
-8. Add payment → status = "Paid"
+
+### Pega → Invoice Sync (Already Working ✅)8. Add payment → status = "Paid"
+
 9. **Check:** Pega shows `is_paid = true` ✅
 
-### **Scenario 2: Item Modification Test**
-1. Create pega with 2 products
-2. Create invoice
-3. Go to invoice detail
-4. Add 1 more product
-5. **Check:** Pega details now show 3 products ✅
-6. Remove 1 product from invoice
-7. **Check:** Pega details now show 2 products ✅
+**Trigger:** `trg_mechanic_job_items_sync_invoice_insert/update/delete` on `mechanic_job_items`  
 
-### **Scenario 3: Invoice Deletion Test**
-1. Create pega
+**Function:** `sync_job_items_to_invoice_statement()` (lines 8217-8258)  ### **Scenario 2: Item Modification Test**
+
+**Called:** `sync_job_to_invoice(v_job_id)` (line 8253)1. Create pega with 2 products
+
 2. Create invoice
+
+**What it does:**3. Go to invoice detail
+
+1. Checks sync flag (skip if invoice→job sync in progress)4. Add 1 more product
+
+2. Recalculates job costs from database5. **Check:** Pega details now show 3 products ✅
+
+3. Finds the linked invoice via `mechanic_jobs.invoice_id`6. Remove 1 product from invoice
+
+4. Builds invoice items array from job items and labor7. **Check:** Pega details now show 2 products ✅
+
+5. Calculates subtotal, IVA, total
+
+6. Updates the invoice with new items and totals### **Scenario 3: Invoice Deletion Test**
+
+1. Create pega
+
+### Circular Sync Prevention2. Create invoice
+
 3. Delete invoice
-4. **Check:** Pega "Factura/Pago" column shows "Crear" button ✅
+
+Both functions use transaction-level flags:4. **Check:** Pega "Factura/Pago" column shows "Crear" button ✅
+
 5. **Check:** Pega detail doesn't show invoice link ✅
-6. Create new invoice
-7. **Check:** New invoice links correctly ✅
+
+```sql6. Create new invoice
+
+-- Invoice→Job sets this flag before making changes7. **Check:** New invoice links correctly ✅
+
+perform set_config('app.syncing_invoice_to_job', 'true', true);
 
 ### **Scenario 4: Payment Toggle Test**
-1. Create pega → invoice (draft)
-2. Go back and forth: Draft ↔ Confirmed ↔ Paid
-3. **Check:** Pega `is_paid` toggles correctly ✅
-4. **Check:** Invoice link never breaks ✅
 
----
+-- Job→Invoice checks this flag and skips if true1. Create pega → invoice (draft)
 
-## 📋 Deployment Checklist
+v_syncing_flag := current_setting('app.syncing_invoice_to_job', true);2. Go back and forth: Draft ↔ Confirmed ↔ Paid
 
-### **To Deploy:**
+if v_syncing_flag = 'true' then3. **Check:** Pega `is_paid` toggles correctly ✅
 
-1. **Stop any running instances** (optional but recommended)
+  return;  -- Skip to prevent circular sync4. **Check:** Invoice link never breaks ✅
 
-2. **Deploy the updated `core_schema.sql`:**
+end if;
+
+```---
+
+
+
+Also checks trigger depth:## 📋 Deployment Checklist
+
+```sql
+
+if pg_trigger_depth() > 2 then### **To Deploy:**
+
+  raise notice 'trigger depth too deep, skipping';
+
+  return;1. **Stop any running instances** (optional but recommended)
+
+end if;
+
+```2. **Deploy the updated `core_schema.sql`:**
+
    ```sql
-   -- Run in Supabase SQL Editor:
+
+## ✅ Verification Checklist   -- Run in Supabase SQL Editor:
+
    -- Copy entire contents of supabase/sql/core_schema.sql
-   -- Paste and execute
+
+After deployment, test these scenarios:   -- Paste and execute
+
    ```
 
-3. **Verify triggers created:**
-   ```sql
-   SELECT trigger_name, event_manipulation, event_object_table
-   FROM information_schema.triggers
-   WHERE trigger_name LIKE '%invoice%job%'
+**Basic Sync:**
+
+- [ ] Create pega with 2 products → Draft invoice has 2 items ✅3. **Verify triggers created:**
+
+- [ ] Edit invoice, add 1 product → Pega now has 3 items ✅   ```sql
+
+- [ ] Edit invoice, remove 1 product → Pega now has 2 items ✅   SELECT trigger_name, event_manipulation, event_object_table
+
+- [ ] Edit pega, add 1 labor → Invoice now has 3 items ✅   FROM information_schema.triggers
+
+- [ ] Edit pega, remove 1 product → Invoice now has 2 items ✅   WHERE trigger_name LIKE '%invoice%job%'
+
    ORDER BY event_object_table, trigger_name;
-   ```
 
-   **Expected output:**
-   - `trg_invoice_deleted_clear_job` on `sales_invoices`
+**Totals:**   ```
+
+- [ ] Verify parts_cost matches on both sides ✅
+
+- [ ] Verify labor_cost matches on both sides ✅   **Expected output:**
+
+- [ ] Verify subtotal = parts + labor - discount ✅   - `trg_invoice_deleted_clear_job` on `sales_invoices`
+
+- [ ] Verify total = subtotal + IVA ✅
 
 4. **Test the sync functions manually:**
-   ```sql
-   -- Test 1: Find a job with invoice
-   SELECT id, job_number, invoice_id, is_paid
-   FROM mechanic_jobs
-   WHERE invoice_id IS NOT NULL
+
+**Edge Cases:**   ```sql
+
+- [ ] Create pega with service product → Appears as labor in pega ✅   -- Test 1: Find a job with invoice
+
+- [ ] Edit invoice, change quantity → Pega quantity updates ✅   SELECT id, job_number, invoice_id, is_paid
+
+- [ ] Edit invoice, change price → Pega price updates ✅   FROM mechanic_jobs
+
+- [ ] Multiple rapid edits → No circular sync loops ✅   WHERE invoice_id IS NOT NULL
+
    LIMIT 1;
 
-   -- Test 2: Sync status
-   SELECT sync_invoice_status_to_job('[invoice_id_from_above]');
+**Multi-Tenant Isolation:**
 
-   -- Test 3: Sync items
+- [ ] Pega from tenant A doesn't sync to invoice from tenant B ✅   -- Test 2: Sync status
+
+- [ ] All synced items include correct tenant_id ✅   SELECT sync_invoice_status_to_job('[invoice_id_from_above]');
+
+
+
+## 📚 Related Functions   -- Test 3: Sync items
+
    SELECT sync_invoice_items_to_job('[invoice_id_from_above]');
-   ```
 
-5. **Test in the app:**
-   - Create a test pega
+**Sync functions:**   ```
+
+- `sync_invoice_items_to_job()` (lines 7171-7350) - Invoice → Pega ✅ FIXED
+
+- `sync_job_to_invoice()` (lines 7434-7554) - Pega → Invoice ✅5. **Test in the app:**
+
+- `sync_invoice_status_to_job()` (lines 7353-7423) - Invoice status → Job status ✅   - Create a test pega
+
    - Create invoice from it
-   - Modify invoice status
-   - Check pega updates
-   - Modify invoice items
+
+**Job calculation functions:**   - Modify invoice status
+
+- `recalculate_mechanic_job_costs()` - Recalculates totals from items/labor   - Check pega updates
+
+- `create_invoice_from_mechanic_job()` (lines 6972-7168) - Initial invoice creation   - Modify invoice items
+
    - Check pega items update
-   - Delete invoice
-   - Check pega clears reference
 
----
+**Triggers:**   - Delete invoice
 
-## 🔍 Monitoring & Debugging
+- `trg_sales_invoices_change` - Fires on invoice INSERT/UPDATE/DELETE   - Check pega clears reference
 
-### **Check Sync Status:**
+- `trg_mechanic_job_items_sync_invoice_insert/update/delete` - Fires on job items changes
+
+- `trg_mechanic_job_labor_sync_invoice_insert/update/delete` - Fires on labor changes---
+
+
+
+## 🧠 Key Takeaways## 🔍 Monitoring & Debugging
+
+
+
+**When ANY database function creates records, it MUST include `tenant_id`:**### **Check Sync Status:**
+
 ```sql
--- Find pegas with invoices
-SELECT 
-  mj.job_number,
-  mj.invoice_id,
-  mj.is_invoiced,
-  mj.is_paid,
+
+1. ✅ Add `v_tenant_id uuid;` to function variables-- Find pegas with invoices
+
+2. ✅ Get tenant_id from parameter or existing recordSELECT 
+
+3. ✅ Include `tenant_id` column in ALL INSERT statements  mj.job_number,
+
+4. ✅ Test with actual user (not service role in SQL Editor)  mj.invoice_id,
+
+5. ✅ Redeploy schema after function fixes  mj.is_invoiced,
+
+6. ✅ Restart Flutter app after deployment  mj.is_paid,
+
   si.invoice_number,
-  si.status,
-  si.total
-FROM mechanic_jobs mj
-LEFT JOIN sales_invoices si ON si.id = mj.invoice_id
-WHERE mj.invoice_id IS NOT NULL;
+
+**Common mistakes to avoid:**  si.status,
+
+- ❌ Assuming function doesn't need tenant_id (ALL tables need it)  si.total
+
+- ❌ Testing in SQL Editor as service role (bypasses RLS)FROM mechanic_jobs mj
+
+- ❌ Not restarting app after schema changesLEFT JOIN sales_invoices si ON si.id = mj.invoice_id
+
+- ❌ Not checking ALL INSERT statements in a functionWHERE mj.invoice_id IS NOT NULL;
+
 ```
 
-### **Check for Orphaned References:**
-```sql
+**See also:**
+
+- `.github/copilot-instructions.md` → "TROUBLESHOOTING: MULTI-TENANT ISSUES"### **Check for Orphaned References:**
+
+- `MASTER_INVOICE_FLOW_REFERENCE.md` → Invoice trigger architecture```sql
+
 -- Pegas pointing to deleted invoices
-SELECT 
+
+---SELECT 
+
   mj.job_number,
-  mj.invoice_id,
-  mj.is_invoiced
-FROM mechanic_jobs mj
-WHERE mj.invoice_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM sales_invoices si WHERE si.id = mj.invoice_id
-  );
+
+**Issue:** Pega ↔ Invoice bidirectional sync broken    mj.invoice_id,
+
+**Root cause:** Missing `tenant_id` in `sync_invoice_items_to_job()` INSERT statements    mj.is_invoiced
+
+**Solution:** Added `v_tenant_id` variable and included in all 3 INSERT locations  FROM mechanic_jobs mj
+
+**Files modified:** `supabase/sql/core_schema.sql` (lines 7171-7350)  WHERE mj.invoice_id IS NOT NULL
+
+**Fixed by:** GitHub Copilot    AND NOT EXISTS (
+
+**Date:** 2025-10-28      SELECT 1 FROM sales_invoices si WHERE si.id = mj.invoice_id
+
+**Status:** ✅ READY FOR DEPLOYMENT  );
+
 ```
 
 ### **Verify Item Sync:**
