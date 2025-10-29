@@ -343,6 +343,50 @@ create trigger customer_address_default_trigger
   when (new.is_default = true)
   execute function ensure_single_default_address();
 
+-- Loyalty table for customer loyalty program
+create table if not exists loyalty (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  customer_id uuid not null references customers(id) on delete cascade unique,
+  points integer not null default 0,
+  tier text not null default 'bronze' check (tier in ('bronze', 'silver', 'gold', 'platinum')),
+  last_updated timestamp with time zone not null default now(),
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_loyalty_tenant on loyalty(tenant_id);
+create index if not exists idx_loyalty_customer on loyalty(customer_id);
+create index if not exists idx_loyalty_tier on loyalty(tier);
+
+-- Enable RLS for loyalty table
+alter table loyalty enable row level security;
+
+drop policy if exists "loyalty_select" on loyalty;
+drop policy if exists "loyalty_insert" on loyalty;
+drop policy if exists "loyalty_update" on loyalty;
+drop policy if exists "loyalty_delete" on loyalty;
+
+create policy "loyalty_select" on loyalty
+  for select
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "loyalty_insert" on loyalty
+  for insert
+  to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "loyalty_update" on loyalty
+  for update
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "loyalty_delete" on loyalty
+  for delete
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
 -- Company settings table for global app configuration
 create table if not exists company_settings (
   id uuid primary key default gen_random_uuid(),
@@ -1563,10 +1607,45 @@ create index if not exists idx_payment_methods_sort_order on payment_methods(sor
 create index if not exists idx_payment_methods_account_id on payment_methods(account_id);
 
 -- ============================================================================
+-- 🏗️ MULTI-TENANT ONBOARDING SYSTEM - FOUNDATION DATA SEEDING
+-- ============================================================================
+-- This section contains ALL functions for automatic tenant initialization.
+-- 
+-- ARCHITECTURE OVERVIEW:
+-- ----------------------
+-- 1. User signs up → auth.users INSERT
+-- 2. Trigger: on_auth_user_created (line ~11338)
+--    └─> Calls: handle_new_user() (line ~11221)
+--        ├─> If invited: Joins existing tenant
+--        └─> If new: Creates tenant → tenants INSERT
+-- 3. Trigger: trg_tenant_initialization (line ~2087)
+--    └─> Calls: handle_new_tenant() (line ~2056)
+--        ├─> seed_chart_of_accounts() - 30 standard accounts
+--        ├─> seed_payment_methods_for_tenant() - 4 payment methods + 2 accounts
+--        ├─> seed_company_settings() - 8 default settings
+--        └─> seed_website_settings() - 7 e-commerce defaults
+--
+-- RESULT: New tenant is 100% ready to use with accounting, payments, settings configured.
+--
+-- MANUAL SEEDING (for existing tenants created before this system):
+-- DO $$
+-- DECLARE tenant_rec RECORD;
+-- BEGIN
+--   FOR tenant_rec IN SELECT id FROM tenants LOOP
+--     PERFORM public.seed_chart_of_accounts(tenant_rec.id);
+--     PERFORM public.seed_payment_methods_for_tenant(tenant_rec.id);
+--     PERFORM public.seed_company_settings(tenant_rec.id);
+--     PERFORM public.seed_website_settings(tenant_rec.id);
+--   END LOOP;
+-- END $$;
+-- ============================================================================
+
+-- ============================================================================
 -- SEED DEFAULT PAYMENT METHODS FOR A TENANT
 -- ============================================================================
--- This function seeds default payment methods for a tenant
--- Should be called when a new tenant is created or manually for existing tenants
+-- Creates 4 payment methods: Efectivo, Transferencia, Cheque, Tarjeta
+-- Also creates 2 accounts if missing: 1101 Caja, 1110 Bancos
+-- Called automatically by handle_new_tenant() trigger
 drop function if exists public.seed_payment_methods_for_tenant(uuid);
 
 create or replace function public.seed_payment_methods_for_tenant(p_tenant_id uuid)
@@ -1651,10 +1730,366 @@ end;
 $$;
 
 -- ============================================================================
--- AUTO-SEED PAYMENT METHODS FOR NEW TENANTS (Trigger)
+-- SEED CHART OF ACCOUNTS FOR A TENANT
 -- ============================================================================
--- This trigger automatically seeds payment methods when a new tenant is created
--- Ensures every tenant starts with default payment methods configured
+-- Creates 30 Chilean standard accounts for bikeshop operations
+-- Includes: Assets, Liabilities, Equity, Income, Expenses, Tax (IVA 19%)
+-- Based on Chilean GAAP and typical bikeshop business requirements
+-- Called automatically by handle_new_tenant() trigger
+drop function if exists public.seed_chart_of_accounts(uuid);
+
+create or replace function public.seed_chart_of_accounts(p_tenant_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_count int := 0;
+begin
+  raise notice 'Seeding chart of accounts for tenant %', p_tenant_id;
+  
+  -- Insert standard accounts for Chilean bikeshop operations
+  -- Only insert if they don't already exist (idempotent)
+  
+  -- ASSETS
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '1101', 'Caja General', 'asset', 'currentAsset', 
+    'Efectivo disponible en caja y fondos inmediatos', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1101');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '1110', 'Bancos - Cuenta Corriente', 'asset', 'currentAsset',
+    'Saldos disponibles en cuentas corrientes bancarias', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1110');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '1130', 'Cuentas por Cobrar Comerciales', 'asset', 'currentAsset',
+    'Saldos pendientes de cobro a clientes por ventas a crédito', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1130');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '1140', 'Inventario de Productos', 'asset', 'currentAsset',
+    'Valor de productos y repuestos en stock', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1140');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '1190', 'Otros Activos Corrientes', 'asset', 'currentAsset',
+    'Activos circulantes no clasificados en otra cuenta específica', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1190');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  -- LIABILITIES
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '2101', 'Cuentas por Pagar Comerciales', 'liability', 'currentLiability',
+    'Saldos pendientes de pago a proveedores', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2101');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  -- TAX ACCOUNTS (Critical for Chilean IVA)
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '2110', 'IVA Débito Fiscal', 'tax', 'taxPayable',
+    'IVA recaudado en ventas (19%)', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2110');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '2120', 'IVA Crédito Fiscal', 'tax', 'taxReceivable',
+    'IVA pagado en compras (19%)', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2120');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  -- EQUITY
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '3101', 'Capital Social', 'equity', 'capital',
+    'Aporte inicial de los socios', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '3101');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '3201', 'Utilidades Retenidas', 'equity', 'retainedEarnings',
+    'Ganancias acumuladas de periodos anteriores', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '3201');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  -- INCOME
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '4101', 'Ventas de Productos', 'income', 'operatingIncome',
+    'Ingresos por venta de bicicletas, repuestos y accesorios', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '4101');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '4102', 'Servicios de Mantenimiento', 'income', 'operatingIncome',
+    'Ingresos por servicios de reparación y mantención', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '4102');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '4201', 'Otros Ingresos', 'income', 'nonOperatingIncome',
+    'Ingresos no operacionales', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '4201');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  -- EXPENSES - Cost of Goods Sold
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '5101', 'Costo de Ventas', 'expense', 'costOfGoodsSold',
+    'Costo directo de productos vendidos', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '5101');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  -- EXPENSES - Personnel
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6101', 'Sueldos y Salarios', 'expense', 'operatingExpense',
+    'Remuneraciones del personal y pagos de nómina', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6101');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6102', 'Cotizaciones Previsionales', 'expense', 'operatingExpense',
+    'Aportes previsionales, salud y seguros del personal', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6102');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6103', 'Honorarios Profesionales', 'expense', 'operatingExpense',
+    'Servicios profesionales externos y consultorías', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6103');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  -- EXPENSES - Facilities
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6201', 'Arriendo de Locales', 'expense', 'operatingExpense',
+    'Pagos de arriendo de oficinas, locales y bodegas', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6201');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6202', 'Servicios Básicos', 'expense', 'operatingExpense',
+    'Electricidad, agua, gas y otros servicios básicos', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6202');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6203', 'Telefonía e Internet', 'expense', 'operatingExpense',
+    'Planes de telefonía fija, móvil y servicios de internet', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6203');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6204', 'Mantención y Reparaciones', 'expense', 'operatingExpense',
+    'Mantenimiento de infraestructura y equipos', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6204');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6205', 'Suministros de Oficina', 'expense', 'operatingExpense',
+    'Materiales de oficina, papelería e insumos', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6205');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  -- EXPENSES - Marketing
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6301', 'Marketing y Publicidad', 'expense', 'operatingExpense',
+    'Campañas de marketing, publicidad y promoción', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6301');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6302', 'Comisiones de Venta', 'expense', 'operatingExpense',
+    'Comisiones pagadas a vendedores', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6302');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  -- EXPENSES - Other
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6401', 'Gastos de Viaje', 'expense', 'operatingExpense',
+    'Traslados, alojamiento y viáticos', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6401');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6501', 'Seguros', 'expense', 'operatingExpense',
+    'Primas de seguros patrimoniales y de responsabilidad', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6501');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6502', 'Patentes y Contribuciones', 'expense', 'taxExpense',
+    'Patentes municipales y contribuciones', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6502');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6601', 'Gastos Financieros', 'expense', 'financialExpense',
+    'Intereses de créditos y comisiones bancarias', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6601');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6701', 'Depreciación', 'expense', 'operatingExpense',
+    'Depreciación de activos fijos', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6701');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6801', 'Gastos Varios', 'expense', 'operatingExpense',
+    'Gastos menores no clasificados', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6801');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  raise notice '✓ Created % accounts for tenant %', v_count, p_tenant_id;
+  return format('✓ Created %s accounts for tenant %s', v_count, p_tenant_id);
+end;
+$$;
+
+-- ============================================================================
+-- SEED COMPANY SETTINGS FOR A TENANT
+-- ============================================================================
+-- Creates 8 default settings: tax_rate_iva (19%), business_name, currency (CLP),
+-- fiscal_year_start_month (1), invoice_prefix, purchase_prefix, enable_inventory
+-- Called automatically by handle_new_tenant() trigger
+drop function if exists public.seed_company_settings(uuid);
+
+create or replace function public.seed_company_settings(p_tenant_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_shop_name text;
+  v_owner_email text;
+  v_count int := 0;
+begin
+  raise notice 'Seeding company settings for tenant %', p_tenant_id;
+  
+  -- Get tenant info
+  select shop_name, owner_email into v_shop_name, v_owner_email
+  from tenants where id = p_tenant_id;
+  
+  -- Insert default settings (only if they don't exist)
+  insert into company_settings (tenant_id, key, value)
+  select p_tenant_id, 'tax_rate_iva', '19'
+  where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'tax_rate_iva');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into company_settings (tenant_id, key, value)
+  select p_tenant_id, 'business_name', coalesce(v_shop_name, 'Mi Tienda de Bicicletas')
+  where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'business_name');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into company_settings (tenant_id, key, value)
+  select p_tenant_id, 'contact_email', coalesce(v_owner_email, '')
+  where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'contact_email');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into company_settings (tenant_id, key, value)
+  select p_tenant_id, 'currency', 'CLP'
+  where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'currency');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into company_settings (tenant_id, key, value)
+  select p_tenant_id, 'fiscal_year_start_month', '1'
+  where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'fiscal_year_start_month');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into company_settings (tenant_id, key, value)
+  select p_tenant_id, 'invoice_prefix', 'FV-'
+  where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'invoice_prefix');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into company_settings (tenant_id, key, value)
+  select p_tenant_id, 'purchase_prefix', 'FC-'
+  where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'purchase_prefix');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into company_settings (tenant_id, key, value)
+  select p_tenant_id, 'enable_inventory', 'true'
+  where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'enable_inventory');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  raise notice '✓ Created % company settings for tenant %', v_count, p_tenant_id;
+  return format('✓ Created %s company settings for tenant %s', v_count, p_tenant_id);
+end;
+$$;
+
+-- ============================================================================
+-- SEED WEBSITE SETTINGS FOR A TENANT
+-- ============================================================================
+-- Creates 7 e-commerce defaults: site_title, site_description, contact_email,
+-- enable_ecommerce (true), currency (CLP), shipping_enabled (false), theme
+-- Called automatically by handle_new_tenant() trigger
+drop function if exists public.seed_website_settings(uuid);
+
+create or replace function public.seed_website_settings(p_tenant_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_shop_name text;
+  v_owner_email text;
+  v_subdomain text;
+  v_count int := 0;
+begin
+  raise notice 'Seeding website settings for tenant %', p_tenant_id;
+  
+  -- Get tenant info
+  select shop_name, owner_email, subdomain into v_shop_name, v_owner_email, v_subdomain
+  from tenants where id = p_tenant_id;
+  
+  -- Insert default website settings
+  insert into website_settings (tenant_id, key, value, description)
+  select p_tenant_id, 'site_title', coalesce(v_shop_name, 'Mi Tienda'), 'Título del sitio web'
+  where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'site_title');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into website_settings (tenant_id, key, value, description)
+  select p_tenant_id, 'site_description', 'Venta y reparación de bicicletas', 'Descripción del sitio'
+  where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'site_description');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into website_settings (tenant_id, key, value, description)
+  select p_tenant_id, 'contact_email', coalesce(v_owner_email, ''), 'Email de contacto'
+  where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'contact_email');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into website_settings (tenant_id, key, value, description)
+  select p_tenant_id, 'enable_ecommerce', 'true', 'Habilitar tienda online'
+  where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'enable_ecommerce');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into website_settings (tenant_id, key, value, description)
+  select p_tenant_id, 'currency', 'CLP', 'Moneda de la tienda'
+  where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'currency');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into website_settings (tenant_id, key, value, description)
+  select p_tenant_id, 'shipping_enabled', 'false', 'Habilitar envíos'
+  where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'shipping_enabled');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into website_settings (tenant_id, key, value, description)
+  select p_tenant_id, 'theme', 'light', 'Tema visual del sitio'
+  where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'theme');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  raise notice '✓ Created % website settings for tenant %', v_count, p_tenant_id;
+  return format('✓ Created %s website settings for tenant %s', v_count, p_tenant_id);
+end;
+$$;
+
+-- ============================================================================
+-- AUTO-SEED ALL FOUNDATION DATA FOR NEW TENANTS (Complete Trigger)
+-- ============================================================================
+-- This is the master trigger that orchestrates all seeding functions
+-- Ensures every new tenant gets a complete, production-ready environment
 
 create or replace function public.handle_new_tenant()
 returns trigger
@@ -1662,10 +2097,25 @@ language plpgsql
 security definer
 as $$
 begin
-  -- Seed default payment methods for the new tenant
-  perform public.seed_payment_methods_for_tenant(NEW.id);
+  raise notice '🏗️ Initializing new tenant: % (ID: %)', NEW.shop_name, NEW.id;
   
-  raise notice '✓ Initialized new tenant: % (ID: %)', NEW.name, NEW.id;
+  -- Seed chart of accounts (CRITICAL - must come first, needed by payment methods)
+  perform public.seed_chart_of_accounts(NEW.id);
+  raise notice '  ✓ Chart of accounts created';
+  
+  -- Seed payment methods (uses accounts created above)
+  perform public.seed_payment_methods_for_tenant(NEW.id);
+  raise notice '  ✓ Payment methods configured';
+  
+  -- Seed company settings
+  perform public.seed_company_settings(NEW.id);
+  raise notice '  ✓ Company settings initialized';
+  
+  -- Seed website settings
+  perform public.seed_website_settings(NEW.id);
+  raise notice '  ✓ Website settings initialized';
+  
+  raise notice '✅ Tenant % fully initialized and ready for use!', NEW.shop_name;
   return NEW;
 end;
 $$;
@@ -3502,6 +3952,21 @@ create table if not exists expenses (
   updated_at timestamp with time zone not null default now(),
   unique(tenant_id, expense_number) -- Each tenant can have same expense numbers
 );
+
+-- Drop old global unique constraint if it exists (migration from single-tenant)
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.table_constraints
+    where constraint_schema = 'public'
+      and table_name = 'expenses'
+      and constraint_name = 'expenses_expense_number_key'
+  ) then
+    alter table public.expenses drop constraint expenses_expense_number_key;
+    raise notice 'Dropped old global unique constraint expenses_expense_number_key';
+  end if;
+end $$;
 
 alter table public.expenses
   add column if not exists expense_number text,
@@ -6949,6 +7414,50 @@ create index if not exists idx_mechanic_job_timeline_created_at on mechanic_job_
 -- BIKESHOP MODULE - Trigger Functions and Business Logic
 -- ============================================================
 
+-- Function: Cascade delete between mechanic jobs and invoices
+-- When a pega is deleted, also delete its associated invoice
+-- When an invoice is deleted, also delete its associated pega
+create or replace function public.cascade_delete_pega_invoice()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Prevent infinite recursion
+  if pg_trigger_depth() > 1 then
+    return OLD;
+  end if;
+
+  if TG_TABLE_NAME = 'mechanic_jobs' then
+    -- Pega deleted → delete its invoice
+    if OLD.invoice_id is not null then
+      delete from sales_invoices where id = OLD.invoice_id;
+      raise notice 'Deleted invoice % for pega %', OLD.invoice_id, OLD.id;
+    end if;
+  elsif TG_TABLE_NAME = 'sales_invoices' then
+    -- Invoice deleted → delete associated pega (if any)
+    delete from mechanic_jobs where invoice_id = OLD.id;
+    raise notice 'Deleted pega(s) for invoice %', OLD.id;
+  end if;
+
+  return OLD;
+end;
+$$;
+
+-- Create triggers for cascade delete (AFTER DELETE to avoid row modification conflict)
+drop trigger if exists trg_delete_pega_cascade_invoice on mechanic_jobs;
+create trigger trg_delete_pega_cascade_invoice
+  after delete on mechanic_jobs
+  for each row
+  execute function public.cascade_delete_pega_invoice();
+
+drop trigger if exists trg_delete_invoice_cascade_pega on sales_invoices;
+create trigger trg_delete_invoice_cascade_pega
+  after delete on sales_invoices
+  for each row
+  execute function public.cascade_delete_pega_invoice();
+
 -- Function: Auto-generate job number (MJ-YYYYMMDD-###)
 create or replace function public.generate_mechanic_job_number()
 returns text
@@ -7976,8 +8485,21 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_tenant_id uuid;
 begin
+  -- Get tenant_id from the job
+  select tenant_id into v_tenant_id
+  from mechanic_jobs
+  where id = p_job_id;
+
+  if v_tenant_id is null then
+    raise warning 'Cannot log timeline: job % not found or has no tenant_id', p_job_id;
+    return;
+  end if;
+
   insert into mechanic_job_timeline (
+    tenant_id,
     job_id,
     event_type,
     old_value,
@@ -7985,6 +8507,7 @@ begin
     description,
     created_at
   ) values (
+    v_tenant_id,
     p_job_id,
     p_event_type,
     p_old_value,
@@ -10357,10 +10880,31 @@ end $$;
 
 -- Attendances: Tenant isolation
 do $$ begin
-  create policy "attendances_select" on attendances for select using (tenant_id = public.user_tenant_id());
-  create policy "attendances_insert" on attendances for insert with check (tenant_id = public.user_tenant_id());
-  create policy "attendances_update" on attendances for update using (tenant_id = public.user_tenant_id());
-  create policy "attendances_delete" on attendances for delete using (tenant_id = public.user_tenant_id());
+  drop policy if exists "attendances_select" on attendances;
+  drop policy if exists "attendances_insert" on attendances;
+  drop policy if exists "attendances_update" on attendances;
+  drop policy if exists "attendances_delete" on attendances;
+  
+  create policy "attendances_select" on attendances 
+    for select 
+    to authenticated
+    using (tenant_id = public.user_tenant_id());
+    
+  create policy "attendances_insert" on attendances 
+    for insert 
+    to authenticated
+    with check (tenant_id = public.user_tenant_id());
+    
+  create policy "attendances_update" on attendances 
+    for update 
+    to authenticated
+    using (tenant_id = public.user_tenant_id());
+    
+  create policy "attendances_delete" on attendances 
+    for delete 
+    to authenticated
+    using (tenant_id = public.user_tenant_id());
+    
   raise notice '✓ Created RLS policies for attendances';
 exception
   when undefined_table then raise notice '⚠ Table attendances does not exist yet';
@@ -10517,17 +11061,32 @@ exception
 end $$;
 
 -- Mechanic Job Timeline: Tenant isolation
-do $$ begin
-  create policy "mechanic_job_timeline_select" on mechanic_job_timeline for select using (tenant_id = public.user_tenant_id());
-  create policy "mechanic_job_timeline_insert" on mechanic_job_timeline for insert with check (tenant_id = public.user_tenant_id());
-  create policy "mechanic_job_timeline_update" on mechanic_job_timeline for update using (tenant_id = public.user_tenant_id());
-  create policy "mechanic_job_timeline_delete" on mechanic_job_timeline for delete using (tenant_id = public.user_tenant_id());
-  raise notice '✓ Created RLS policies for mechanic_job_timeline';
-exception
-  when undefined_table then raise notice '⚠ Table mechanic_job_timeline does not exist yet';
-  when undefined_column then raise notice '⚠ Column tenant_id missing in mechanic_job_timeline';
-  when duplicate_object then raise notice '⚠ Policies already exist for mechanic_job_timeline';
-end $$;
+alter table mechanic_job_timeline enable row level security;
+
+drop policy if exists "mechanic_job_timeline_select" on mechanic_job_timeline;
+drop policy if exists "mechanic_job_timeline_insert" on mechanic_job_timeline;
+drop policy if exists "mechanic_job_timeline_update" on mechanic_job_timeline;
+drop policy if exists "mechanic_job_timeline_delete" on mechanic_job_timeline;
+
+create policy "mechanic_job_timeline_select" on mechanic_job_timeline
+  for select
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "mechanic_job_timeline_insert" on mechanic_job_timeline
+  for insert
+  to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "mechanic_job_timeline_update" on mechanic_job_timeline
+  for update
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "mechanic_job_timeline_delete" on mechanic_job_timeline
+  for delete
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
 
 -- Expense Attachments: Tenant isolation
 do $$ begin

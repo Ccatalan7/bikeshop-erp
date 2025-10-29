@@ -916,6 +916,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
             id: _existingExpense != null && _existingExpense!.lines.isNotEmpty
                 ? _existingExpense!.lines.first.id
                 : null,
+            tenantId: tenantId,
             expenseId: _existingExpense?.id,
             lineIndex: 0,
             accountId: _selectedAccount!.id ?? '',

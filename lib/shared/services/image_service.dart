@@ -166,7 +166,7 @@ class ImageService {
       imageUrl: imageUrl,
       width: containerSize,
       height: containerSize,
-      fit: BoxFit.cover,
+      fit: BoxFit.contain, // Changed from cover to contain - shows full image without cropping
       errorWidget: Container(
         width: containerSize,
         height: containerSize,

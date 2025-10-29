@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -184,9 +185,28 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
 
       // Load combined timeline from all jobs
       final allTimeline = <MechanicJobTimeline>[];
+      if (kDebugMode) {
+        print('📋 Loading timeline for ${jobs.length} jobs...');
+      }
+      
       for (final job in jobs) {
-        final jobTimeline = await bikeshopService.getJobTimeline(job.id!);
-        allTimeline.addAll(jobTimeline);
+        if (job.id == null) continue;
+        
+        try {
+          final jobTimeline = await bikeshopService.getJobTimeline(job.id!);
+          if (kDebugMode) {
+            print('📋 Job ${job.jobNumber}: ${jobTimeline.length} timeline events');
+          }
+          allTimeline.addAll(jobTimeline);
+        } catch (e) {
+          if (kDebugMode) {
+            print('❌ Error loading timeline for job ${job.id}: $e');
+          }
+        }
+      }
+
+      if (kDebugMode) {
+        print('📋 Total timeline events loaded: ${allTimeline.length}');
       }
 
       // Sort timeline by date descending (most recent first)

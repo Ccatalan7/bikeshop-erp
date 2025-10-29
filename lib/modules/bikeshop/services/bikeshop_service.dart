@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/database_service.dart';
 import '../models/bikeshop_models.dart';
 
@@ -319,15 +320,22 @@ class BikeshopService extends ChangeNotifier {
 
   Future<List<MechanicJobTimeline>> getJobTimeline(String jobId) async {
     try {
-      final data = await _db.select(
-        'mechanic_job_timeline',
-        where: 'job_id=$jobId',
-        orderBy: 'created_at',
-        descending: true,
-      );
-      return data.map((json) => MechanicJobTimeline.fromJson(json)).toList();
+      // Use Supabase client directly to ensure RLS policies work correctly
+      final response = await Supabase.instance.client
+          .from('mechanic_job_timeline')
+          .select()
+          .eq('job_id', jobId)
+          .order('created_at', ascending: false);
+      
+      if (kDebugMode) {
+        print('📋 Timeline query result for job $jobId: ${response.length} events');
+      }
+      
+      return (response as List)
+          .map((json) => MechanicJobTimeline.fromJson(json))
+          .toList();
     } catch (e) {
-      if (kDebugMode) print('Error fetching job timeline: $e');
+      if (kDebugMode) print('❌ Error fetching job timeline: $e');
       rethrow;
     }
   }

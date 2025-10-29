@@ -95,7 +95,27 @@ class _KioskModePageState extends State<KioskModePage> {
         );
 
         if (employeeRecord.isEmpty) {
-          throw Exception('No se encontró registro de entrada');
+          // Attendance record not found (deleted manually) - clear cached status
+          if (!mounted) return;
+          
+          setState(() {
+            _checkedInStatus.remove(employee.id);
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'No se encontró turno activo para ${employee.firstName}. '
+                'Estado actualizado.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          
+          // Refresh to sync state with database
+          await _loadEmployees();
+          return;
         }
 
         await hrService.checkOut(
@@ -282,10 +302,10 @@ class _KioskModePageState extends State<KioskModePage> {
                         padding: const EdgeInsets.all(16),
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3, // 3 columns for tablets
-                          childAspectRatio: 1.0,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
+                          crossAxisCount: 4, // 4 columns instead of 3
+                          childAspectRatio: 0.85, // Taller/narrower cards
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
                         ),
                         itemCount: _filteredEmployees.length,
                         itemBuilder: (context, index) {
@@ -354,7 +374,7 @@ class _EmployeeCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -362,49 +382,49 @@ class _EmployeeCard extends StatelessWidget {
               if (isCheckedIn)
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.green,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
                     'En el lugar',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 12,
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-              if (isCheckedIn) const SizedBox(height: 8),
+              if (isCheckedIn) const SizedBox(height: 6),
               // Avatar
               CircleAvatar(
-                radius: 50,
+                radius: 32,
                 backgroundColor: _getAvatarColor(),
                 child: employee.photoUrl != null
                     ? ClipOval(
                         child: Image.network(
                           employee.photoUrl!,
                           fit: BoxFit.cover,
-                          width: 100,
-                          height: 100,
+                          width: 64,
+                          height: 64,
                         ),
                       )
                     : Text(
                         employee.initials,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 36,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               // Name
               Text(
                 employee.fullName,
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: textColor,
                 ),
@@ -412,12 +432,12 @@ class _EmployeeCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               // Job title
               Text(
                 employee.jobTitle,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 11,
                   color: subtitleColor,
                 ),
                 textAlign: TextAlign.center,
@@ -429,7 +449,7 @@ class _EmployeeCard extends StatelessWidget {
               Text(
                 isCheckedIn ? 'Toca para salir' : 'Toca para entrar',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 11,
                   color: isCheckedIn ? Colors.green : Colors.blue,
                   fontWeight: FontWeight.w500,
                 ),

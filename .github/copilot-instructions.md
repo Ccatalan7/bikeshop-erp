@@ -626,3 +626,258 @@ Copilot must:
 - For very large datasets (100+ items), implement pagination or lazy loading with search.
 - Always place the search bar **above the list** (not hidden in a menu).
 - Respect localization: search must work with Spanish characters (ñ, á, é, í, ó, ú).
+
+---
+
+# 🚀 Multi-Tenant Onboarding System (AUTO-INITIALIZATION)
+
+**Location:** `supabase/sql/core_schema.sql` lines 1608-2091, 11221-11345
+
+## Automated Flow
+
+When a user signs up, the system **automatically creates**:
+
+1. **Tenant** (shop, subdomain, currency CLP, timezone America/Santiago)
+2. **User Profile** (links user to tenant with 'admin' role)
+3. **30 Chilean Accounting Accounts** (Assets, Liabilities, Equity, Income, Expenses, Tax)
+4. **4 Payment Methods** (Efectivo→Caja, Transferencia→Banco, Cheque, Tarjeta)
+5. **8 Company Settings** (IVA 19%, currency, fiscal year, invoice/purchase prefixes)
+6. **7 Website Settings** (e-commerce defaults, theme, currency)
+
+**Trigger Chain:**
+```
+User signup → on_auth_user_created → handle_new_user() 
+                                           ↓
+                                    Creates tenant
+                                           ↓
+                            trg_tenant_initialization → handle_new_tenant()
+                                                              ↓
+                                                    seed_chart_of_accounts()
+                                                    seed_payment_methods_for_tenant()
+                                                    seed_company_settings()
+                                                    seed_website_settings()
+```
+
+## User Invitation Flow
+
+- If user has pending invitation → joins existing tenant with invited role
+- Otherwise → creates new tenant and becomes admin
+- Subdomain auto-generated from email (handles collisions with counter)
+
+## Manual Seeding (Existing Tenants)
+
+```sql
+-- Seed all foundation data for existing tenant
+DO $$
+DECLARE tenant_rec RECORD;
+BEGIN
+  FOR tenant_rec IN SELECT id FROM tenants LOOP
+    PERFORM public.seed_chart_of_accounts(tenant_rec.id);
+    PERFORM public.seed_payment_methods_for_tenant(tenant_rec.id);
+    PERFORM public.seed_company_settings(tenant_rec.id);
+    PERFORM public.seed_website_settings(tenant_rec.id);
+  END LOOP;
+END $$;
+```
+
+---
+
+# 📦 Barcode Scanner Support
+
+The app supports **3 types of barcode scanners**:
+
+## 1. USB/Keyboard Scanners (Recommended for Desktop/POS)
+- Works on all platforms (Windows, macOS, Linux, Web)
+- No drivers needed - plug and play
+- Scanner emulates keyboard input
+- Most economical option
+- Examples: Symbol LS2208, Honeywell Voyager, Inateck BCST-70
+
+## 2. Bluetooth Scanners (Mobile/Tablet)
+- For Windows, Android, iOS
+- Wireless freedom
+- Requires Bluetooth pairing
+- Examples: Socket Mobile, Honeywell Voyager 1602g
+
+## 3. Mobile Phone as Scanner (NEW)
+- Use phone camera as wireless scanner
+- No additional hardware needed
+- Perfect for inventory/warehouse
+- Cross-platform (any phone with camera)
+
+**Implementation:** `lib/modules/settings/pages/barcode_scanner_config_page.dart`
+
+---
+
+# 🔄 Key Business Logic Patterns
+
+## Invoice → Journal Entry Flow
+
+**Sales Invoice:**
+1. User creates invoice → `sales_invoices` INSERT
+2. Trigger `trg_sales_invoices_change` fires
+3. Calls `handle_sales_invoice_change()`
+4. If posted → creates journal entry with:
+   - DEBIT: Cuentas por Cobrar (1130)
+   - CREDIT: Ventas (4101) + IVA Débito (2110)
+5. Deducts inventory via `consume_sales_invoice_inventory()`
+
+**Purchase Invoice:**
+1. User creates invoice → `purchase_invoices` INSERT
+2. Trigger `trg_purchase_invoices_change` fires
+3. If posted → creates journal entry with:
+   - DEBIT: Expense account + IVA Crédito (2120)
+   - CREDIT: Cuentas por Pagar (2101)
+4. Increases inventory via `consume_purchase_invoice_inventory()`
+
+**Payment Recording:**
+- Trigger on `sales_payments`/`purchase_payments` INSERT
+- Creates journal entry:
+  - DEBIT: Payment method account (Caja/Banco)
+  - CREDIT: Cuentas por Cobrar/Pagar
+- Updates invoice `paid_amount` and `status`
+
+## Mechanic Job (Pega) → Invoice Flow
+
+**Location:** `lib/modules/bikeshop/services/bikeshop_service.dart`
+
+1. Mechanic completes job with parts + labor
+2. Job status = 'completed' or 'ready_for_delivery'
+3. User clicks "Generate Invoice"
+4. System creates `sales_invoice` with:
+   - Line items from `mechanic_job_parts` (products used)
+   - Labor line item from `mechanic_jobs.labor_cost`
+   - Customer from `mechanic_jobs.customer_id`
+   - Links invoice back: `mechanic_jobs.invoice_id = invoice.id`
+5. Invoice posting triggers accounting entries (see above)
+
+**Bidirectional Cascade Delete:**
+- Deleting pega → deletes invoice (trigger: `cascade_delete_pega_invoice`)
+- Deleting invoice → deletes pega (same trigger)
+- Prevents orphaned records
+
+---
+
+# 🎨 UI/UX Standards
+
+## Calendar/Timeline Views
+
+- Use **flutter_calendar_carousel** for month view
+- Color coding by status (pending, in_progress, completed)
+- Click event → detail panel (split view on desktop, modal on mobile)
+- Show bike brand/model instead of internal codes
+- Timeline items sorted by date DESC
+
+## Form Validation
+
+- Required fields marked with red asterisk (*)
+- Real-time validation on blur
+- Error messages below field (red text)
+- Success messages via SnackBar (green)
+- Prevent submit if validation fails
+
+## Responsive Design
+
+- Desktop (>900px): Sidebar + content area
+- Tablet (600-900px): Collapsible drawer
+- Mobile (<600px): Bottom navigation + hamburger menu
+- Tables adapt to cards on mobile
+- Forms stack vertically on narrow screens
+
+## Loading States
+
+- Show CircularProgressIndicator while fetching data
+- Skeleton loaders for lists (shimmer effect)
+- Disable buttons during async operations
+- Display "No data" message if results empty
+
+---
+
+# 🔐 Row Level Security (RLS) Best Practices
+
+## Policy Template (Copy-Paste for New Tables)
+
+```sql
+-- Enable RLS
+alter table table_name enable row level security;
+
+-- Drop old policies
+drop policy if exists "table_select" on table_name;
+drop policy if exists "table_insert" on table_name;
+drop policy if exists "table_update" on table_name;
+drop policy if exists "table_delete" on table_name;
+
+-- Create new policies
+create policy "table_select" on table_name
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "table_insert" on table_name
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "table_update" on table_name
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "table_delete" on table_name
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+```
+
+**CRITICAL:** Always include `to authenticated` or policy defaults to public role (bypasses RLS)!
+
+---
+
+# 📝 Naming Conventions
+
+## Database
+
+- Tables: `snake_case` plural (e.g., `sales_invoices`, `mechanic_jobs`)
+- Columns: `snake_case` (e.g., `invoice_number`, `total_amount`)
+- Functions: `snake_case` (e.g., `create_sales_invoice_journal_entry`)
+- Triggers: `trg_<table>_<action>` (e.g., `trg_sales_invoices_change`)
+- Indexes: `idx_<table>_<column>` (e.g., `idx_products_tenant`)
+- Foreign keys: `<table_singular>_id` (e.g., `customer_id`, `product_id`)
+
+## Flutter/Dart
+
+- Classes: `PascalCase` (e.g., `SalesInvoice`, `BikeshopService`)
+- Files: `snake_case` (e.g., `sales_invoice.dart`, `bikeshop_service.dart`)
+- Variables/functions: `camelCase` (e.g., `getTenantId()`, `invoiceNumber`)
+- Constants: `lowerCamelCase` (e.g., `defaultCurrency = 'CLP'`)
+- Private members: prefix with `_` (e.g., `_tenantId`, `_loadData()`)
+
+## SQL Variables
+
+- Prefix with `v_` for local variables (e.g., `v_tenant_id`, `v_total`)
+- Prefix with `p_` for parameters (e.g., `p_invoice_id`, `p_tenant_id`)
+
+---
+
+# 🧪 Testing Multi-Tenant Isolation
+
+```sql
+-- Verify RLS is working
+SELECT 
+  schemaname, 
+  tablename, 
+  rowsecurity 
+FROM pg_tables 
+WHERE schemaname = 'public' 
+  AND tablename NOT LIKE 'pg_%'
+ORDER BY tablename;
+-- All tenant tables should have rowsecurity = true
+
+-- Check policies exist
+SELECT tablename, policyname, roles, cmd 
+FROM pg_policies 
+WHERE tablename = 'your_table_name';
+-- Should show 4 policies (SELECT, INSERT, UPDATE, DELETE) with {authenticated} role
+
+-- Test data isolation
+SELECT * FROM your_table WHERE tenant_id = public.user_tenant_id();
+-- Should only return current user's tenant data
+```
+
+**Never test in SQL Editor with service role** - it bypasses RLS! Always test from Flutter app as authenticated user.

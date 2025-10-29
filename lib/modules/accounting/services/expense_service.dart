@@ -143,7 +143,7 @@ class ExpenseService extends ChangeNotifier {
       }
 
       final saved = Expense.fromJson(stored);
-      await _syncExpenseLines(saved.id!, expense.lines);
+      await _syncExpenseLines(saved.id!, saved.tenantId, expense.lines);
 
       // Payments are handled via dedicated endpoints to maintain audit trail.
       // Attachments are managed separately as well.
@@ -293,6 +293,7 @@ class ExpenseService extends ChangeNotifier {
 
   Future<void> _syncExpenseLines(
     String expenseId,
+    String tenantId,
     List<ExpenseLine> lines,
   ) async {
     final existingRaw = await _client
@@ -310,7 +311,11 @@ class ExpenseService extends ChangeNotifier {
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
       final payload = line
-          .copyWith(expenseId: expenseId, lineIndex: i)
+          .copyWith(
+            expenseId: expenseId,
+            tenantId: tenantId,
+            lineIndex: i,
+          )
           .toJson();
 
       if (line.id == null || line.id!.isEmpty) {

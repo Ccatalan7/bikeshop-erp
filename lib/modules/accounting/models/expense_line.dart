@@ -1,6 +1,7 @@
 class ExpenseLine {
   ExpenseLine({
     this.id,
+    this.tenantId,
     this.expenseId,
     this.lineIndex = 0,
     required this.accountId,
@@ -21,6 +22,7 @@ class ExpenseLine {
         total = total ?? ((subtotal ?? (quantity * unitPrice)) + (taxAmount ?? 0));
 
   final String? id;
+  final String? tenantId;
   final String? expenseId;
   final int lineIndex;
   final String accountId;
@@ -47,6 +49,7 @@ class ExpenseLine {
 
     return ExpenseLine(
       id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString(),
       expenseId: json['expense_id']?.toString(),
       lineIndex: _parseInt(json['line_index']) ?? 0,
       accountId: json['account_id']?.toString() ?? '',
@@ -67,6 +70,7 @@ class ExpenseLine {
 
   Map<String, dynamic> toJson({bool includeIdentifier = true}) {
     final payload = <String, dynamic>{
+      'tenant_id': tenantId,
       'expense_id': expenseId,
       'line_index': lineIndex,
       'account_id': accountId,
@@ -93,6 +97,7 @@ class ExpenseLine {
 
   ExpenseLine copyWith({
     String? id,
+    String? tenantId,
     String? expenseId,
     int? lineIndex,
     String? accountId,
@@ -111,6 +116,7 @@ class ExpenseLine {
   }) {
     return ExpenseLine(
       id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
       expenseId: expenseId ?? this.expenseId,
       lineIndex: lineIndex ?? this.lineIndex,
       accountId: accountId ?? this.accountId,

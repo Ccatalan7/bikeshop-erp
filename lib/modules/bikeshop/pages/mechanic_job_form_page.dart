@@ -9,6 +9,7 @@ import '../../../shared/models/product.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/image_service.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
@@ -256,7 +257,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     });
   }
 
-  void _addPartItem() {
+  void _addPartItem() async {
+    // Force refresh products to get latest stock quantities
+    setState(() => _isLoadingProducts = true);
+    try {
+      final inventoryService = context.read<InventoryService>();
+      final products = await inventoryService.getProducts();
+      final stockProducts = products
+          .where((product) => product.productType == ProductType.product)
+          .toList();
+      
+      setState(() {
+        _stockProducts = stockProducts;
+        _isLoadingProducts = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingProducts = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cargar productos: $e')),
+        );
+      }
+      return;
+    }
+    
     showDialog(
       context: context,
       builder: (context) => _ProductSelectorDialog(
@@ -1113,16 +1137,33 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Text(item.product.name,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w500)),
-                              Text(
-                                'SKU: ${item.product.sku} | Stock: ${item.product.stockQuantity}',
-                                style: TextStyle(
-                                    fontSize: 12, color: Colors.grey[600]),
+                              // Product image
+                              if (item.product.imageUrl != null)
+                                Container(
+                                  width: 50,
+                                  height: 50,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  child: ImageService.buildProductImage(
+                                    imageUrl: item.product.imageUrl,
+                                    size: 50,
+                                  ),
+                                ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item.product.name,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w500)),
+                                    Text(
+                                      'SKU: ${item.product.sku} | Stock: ${item.product.stockQuantity}',
+                                      style: TextStyle(
+                                          fontSize: 12, color: Colors.grey[600]),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -1294,23 +1335,40 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Text(
-                                item.displayName,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600),
-                              ),
-                              if (item.hasCustomDescription)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Text(
-                                    item.description,
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
+                              // Service image
+                              if (item.serviceProduct?.imageUrl != null)
+                                Container(
+                                  width: 50,
+                                  height: 50,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  child: ImageService.buildProductImage(
+                                    imageUrl: item.serviceProduct!.imageUrl,
+                                    size: 50,
                                   ),
                                 ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.displayName,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                    if (item.hasCustomDescription)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          item.description,
+                                          style:
+                                              Theme.of(context).textTheme.bodySmall,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ),

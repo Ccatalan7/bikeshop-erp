@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../services/bikeshop_service.dart';
@@ -19,6 +20,8 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
   DateTime _focusedMonth = DateTime.now();
   List<MechanicJob> _jobs = [];
   Map<String, String> _customerNames = {}; // Map of customer_id -> customer_name
+  Map<String, String> _bikeNames = {}; // Map of bike_id -> "brand model"
+  Map<String, String> _productImages = {}; // Map of product_id -> image_url
   bool _isLoading = true;
   MechanicJob? _selectedJob;
   List<MechanicJobItem> _selectedJobItems = [];
@@ -51,9 +54,22 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
         }
       }
       
+      // Create bike name lookup map
+      final bikeNameMap = <String, String>{};
+      final bikes = await bikeshopService.getBikes();
+      for (final bike in bikes) {
+        if (bike.id != null) {
+          final bikeName = '${bike.brand ?? ''} ${bike.model ?? ''}'.trim();
+          if (bikeName.isNotEmpty) {
+            bikeNameMap[bike.id!] = bikeName;
+          }
+        }
+      }
+      
       setState(() {
         _jobs = jobs;
         _customerNames = customerNameMap;
+        _bikeNames = bikeNameMap;
         _isLoading = false;
       });
     } catch (e) {
@@ -99,12 +115,39 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
         bikeModel = '';
       }
       
+      // Load product images
+      final Map<String, String> productImages = {};
+      try {
+        final productIds = items
+            .where((item) => item.productId != null)
+            .map((item) => item.productId!)
+            .toSet();
+        
+        if (productIds.isNotEmpty) {
+          final response = await Supabase.instance.client
+              .from('products')
+              .select('id, image_url')
+              .inFilter('id', productIds.toList());
+          
+          for (final product in response) {
+            final id = product['id'] as String;
+            final imageUrl = product['image_url'] as String?;
+            if (imageUrl != null && imageUrl.isNotEmpty) {
+              productImages[id] = imageUrl;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error loading product images: $e');
+      }
+      
       setState(() {
         _selectedJobItems = items;
         _selectedJobLabor = labor;
         _customerName = customerName;
         _bikeBrand = bikeBrand;
         _bikeModel = bikeModel;
+        _productImages = productImages;
         _loadingDetails = false;
       });
     } catch (e) {
@@ -455,7 +498,7 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      job.jobNumber,
+                      _bikeNames[job.bikeId] ?? job.jobNumber,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                       ),
@@ -595,13 +638,16 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
                 ),
               ),
               const Spacer(),
-              // Job Number (compact)
+              // Bicycle Info (compact) - fallback to job number if no bike info
               Text(
-                job.jobNumber,
+                _bikeBrand != null || _bikeModel != null
+                    ? '${_bikeBrand ?? ''} ${_bikeModel ?? ''}'.trim()
+                    : job.jobNumber,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.bold,
                     ),
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -700,6 +746,15 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Product image with hover zoom
+                  if (item.productId != null && _productImages.containsKey(item.productId))
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _HoverImageWidget(
+                        imageUrl: _productImages[item.productId]!,
+                        size: 40,
+                      ),
+                    ),
                   Text(
                     '• ',
                     style: TextStyle(
@@ -895,6 +950,113 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ============================================================
+// HOVER IMAGE WIDGET - Shows small thumbnail with zoom on hover
+// ============================================================
+class _HoverImageWidget extends StatefulWidget {
+  final String imageUrl;
+  final double size;
+
+  const _HoverImageWidget({
+    required this.imageUrl,
+    this.size = 40,
+  });
+
+  @override
+  State<_HoverImageWidget> createState() => _HoverImageWidgetState();
+}
+
+class _HoverImageWidgetState extends State<_HoverImageWidget> {
+  bool _isHovered = false;
+  OverlayEntry? _overlayEntry;
+
+  void _showZoomedImage(BuildContext context) {
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final offset = renderBox.localToGlobal(Offset.zero);
+    
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: offset.dx + widget.size + 8,
+        top: offset.dy - 75,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: 300,
+            height: 300,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[300]!, width: 2),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.network(
+                widget.imageUrl,
+                fit: BoxFit.contain, // Changed from cover to contain
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: Colors.grey[200],
+                  child: const Icon(Icons.broken_image, size: 50),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _hideZoomedImage() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  @override
+  void dispose() {
+    _hideZoomedImage();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) {
+        setState(() => _isHovered = true);
+        _showZoomedImage(context);
+      },
+      onExit: (_) {
+        setState(() => _isHovered = false);
+        _hideZoomedImage();
+      },
+      child: Container(
+        width: widget.size,
+        height: widget.size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: _isHovered ? Theme.of(context).colorScheme.primary : Colors.grey[300]!,
+            width: _isHovered ? 2 : 1,
+          ),
+          color: Colors.grey[100], // Add background color
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(5),
+          child: Image.network(
+            widget.imageUrl,
+            fit: BoxFit.contain, // Changed from cover to contain
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: Colors.grey[200],
+              child: const Icon(Icons.image, size: 20, color: Colors.grey),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
