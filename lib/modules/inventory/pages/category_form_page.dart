@@ -5,9 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/app_button.dart';
-import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
-import '../../../shared/services/tenant_service.dart';
 import '../../../shared/constants/storage_constants.dart';
 import '../models/category_models.dart';
 import '../services/category_service.dart';
@@ -180,15 +178,9 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
         level = 0;
       }
       
-      final tenantId = await TenantService().getTenantId();
-      if (tenantId == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Error: No se pudo obtener el tenant ID')),
-          );
-        }
-        return;
-      }
+      // For new categories: Use placeholder tenant_id, DatabaseService will auto-inject
+      // For updates: Keep existing tenant_id
+      String tenantId = _existingCategory?.tenantId ?? '00000000-0000-0000-0000-000000000000';
 
       final category = Category(
         id: _existingCategory?.id,
@@ -204,13 +196,15 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
         isActive: _isActive,
       );
 
+      Category resultCategory;
       if (_existingCategory != null) {
-        await _categoryService.updateCategory(category);
+        resultCategory = await _categoryService.updateCategory(category);
       } else {
-        await _categoryService.createCategory(category);
+        resultCategory = await _categoryService.createCategory(category);
       }
 
       if (mounted) {
+        debugPrint('✅ [FORM] Save successful, popping with category...');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_existingCategory != null
@@ -219,7 +213,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
             backgroundColor: Colors.green,
           ),
         );
-        context.pop(true); // Return true to indicate success
+        context.pop(resultCategory);
       }
     } catch (e) {
       if (mounted) {
@@ -272,7 +266,10 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.arrow_back),
-                  onPressed: () => context.pop(),
+                  onPressed: () {
+                    debugPrint('🔙 [FORM] Back button clicked, popping...');
+                    context.pop();
+                  },
                 ),
                 const SizedBox(width: 8),
                 Expanded(

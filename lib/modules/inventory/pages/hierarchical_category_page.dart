@@ -65,32 +65,57 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
   }
 
   Future<void> _loadData() async {
+    final startTime = DateTime.now();
+    debugPrint('⏱️ [LOAD] Starting _loadData for categoryId: ${widget.categoryId}');
+    
     setState(() => _isLoading = true);
     try {
-      // Load all categories for global search
-      _allCategories = await _categoryService.getCategories(activeOnly: true);
-      _indexCategoryPaths();
+      // Only load all categories if search is active
+      if (_searchTerm.isNotEmpty && _allCategories.isEmpty) {
+        final searchStart = DateTime.now();
+        _allCategories = await _categoryService.getCategories(activeOnly: true);
+        _indexCategoryPaths();
+        debugPrint('⏱️ [LOAD] All categories loaded in ${DateTime.now().difference(searchStart).inMilliseconds}ms');
+      }
       
       if (widget.categoryId == null) {
         // Load root categories (no products at root level)
+        final rootStart = DateTime.now();
         _currentCategory = null;
         _subcategories = await _categoryService.getRootCategories();
+        debugPrint('⏱️ [LOAD] Root categories loaded (${_subcategories.length} items) in ${DateTime.now().difference(rootStart).inMilliseconds}ms');
         _products = [];
         _breadcrumbs = _generateBreadcrumbs(null);
       } else {
-        // Load specific category, its subcategories, and products
-        _currentCategory = await _categoryService.getCategoryById(widget.categoryId!);
+        // Load category, subcategories, and products in PARALLEL
+        final parallelStart = DateTime.now();
+        final results = await Future.wait([
+          _categoryService.getCategoryById(widget.categoryId!),
+          _categoryService.getSubcategories(widget.categoryId!),
+          _loadProductsForCategory(widget.categoryId!),
+        ]);
+        debugPrint('⏱️ [LOAD] Parallel queries completed in ${DateTime.now().difference(parallelStart).inMilliseconds}ms');
+        
+        _currentCategory = results[0] as Category?;
+        _subcategories = results[1] as List<Category>;
+        _products = results[2] as List<Map<String, dynamic>>;
+        
+        debugPrint('⏱️ [LOAD] Loaded: ${_subcategories.length} subcategories, ${_products.length} products');
+        
         if (_currentCategory != null) {
-          _subcategories = await _categoryService.getSubcategories(widget.categoryId!);
-          _products = await _loadProductsForCategory(widget.categoryId!);
           _breadcrumbs = _generateBreadcrumbs(_currentCategory!);
         }
       }
 
-      setState(() => _isLoading = false);
-    } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      
+      debugPrint('⏱️ [LOAD] TOTAL _loadData completed in ${DateTime.now().difference(startTime).inMilliseconds}ms');
+    } catch (e) {
+      debugPrint('❌ [LOAD] Error after ${DateTime.now().difference(startTime).inMilliseconds}ms: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
@@ -116,9 +141,9 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
 
   void _navigateToCategory(String? categoryId) {
     if (categoryId == null) {
-      context.go('/inventory/categories');
+      context.push('/inventory/categories');
     } else {
-      context.go('/inventory/categories/$categoryId');
+      context.push('/inventory/categories/$categoryId');
     }
   }
 
@@ -273,8 +298,15 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                           ),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
-                        onChanged: (value) {
+                        onChanged: (value) async {
                           setState(() => _searchTerm = value);
+                          // Load all categories when user starts searching
+                          if (value.isNotEmpty && _allCategories.isEmpty) {
+                            setState(() => _isLoading = true);
+                            _allCategories = await _categoryService.getCategories(activeOnly: true);
+                            _indexCategoryPaths();
+                            setState(() => _isLoading = false);
+                          }
                         },
                       ),
                     ),
@@ -315,14 +347,16 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                       text: 'Nueva Categoría',
                       icon: Icons.add,
                       type: ButtonType.primary,
-                      onPressed: () {
+                      onPressed: () async {
                         // Pass current category as parent context
                         final parentId = widget.categoryId;
                         if (parentId != null) {
-                          context.push('/inventory/categories/new?parent=$parentId');
+                          await context.push('/inventory/categories/new?parent=$parentId');
                         } else {
-                          context.push('/inventory/categories/new');
+                          await context.push('/inventory/categories/new');
                         }
+                        // Reload after returning from form
+                        _loadData();
                       },
                     ),
                   ],

@@ -3,6 +3,58 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DatabaseService extends ChangeNotifier {
   final SupabaseClient _client = Supabase.instance.client;
+  
+  // Tables that should NOT have tenant_id auto-injected
+  static const _excludedTables = {
+    'tenants',
+    'user_profiles',
+    'reserved_subdomains',
+    'user_invitations',
+  };
+
+  /// Automatically injects tenant_id for multi-tenant tables
+  Future<void> _injectTenantId(String table, Map<String, dynamic> payload) async {
+    // Skip if table is excluded from multi-tenancy
+    if (_excludedTables.contains(table)) {
+      return;
+    }
+
+    // Check if tenant_id already exists and is valid (not placeholder)
+    final existingTenantId = payload['tenant_id'];
+    final isPlaceholder = existingTenantId == null || 
+                          existingTenantId == '' || 
+                          existingTenantId == '00000000-0000-0000-0000-000000000000';
+    
+    // Skip injection if valid tenant_id already exists
+    if (payload.containsKey('tenant_id') && !isPlaceholder) {
+      return;
+    }
+
+    try {
+      // Get tenant_id from current user's profile
+      final userId = _client.auth.currentUser?.id;
+      if (userId == null) {
+        debugPrint('⚠️ No authenticated user - cannot inject tenant_id');
+        return;
+      }
+
+      final profileResponse = await _client
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (profileResponse != null && profileResponse['tenant_id'] != null) {
+        payload['tenant_id'] = profileResponse['tenant_id'];
+        debugPrint('✅ Auto-injected tenant_id: ${payload['tenant_id']} into $table');
+      } else {
+        debugPrint('⚠️ User has no tenant_id in user_profiles');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Failed to inject tenant_id: $e');
+      // Don't rethrow - let RLS handle the error
+    }
+  }
 
   // Generic CRUD operations
   Future<List<Map<String, dynamic>>> select(
@@ -20,7 +72,7 @@ class DatabaseService extends ChangeNotifier {
       }
 
       // Use dynamic to handle different builder types in the chain
-      dynamic query = _client.from(table).select();
+    dynamic query = _client.from(table).select();
 
       // Handle simple WHERE clause
       if (where != null && where.contains('=')) {
@@ -45,7 +97,7 @@ class DatabaseService extends ChangeNotifier {
         query = query.limit(limit);
       }
 
-      final data = await query;
+  final data = await query;
 
       if (kDebugMode) {
         debugPrint('✅ DB Result: ${(data as List).length} rows from $table');
@@ -79,6 +131,10 @@ class DatabaseService extends ChangeNotifier {
       {bool applyTimestamps = true}) async {
     try {
       final payload = Map<String, dynamic>.from(data);
+      
+      // ⚠️ CRITICAL: Auto-inject tenant_id for multi-tenant tables
+      await _injectTenantId(table, payload);
+      
       if (applyTimestamps) {
         _applyTimestamps(payload, isInsert: true);
       }
@@ -246,10 +302,10 @@ class DatabaseService extends ChangeNotifier {
     String searchTerm,
   ) async {
     try {
-      final data = await _client
-          .from(table)
-          .select()
-          .ilike(searchColumn, '%${searchTerm.trim()}%');
+    final data = await _client
+      .from(table)
+      .select()
+      .ilike(searchColumn, '%${searchTerm.trim()}%');
       return List<Map<String, dynamic>>.from(data as List);
     } catch (e) {
       if (kDebugMode) {

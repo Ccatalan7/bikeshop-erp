@@ -11,6 +11,8 @@ import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../theme/public_store_theme.dart';
+import '../providers/public_store_tenant_provider.dart';
+import '../services/public_inventory_service.dart';
 
 class PublicHomePage extends StatefulWidget {
   const PublicHomePage({super.key});
@@ -146,6 +148,15 @@ class _PublicHomePageState extends State<PublicHomePage> {
       return const [];
     }
 
+    // Get tenant from provider (detected from subdomain)
+    final tenantProvider = context.read<PublicStoreTenantProvider>();
+    final tenantId = tenantProvider.tenantId;
+
+    if (tenantId == null) {
+      debugPrint('[PublicHomePage] No tenant detected - cannot load featured products');
+      return const [];
+    }
+
     final productIds =
         featuredEntries.map((entry) => entry.productId).toSet().toList();
 
@@ -153,9 +164,10 @@ class _PublicHomePageState extends State<PublicHomePage> {
       final response = await Supabase.instance.client
           .from('products')
           .select()
-      .inFilter('id', productIds)
-      .eq('show_on_website', true)
-      .eq('is_active', true);
+          .eq('tenant_id', tenantId) // ⚠️ CRITICAL: Filter by tenant_id
+          .inFilter('id', productIds)
+          .eq('show_on_website', true)
+          .eq('is_active', true);
 
       final productsById = <String, Product>{};
       for (final row in response as List<dynamic>) {

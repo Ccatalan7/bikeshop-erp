@@ -81,6 +81,7 @@ class CategoryService extends ChangeNotifier {
 
       // Category already has tenant_id from the form - no need to add it again
       final data = await _db.insert('product_categories', category.toJson());
+      notifyListeners(); // ✅ Notify listeners to refresh UI
       return models.Category.fromJson(data);
     } catch (e) {
       if (kDebugMode) print('Error creating category: $e');
@@ -102,6 +103,7 @@ class CategoryService extends ChangeNotifier {
 
       final updatedCategory = category.copyWith(updatedAt: DateTime.now());
       await _db.update('product_categories', category.id!, updatedCategory.toJson());
+      notifyListeners(); // ✅ Notify listeners to refresh UI
       return updatedCategory;
     } catch (e) {
       if (kDebugMode) print('Error updating category: $e');
@@ -127,6 +129,7 @@ class CategoryService extends ChangeNotifier {
       }
 
       await _db.delete('product_categories', id);
+      notifyListeners(); // ✅ Notify listeners to refresh UI
     } catch (e) {
       if (kDebugMode) print('Error deleting category: $e');
       rethrow;

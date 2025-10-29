@@ -7,6 +7,7 @@ import 'dart:html' as html show window;
 import 'package:flutter_typeahead/flutter_typeahead.dart' as typeahead;
 import '../theme/public_store_theme.dart';
 import '../providers/cart_provider.dart';
+import '../providers/public_store_tenant_provider.dart';
 import '../services/customer_account_service.dart';
 import '../services/address_autocomplete_service.dart';
 import '../../modules/website/services/website_service.dart';
@@ -286,8 +287,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final profile = accountService.customerProfile;
       final resolvedAddress = _resolvedAddress;
 
+      // ⚠️ CRITICAL: Get tenant_id from detected tenant (subdomain)
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      final tenantId = tenantProvider.tenantId;
+
+      if (tenantId == null) {
+        throw Exception('No se pudo detectar la tienda. Por favor recarga la página.');
+      }
+
       // Create order data (database will generate id and orderNumber)
       final orderData = {
+        'tenant_id': tenantId, // ⚠️ REQUIRED for multi-tenant isolation
         'customer_email': _emailController.text.trim(),
         'customer_name': _nameController.text.trim(),
         'customer_phone': _phoneController.text.trim(),
@@ -312,6 +322,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       final orderItems = cart.items.map((item) {
         return {
+          'tenant_id': tenantId, // ⚠️ REQUIRED for multi-tenant isolation
           'product_id': item.product.id,
           'product_name': item.product.name,
           'product_sku': item.product.sku,

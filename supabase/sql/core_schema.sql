@@ -10553,10 +10553,10 @@ end $$;
 
 -- Product Categories: Tenant isolation
 do $$ begin
-  create policy "product_categories_select" on product_categories for select using (tenant_id = public.user_tenant_id());
-  create policy "product_categories_insert" on product_categories for insert with check (tenant_id = public.user_tenant_id());
-  create policy "product_categories_update" on product_categories for update using (tenant_id = public.user_tenant_id());
-  create policy "product_categories_delete" on product_categories for delete using (tenant_id = public.user_tenant_id());
+  create policy "product_categories_select" on product_categories for select to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "product_categories_insert" on product_categories for insert to authenticated with check (tenant_id = public.user_tenant_id());
+  create policy "product_categories_update" on product_categories for update to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "product_categories_delete" on product_categories for delete to authenticated using (tenant_id = public.user_tenant_id());
   raise notice '✓ Created RLS policies for product_categories';
 exception
   when undefined_table then raise notice '⚠ Table product_categories does not exist yet';

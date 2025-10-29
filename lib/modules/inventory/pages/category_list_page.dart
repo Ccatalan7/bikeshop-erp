@@ -6,7 +6,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../../../shared/widgets/app_button.dart';
-import '../../../shared/services/database_service.dart';
 import '../models/category_models.dart';
 import '../services/category_service.dart';
 
@@ -44,10 +43,12 @@ class _CategoryListPageState extends State<CategoryListPage> {
 
   Future<void> _loadCategories() async {
     setState(() => _isLoading = true);
+    
     try {
       final categories = await _categoryService.getCategories(
         searchTerm: _searchTerm.isEmpty ? null : _searchTerm,
       );
+      
       setState(() {
         _categories = categories;
         _applyFilters();
@@ -221,10 +222,12 @@ class _CategoryListPageState extends State<CategoryListPage> {
                 AppButton(
                   text: 'Nueva Categoría',
                   icon: Icons.add,
-                  onPressed: () {
-                    context.push('/inventory/categories/new').then((_) {
-                      _loadCategories();
-                    });
+                  onPressed: () async {
+                    debugPrint('🚀 [LIST] Opening new category form...');
+                    await context.push('/inventory/categories/new');
+                    debugPrint('🔙 [LIST] Returned from form, reloading...');
+                    await _loadCategories();
+                    debugPrint('✅ [LIST] Reload complete');
                   },
                 ),
               ],
@@ -344,10 +347,9 @@ class _CategoryListPageState extends State<CategoryListPage> {
               const SizedBox(height: 16),
               AppButton(
                 text: 'Agregar Primera Categoría',
-                onPressed: () {
-                  context.push('/inventory/categories/new').then((_) {
-                    _loadCategories();
-                  });
+                onPressed: () async {
+                  await context.push('/inventory/categories/new');
+                  await _loadCategories();
                 },
               ),
             ],
@@ -479,14 +481,11 @@ class _CategoryListPageState extends State<CategoryListPage> {
 
             // Actions menu
             PopupMenuButton<String>(
-              onSelected: (value) {
+              onSelected: (value) async {
                 switch (value) {
                   case 'edit':
-                    context
-                        .push('/inventory/categories/${category.id}/edit')
-                        .then((_) {
-                      _loadCategories();
-                    });
+                    await context.push('/inventory/categories/${category.id}/edit');
+                    await _loadCategories();
                     break;
                   case 'toggle':
                     _toggleCategoryStatus(category);
@@ -605,15 +604,11 @@ class _CategoryListPageState extends State<CategoryListPage> {
                           ),
                         ),
                         PopupMenuButton<String>(
-                          onSelected: (value) {
+                          onSelected: (value) async {
                             switch (value) {
                               case 'edit':
-                                context
-                                    .push(
-                                        '/inventory/categories/${category.id}/edit')
-                                    .then((_) {
-                                  _loadCategories();
-                                });
+                                await context.push('/inventory/categories/${category.id}/edit');
+                                await _loadCategories();
                                 break;
                               case 'toggle':
                                 _toggleCategoryStatus(category);

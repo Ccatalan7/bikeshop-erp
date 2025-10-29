@@ -53,6 +53,55 @@ unique(name)             -- ❌ Wrong: global unique = shared data
 
 **If ANY answer is NO → STOP and fix it first**
 
+## Public Store / Anonymous Access (CRITICAL)
+**FOR PUBLIC STOREFRONTS (subdomain-based, anonymous users):**
+
+- **EVERY** query MUST use `PublicStoreTenantProvider` to get detected tenant_id
+- **EVERY** product/category query MUST filter: `.eq('tenant_id', tenantId)`
+- **EVERY** order INSERT MUST include `tenant_id` from detected tenant
+- **NEVER** query database without tenant_id filter (even with RLS, app must filter)
+- **ALWAYS** check `tenantProvider.tenantId != null` before queries
+
+**Common mistakes:**
+- ❌ Using `InventoryService` (authenticated) instead of `PublicInventoryService` (anonymous)
+- ❌ Direct Supabase queries without `.eq('tenant_id', tenantId)`
+- ❌ Creating orders without `tenant_id` in orderData
+- ❌ Assuming RLS handles filtering (app layer MUST filter for performance/security)
+
+**Correct pattern:**
+```dart
+// ✅ CORRECT: Get tenant from subdomain detection
+final tenantProvider = context.read<PublicStoreTenantProvider>();
+final tenantId = tenantProvider.tenantId;
+
+if (tenantId == null) {
+  // Show error or redirect
+  return;
+}
+
+// ✅ CORRECT: Filter by tenant_id
+final products = await Supabase.instance.client
+    .from('products')
+    .select()
+    .eq('tenant_id', tenantId)  // ⚠️ MANDATORY
+    .eq('is_active', true);
+
+// ✅ CORRECT: Include tenant_id in INSERT
+final orderData = {
+  'tenant_id': tenantId,  // ⚠️ MANDATORY
+  'customer_email': email,
+  'total': total,
+  // ... other fields
+};
+```
+
+**Pages that need tenant detection:**
+- ✅ `product_catalog_page.dart` - Filter products by tenant
+- ✅ `public_home_page.dart` - Filter featured products by tenant
+- ✅ `product_detail_page.dart` - Verify product belongs to tenant
+- ✅ `checkout_page.dart` - Include tenant_id in order creation
+- ✅ Any page that queries tenant-scoped data
+
 ---
 
 # 🚨 TROUBLESHOOTING: MULTI-TENANT ISSUES
@@ -140,31 +189,32 @@ final paymentData = {
   'date': date.toIso8601String(),
 };
 
-// ✅ CORRECT: Include tenant_id
-final userId = Supabase.instance.client.auth.currentUser?.id;
-final profileResponse = await Supabase.instance.client
-    .from('user_profiles')
-    .select('tenant_id')
-    .eq('user_id', userId)
-    .single();
-final tenantId = profileResponse['tenant_id'] as String;
+// ✅ CORRECT: DatabaseService auto-injects tenant_id (as of Oct 28, 2025)
+// Just use DatabaseService.insert() - it will auto-inject tenant_id
+final data = {
+  'invoice_id': invoiceId,
+  'amount': amount,
+  'date': date.toIso8601String(),
+  // tenant_id is automatically added by DatabaseService
+};
+await databaseService.insert('payments', data);
 
+// ✅ ALTERNATIVE: Use TenantService for manual injection
+final tenantId = await TenantService().getTenantId();
 final paymentData = {
-  'tenant_id': tenantId,  // ⚠️ CRITICAL
+  'tenant_id': tenantId,  // ⚠️ EXPLICIT
   'invoice_id': invoiceId,
   'amount': amount,
   'date': date.toIso8601String(),
 };
 ```
 
-**Or use TenantService:**
-```dart
-final tenantId = await TenantService().getTenantId();
-final data = {
-  'tenant_id': tenantId,
-  // ... other fields
-};
-```
+**⚠️ CRITICAL: DatabaseService Auto-Injection (Oct 28, 2025)**
+- `DatabaseService.insert()` now **automatically injects `tenant_id`**
+- Works for authenticated users (gets tenant_id from user_profiles)
+- Skips injection for system tables (tenants, user_profiles, etc.)
+- Preserves existing tenant_id if already in payload
+- **Import services (CSV/Excel) are now tenant-safe automatically**
 
 ## 4. Debugging Steps (In Order)
 
@@ -328,7 +378,17 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 2. ✅ **READ `core_schema.sql`** to verify table/column names
 3. ✅ Adapt Flutter code to match database schema (not vice versa)
 4. ✅ Use correct column names from `core_schema.sql`
-5. ✅ Test compilation before marking complete
+5. ✅ **CHECK EXISTING CODE** for tenant_id handling patterns
+6. ✅ **VERIFY** all queries include `.eq('tenant_id', tenantId)` or use services that filter
+7. ✅ **VERIFY** all inserts include `'tenant_id': tenantId` in data maps
+8. ✅ Test compilation before marking complete
+
+**When modifying existing pages/services:**
+- 🔍 **SEARCH** for similar queries in the file - do they filter by tenant_id?
+- 🔍 **GREP** for `from('table_name')` to find all database queries
+- 🔍 **CHECK** if page uses authenticated or anonymous access pattern
+- ⚠️ **NEVER** remove existing `.eq('tenant_id', ...)` filters
+- ⚠️ **NEVER** assume query is safe without tenant_id filter
 
 **For ANY new feature:**
 
@@ -346,6 +406,7 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 3. ✅ Flutter models and services
    - ⚠️ **MUST include `tenant_id` in queries**
    - ⚠️ **MUST get `tenant_id` from auth context**
+   - ⚠️ **Import services MUST use `DatabaseService` (auto-injects tenant_id)**
 4. ✅ UI implementation
 5. ✅ Navigation integration (add to main menu)
 
@@ -357,7 +418,10 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 - 🚫 No creating new patterns when existing patterns work
 - 🚫 **NO TABLES WITHOUT `tenant_id`** (except auth/system)
 - 🚫 **NO GLOBAL UNIQUE CONSTRAINTS** (must be per-tenant)
-- 🚫 **NO QUERIES WITHOUT `tenant_id` FILTER**
+- 🚫 **NO QUERIES WITHOUT `tenant_id` FILTER** (authenticated OR anonymous)
+- 🚫 **NO ORDER/INSERT WITHOUT `tenant_id`** (public store guest checkout)
+- 🚫 **NO DIRECT SUPABASE QUERIES IN PUBLIC STORE** (use PublicInventoryService or filter by tenant_id)
+- 🚫 **NO DIRECT SUPABASE CLIENT IN IMPORT SERVICES** (use DatabaseService for auto-injection)
 - ✅ Always search for existing similar code
 - ✅ Always follow existing naming conventions
 - ✅ Always reuse existing helper functions
@@ -365,6 +429,9 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 - ✅ **ALWAYS add `tenant_id` to new tables**
 - ✅ **ALWAYS create RLS policies for tenant isolation**
 - ✅ **ALWAYS test with multiple tenants to verify isolation**
+- ✅ **ALWAYS use PublicStoreTenantProvider for public store pages**
+- ✅ **ALWAYS check tenant_id != null before database operations**
+- ✅ **ALWAYS use DatabaseService for import services** (CSV/Excel imports)
 
 ---
 
@@ -629,7 +696,73 @@ Copilot must:
 
 ---
 
-# 🚀 Multi-Tenant Onboarding System (AUTO-INITIALIZATION)
+# � Import Services (CSV/Excel) - Multi-Tenant Rules
+
+**ALL import services MUST follow these rules:**
+
+## ✅ Automatic Protection (Oct 28, 2025)
+
+- **Import services are NOW tenant-safe automatically** via `DatabaseService.insert()`
+- No manual tenant_id injection needed - it's handled at database layer
+- Works for ALL authenticated users across ALL modules
+
+## 🔧 When Creating Import Services
+
+**ALWAYS use DatabaseService for imports:**
+
+```dart
+// ✅ CORRECT: DatabaseService auto-injects tenant_id
+class ProductImportService {
+  final DatabaseService _db = DatabaseService();
+  
+  Future<void> _upsertProduct(Map<String, dynamic> productData) async {
+    // Just use DatabaseService.insert() - tenant_id added automatically
+    await _db.insert('products', productData);
+  }
+}
+
+// ❌ WRONG: Direct Supabase client bypasses auto-injection
+class ProductImportService {
+  Future<void> _upsertProduct(Map<String, dynamic> productData) async {
+    // This bypasses DatabaseService - tenant_id NOT added!
+    await Supabase.instance.client.from('products').insert(productData);
+  }
+}
+```
+
+## 🚨 Import Service Checklist
+
+When creating ANY import service (products, categories, customers, suppliers, etc.):
+
+1. ✅ Use `DatabaseService` for ALL inserts/updates (NOT direct Supabase client)
+2. ✅ Import service class extends `ChangeNotifier` for UI updates
+3. ✅ Handle errors gracefully (show which rows failed)
+4. ✅ Support both CSV and Excel formats
+5. ✅ Validate data before inserting (SKU/name required, prices > 0, etc.)
+6. ✅ Show progress indicator during bulk imports
+7. ✅ Test with multiple tenants to verify isolation
+
+## 🔍 How Auto-Injection Works
+
+- `DatabaseService.insert()` checks if table needs tenant_id
+- Fetches current user's tenant_id from `user_profiles` table
+- Injects tenant_id into payload before INSERT
+- Skips system tables: `tenants`, `user_profiles`, `reserved_subdomains`, `user_invitations`
+- Logs injection activity: `✅ Auto-injected tenant_id: [uuid] into [table]`
+
+## 📦 Existing Import Services (All Protected)
+
+- ✅ `ProductImportService` → Products
+- ✅ `CategoryImportService` → Product categories
+- ✅ `CustomerImportService` → Customers
+- ✅ `SupplierImportService` → Suppliers
+- ✅ `EmployeeImportService` → Employees (if exists)
+
+**All use DatabaseService → All tenant-safe automatically!**
+
+---
+
+# �🚀 Multi-Tenant Onboarding System (AUTO-INITIALIZATION)
 
 **Location:** `supabase/sql/core_schema.sql` lines 1608-2091, 11221-11345
 
