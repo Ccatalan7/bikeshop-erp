@@ -85,7 +85,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
         _subcategories = await _categoryService.getRootCategories();
         debugPrint('⏱️ [LOAD] Root categories loaded (${_subcategories.length} items) in ${DateTime.now().difference(rootStart).inMilliseconds}ms');
         _products = [];
-        _breadcrumbs = _generateBreadcrumbs(null);
+        _breadcrumbs = await _generateBreadcrumbs(null);
       } else {
         // Load category, subcategories, and products in PARALLEL
         final parallelStart = DateTime.now();
@@ -103,7 +103,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
         debugPrint('⏱️ [LOAD] Loaded: ${_subcategories.length} subcategories, ${_products.length} products');
         
         if (_currentCategory != null) {
-          _breadcrumbs = _generateBreadcrumbs(_currentCategory!);
+          _breadcrumbs = await _generateBreadcrumbs(_currentCategory!);
         }
       }
 
@@ -147,54 +147,6 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
     }
   }
 
-  Future<void> _loadCategoryData(String? categoryId) async {
-    setState(() {
-      _isLoading = true;
-      _searchController.clear();
-      _searchTerm = '';
-    });
-
-    try {
-      // Load all categories for global search
-      _allCategories = await _categoryService.getCategories(activeOnly: true);
-      _indexCategoryPaths();
-      
-      if (categoryId == null) {
-        // Load root categories
-        final categories = await _categoryService.getRootCategories();
-        setState(() {
-          _currentCategory = null;
-          _subcategories = categories;
-          _products = [];
-          _breadcrumbs = _generateBreadcrumbs(null);
-          _isLoading = false;
-        });
-      } else {
-        // Load specific category
-        final category = await _categoryService.getCategoryById(categoryId);
-        final subcategories = await _categoryService.getSubcategories(categoryId);
-        final products = await _loadProductsForCategory(categoryId);
-        
-        if (category != null) {
-          setState(() {
-            _currentCategory = category;
-            _subcategories = subcategories;
-            _products = products;
-            _breadcrumbs = _generateBreadcrumbs(category);
-            _isLoading = false;
-          });
-        }
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar categoría: $e')),
-        );
-      }
-    }
-  }
-
   void _indexCategoryPaths() {
     _categoryByPath = {};
     for (final category in _allCategories) {
@@ -205,7 +157,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
     }
   }
 
-  List<CategoryBreadcrumb> _generateBreadcrumbs(Category? category) {
+  Future<List<CategoryBreadcrumb>> _generateBreadcrumbs(Category? category) async {
     final breadcrumbs = <CategoryBreadcrumb>[
       CategoryBreadcrumb(name: 'Todas las Categorías', categoryId: null, level: -1),
     ];
@@ -214,29 +166,34 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
       return breadcrumbs;
     }
 
-    final parts = category.fullPath
-        .split(' / ')
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .toList();
-
-    String currentPath = '';
-    for (int i = 0; i < parts.length; i++) {
-      final part = parts[i];
-      currentPath = i == 0 ? part : '$currentPath / $part';
-
-      final matchingCategory = _categoryByPath[currentPath];
-      String? categoryId = matchingCategory?.id;
-
-      // Fallback to current category ID if this is the last part
-      if (categoryId == null && i == parts.length - 1) {
-        categoryId = category.id;
+    // Build breadcrumb path by traversing parent chain
+    final path = <Category>[];
+    Category? current = category;
+    
+    // Traverse up the parent chain
+    while (current != null) {
+      path.insert(0, current); // Insert at beginning to maintain order
+      
+      // Stop if we've reached a root category (no parent)
+      if (current.parentId == null) {
+        break;
       }
+      
+      // Fetch parent category
+      try {
+        current = await _categoryService.getCategoryById(current.parentId!);
+      } catch (e) {
+        debugPrint('⚠️ Error fetching parent category: $e');
+        break;
+      }
+    }
 
+    // Build breadcrumbs from the path
+    for (int i = 0; i < path.length; i++) {
       breadcrumbs.add(
         CategoryBreadcrumb(
-          name: part,
-          categoryId: categoryId,
+          name: path[i].name,
+          categoryId: path[i].id,
           level: i,
         ),
       );
@@ -385,8 +342,9 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
           InkWell(
             onTap: () {
               final breadcrumb = _breadcrumbs[i];
-              // For breadcrumbs, load data in-place without route change
-              _loadCategoryData(breadcrumb.categoryId);
+              debugPrint('🔗 Breadcrumb clicked: ${breadcrumb.name} -> categoryId: ${breadcrumb.categoryId}');
+              // Navigate to the breadcrumb's category
+              _navigateToCategory(breadcrumb.categoryId);
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
