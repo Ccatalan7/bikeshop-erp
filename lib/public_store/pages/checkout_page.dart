@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:html' as html show window;
 import 'package:flutter_typeahead/flutter_typeahead.dart' as typeahead;
+import '../utils/web_utils.dart' as web_utils;
 import '../theme/public_store_theme.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
@@ -211,7 +211,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (kIsWeb && status.isNotEmpty) {
       final cleaned = Uri.base.removeFragment().replace(queryParameters: {});
-      html.window.history.replaceState(null, 'Checkout', cleaned.toString());
+      web_utils.WebUtils.replaceHistoryState(cleaned.toString());
     }
   }
 
@@ -375,7 +375,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
           if (kIsWeb) {
             // For web, use window.open to redirect to MercadoPago
-            html.window.open(initPoint, '_self');
+            web_utils.WebUtils.openUrl(initPoint);
           } else {
             // For mobile/desktop, use url_launcher
             final url = Uri.parse(initPoint);
