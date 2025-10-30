@@ -127,9 +127,11 @@ create table if not exists user_invitations (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   email text not null,
-  role text not null check (role in ('manager', 'cashier', 'mechanic', 'accountant')),
+  role text not null check (role in ('admin', 'manager', 'cashier', 'mechanic', 'accountant')),
   permissions jsonb not null,
   invited_by uuid references auth.users(id) not null,
+  employee_id uuid references employees(id) on delete cascade,
+  metadata jsonb,
   status text default 'pending' check (status in ('pending', 'accepted', 'expired')),
   expires_at timestamp with time zone not null,
   accepted_at timestamp with time zone,
@@ -137,6 +139,7 @@ create table if not exists user_invitations (
 );
 
 create index if not exists idx_invitations_email_status on user_invitations(email, status);
+create index if not exists idx_user_invitations_employee_id on user_invitations(employee_id);
 
 do $$ begin
   create index if not exists idx_invitations_tenant on user_invitations(tenant_id);
@@ -159,16 +162,51 @@ end $$;
 -- Enable RLS on user_invitations
 alter table user_invitations enable row level security;
 
--- Managers can create invitations for their tenant
-create policy "managers_create_invitations" on user_invitations
-  for insert with check (
-    tenant_id = public.user_tenant_id() and
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'manager'
-  );
+-- Drop old policies
+drop policy if exists "user_invitations_insert" on user_invitations;
+drop policy if exists "user_invitations_select" on user_invitations;
+drop policy if exists "user_invitations_update" on user_invitations;
+drop policy if exists "user_invitations_delete" on user_invitations;
+drop policy if exists "managers_create_invitations" on user_invitations;
+drop policy if exists "managers_view_tenant_invitations" on user_invitations;
+drop policy if exists "user_invitations_select_anonymous" on user_invitations;
+drop policy if exists "user_invitations_update_anonymous" on user_invitations;
 
--- Managers can view invitations in their tenant
-create policy "managers_view_tenant_invitations" on user_invitations
-  for select using (tenant_id = public.user_tenant_id());
+-- Allow authenticated users to create invitations in their tenant
+create policy "user_invitations_insert" on user_invitations
+  for insert
+  to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+-- Allow authenticated users to view invitations in their tenant
+create policy "user_invitations_select" on user_invitations
+  for select
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Allow anonymous users to view invitations by token (for accepting invitations)
+create policy "user_invitations_select_anonymous" on user_invitations
+  for select
+  to anon
+  using (status = 'pending');
+
+-- Allow authenticated users to update invitations in their tenant
+create policy "user_invitations_update" on user_invitations
+  for update
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Allow anonymous users to update invitation status when accepting
+create policy "user_invitations_update_anonymous" on user_invitations
+  for update
+  to anon
+  using (status = 'pending');
+
+-- Allow authenticated users to delete invitations in their tenant
+create policy "user_invitations_delete" on user_invitations
+  for delete
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
 
 -- CRITICAL: Nuclear cleanup for purchase_payments type caching issue
 -- This MUST run first before any table or function definitions
@@ -723,6 +761,90 @@ create index if not exists idx_products_supplier_id on products(supplier_id);
 create index if not exists idx_products_brand_id on products(brand_id);
 create index if not exists idx_products_gtin on products(gtin);
 create index if not exists idx_products_hs_code on products(hs_code);
+
+-- ============================================================================
+-- PRODUCT TRIGGERS - Sync denormalized fields
+-- ============================================================================
+
+-- Function to sync category_name when category_id changes
+create or replace function sync_product_category_name()
+returns trigger as $$
+begin
+  -- Update category_name from product_categories table
+  if NEW.category_id is not null then
+    select name into NEW.category_name
+    from product_categories
+    where id = NEW.category_id;
+  else
+    NEW.category_name := null;
+  end if;
+  
+  -- Update supplier_name from suppliers table
+  if NEW.supplier_id is not null then
+    select name into NEW.supplier_name
+    from suppliers
+    where id = NEW.supplier_id;
+  else
+    NEW.supplier_name := null;
+  end if;
+  
+  return NEW;
+end;
+$$ language plpgsql;
+
+-- Trigger to sync category_name and supplier_name on INSERT or UPDATE
+drop trigger if exists trg_sync_product_denormalized_fields on products;
+create trigger trg_sync_product_denormalized_fields
+  before insert or update of category_id, supplier_id
+  on products
+  for each row
+  execute function sync_product_category_name();
+
+-- Function to update category_name when category name changes
+create or replace function sync_products_on_category_change()
+returns trigger as $$
+begin
+  -- When a category name changes, update all products using that category
+  if TG_OP = 'UPDATE' and OLD.name is distinct from NEW.name then
+    update products
+    set category_name = NEW.name
+    where category_id = NEW.id;
+  end if;
+  
+  return NEW;
+end;
+$$ language plpgsql;
+
+-- Trigger on product_categories to sync product names
+drop trigger if exists trg_sync_products_on_category_change on product_categories;
+create trigger trg_sync_products_on_category_change
+  after update of name
+  on product_categories
+  for each row
+  execute function sync_products_on_category_change();
+
+-- Function to update supplier_name when supplier name changes
+create or replace function sync_products_on_supplier_change()
+returns trigger as $$
+begin
+  -- When a supplier name changes, update all products using that supplier
+  if TG_OP = 'UPDATE' and OLD.name is distinct from NEW.name then
+    update products
+    set supplier_name = NEW.name
+    where supplier_id = NEW.id;
+  end if;
+  
+  return NEW;
+end;
+$$ language plpgsql;
+
+-- Trigger on suppliers to sync product supplier names
+drop trigger if exists trg_sync_products_on_supplier_change on suppliers;
+create trigger trg_sync_products_on_supplier_change
+  after update of name
+  on suppliers
+  for each row
+  execute function sync_products_on_supplier_change();
 
 -- ============================================================================
 -- PRODUCT CATEGORIES - Hierarchical (Odoo-style)
@@ -2114,6 +2236,10 @@ begin
   -- Seed website settings
   perform public.seed_website_settings(NEW.id);
   raise notice '  ✓ Website settings initialized';
+  
+  -- Seed job roles (employee-user linking system)
+  perform public.seed_job_roles_for_tenant(NEW.id);
+  raise notice '  ✓ Job roles catalog created';
   
   raise notice '✅ Tenant % fully initialized and ready for use!', NEW.shop_name;
   return NEW;
@@ -9056,18 +9182,20 @@ end $$;
 -- Employees table (core HR entity)
 create table if not exists employees (
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
   user_id uuid references auth.users(id), -- Link to Supabase auth for login
-  employee_number text unique not null,
+  employee_number text not null,
   first_name text not null,
   last_name text not null,
-  email text unique,
+  email text,
   phone text,
-  rut text unique, -- Chilean ID number
+  rut text, -- Chilean ID number
   birth_date date,
   hire_date date not null default current_date,
   termination_date date,
   department_id uuid references departments(id),
   job_title text not null,
+  system_role text, -- Links to job_roles.system_role
   employment_type text check (employment_type in ('full_time', 'part_time', 'contractor', 'intern')) not null default 'full_time',
   status text check (status in ('active', 'inactive', 'on_leave', 'terminated')) not null default 'active',
   photo_url text,
@@ -9077,7 +9205,11 @@ create table if not exists employees (
   emergency_contact_phone text,
   notes text,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  -- Tenant-scoped unique constraints
+  unique (tenant_id, employee_number),
+  unique (tenant_id, email),
+  unique (tenant_id, rut)
 );
 
 -- Migration: Add missing columns to employees table
@@ -9179,6 +9311,146 @@ begin
   end if;
 end $$;
 
+-- ============================================================================
+-- HYBRID EMPLOYEE-USER LINKING SYSTEM
+-- ============================================================================
+-- This creates a smart role system that links employees to users
+-- Employees can exist without users (HR records only)
+-- Users can be linked to employees for system access
+
+-- Step 1: Add linking columns to existing tables
+do $$
+begin
+  -- Add employee_id to user_profiles for bidirectional linking
+  if not exists (select 1 from information_schema.columns where table_name = 'user_profiles' and column_name = 'employee_id') then
+    alter table user_profiles add column employee_id uuid references employees(id) on delete set null;
+    create index idx_user_profiles_employee on user_profiles(employee_id);
+  end if;
+  
+  -- Add system_role to employees (maps to user_profiles.role)
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'system_role') then
+    alter table employees add column system_role text 
+      check (system_role in ('admin', 'manager', 'cashier', 'mechanic', 'accountant'));
+    comment on column employees.system_role is 'System access role if employee has user account';
+  end if;
+  
+  -- Add tenant_id to employees (was missing!)
+  if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'tenant_id') then
+    alter table employees add column tenant_id uuid references tenants(id) on delete cascade not null;
+    create index idx_employees_tenant on employees(tenant_id);
+  end if;
+end $$;
+
+-- Step 2: Create job_roles catalog (standardized roles with suggestions)
+create table if not exists job_roles (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  system_role text not null check (system_role in ('admin', 'manager', 'cashier', 'mechanic', 'accountant')),
+  display_name text not null, -- 'Administrador', 'Gerente', 'Cajero', 'Mecánico', 'Contador'
+  suggested_titles text[] not null default '{}', -- ['Gerente General', 'Gerente de Ventas']
+  default_permissions jsonb not null,
+  description text,
+  sort_order integer not null default 0,
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, system_role)
+);
+
+create index if not exists idx_job_roles_tenant on job_roles(tenant_id);
+create index if not exists idx_job_roles_system_role on job_roles(system_role);
+
+-- RLS policies for job_roles
+alter table job_roles enable row level security;
+
+drop policy if exists "job_roles_select" on job_roles;
+drop policy if exists "job_roles_insert" on job_roles;
+drop policy if exists "job_roles_update" on job_roles;
+drop policy if exists "job_roles_delete" on job_roles;
+
+create policy "job_roles_select" on job_roles for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+  
+create policy "job_roles_insert" on job_roles for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+  
+create policy "job_roles_update" on job_roles for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+  
+create policy "job_roles_delete" on job_roles for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Step 3: Seed default job roles for each tenant
+create or replace function seed_job_roles_for_tenant(p_tenant_id uuid)
+returns void
+security definer
+set search_path = public
+language plpgsql
+as $$
+begin
+  -- Delete existing roles for clean slate
+  delete from job_roles where tenant_id = p_tenant_id;
+  
+  -- Admin role
+  insert into job_roles (tenant_id, system_role, display_name, suggested_titles, default_permissions, sort_order)
+  values (
+    p_tenant_id,
+    'admin',
+    'Administrador',
+    array['Administrador General', 'Gerente General', 'Dueño'],
+    '{"access_pos": true, "create_invoices": true, "edit_prices": true, "delete_invoices": true, "access_accounting": true, "manage_users": true, "edit_settings": true}'::jsonb,
+    1
+  );
+  
+  -- Manager role
+  insert into job_roles (tenant_id, system_role, display_name, suggested_titles, default_permissions, sort_order)
+  values (
+    p_tenant_id,
+    'manager',
+    'Gerente',
+    array['Gerente de Ventas', 'Gerente de Taller', 'Gerente de Operaciones', 'Subgerente'],
+    '{"access_pos": true, "create_invoices": true, "edit_prices": true, "delete_invoices": true, "access_accounting": true, "manage_users": true, "edit_settings": false}'::jsonb,
+    2
+  );
+  
+  -- Cashier role
+  insert into job_roles (tenant_id, system_role, display_name, suggested_titles, default_permissions, sort_order)
+  values (
+    p_tenant_id,
+    'cashier',
+    'Cajero',
+    array['Cajero', 'Vendedor', 'Encargado de Ventas'],
+    '{"access_pos": true, "create_invoices": true, "edit_prices": false, "delete_invoices": false, "access_accounting": false, "manage_users": false, "edit_settings": false}'::jsonb,
+    3
+  );
+  
+  -- Mechanic role
+  insert into job_roles (tenant_id, system_role, display_name, suggested_titles, default_permissions, sort_order)
+  values (
+    p_tenant_id,
+    'mechanic',
+    'Mecánico',
+    array['Mecánico Junior', 'Mecánico Senior', 'Técnico', 'Jefe de Taller', 'Especialista en Suspensiones'],
+    '{"access_pos": false, "create_invoices": false, "edit_prices": false, "delete_invoices": false, "access_accounting": false, "manage_users": false, "edit_settings": false}'::jsonb,
+    4
+  );
+  
+  -- Accountant role
+  insert into job_roles (tenant_id, system_role, display_name, suggested_titles, default_permissions, sort_order)
+  values (
+    p_tenant_id,
+    'accountant',
+    'Contador',
+    array['Contador', 'Contador General', 'Asistente Contable'],
+    '{"access_pos": false, "create_invoices": false, "edit_prices": false, "delete_invoices": false, "access_accounting": true, "manage_users": false, "edit_settings": false}'::jsonb,
+    5
+  );
+  
+  raise notice 'Seeded 5 job roles for tenant %', p_tenant_id;
+end;
+$$;
+
+-- Indexes for employees table
 create index if not exists idx_employees_user_id on employees(user_id);
 create index if not exists idx_employees_department on employees(department_id);
 create index if not exists idx_employees_status on employees(status);
@@ -11271,9 +11543,10 @@ declare
   v_counter integer := 1;
 begin
   -- Check if user was invited (has pending invitation)
+  -- Use LOWER() for case-insensitive email matching
   select * into v_invitation
   from user_invitations
-  where email = new.email
+  where lower(email) = lower(new.email)
     and status = 'pending'
     and expires_at > now()
   order by created_at desc
@@ -11285,28 +11558,61 @@ begin
     -- ========================================================================
     v_tenant_id := v_invitation.tenant_id;
     
+    raise notice '✅ User % joining tenant % via invitation (role: %)', new.email, v_tenant_id, v_invitation.role;
+    
     -- Create user_profile entry linking user to tenant
-    insert into user_profiles (user_id, tenant_id, role, is_active)
-    values (new.id, v_tenant_id, v_invitation.role, true);
+    begin
+      insert into user_profiles (user_id, tenant_id, role, is_active, permissions)
+      values (new.id, v_tenant_id, v_invitation.role, true, 
+        case v_invitation.role
+          when 'admin' then '{"access_pos": true, "create_invoices": true, "edit_prices": true, "delete_invoices": true, "access_accounting": true, "manage_users": true, "edit_settings": true}'::jsonb
+          when 'manager' then '{"access_pos": true, "create_invoices": true, "edit_prices": true, "delete_invoices": true, "access_accounting": true, "manage_users": true, "edit_settings": true}'::jsonb
+          when 'cashier' then '{"access_pos": true, "create_invoices": true, "edit_prices": false, "delete_invoices": false, "access_accounting": false, "manage_users": false, "edit_settings": false}'::jsonb
+          when 'accountant' then '{"access_pos": false, "create_invoices": false, "edit_prices": false, "delete_invoices": false, "access_accounting": true, "manage_users": false, "edit_settings": false}'::jsonb
+          when 'mechanic' then '{"access_pos": false, "create_invoices": false, "edit_prices": false, "delete_invoices": false, "access_accounting": false, "manage_users": false, "edit_settings": false}'::jsonb
+          else '{}'::jsonb
+        end
+      );
+      raise notice '✅ Created user_profile for user %', new.id;
+    exception
+      when others then
+        raise exception '❌ Failed to create user_profile: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
+    end;
     
     -- Update user metadata to include tenant_id and role
-    update auth.users
-    set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object(
-      'tenant_id', v_tenant_id,
-      'role', v_invitation.role
-    )
-    where id = new.id;
+    begin
+      update auth.users
+      set 
+        raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object(
+          'tenant_id', v_tenant_id,
+          'role', v_invitation.role
+        ),
+        email_confirmed_at = now() -- Auto-confirm email for invited users
+      where id = new.id;
+      raise notice '✅ Updated user metadata and confirmed email';
+    exception
+      when others then
+        raise warning '⚠️ Failed to update user metadata: %', SQLERRM;
+    end;
     
     -- Mark invitation as accepted
-    update user_invitations
-    set status = 'accepted', accepted_at = now()
-    where id = v_invitation.id;
+    begin
+      update user_invitations
+      set status = 'accepted', accepted_at = now()
+      where id = v_invitation.id;
+      raise notice '✅ Marked invitation as accepted';
+    exception
+      when others then
+        raise warning '⚠️ Failed to mark invitation as accepted: %', SQLERRM;
+    end;
     
-    raise notice 'User % joined tenant % via invitation', new.email, v_tenant_id;
+    raise notice '✅ User % joined tenant % via invitation', new.email, v_tenant_id;
   else
     -- ========================================================================
     -- SCENARIO: No invitation → Create new tenant (new business owner)
     -- ========================================================================
+    
+    raise notice '⚠️ No pending invitation found for %, creating new tenant', new.email;
     
     -- Extract shop name from signup data or email
     v_shop_name := coalesce(
@@ -11334,31 +11640,51 @@ begin
     end loop;
     
     -- Create new tenant
-    insert into tenants (shop_name, subdomain, owner_email, plan, is_active, currency, timezone)
-    values (
-      v_shop_name,
-      v_subdomain,
-      new.email,
-      'free',  -- Start with free plan
-      true,
-      'CLP',
-      'America/Santiago'
-    )
-    returning id into v_tenant_id;
+    begin
+      insert into tenants (shop_name, subdomain, owner_email, plan, is_active, currency, timezone)
+      values (
+        v_shop_name,
+        v_subdomain,
+        new.email,
+        'free',  -- Start with free plan
+        true,
+        'CLP',
+        'America/Santiago'
+      )
+      returning id into v_tenant_id;
+      raise notice '✅ Created new tenant % with subdomain %', v_tenant_id, v_subdomain;
+    exception
+      when others then
+        raise exception '❌ Failed to create tenant: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
+    end;
     
     -- Create user_profile entry linking user to tenant as admin
-    insert into user_profiles (user_id, tenant_id, role, is_active)
-    values (new.id, v_tenant_id, 'admin', true);
+    begin
+      insert into user_profiles (user_id, tenant_id, role, is_active, permissions)
+      values (new.id, v_tenant_id, 'admin', true, 
+        '{"access_pos": true, "create_invoices": true, "edit_prices": true, "delete_invoices": true, "access_accounting": true, "manage_users": true, "edit_settings": true}'::jsonb
+      );
+      raise notice '✅ Created user_profile for admin user %', new.id;
+    exception
+      when others then
+        raise exception '❌ Failed to create user_profile for new tenant: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
+    end;
     
     -- Update user metadata to include tenant_id and role
-    update auth.users
-    set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object(
-      'tenant_id', v_tenant_id,
-      'role', 'admin'
-    )
-    where id = new.id;
+    begin
+      update auth.users
+      set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object(
+        'tenant_id', v_tenant_id,
+        'role', 'admin'
+      )
+      where id = new.id;
+      raise notice '✅ Updated user metadata for new tenant owner';
+    exception
+      when others then
+        raise warning '⚠️ Failed to update user metadata: %', SQLERRM;
+    end;
     
-    raise notice 'Created new tenant % for user % with subdomain %', v_tenant_id, new.email, v_subdomain;
+    raise notice '✅ Created new tenant % for user % with subdomain %', v_tenant_id, new.email, v_subdomain;
   end if;
 
   return new;

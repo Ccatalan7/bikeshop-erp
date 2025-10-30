@@ -1285,28 +1285,6 @@ class _ProductFormPageState extends State<ProductFormPage> {
         children: [
           Expanded(
             child: TextFormField(
-              controller: _costController,
-              decoration: const InputDecoration(
-                labelText: 'Costo unitario',
-                prefixText: 'CLP ',
-              ),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
-              ],
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Indica el costo del producto';
-                }
-                return null;
-              },
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: TextFormField(
               controller: _priceController,
               decoration: const InputDecoration(
                 labelText: 'Precio de venta',
@@ -1321,6 +1299,28 @@ class _ProductFormPageState extends State<ProductFormPage> {
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
                   return 'Define el precio de venta';
+                }
+                return null;
+              },
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: TextFormField(
+              controller: _costController,
+              decoration: const InputDecoration(
+                labelText: 'Costo unitario',
+                prefixText: 'CLP ',
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+              ],
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Indica el costo del producto';
                 }
                 return null;
               },

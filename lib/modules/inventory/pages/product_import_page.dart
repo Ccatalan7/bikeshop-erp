@@ -4,12 +4,16 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
+import '../../../shared/services/smart_import_service.dart';
+import '../../../shared/models/import_options.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/smart_import_dialog.dart';
 import '../services/product_import_service.dart';
 
 class ProductImportPage extends StatefulWidget {
@@ -21,6 +25,7 @@ class ProductImportPage extends StatefulWidget {
 
 class _ProductImportPageState extends State<ProductImportPage> {
   late ProductImportService _importService;
+  final SmartImportService _smartImportService = SmartImportService();
   bool _initialized = false;
   late List<String> _recommendedColumns;
 
@@ -122,38 +127,79 @@ class _ProductImportPageState extends State<ProductImportPage> {
   }
 
   Widget _buildInstructions(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Columnas sugeridas',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+    return Column(
+      children: [
+        // Import mode info banner
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue.shade700, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '🔄 Nuevo: Importación Inteligente',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '• Importar con Opciones: Actualiza productos existentes sin duplicar. '
+                      'Ideal para actualizar precios, stock, o datos específicos.\n'
+                      '• Importar Normal: Inserta nuevos y actualiza existentes por SKU (modo clásico).',
+                      style: TextStyle(fontSize: 13, color: Colors.blue.shade800),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _recommendedColumns
-                  .map((column) => Chip(label: Text(column)))
-                  .toList(),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Puedes incluir columnas adicionales; las no mapeadas se guardarán en "Especificaciones".',
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'La plantilla CSV incluye una fila de ejemplo que puedes reemplazar o eliminar antes de importar.',
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: 16),
-            Wrap(
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Suggested columns card
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Columnas sugeridas',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _recommendedColumns
+                      .map((column) => Chip(label: Text(column)))
+                      .toList(),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Puedes incluir columnas adicionales; las no mapeadas se guardarán en "Especificaciones".',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'La plantilla CSV incluye una fila de ejemplo que puedes reemplazar o eliminar antes de importar.',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 16),
+                Wrap(
               spacing: 12,
               runSpacing: 12,
               children: [
@@ -190,12 +236,14 @@ class _ProductImportPageState extends State<ProductImportPage> {
                   onPressed:
                       _isExportingExcel ? null : () => _exportProductsExcel(),
                 ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
+              ], // Wrap children (buttons)
+            ), // Wrap (buttons)
+          ], // Inner Column children
+        ), // Inner Column
+      ), // Padding
+    ), // Card
+    ], // Outer Column children
+    ); // Outer Column
   }
 
   Widget _buildActionsRow(ThemeData theme) {
@@ -471,14 +519,26 @@ class _ProductImportPageState extends State<ProductImportPage> {
 
   Widget _buildImportButton(ThemeData theme) {
     final missing = _missingRequiredFields;
-    return Align(
-      alignment: Alignment.centerRight,
-      child: AppButton(
-        text: 'Importar ${_parseResult!.rows.length} productos',
-        icon: Icons.playlist_add_check_outlined,
-        isLoading: _isImporting,
-        onPressed: _isImporting || missing.isNotEmpty ? null : _runImport,
-      ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        // Smart Import (Upsert with options)
+        AppButton(
+          text: 'Importar con Opciones',
+          icon: Icons.sync_outlined,
+          type: ButtonType.secondary,
+          isLoading: _isImporting,
+          onPressed: _isImporting || missing.isNotEmpty ? null : _runSmartImport,
+        ),
+        const SizedBox(width: 12),
+        // Classic Import (Insert/Update all)
+        AppButton(
+          text: 'Importar ${_parseResult!.rows.length} productos',
+          icon: Icons.playlist_add_check_outlined,
+          isLoading: _isImporting,
+          onPressed: _isImporting || missing.isNotEmpty ? null : _runImport,
+        ),
+      ],
     );
   }
 
@@ -737,10 +797,190 @@ class _ProductImportPageState extends State<ProductImportPage> {
           message:
               'Importación completada: ${summary.inserted} nuevos, ${summary.updated} actualizados.');
       _refreshInventoryCaches();
+      
+      // Navigate back to product list after successful import
+      if (mounted) {
+        // Small delay to ensure caches are refreshed
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          // Add timestamp to force route refresh
+          context.go('/inventory/products?refresh=${DateTime.now().millisecondsSinceEpoch}');
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _errorMessage = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isImporting = false);
+      }
+    }
+  }
+
+  /// Smart Import with Upsert options
+  Future<void> _runSmartImport() async {
+    final parseResult = _parseResult;
+    if (parseResult == null) return;
+
+    final missing = _missingRequiredFields;
+    if (missing.isNotEmpty) {
+      setState(() {
+        _errorMessage =
+            'Faltan asignar campos obligatorios: ${missing.map((f) => f.label).join(', ')}';
+      });
+      return;
+    }
+
+    // 1. Show import options dialog
+    final options = await showDialog<ImportOptions>(
+      context: context,
+      builder: (context) => SmartImportOptionsDialog(
+        availableMatchFields: const ['sku', 'name', 'barcode'],
+        defaultMatchField: 'sku',
+        availableUpdateFields: const [
+          'name',
+          'description',
+          'price',
+          'cost',
+          'stock_quantity',
+          'min_stock_level',
+          'max_stock_level',
+          'reorder_point',
+          'category_id',
+          'supplier_id',
+          'barcode',
+          'sku',
+          'unit',
+          'tax_rate',
+          'is_active',
+          'is_featured',
+          'location',
+          'notes',
+        ],
+      ),
+    );
+
+    if (options == null || !mounted) return;
+
+    setState(() {
+      _isImporting = true;
+      _errorMessage = null;
+      _summary = null;
+    });
+
+    try {
+      // 2. Transform parsed rows to product data maps
+      final productRecords = <Map<String, dynamic>>[];
+      
+      for (final row in parseResult.rows) {
+        final productData = <String, dynamic>{};
+        
+        // Map each field from the file
+        _mapping.forEach((fileHeader, fieldKey) {
+          if (fieldKey != null && row.containsKey(fileHeader)) {
+            final value = row[fileHeader];
+            if (value != null && value.toString().trim().isNotEmpty) {
+              productData[fieldKey] = value;
+            }
+          }
+        });
+        
+        // Skip empty records
+        if (productData.isEmpty) continue;
+        
+        debugPrint('📦 Mapped product data: $productData');
+        productRecords.add(productData);
+      }
+
+      debugPrint('🔄 Smart Import: ${productRecords.length} records prepared');
+
+      // 3. Preview changes
+      final preview = await _smartImportService.previewImport(
+        tableName: 'products',
+        records: productRecords,
+        options: options,
+      );
+
+      if (!mounted) return;
+
+      // 4. Show conflict preview if there are changes
+      if (preview.hasConflicts || preview.inserted > 0 || preview.updated > 0) {
+        debugPrint('📋 Showing preview dialog: ${preview.conflicts.length} conflicts, ${preview.inserted} inserted, ${preview.updated} updated');
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => ImportConflictPreviewDialog(
+            result: preview,
+            onConfirm: () => Navigator.pop(context, true),
+          ),
+        );
+
+        debugPrint('📋 Preview dialog result: $confirmed');
+        
+        if (confirmed != true || !mounted) {
+          debugPrint('⚠️ Import cancelled by user or widget unmounted');
+          setState(() => _isImporting = false);
+          return;
+        }
+        
+        debugPrint('✅ User confirmed - proceeding with actual import');
+      } else {
+        // No changes detected
+        setState(() {
+          _isImporting = false;
+          _errorMessage = 'No se detectaron cambios. Todos los productos ya están actualizados.';
+        });
+        return;
+      }
+
+      // 5. Execute import
+      debugPrint('🚀 EXECUTING ACTUAL IMPORT (previewMode: false)');
+      final importResult = await _smartImportService.importData(
+        tableName: 'products',
+        records: productRecords,
+        options: options.copyWith(previewMode: false),
+      );
+
+      debugPrint('📊 Import result: inserted=${importResult.inserted}, updated=${importResult.updated}, skipped=${importResult.skipped}, failed=${importResult.failed}');
+
+      if (!mounted) return;
+
+      // 6. Show results
+      setState(() {
+        _summary = ProductImportSummary(
+          processed: importResult.total,
+          inserted: importResult.inserted,
+          updated: importResult.updated,
+          errors: importResult.errors.map((e) => ProductImportError(
+            rowNumber: 0,
+            message: e,
+            rowSnapshot: {},
+          )).toList(),
+          elapsed: Duration.zero,
+        );
+      });
+
+      _showSnack(
+        message: 'Importación completada: ${importResult.inserted} nuevos, '
+                 '${importResult.updated} actualizados, ${importResult.skipped} omitidos.',
+      );
+      
+      _refreshInventoryCaches();
+      
+      // Navigate back to product list after successful import
+      if (mounted) {
+        // Small delay to ensure caches are refreshed
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          // Add timestamp to force route refresh
+          context.go('/inventory/products?refresh=${DateTime.now().millisecondsSinceEpoch}');
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Error en importación inteligente: $e';
       });
     } finally {
       if (mounted) {

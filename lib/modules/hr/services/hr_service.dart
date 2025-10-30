@@ -661,9 +661,16 @@ class HRService extends ChangeNotifier {
 
   Future<String> generateEmployeeNumber() async {
     try {
+      // Get current tenant ID
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('Tenant ID not found');
+      }
+
       final response = await _client
           .from('employees')
           .select('employee_number')
+          .eq('tenant_id', tenantId) // Filter by tenant
           .order('employee_number', ascending: false)
           .limit(1);
 
@@ -678,8 +685,9 @@ class HRService extends ChangeNotifier {
       return 'EMP$newNumber';
     } catch (e) {
       debugPrint('Error generating employee number: $e');
-      return 'EMP${DateTime.now().millisecondsSinceEpoch % 1000}'
-          .padLeft(3, '0');
+      // Fallback with timestamp to ensure uniqueness
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      return 'EMP${(timestamp % 10000).toString().padLeft(4, '0')}';
     }
   }
 
@@ -722,6 +730,196 @@ class HRService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error getting today attendance rate: $e');
       return 0.0;
+    }
+  }
+
+  // ============================================================================
+  // USER ACCOUNT CREATION FOR EMPLOYEES
+  // ============================================================================
+
+  /// Creates a user invitation for an employee, granting them system access
+  /// This will send an email invitation to set up their account
+  /// Returns the invitation link for manual sharing if email fails
+  Future<String?> createUserForEmployee({
+    required String employeeId,
+    required String email,
+    required String role,
+    required Map<String, dynamic> permissions,
+    required String firstName,
+    required String lastName,
+  }) async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('Tenant ID not found');
+      }
+
+      final emailLower = email.toLowerCase().trim();
+
+      // Check if there's already a pending invitation for this email
+      final existingInvitation = await _client
+          .from('user_invitations')
+          .select('id, status')
+          .eq('tenant_id', tenantId)
+          .eq('email', emailLower)
+          .eq('status', 'pending')
+          .maybeSingle();
+
+      String invitationId;
+
+      if (existingInvitation != null) {
+        // Reuse existing invitation and resend email
+        invitationId = existingInvitation['id'];
+        debugPrint('⚠️ Pending invitation already exists for $emailLower, resending email...');
+      } else {
+        // Create new user invitation record
+        final invitationData = {
+          'tenant_id': tenantId,
+          'email': emailLower,
+          'role': role,
+          'permissions': permissions,
+          'invited_by': _client.auth.currentUser?.id,
+          'status': 'pending',
+          'employee_id': employeeId, // Link to employee
+          'expires_at': DateTime.now().add(const Duration(days: 7)).toIso8601String(),
+          'metadata': {
+            'first_name': firstName,
+            'last_name': lastName,
+            'invited_at': DateTime.now().toIso8601String(),
+          },
+        };
+
+        final response = await _client.from('user_invitations').insert(invitationData).select().single();
+        invitationId = response['id'];
+      }
+
+      // Send invitation email via Supabase Edge Function
+      String? invitationLink;
+      try {
+        debugPrint('📧 Calling send-invitation edge function with invitationId: $invitationId');
+        
+        final emailResponse = await _client.functions.invoke(
+          'send-invitation',
+          body: {'invitationId': invitationId},
+        );
+
+        debugPrint('📧 Edge function response - Status: ${emailResponse.status}, Data: ${emailResponse.data}');
+
+        if (emailResponse.status == 200 && emailResponse.data != null) {
+          // Extract invitation link from response
+          invitationLink = emailResponse.data['invitationLink'];
+          debugPrint('✅ Invitation link: $invitationLink');
+        } else {
+          debugPrint('⚠️ Warning: Email sending failed: ${emailResponse.data}');
+        }
+      } catch (emailError) {
+        debugPrint('⚠️ Warning: Email sending error: $emailError');
+        // Don't throw - invitation is still created, email just failed
+      }
+
+      debugPrint('✅ User invitation created for $emailLower (employee: $employeeId)');
+      notifyListeners();
+      
+      return invitationLink; // Return link for manual sharing
+    } catch (e) {
+      debugPrint('❌ Error creating user invitation: $e');
+      rethrow;
+    }
+  }
+
+  /// Resend invitation email to an employee
+  Future<void> resendInvitation(String employeeId) async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('Tenant ID not found');
+      }
+
+      // Get pending invitation for this employee
+      final response = await _client
+          .from('user_invitations')
+          .select('id, email')
+          .eq('employee_id', employeeId)
+          .eq('status', 'pending')
+          .maybeSingle();
+
+      if (response == null) {
+        throw Exception('No pending invitation found for this employee');
+      }
+
+      final invitationId = response['id'];
+      final email = response['email'];
+
+      // Call edge function to resend email
+      final emailResponse = await _client.functions.invoke(
+        'send-invitation',
+        body: {'invitationId': invitationId},
+      );
+
+      if (emailResponse.status != 200) {
+        throw Exception('Failed to send invitation email: ${emailResponse.data}');
+      }
+
+      debugPrint('✅ Invitation email resent to $email');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error resending invitation: $e');
+      rethrow;
+    }
+  }
+
+  /// Link an existing employee to an existing user account
+  Future<void> linkEmployeeToUser({
+    required String employeeId,
+    required String userId,
+  }) async {
+    try {
+      // Update employee with user_id
+      await _client
+          .from('employees')
+          .update({'user_id': userId})
+          .eq('id', employeeId);
+
+      // Update user_profile with employee_id
+      await _client
+          .from('user_profiles')
+          .update({'employee_id': employeeId})
+          .eq('user_id', userId);
+
+      debugPrint('✅ Linked employee $employeeId to user $userId');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error linking employee to user: $e');
+      rethrow;
+    }
+  }
+
+  /// Unlink an employee from their user account
+  Future<void> unlinkEmployeeFromUser(String employeeId) async {
+    try {
+      // Get the user_id first
+      final employee = await getEmployeeById(employeeId);
+      if (employee?.userId == null) {
+        throw Exception('Employee is not linked to any user');
+      }
+
+      // Remove user_id from employee
+      await _client
+          .from('employees')
+          .update({'user_id': null})
+          .eq('id', employeeId);
+
+      // Remove employee_id from user_profile
+      await _client
+          .from('user_profiles')
+          .update({'employee_id': null})
+          .eq('user_id', employee!.userId!);
+
+      debugPrint('✅ Unlinked employee $employeeId from user ${employee.userId}');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error unlinking employee from user: $e');
+      rethrow;
     }
   }
 }

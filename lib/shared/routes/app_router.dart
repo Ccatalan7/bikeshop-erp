@@ -5,6 +5,7 @@ import '../widgets/main_layout.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/reset_password_screen.dart';
+import '../../modules/auth/pages/accept_invitation_page.dart';
 import '../services/auth_service.dart';
 import '../../modules/accounting/pages/account_list_page.dart';
 import '../../modules/accounting/pages/account_form_page.dart';
@@ -142,14 +143,15 @@ class AppRouter {
         final isLoggedIn = authService.isAuthenticated;
         final loggingIn = state.matchedLocation == '/login';
         final resettingPassword = state.matchedLocation == '/reset-password';
+        final acceptingInvitation = state.matchedLocation == '/accept-invitation';
 
         // Allow access to public store routes without authentication
         if (isPublicRoute) {
           return null;
         }
 
-        // Allow access to password reset without authentication
-        if (resettingPassword) {
+        // Allow access to password reset and invitation acceptance without authentication
+        if (resettingPassword || acceptingInvitation) {
           return null;
         }
 
@@ -325,6 +327,19 @@ class AppRouter {
             state,
             const ResetPasswordScreen(),
           ),
+        ),
+
+        // Accept Invitation
+        GoRoute(
+          path: '/accept-invitation',
+          pageBuilder: (context, state) {
+            final token = state.uri.queryParameters['token'] ?? '';
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              AcceptInvitationPage(token: token),
+            );
+          },
         ),
 
         // Dashboard
@@ -555,12 +570,14 @@ class AppRouter {
           pageBuilder: (context, state) {
             final categoryId = state.uri.queryParameters['category'];
             final supplierId = state.uri.queryParameters['supplier'];
+            final refreshToken = state.uri.queryParameters['refresh'];
             return _buildPageWithNoTransition(
               context,
               state,
               ProductListPage(
                 initialCategoryId: categoryId,
                 initialSupplierId: supplierId,
+                refreshToken: refreshToken,
               ),
             );
           },

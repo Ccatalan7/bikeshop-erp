@@ -109,6 +109,7 @@ class Employee {
   final DateTime? terminationDate;
   final String? departmentId;
   final String jobTitle;
+  final String? systemRole; // Links to job_roles.system_role
   final EmploymentType employmentType;
   final EmployeeStatus status;
   final String? photoUrl;
@@ -139,6 +140,7 @@ class Employee {
     this.terminationDate,
     this.departmentId,
     required this.jobTitle,
+    this.systemRole, // Optional: links to standardized role
     this.employmentType = EmploymentType.fullTime,
     this.status = EmployeeStatus.active,
     this.photoUrl,
@@ -174,6 +176,7 @@ class Employee {
           : null,
       departmentId: map['department_id'],
       jobTitle: map['job_title'] ?? '',
+      systemRole: map['system_role'], // NEW: job role link
       employmentType: _employmentTypeFromString(map['employment_type']),
       status: _employeeStatusFromString(map['status']),
       photoUrl: map['photo_url'],
@@ -209,6 +212,7 @@ class Employee {
         'termination_date': terminationDate!.toIso8601String().split('T')[0],
       if (departmentId != null) 'department_id': departmentId,
       'job_title': jobTitle,
+      if (systemRole != null) 'system_role': systemRole, // NEW: save role link
       'employment_type': _employmentTypeToString(employmentType),
       'status': _employeeStatusToString(status),
       if (photoUrl != null) 'photo_url': photoUrl,

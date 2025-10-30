@@ -24,11 +24,13 @@ enum ProductViewMode { table, cards }
 class ProductListPage extends StatefulWidget {
   final String? initialCategoryId;
   final String? initialSupplierId;
+  final String? refreshToken; // Add refresh parameter
 
   const ProductListPage({
     super.key,
     this.initialCategoryId,
     this.initialSupplierId,
+    this.refreshToken,
   });
 
   @override
@@ -99,6 +101,15 @@ class _ProductListPageState extends State<ProductListPage> {
         _handleBarcodeScan(scan.barcode);
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(ProductListPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload products when refresh token changes (from import page)
+    if (widget.refreshToken != null && widget.refreshToken != oldWidget.refreshToken) {
+      _loadProducts();
+    }
   }
 
   @override

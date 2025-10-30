@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // For Clipboard
 import 'package:provider/provider.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/job_role_service.dart';
+import '../../../shared/models/job_role.dart';
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
 
@@ -72,7 +75,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
   }
 
   Future<void> _showEmployeeForm([Employee? employee]) async {
-    final result = await showDialog<Employee>(
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => _EmployeeFormDialog(
         employee: employee,
@@ -82,7 +85,91 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
 
     if (result != null) {
       _loadData();
+      
+      // Show invitation link dialog if present
+      final invitationLink = result['invitationLink'] as String?;
+      final email = result['email'] as String?;
+      
+      if (invitationLink != null && email != null && mounted) {
+        // Wait a frame for the form dialog to fully close
+        await Future.delayed(const Duration(milliseconds: 150));
+        
+        if (!mounted) return;
+        
+        _showInvitationLinkDialog(invitationLink, email);
+      }
     }
+  }
+
+  // Show invitation link dialog for manual sharing
+  void _showInvitationLinkDialog(String invitationLink, String email) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.link, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Enlace de Invitación'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Invitación creada para:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(email, style: const TextStyle(color: Colors.blue)),
+            const SizedBox(height: 16),
+            const Text(
+              'Copia este enlace y envíalo manualmente (WhatsApp, email, etc.):',
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: SelectableText(
+                invitationLink,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '⏰ El enlace expira en 7 días',
+              style: TextStyle(fontSize: 12, color: Colors.orange.shade700),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              // Copy to clipboard
+              final data = ClipboardData(text: invitationLink);
+              Clipboard.setData(data);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('✅ Enlace copiado al portapapeles'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            child: const Text('Copiar Enlace'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _deleteEmployee(Employee employee) async {
@@ -167,8 +254,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                 ),
                 const SizedBox(width: 16),
                 // Status filter
-                SizedBox(
-                  width: 150,
+                Flexible(
                   child: DropdownButtonFormField<EmployeeStatus?>(
                     value: _selectedStatus,
                     decoration: const InputDecoration(
@@ -208,8 +294,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                 ),
                 const SizedBox(width: 16),
                 // Department filter
-                SizedBox(
-                  width: 180,
+                Flexible(
                   child: DropdownButtonFormField<String?>(
                     value: _selectedDepartmentId,
                     decoration: const InputDecoration(
@@ -517,10 +602,13 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
   final _notesController = TextEditingController();
 
   String? _departmentId;
+  String? _selectedSystemRole; // NEW: selected job role
+  List<String> _suggestedTitles = []; // NEW: job title suggestions
   EmploymentType _employmentType = EmploymentType.fullTime;
   EmployeeStatus _status = EmployeeStatus.active;
   DateTime? _birthDate;
   DateTime _hireDate = DateTime.now();
+  bool _grantSystemAccess = false; // NEW: checkbox for user account creation
   bool _isSaving = false;
 
   @override
@@ -539,10 +627,16 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
       _cityController.text = emp.city ?? '';
       _notesController.text = emp.notes ?? '';
       _departmentId = emp.departmentId;
+      _selectedSystemRole = emp.systemRole; // Load existing role
       _employmentType = emp.employmentType;
       _status = emp.status;
       _birthDate = emp.birthDate;
       _hireDate = emp.hireDate;
+      
+      // Load suggested titles if role exists
+      if (emp.systemRole != null) {
+        _loadSuggestedTitles(emp.systemRole!);
+      }
     } else {
       // Generate employee number for new employee
       context.read<HRService>().generateEmployeeNumber().then((number) {
@@ -568,13 +662,50 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
     super.dispose();
   }
 
+  // Load job title suggestions when role is selected
+  Future<void> _loadSuggestedTitles(String systemRole) async {
+    try {
+      final jobRoleService = context.read<JobRoleService>();
+      final titles = await jobRoleService.getSuggestedTitles(systemRole);
+      if (mounted) {
+        setState(() => _suggestedTitles = titles);
+      }
+    } catch (e) {
+      // Silently fail - suggestions are optional
+      setState(() => _suggestedTitles = []);
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Additional validation for system access
+    if (_grantSystemAccess) {
+      if (_emailController.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Se requiere un email para otorgar acceso al sistema'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      if (_selectedSystemRole == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Se requiere un rol para otorgar acceso al sistema'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
 
     setState(() => _isSaving = true);
 
     try {
       final hrService = context.read<HRService>();
+      final jobRoleService = context.read<JobRoleService>();
       
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
@@ -591,6 +722,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
         phone: _phoneController.text.isEmpty ? null : _phoneController.text,
         rut: _rutController.text.isEmpty ? null : _rutController.text,
         jobTitle: _jobTitleController.text,
+        systemRole: _selectedSystemRole, // NEW: save role link
         departmentId: _departmentId,
         employmentType: _employmentType,
         status: _status,
@@ -602,13 +734,65 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
         notes: _notesController.text.isEmpty ? null : _notesController.text,
       );
 
+      // Save employee first
       final saved = widget.employee == null
           ? await hrService.createEmployee(employee)
           : await hrService.updateEmployee(employee);
 
+      // If granting system access, create user account
+      String? invitationLink;
+      if (_grantSystemAccess && saved.id != null && _selectedSystemRole != null) {
+        try {
+          // Get default permissions for the role
+          final permissions = await jobRoleService.getDefaultPermissions(_selectedSystemRole!);
+          
+          // Create user invitation (will send email with setup link)
+          invitationLink = await hrService.createUserForEmployee(
+            employeeId: saved.id!,
+            email: _emailController.text,
+            role: _selectedSystemRole!,
+            permissions: permissions,
+            firstName: _firstNameController.text,
+            lastName: _lastNameController.text,
+          );
+
+          if (!mounted) return;
+          
+          if (invitationLink == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Empleado creado e invitación generada. Revisa los logs para el enlace.',
+                ),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 5),
+              ),
+            );
+          }
+        } catch (inviteError) {
+          // Employee was created but user invitation failed
+          if (!mounted) return;
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Empleado creado pero falló la invitación: $inviteError',
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+
       if (!mounted) return;
 
-      Navigator.pop(context, saved);
+      // Return employee and invitation link (if any) to parent
+      Navigator.pop(context, {
+        'employee': saved,
+        'invitationLink': invitationLink,
+        'email': _emailController.text,
+      });
     } catch (e) {
       if (!mounted) return;
 
@@ -755,19 +939,98 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
+                      // Role selection dropdown
+                      FutureBuilder<List<Map<String, String>>>(
+                        future: context.read<JobRoleService>().getRoleOptions(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const SizedBox(
+                              height: 60,
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
+                          
+                          final roleOptions = snapshot.data!;
+                          
+                          return DropdownButtonFormField<String?>(
+                            value: _selectedSystemRole,
+                            decoration: const InputDecoration(
+                              labelText: 'Rol del Sistema',
+                              helperText: 'Opcional: vincula al empleado con permisos predefinidos',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('Sin rol asignado'),
+                              ),
+                              ...roleOptions.map((option) => DropdownMenuItem(
+                                    value: option['code'],
+                                    child: Text(option['name']!),
+                                  )),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedSystemRole = value;
+                                _suggestedTitles = [];
+                              });
+                              if (value != null) {
+                                _loadSuggestedTitles(value);
+                              }
+                            },
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
-                            child: TextFormField(
-                              controller: _jobTitleController,
-                              decoration: const InputDecoration(
-                                labelText: 'Cargo *',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: (value) => value?.isEmpty ?? true
-                                  ? 'Campo requerido'
-                                  : null,
-                            ),
+                            child: _suggestedTitles.isEmpty
+                                ? TextFormField(
+                                    controller: _jobTitleController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Cargo *',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    validator: (value) => value?.isEmpty ?? true
+                                        ? 'Campo requerido'
+                                        : null,
+                                  )
+                                : DropdownButtonFormField<String>(
+                                    value: _suggestedTitles.contains(_jobTitleController.text)
+                                        ? _jobTitleController.text
+                                        : null,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Cargo * (sugerencias del rol)',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: [
+                                      ..._suggestedTitles.map((title) => DropdownMenuItem(
+                                            value: title,
+                                            child: Text(title),
+                                          )),
+                                      const DropdownMenuItem(
+                                        value: 'custom',
+                                        child: Text('Otro (personalizado)...'),
+                                      ),
+                                    ],
+                                    onChanged: (value) {
+                                      if (value == 'custom') {
+                                        setState(() {
+                                          _jobTitleController.clear();
+                                          _suggestedTitles = []; // Switch to text field
+                                        });
+                                      } else if (value != null) {
+                                        setState(() => _jobTitleController.text = value);
+                                      }
+                                    },
+                                    validator: (value) {
+                                      if (_jobTitleController.text.isEmpty) {
+                                        return 'Campo requerido';
+                                      }
+                                      return null;
+                                    },
+                                  ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -885,6 +1148,62 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                         ),
                         maxLines: 3,
                       ),
+                      const SizedBox(height: 24),
+                      // Grant System Access section
+                      if (widget.employee == null || widget.employee?.userId == null)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[50],
+                            border: Border.all(color: Colors.blue[200]!),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.security, color: Colors.blue[700], size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Acceso al Sistema',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue[900],
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              CheckboxListTile(
+                                value: _grantSystemAccess,
+                                onChanged: _selectedSystemRole != null
+                                    ? (value) => setState(() => _grantSystemAccess = value ?? false)
+                                    : null,
+                                title: const Text('Otorgar acceso al sistema ERP'),
+                                subtitle: Text(
+                                  _selectedSystemRole == null
+                                      ? 'Primero selecciona un rol del sistema arriba'
+                                      : 'Se creará una cuenta de usuario con permisos de ${JobRole.getRoleDisplayName(_selectedSystemRole!)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: _selectedSystemRole == null ? Colors.red[700] : Colors.grey[700],
+                                  ),
+                                ),
+                                controlAffinity: ListTileControlAffinity.leading,
+                              ),
+                              if (_grantSystemAccess && _emailController.text.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 16, top: 8),
+                                  child: Text(
+                                    '⚠️ Se requiere un email válido para crear la cuenta de usuario',
+                                    style: TextStyle(color: Colors.red[700], fontSize: 12),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
