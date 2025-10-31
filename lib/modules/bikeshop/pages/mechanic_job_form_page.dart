@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../modules/crm/models/crm_models.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/image_service.dart';
@@ -56,14 +57,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   List<Customer> _customers = [];
   List<Bike> _bikes = [];
   List<Product> _products = [];
-  List<Product> _stockProducts = [];
   List<Product> _serviceProducts = [];
 
   // Loading states
   bool _isLoading = false;
   bool _isSaving = false;
-  bool _isLoadingCustomers = true;
-  bool _isLoadingProducts = true;
 
   // Edit mode
   MechanicJob? _existingJob;
@@ -100,9 +98,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       // Load products
       final products = await inventoryService.getProducts();
-      final stockProducts = products
-          .where((product) => product.productType == ProductType.product)
-          .toList();
       final serviceProducts = products
           .where((product) => product.productType == ProductType.service)
           .toList();
@@ -110,10 +105,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       setState(() {
         _customers = customers.cast<Customer>();
         _products = products;
-        _stockProducts = stockProducts;
         _serviceProducts = serviceProducts;
-        _isLoadingCustomers = false;
-        _isLoadingProducts = false;
       });
 
       // If editing, load existing job
@@ -207,9 +199,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ),
           );
           _partItems.add(_JobPartItem(
-            product: product,
+            product: part.productId != null ? product : null,
+            name: part.productName,
+            isCatalogProduct: part.productId != null,
             quantity: part.quantity.toInt(),
             unitPrice: part.unitPrice,
+            notes: null, // TODO: Load from database if stored
           ));
         }
 
@@ -258,39 +253,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   void _addPartItem() async {
-    // Force refresh products to get latest stock quantities
-    setState(() => _isLoadingProducts = true);
-    try {
-      final inventoryService = context.read<InventoryService>();
-      final products = await inventoryService.getProducts();
-      final stockProducts = products
-          .where((product) => product.productType == ProductType.product)
-          .toList();
-      
-      setState(() {
-        _stockProducts = stockProducts;
-        _isLoadingProducts = false;
-      });
-    } catch (e) {
-      setState(() => _isLoadingProducts = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar productos: $e')),
-        );
-      }
-      return;
-    }
-    
     showDialog(
       context: context,
-      builder: (context) => _ProductSelectorDialog(
-        products: _stockProducts,
-        onProductSelected: (product, quantity, price) {
+      builder: (context) => _PartItemDialog(
+        onItemAdded: (ProductSelection selection, int quantity, double price, String? notes) {
           setState(() {
             _partItems.add(_JobPartItem(
-              product: product,
+              product: selection.product,
+              name: selection.isCatalogProduct 
+                  ? selection.product!.name 
+                  : selection.customDescription!,
+              isCatalogProduct: selection.isCatalogProduct,
               quantity: quantity,
               unitPrice: price,
+              notes: notes,
             ));
           });
         },
@@ -442,9 +418,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final jobItem = MechanicJobItem(
           jobId: jobId,
           tenantId: tenantId,
-          productId: item.product.id,
-          productName: item.product.name,
-          productSku: item.product.sku,
+          productId: item.product?.id, // Nullable for ad-hoc items
+          productName: item.name,
+          productSku: item.sku ?? '',
           quantity: quantity,
           unitPrice: unitPrice,
           totalPrice: quantity * unitPrice,
@@ -1133,35 +1109,78 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   ..._partItems.asMap().entries.map((entry) {
                     final index = entry.key;
                     final item = entry.value;
+                    final isAdHoc = !item.isCatalogProduct;
                     return TableRow(
                       children: [
                         Padding(
                           padding: const EdgeInsets.all(12),
                           child: Row(
                             children: [
-                              // Product image
-                              if (item.product.imageUrl != null)
+                              // Product image or icon for ad-hoc
+                              if (item.product?.imageUrl != null)
                                 Container(
                                   width: 50,
                                   height: 50,
                                   margin: const EdgeInsets.only(right: 12),
                                   child: ImageService.buildProductImage(
-                                    imageUrl: item.product.imageUrl,
+                                    imageUrl: item.product!.imageUrl,
                                     size: 50,
+                                  ),
+                                )
+                              else
+                                Container(
+                                  width: 50,
+                                  height: 50,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  decoration: BoxDecoration(
+                                    color: isAdHoc ? Colors.orange.shade50 : Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    isAdHoc ? Icons.edit_note : Icons.inventory_2_outlined,
+                                    color: isAdHoc ? Colors.orange : Colors.grey,
                                   ),
                                 ),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(item.product.name,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w500)),
-                                    Text(
-                                      'SKU: ${item.product.sku} | Stock: ${item.product.stockQuantity}',
-                                      style: TextStyle(
-                                          fontSize: 12, color: Colors.grey[600]),
+                                    Row(
+                                      children: [
+                                        if (isAdHoc)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            margin: const EdgeInsets.only(right: 8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.orange.shade100,
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: const Text(
+                                              'Personalizado',
+                                              style: TextStyle(fontSize: 10, color: Colors.orange),
+                                            ),
+                                          ),
+                                        Expanded(
+                                          child: Text(
+                                            item.displayName,
+                                            style: const TextStyle(fontWeight: FontWeight.w500),
+                                          ),
+                                        ),
+                                      ],
                                     ),
+                                    if (!isAdHoc && item.sku != null)
+                                      Text(
+                                        'SKU: ${item.sku} | Stock: ${item.product!.stockQuantity}',
+                                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                      ),
+                                    if (item.notes != null && item.notes!.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          item.notes!,
+                                          style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
@@ -1606,15 +1625,24 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
 // Helper classes for form items
 class _JobPartItem {
-  final Product product;
+  final Product? product; // Nullable for ad-hoc items
+  final String name; // For ad-hoc items
+  final bool isCatalogProduct;
   final int quantity;
   final double unitPrice;
+  final String? notes; // Additional notes for any part
 
   _JobPartItem({
-    required this.product,
+    this.product,
+    required this.name,
+    this.isCatalogProduct = true,
     required this.quantity,
     required this.unitPrice,
+    this.notes,
   });
+
+  String get displayName => product?.name ?? name;
+  String? get sku => product?.sku;
 }
 
 class _JobLaborItem {
@@ -1640,6 +1668,208 @@ class _JobLaborItem {
       description != serviceProduct!.name;
 
   double get total => hours * hourlyRate;
+}
+
+// Modern part item dialog with ProductAutocompleteField
+class _PartItemDialog extends StatefulWidget {
+  final Function(ProductSelection selection, int quantity, double price, String? notes) onItemAdded;
+
+  const _PartItemDialog({
+    required this.onItemAdded,
+  });
+
+  @override
+  State<_PartItemDialog> createState() => _PartItemDialogState();
+}
+
+class _PartItemDialogState extends State<_PartItemDialog> {
+  ProductSelection? _selection;
+  final _quantityController = TextEditingController(text: '1');
+  final _priceController = TextEditingController();
+  final _notesController = TextEditingController();
+  final _productTextController = TextEditingController();
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    _priceController.dispose();
+    _notesController.dispose();
+    _productTextController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Agregar Repuesto o Parte'),
+      content: SizedBox(
+        width: 500,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Product autocomplete field
+            ProductAutocompleteField(
+              controller: _productTextController,
+              onProductSelected: (selection) {
+                setState(() {
+                  _selection = selection;
+                  if (selection.isCatalogProduct && selection.product != null) {
+                    _priceController.text = selection.product!.price.toString();
+                  } else if (!selection.isCatalogProduct) {
+                    // For ad-hoc items, set a default price if empty
+                    if (_priceController.text.isEmpty) {
+                      _priceController.text = '0';
+                    }
+                  }
+                });
+              },
+              allowCustomItems: true,
+              labelText: 'Repuesto o Parte',
+              hintText: 'Buscar en catálogo o escribir personalizado...',
+            ),
+            const SizedBox(height: 16),
+            
+            // Notes field
+            TextField(
+              controller: _notesController,
+              decoration: InputDecoration(
+                labelText: 'Notas (opcional)',
+                hintText: 'Ej: Cliente pidió color específico...',
+                border: const OutlineInputBorder(),
+                helperText: 'Información adicional sobre esta parte',
+              ),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 16),
+            
+            // Quantity and price
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _quantityController,
+                    decoration: const InputDecoration(
+                      labelText: 'Cantidad',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    controller: _priceController,
+                    decoration: const InputDecoration(
+                      labelText: 'Precio Unitario',
+                      border: OutlineInputBorder(),
+                      prefixText: '\$ ',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            
+            // Stock warning for catalog products
+            if (_selection?.isCatalogProduct == true && _selection?.product != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _selection!.product!.stockQuantity > 0 
+                        ? Colors.blue.shade50 
+                        : Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _selection!.product!.stockQuantity > 0 
+                            ? Icons.inventory 
+                            : Icons.warning_amber,
+                        size: 20,
+                        color: _selection!.product!.stockQuantity > 0 
+                            ? Colors.blue 
+                            : Colors.red,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Stock disponible: ${_selection!.product!.stockQuantity.toInt()} unidades',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: _selection!.product!.stockQuantity > 0 
+                                ? Colors.blue.shade900 
+                                : Colors.red.shade900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            // If user typed something but didn't select, create ad-hoc selection
+            if (_selection == null && _productTextController.text.trim().isNotEmpty) {
+              _selection = ProductSelection(
+                isCatalogProduct: false,
+                displayText: _productTextController.text.trim(),
+                customDescription: _productTextController.text.trim(),
+              );
+              // Set default price if not set
+              if (_priceController.text.isEmpty) {
+                _priceController.text = '0';
+              }
+            }
+            
+            // Validate all required fields
+            String? errorMessage;
+            
+            if (_selection == null || _productTextController.text.trim().isEmpty) {
+              errorMessage = 'Por favor seleccione o ingrese un producto';
+            } else if (_quantityController.text.isEmpty || int.tryParse(_quantityController.text) == null) {
+              errorMessage = 'Por favor ingrese una cantidad válida';
+            } else if (_priceController.text.isEmpty || double.tryParse(_priceController.text) == null) {
+              errorMessage = 'Por favor ingrese un precio válido';
+            } else if (int.parse(_quantityController.text) <= 0) {
+              errorMessage = 'La cantidad debe ser mayor a 0';
+            } else if (double.parse(_priceController.text) < 0) {
+              errorMessage = 'El precio no puede ser negativo';
+            }
+            
+            if (errorMessage != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(errorMessage)),
+              );
+            } else {
+              widget.onItemAdded(
+                _selection!,
+                int.parse(_quantityController.text),
+                double.parse(_priceController.text),
+                _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+              );
+              Navigator.of(context).pop();
+            }
+          },
+          child: const Text('Agregar'),
+        ),
+      ],
+    );
+  }
 }
 
 // Product selector dialog

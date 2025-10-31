@@ -13,6 +13,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../models/sales_models.dart';
@@ -36,6 +37,14 @@ class InvoiceFormPage extends StatefulWidget {
 
 class _InvoiceFormPageState extends State<InvoiceFormPage> {
   static const double _ivaRate = 0.19;
+  
+  // Column widths for table alignment
+  static const double _colIndexWidth = 40.0;
+  static const double _colQuantityWidth = 120.0;
+  static const double _colPriceWidth = 130.0;
+  static const double _colDiscountWidth = 130.0;
+  static const double _colTotalWidth = 130.0;
+  static const double _colActionsWidth = 48.0;
 
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _invoiceNumberController =
@@ -54,6 +63,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   bool _isSaving = false;
   bool _isEditing = false;
   bool _isUpdatingStatus = false;
+  
+  // Key to reset autocomplete field after adding product
+  int _autocompleteKey = 0;
 
   Customer? _selectedCustomer;
   Invoice? _loadedInvoice;
@@ -300,23 +312,28 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     final newEntries = <_InvoiceLineEntry>[];
     for (final item in invoice.items) {
       Product? product;
-      for (final candidate in _cachedProducts) {
-        if (candidate.id == item.productId) {
-          product = candidate;
-          break;
+      // Only look for product if it's a catalog item
+      if (item.isCatalogProduct && item.productId != null) {
+        for (final candidate in _cachedProducts) {
+          if (candidate.id == item.productId) {
+            product = candidate;
+            break;
+          }
         }
       }
 
       final entry = _InvoiceLineEntry(
         _InvoiceLine(
-          productId: item.productId,
+          productId: item.productId, // Nullable - null for ad-hoc items
           product: product,
-          name: item.productName ?? product?.name ?? 'Producto',
+          name: item.productName ?? product?.name ?? 'Artículo',
           sku: item.productSku ?? product?.sku ?? '',
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           discount: item.discount,
           cost: item.cost,
+          description: item.description,
+          isCatalogProduct: item.isCatalogProduct,
         ),
       );
       entry.attachListeners(_handleLinesChanged);
@@ -526,50 +543,15 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
   }
 
-  Future<void> _openProductSelector() async {
-    if (_cachedProducts.isEmpty) {
-      try {
-        final products =
-            await _inventoryService.getProducts(forceRefresh: true);
-        _cachedProducts
-          ..clear()
-          ..addAll(products);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('No se pudieron cargar los productos: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-    }
-
-    if (!mounted) return;
-
-    final selected = await showModalBottomSheet<Product>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return _ProductSelector(
-          inventoryService: _inventoryService,
-          initialProducts: List<Product>.from(_cachedProducts),
-        );
-      },
-    );
-
-    if (selected != null && mounted) {
-      _addProductLine(selected);
-    }
-  }
-
   void _addProductLine(Product product) {
+    // Check if product already in cart
     for (final entry in _lineEntries) {
       if (entry.line.productId == product.id) {
         entry.line.quantity += 1;
         entry.quantityController.text = entry.line.quantity.toStringAsFixed(0);
+        setState(() {
+          _autocompleteKey++; // Reset autocomplete field
+        });
         _handleLinesChanged();
         return;
       }
@@ -584,6 +566,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       unitPrice: product.price,
       discount: 0,
       cost: product.cost,
+      isCatalogProduct: true,
     );
 
     final entry = _InvoiceLineEntry(line);
@@ -591,6 +574,30 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
     setState(() {
       _lineEntries.add(entry);
+      _autocompleteKey++; // Reset autocomplete field
+    });
+  }
+
+  void _addCustomItemLine(String description) {
+    final line = _InvoiceLine(
+      productId: null, // Ad-hoc items have no product ID
+      product: null,
+      name: description,
+      sku: '',
+      quantity: 1,
+      unitPrice: 0, // User must enter price manually
+      discount: 0,
+      cost: 0,
+      isCatalogProduct: false,
+      description: description,
+    );
+
+    final entry = _InvoiceLineEntry(line);
+    entry.attachListeners(_handleLinesChanged);
+
+    setState(() {
+      _lineEntries.add(entry);
+      _autocompleteKey++; // Reset autocomplete field
     });
   }
 
@@ -599,6 +606,26 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       _lineEntries.remove(entry);
       entry.dispose();
     });
+  }
+
+  void _moveLineUp(_InvoiceLineEntry entry) {
+    final currentIndex = _lineEntries.indexOf(entry);
+    if (currentIndex > 0) {
+      setState(() {
+        _lineEntries.removeAt(currentIndex);
+        _lineEntries.insert(currentIndex - 1, entry);
+      });
+    }
+  }
+
+  void _moveLineDown(_InvoiceLineEntry entry) {
+    final currentIndex = _lineEntries.indexOf(entry);
+    if (currentIndex < _lineEntries.length - 1) {
+      setState(() {
+        _lineEntries.removeAt(currentIndex);
+        _lineEntries.insert(currentIndex + 1, entry);
+      });
+    }
   }
 
   Future<void> _pickDate({required bool isIssueDate}) async {
@@ -1129,179 +1156,607 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   Widget _buildLineItemsSection(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.add_shopping_cart_outlined),
-            label: const Text('Agregar producto'),
-            onPressed: _canEditFields ? _openProductSelector : null,
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (_lineEntries.isEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.production_quantity_limits,
-                    size: 48, color: theme.colorScheme.onSurfaceVariant),
-                const SizedBox(height: 12),
-                Text(
-                  'Aún no has agregado productos',
-                  style: theme.textTheme.titleMedium,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Use available width, but ensure minimum for proper column display
+        final tableWidth = constraints.maxWidth > 900 ? constraints.maxWidth : 900.0;
+        
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: tableWidth,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Table header
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Usa el buscador para seleccionar artículos del inventario.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                child: Row(
+                  children: [
+                    // # column
+                    Container(
+                      width: _colIndexWidth,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border(
+                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                    ),
                   ),
-                  textAlign: TextAlign.center,
+                  child: Center(
+                    child: Text('#', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                  ),
                 ),
+                
+                // Artículo column (flex to fill remaining space)
+                Expanded(
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 300), // Prevent collapse
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                      ),
+                    ),
+                    child: Text(
+                      'DETALLES DEL ARTÍCULO',
+                      style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.visible,
+                    ),
+                  ),
+                ),
+                
+                // Cantidad column
+                Container(
+                  width: _colQuantityWidth,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text('CANTIDAD', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                
+                // Tarifa column
+                Container(
+                  width: _colPriceWidth,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text('TARIFA', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                
+                // Descuento column
+                Container(
+                  width: _colDiscountWidth,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text('DESCUENTO', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                
+                // Importe column
+                Container(
+                  width: _colTotalWidth,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Text('IMPORTE', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600), textAlign: TextAlign.right),
+                ),
+                
+                // Actions column
+                SizedBox(width: _colActionsWidth),
               ],
             ),
-          )
-        else
-          Column(
-            children: _lineEntries
-                .map((entry) => _buildLineCard(theme, entry))
-                .toList(),
           ),
-      ],
+          
+          // Header/Content divider
+          Divider(height: 1, thickness: 1, color: theme.colorScheme.outline.withOpacity(0.2)),
+        
+          // Line items
+          Column(
+            children: [
+            // Line items (all states)
+            if (_lineEntries.isNotEmpty)
+              ..._lineEntries.asMap().entries.map((entry) => 
+                _buildCompactLineRow(theme, entry.key + 1, entry.value)
+              ),
+              
+              // Add new line button (only when editing)
+              if (_canEditFields)
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                    ),
+                  ),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Empty space for # column
+                        Container(
+                          width: _colIndexWidth,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                            ),
+                          ),
+                        ),
+                        
+                        // Search field spanning the product details column
+                        Expanded(
+                          child: Container(
+                            constraints: const BoxConstraints(minWidth: 300), // Prevent collapse
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                              ),
+                            ),
+                            child: ProductAutocompleteField(
+                              key: ValueKey(_autocompleteKey), // Reset field when key changes
+                              onProductSelected: (selection) {
+                                if (selection.isCatalogProduct && selection.product != null) {
+                                  _addProductLine(selection.product!);
+                                } else if (!selection.isCatalogProduct && selection.customDescription != null) {
+                                  _addCustomItemLine(selection.customDescription!);
+                                }
+                              },
+                              allowCustomItems: true,
+                              labelText: 'Agregar producto o servicio',
+                              hintText: 'Buscar por nombre o SKU, o escribir artículo personalizado...',
+                            ),
+                          ),
+                        ),
+                        
+                        // Empty spaces for other columns to maintain alignment
+                        Container(
+                          width: _colQuantityWidth,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          width: _colPriceWidth,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          width: _colDiscountWidth,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: _colTotalWidth),
+                        SizedBox(width: _colActionsWidth),
+                      ],
+                    ),
+                  ),
+                ),
+              
+              // Empty state
+              if (_lineEntries.isEmpty && !_canEditFields)
+                Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Text(
+                    'No hay artículos en esta factura',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildLineCard(ThemeData theme, _InvoiceLineEntry entry) {
+  Widget _buildCompactLineRow(ThemeData theme, int index, _InvoiceLineEntry entry) {
     final line = entry.line;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        line.name,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
+    final isAdHoc = !line.isCatalogProduct;
+    final canMoveUp = index > 1 && _canEditFields;
+    final canMoveDown = index < _lineEntries.length && _canEditFields;
+    
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      child: Builder(
+        builder: (context) {
+          // Track hover state
+          bool isHovered = false;
+          
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return MouseRegion(
+                onEnter: (_) => setState(() => isHovered = true),
+                onExit: (_) => setState(() => isHovered = false),
+                child: Container(
+                  key: ValueKey('line_${entry.hashCode}_$index'),
+                  decoration: BoxDecoration(
+                    color: isHovered ? theme.colorScheme.surfaceVariant.withOpacity(0.3) : null,
+                    border: Border(
+                      bottom: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                    ),
+                  ),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                      // # / Drag handle column
+                      Container(
+                        width: _colIndexWidth,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (canMoveUp && isHovered)
+                              InkWell(
+                                onTap: () => _moveLineUp(entry),
+                                child: Icon(
+                                  Icons.keyboard_arrow_up,
+                                  size: 18,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              )
+                            else
+                              const SizedBox(height: 18),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Text(
+                                '$index',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            if (canMoveDown && isHovered)
+                              InkWell(
+                                onTap: () => _moveLineDown(entry),
+                                child: Icon(
+                                  Icons.keyboard_arrow_down,
+                                  size: 18,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              )
+                            else
+                              const SizedBox(height: 18),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        line.sku.isEmpty ? 'SKU pendiente' : 'SKU: ${line.sku}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant),
-                      ),
-                    ],
+            
+            // Product details column
+            Expanded(
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 300), // Prevent collapse
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Quitar',
-                  onPressed: _canEditFields ? () => _removeLine(entry) : null,
-                  icon: Icon(Icons.delete_outline,
-                      color: theme.colorScheme.error),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Product image
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: theme.colorScheme.outline.withOpacity(0.2),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(5),
+                        child: line.product?.imageUrl != null
+                            ? Image.network(
+                                line.product!.imageUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Icon(
+                                  Icons.inventory_2_outlined,
+                                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                                  size: 24,
+                                ),
+                              )
+                            : Icon(
+                                isAdHoc ? Icons.edit_note : Icons.inventory_2_outlined,
+                                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                                size: 24,
+                              ),
+                      ),
+                    ),
+                    
+                    const SizedBox(width: 12),
+                    
+                    // Product name + SKU + description
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Product name
+                          Text(
+                            line.name,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          
+                          // SKU
+                          if (!isAdHoc && line.sku.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                'SKU (Código de artículo): ${line.sku}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          
+                          // Description field
+                          if (_canEditFields)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: TextField(
+                                controller: entry.descriptionController,
+                                decoration: InputDecoration(
+                                  hintText: isAdHoc 
+                                      ? 'Agregar detalles del servicio...' 
+                                      : 'Agregue una descripción a su artículo',
+                                  hintStyle: theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                    borderSide: BorderSide(
+                                      color: theme.colorScheme.outline.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                    borderSide: BorderSide(
+                                      color: theme.colorScheme.outline.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  isDense: true,
+                                ),
+                                style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+                                maxLines: 3,
+                                minLines: 1,
+                              ),
+                            )
+                          else if (entry.descriptionController.text.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                entry.descriptionController.text,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
+            
+            // Cantidad column
+            Container(
+              width: _colQuantityWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextField(
                     controller: entry.quantityController,
                     enabled: _canEditFields,
-                    decoration: const InputDecoration(
-                      labelText: 'Cantidad',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      border: _canEditFields ? const OutlineInputBorder() : InputBorder.none,
                     ),
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: entry.unitPriceController,
-                    enabled: _canEditFields,
-                    decoration: const InputDecoration(
-                      labelText: 'Precio unitario (sin IVA)',
-                      prefixText: 'CLP ',
+                  
+                  // Stock warning
+                  if (line.product != null && line.product!.stockQuantity < line.quantity)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.warning_amber, size: 12, color: Colors.red),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Stock bajo: ${line.product!.stockQuantity.toInt()} disponibles',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.red,
+                                fontSize: 10,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: entry.discountController,
-                    enabled: _canEditFields,
-                    decoration: const InputDecoration(
-                      labelText: 'Descuento',
-                      prefixText: 'CLP ',
-                    ),
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Total línea: ${ChileanUtils.formatCurrency(line.netAmount)}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+            
+            // Tarifa column
+            Container(
+              width: _colPriceWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
                 ),
-                const Spacer(),
-                if (line.product != null && line.product!.trackStock)
-                  Text(
-                    'Stock disponible: ${line.product!.stockQuantity}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: line.product!.stockQuantity <=
-                              line.product!.minStockLevel
-                          ? theme.colorScheme.error
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
+              ),
+              child: Center(
+                child: TextField(
+                  controller: entry.unitPriceController,
+                  enabled: _canEditFields,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    border: _canEditFields ? const OutlineInputBorder() : InputBorder.none,
+                    prefixText: '\$ ',
                   ),
-              ],
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                  ],
+                ),
+              ),
+            ),
+            
+            // Descuento column
+            Container(
+              width: _colDiscountWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                ),
+              ),
+              child: Center(
+                child: Row(
+                  children: [
+                    const SizedBox(width: 4),
+                    const Text('\$ ', style: TextStyle(fontSize: 14)),
+                    Expanded(
+                      child: TextField(
+                        controller: entry.discountController,
+                        enabled: _canEditFields,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          border: _canEditFields ? const OutlineInputBorder() : InputBorder.none,
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    // Dropdown for % or fixed amount (placeholder)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('%', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Importe column
+            Container(
+              width: _colTotalWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Center(
+                child: Text(
+                  ChileanUtils.formatCurrency(line.netAmount),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ),
+            
+            // Delete button
+            SizedBox(
+              width: _colActionsWidth,
+              child: Center(
+                child: _canEditFields
+                    ? IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => _removeLine(entry),
+                        color: theme.colorScheme.error,
+                        tooltip: 'Eliminar',
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ),
           ],
         ),
+      ),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -1453,19 +1908,23 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
 class _InvoiceLine {
   _InvoiceLine({
-    required this.productId,
+    this.productId, // NOW NULLABLE - null for ad-hoc items
     this.product,
     required this.name,
-    required this.sku,
+    this.sku = '',
     required this.quantity,
     required this.unitPrice,
     required this.discount,
-    required this.cost,
+    this.cost = 0,
+    this.description, // Custom description/notes
+    this.isCatalogProduct = true, // true = catalog product, false = ad-hoc item
   });
 
-  final String productId;
+  final String? productId; // Nullable for ad-hoc items
   final Product? product;
   final double cost;
+  final String? description; // Custom notes for line item
+  final bool isCatalogProduct; // Track if catalog vs ad-hoc
   double quantity;
   double unitPrice;
   double discount;
@@ -1485,12 +1944,15 @@ class _InvoiceLineEntry {
         unitPriceController =
             TextEditingController(text: line.unitPrice.toStringAsFixed(0)),
         discountController =
-            TextEditingController(text: line.discount.toStringAsFixed(0));
+            TextEditingController(text: line.discount.toStringAsFixed(0)),
+        descriptionController =
+            TextEditingController(text: line.description ?? '');
 
   final _InvoiceLine line;
   final TextEditingController quantityController;
   final TextEditingController unitPriceController;
   final TextEditingController discountController;
+  final TextEditingController descriptionController;
   VoidCallback? _listener;
 
   void attachListeners(VoidCallback listener) {
@@ -1502,9 +1964,13 @@ class _InvoiceLineEntry {
 
   InvoiceItem toInvoiceItem() {
     return InvoiceItem(
-      productId: line.productId,
+      productId: line.productId, // Nullable - null for ad-hoc items
       productName: line.name,
       productSku: line.sku,
+      description: descriptionController.text.trim().isEmpty 
+          ? null 
+          : descriptionController.text.trim(),
+      isCatalogProduct: line.isCatalogProduct,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
       discount: line.discount,
@@ -1551,6 +2017,7 @@ class _InvoiceLineEntry {
     quantityController.dispose();
     unitPriceController.dispose();
     discountController.dispose();
+    descriptionController.dispose();
   }
 }
 
@@ -1661,112 +2128,3 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
   }
 }
 
-class _ProductSelector extends StatefulWidget {
-  final shared_inventory.InventoryService inventoryService;
-  final List<Product> initialProducts;
-
-  const _ProductSelector({
-    required this.inventoryService,
-    required this.initialProducts,
-  });
-
-  @override
-  State<_ProductSelector> createState() => _ProductSelectorState();
-}
-
-class _ProductSelectorState extends State<_ProductSelector> {
-  late List<Product> _products = widget.initialProducts;
-  Timer? _debounce;
-  bool _isSearching = false;
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    super.dispose();
-  }
-
-  void _onSearchChanged(String term) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 250), () async {
-      setState(() => _isSearching = true);
-      try {
-        final results = term.trim().isEmpty
-            ? widget.initialProducts
-            : await widget.inventoryService.searchProducts(term);
-        if (mounted) {
-          setState(() => _products = results);
-        }
-      } catch (_) {
-        if (mounted) {
-          setState(() => _products = widget.initialProducts);
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isSearching = false);
-        }
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 48,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-            TextField(
-              decoration: const InputDecoration(
-                labelText: 'Buscar producto por nombre, SKU o marca',
-                prefixIcon: Icon(Icons.search),
-              ),
-              onChanged: _onSearchChanged,
-            ),
-            const SizedBox(height: 16),
-            if (_isSearching) const LinearProgressIndicator(minHeight: 2),
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.5,
-              child: _products.isEmpty
-                  ? const Center(child: Text('No se encontraron productos'))
-                  : ListView.separated(
-                      itemCount: _products.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (context, index) {
-                        final product = _products[index];
-                        return ListTile(
-                          title: Text(product.name),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('SKU: ${product.sku}'),
-                              if (product.brand != null &&
-                                  product.brand!.isNotEmpty)
-                                Text('Marca: ${product.brand}'),
-                              Text('Stock: ${product.stockQuantity}'),
-                            ],
-                          ),
-                          trailing: Text(
-                            ChileanUtils.formatCurrency(product.price),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          onTap: () => Navigator.of(context).pop(product),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

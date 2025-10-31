@@ -190,9 +190,11 @@ extension InvoiceStatusX on InvoiceStatus {
 class InvoiceItem {
   final String? id;
   final String? invoiceId;
-  final String productId;
+  final String? productId; // Nullable - null for ad-hoc/custom items
   final String? productName;
   final String? productSku;
+  final String? description; // Custom description/notes for line item
+  final bool isCatalogProduct; // true = official product, false = ad-hoc item
   final double quantity;
   final double unitPrice;
   final double discount;
@@ -202,9 +204,11 @@ class InvoiceItem {
   InvoiceItem({
     this.id,
     this.invoiceId,
-    required this.productId,
+    this.productId, // Now nullable
     this.productName,
     this.productSku,
+    this.description,
+    this.isCatalogProduct = true, // Default to catalog product
     this.quantity = 1,
     required this.unitPrice,
     this.discount = 0,
@@ -218,6 +222,8 @@ class InvoiceItem {
     String? productId,
     String? productName,
     String? productSku,
+    String? description,
+    bool? isCatalogProduct,
     double? quantity,
     double? unitPrice,
     double? discount,
@@ -230,6 +236,8 @@ class InvoiceItem {
       productId: productId ?? this.productId,
       productName: productName ?? this.productName,
       productSku: productSku ?? this.productSku,
+      description: description ?? this.description,
+      isCatalogProduct: isCatalogProduct ?? this.isCatalogProduct,
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       discount: discount ?? this.discount,
@@ -242,9 +250,11 @@ class InvoiceItem {
     return InvoiceItem(
       id: json['id']?.toString(),
       invoiceId: json['invoice_id']?.toString(),
-      productId: json['product_id']?.toString() ?? '',
+      productId: json['product_id']?.toString(), // Nullable now
       productName: json['product_name']?.toString(),
       productSku: json['product_sku']?.toString(),
+      description: json['description']?.toString(),
+      isCatalogProduct: json['is_catalog_product'] ?? true,
       quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
       unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0,
       discount: (json['discount'] as num?)?.toDouble() ?? 0,
@@ -257,9 +267,11 @@ class InvoiceItem {
     return {
       if (id != null) 'id': id,
       'invoice_id': invoiceId,
-      'product_id': productId,
+      'product_id': productId, // Can be null for ad-hoc items
       'product_name': productName,
       'product_sku': productSku,
+      'description': description,
+      'is_catalog_product': isCatalogProduct,
       'quantity': quantity,
       'unit_price': unitPrice,
       'discount': discount,
