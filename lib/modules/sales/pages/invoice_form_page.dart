@@ -544,19 +544,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   void _addProductLine(Product product) {
-    // Check if product already in cart
-    for (final entry in _lineEntries) {
-      if (entry.line.productId == product.id) {
-        entry.line.quantity += 1;
-        entry.quantityController.text = entry.line.quantity.toStringAsFixed(0);
-        setState(() {
-          _autocompleteKey++; // Reset autocomplete field
-        });
-        _handleLinesChanged();
-        return;
-      }
-    }
-
+    // Always add as new line (allow duplicates on different lines)
     final line = _InvoiceLine(
       productId: product.id,
       product: product,
@@ -1158,8 +1146,12 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   Widget _buildLineItemsSection(ThemeData theme) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Use available width, but ensure minimum for proper column display
-        final tableWidth = constraints.maxWidth > 900 ? constraints.maxWidth : 900.0;
+        // Calculate minimum required width based on columns
+        const minTableWidth = 800.0; // Reduced from 900
+        // Use available width if larger, otherwise use minimum (enables scroll)
+        final tableWidth = constraints.maxWidth > minTableWidth 
+            ? constraints.maxWidth 
+            : minTableWidth;
         
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -1198,7 +1190,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 // Artículo column (flex to fill remaining space)
                 Expanded(
                   child: Container(
-                    constraints: const BoxConstraints(minWidth: 300), // Prevent collapse
+                    constraints: const BoxConstraints(minWidth: 250), // Reduced from 300 for better shrinking
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       border: Border(
@@ -1305,7 +1297,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                         // Search field spanning the product details column
                         Expanded(
                           child: Container(
-                            constraints: const BoxConstraints(minWidth: 300), // Prevent collapse
+                            constraints: const BoxConstraints(minWidth: 250), // Match header column
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               border: Border(
@@ -1464,7 +1456,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             // Product details column
             Expanded(
               child: Container(
-                constraints: const BoxConstraints(minWidth: 300), // Prevent collapse
+                constraints: const BoxConstraints(minWidth: 250), // Allow more shrinking for better fit
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   border: Border(

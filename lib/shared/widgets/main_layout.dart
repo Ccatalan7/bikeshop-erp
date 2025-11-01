@@ -225,39 +225,47 @@ class MainLayout extends StatelessWidget {
             AnimatedContainer(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
-              width: navigationService.isDrawerVisible ? 280 : 0,
+              width: navigationService.isDrawerVisible ? navigationService.drawerWidth : 0,
               child: navigationService.isDrawerVisible
                   ? Container(
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.surface,
-                        border: Border(
-                          right: BorderSide(
-                            color: Theme.of(context).dividerColor,
-                            width: 1,
-                          ),
-                        ),
                       ),
                       child: const AppSidebar(),
                     )
                   : const SizedBox.shrink(),
             ),
-            // Main Content Area
+            // Main Content Area with left border
             Expanded(
-              child: Column(
+              child: Stack(
                 children: [
-                  // Top App Bar
+                  // Main content with border
                   Container(
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Theme.of(context).dividerColor,
-                          width: 1,
+                    decoration: navigationService.isDrawerVisible
+                        ? BoxDecoration(
+                            border: Border(
+                              left: BorderSide(
+                                color: Theme.of(context).dividerColor,
+                                width: 1,
+                              ),
+                            ),
+                          )
+                        : null,
+                    child: Column(
+                  children: [
+                    // Top App Bar
+                    Container(
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Theme.of(context).dividerColor,
+                            width: 1,
+                          ),
                         ),
                       ),
-                    ),
-                    child: Row(
+                      child: Row(
                       children: [
                         // Toggle drawer button
                         IconButton(
@@ -314,6 +322,31 @@ class MainLayout extends StatelessWidget {
                       child: body ?? child,
                     ),
                   ),
+                ],
+              ),
+                  ),
+                  // Invisible resize handle on left edge (12px wide)
+                  if (navigationService.isDrawerVisible)
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: 12,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.resizeColumn,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onHorizontalDragUpdate: (details) {
+                            navigationService.updateDrawerWidth(
+                              navigationService.drawerWidth + details.delta.dx,
+                            );
+                          },
+                          child: Container(
+                            color: Colors.transparent,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

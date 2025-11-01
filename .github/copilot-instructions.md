@@ -550,6 +550,485 @@ Support:
 
 ---
 
+# 🖼️ SPACE MANAGEMENT & RESPONSIVE UI PATTERNS
+
+**CRITICAL LESSONS LEARNED FROM PRODUCTION TESTING (Oct 31, 2025)**
+
+## 1. Resizable Navigation Pane
+
+**Pattern:** User-adjustable sidebar width with persistence
+
+**Implementation:**
+```dart
+// NavigationService (shared/services/navigation_service.dart)
+class NavigationService extends ChangeNotifier {
+  static const double _minDrawerWidth = 200;
+  static const double _maxDrawerWidth = 400;
+  static const double _defaultDrawerWidth = 280;
+  double _drawerWidth = _defaultDrawerWidth;
+  
+  Future<void> initialize() async {
+    final prefs = await SharedPreferences.getInstance();
+    _drawerWidth = prefs.getDouble('navigation_drawer_width') ?? _defaultDrawerWidth;
+    notifyListeners();
+  }
+  
+  void updateDrawerWidth(double newWidth) {
+    _drawerWidth = newWidth.clamp(_minDrawerWidth, _maxDrawerWidth);
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setDouble('navigation_drawer_width', _drawerWidth);
+    });
+    notifyListeners();
+  }
+}
+
+// MainLayout (shared/widgets/main_layout.dart)
+Row(
+  children: [
+    // Sidebar with dynamic width
+    AnimatedContainer(
+      width: navigationService.drawerWidth,
+      child: AppSidebar(),
+    ),
+    // Main content area with left border (serves as resize handle)
+    Expanded(
+      child: Container(
+        decoration: navigationService.isDrawerVisible
+            ? BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: Theme.of(context).dividerColor,
+                    width: 1,
+                  ),
+                ),
+              )
+            : null,
+        child: MouseRegion(
+          cursor: navigationService.isDrawerVisible 
+              ? SystemMouseCursors.resizeColumn 
+              : MouseCursor.defer,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragUpdate: navigationService.isDrawerVisible
+                ? (details) {
+                    navigationService.updateDrawerWidth(
+                      navigationService.drawerWidth + details.delta.dx,
+                    );
+                  }
+                : null,
+            child: Column(
+              children: [
+                // App bar and content...
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  ],
+)
+```
+
+**Key Principles:**
+- ✅ Use `SharedPreferences` to persist user preference
+- ✅ Clamp width to reasonable min/max (200-400px)
+- ✅ Use `MouseRegion` with `SystemMouseCursors.resizeColumn` for visual feedback
+- ✅ Use `GestureDetector.onHorizontalDragUpdate` for drag handling
+- ✅ **CRITICAL:** The 1px border IS the visual divider - no separate resize handle
+- ✅ **CRITICAL:** Wrap the entire content Column with MouseRegion + GestureDetector, not a separate widget
+- ✅ **CRITICAL:** Border must be on the Container wrapping the content, not on a separate resize handle
+- ✅ This ensures horizontal lines extend fully without gaps
+- ✅ `notifyListeners()` for real-time UI updates
+
+**Common Mistakes to AVOID:**
+- ❌ Creating a separate resize handle widget between sidebar and content
+- ❌ Adding extra width for the resize handle (creates gaps in horizontal dividers)
+- ❌ Putting the border on the resize handle instead of the content area
+- ❌ Using a thick transparent area for dragging (makes UI look broken)
+
+**Apply To:** Any resizable panel (sidebar, detail panels, split views)
+
+---
+
+## 2. Responsive Table Layout with Horizontal Scroll
+
+**Pattern:** Tables that shrink to minimum width but use available space
+
+**Implementation:**
+```dart
+// Sales Invoice Line Items (modules/sales/pages/invoice_form_page.dart)
+// Column width constants
+static const double _colIndexWidth = 40;
+static const double _colQuantityWidth = 120;
+static const double _colPriceWidth = 130;
+static const double _colDiscountWidth = 130;
+static const double _colTotalWidth = 130;
+static const double _colActionsWidth = 48;
+
+Widget _buildLineItemsSection() {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      const minTableWidth = 800.0; // Reduced from 900
+      final tableWidth = constraints.maxWidth > minTableWidth 
+          ? constraints.maxWidth 
+          : minTableWidth;
+      
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: tableWidth,
+          child: Column(
+            children: [
+              _buildTableHeader(),
+              ..._lineItems.map((item, index) => _buildLineRow(item, index)),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+// Product column with minimum width
+Container(
+  constraints: BoxConstraints(
+    minWidth: 250, // Reduced from 300
+    maxWidth: tableWidth - fixedColumnsWidth,
+  ),
+  child: ProductAutocompleteField(...),
+)
+```
+
+**Key Principles:**
+- ✅ Use `LayoutBuilder` to detect available width
+- ✅ Define minimum table width (typically 800px for complex tables)
+- ✅ Use `constraints.maxWidth` when available space > minimum
+- ✅ Wrap in `SingleChildScrollView` with `Axis.horizontal` for overflow
+- ✅ Set `minWidth` on flexible columns (e.g., product name 250px)
+- ✅ Fixed columns use exact widths (e.g., index 40px, actions 48px)
+- ✅ Flexible column takes remaining space: `maxWidth: tableWidth - fixedColumnsWidth`
+
+**Apply To:** Any data table, invoice line items, product lists, grid views
+
+---
+
+## 3. Overlay Dropdowns with Scroll Tracking
+
+**Pattern:** Dropdown that follows parent widget when page scrolls
+
+**Problem:** Absolute positioning (`Positioned` with `localToGlobal`) doesn't update on scroll
+
+**Solution:** Use `CompositedTransformFollower` with `LayerLink`
+
+**Implementation:**
+```dart
+// ProductAutocompleteField (shared/widgets/product_autocomplete_field.dart)
+class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
+  final LayerLink _layerLink = LayerLink();
+  
+  void _showOverlay() {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+    
+    // Minimum 300px width for dropdown (even if field is narrow)
+    final dropdownWidth = size.width < 300 ? 300.0 : size.width;
+    
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: dropdownWidth, // Fixed minimum width
+        child: CompositedTransformFollower(
+          link: _layerLink, // Tracks target position
+          showWhenUnlinked: false,
+          offset: Offset(0, size.height + 4), // 4px gap below field
+          child: Material(
+            elevation: 8,
+            child: _buildDropdownContent(),
+          ),
+        ),
+      ),
+    );
+    
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink, // Links target to follower
+      child: TextField(...),
+    );
+  }
+}
+```
+
+**Key Principles:**
+- ✅ Use `LayerLink` to connect target widget and overlay
+- ✅ Wrap target in `CompositedTransformTarget`
+- ✅ Use `CompositedTransformFollower` for overlay (NOT `Positioned` with absolute coordinates)
+- ✅ Set minimum width for dropdown content (e.g., 300px for product search)
+- ✅ Dropdown automatically follows target when scrolling
+- ✅ Add small offset (4px) for visual separation
+
+**Apply To:** Autocomplete fields, custom dropdowns, context menus, tooltips
+
+---
+
+## 4. Overlay Click Handling with Focus Delay
+
+**Pattern:** Prevent overlay from closing before tap events register
+
+**Problem:** Focus loss triggers overlay removal before tap completes
+
+**Solution:** 200ms delay before removing overlay
+
+**Implementation:**
+```dart
+_focusNode.addListener(() {
+  if (_focusNode.hasFocus) {
+    _showOverlay();
+  } else {
+    // Add delay to allow tap events to complete
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (!_focusNode.hasFocus && mounted) {
+        _removeOverlay();
+      }
+    });
+  }
+});
+
+// Wrap dropdown items in InkWell for better tap detection
+MouseRegion(
+  child: ListView.builder(
+    itemBuilder: (context, index) {
+      return InkWell( // Better than ListTile onTap
+        onTap: () => _onProductSelected(product),
+        child: ListTile(
+          title: Text(product.name),
+          subtitle: Text('SKU: ${product.sku}'),
+        ),
+      );
+    },
+  ),
+)
+```
+
+**Key Principles:**
+- ✅ Use `Future.delayed(Duration(milliseconds: 200))` before removing overlay
+- ✅ Check `mounted` before removing overlay (widget may be disposed)
+- ✅ Wrap list items in `InkWell` (more reliable than `ListTile.onTap`)
+- ✅ Use `MouseRegion` to keep overlay open when mouse hovers
+- ✅ 200ms is the sweet spot (100ms too fast, 300ms feels sluggish)
+
+**Apply To:** Any overlay with clickable content (autocomplete, menus, pickers)
+
+---
+
+## 5. Hover-Based UI Elements (Desktop)
+
+**Pattern:** Show actions/controls only when hovering over specific areas
+
+**Implementation:**
+```dart
+// Sales Invoice Line Items - Hover-based reorder arrows
+Widget _buildLineRow(LineItem item, int index) {
+  return StatefulBuilder(
+    builder: (context, setState) {
+      bool isHovered = false;
+      
+      return MouseRegion(
+        onEnter: (_) => setState(() => isHovered = true),
+        onExit: (_) => setState(() => isHovered = false),
+        child: Row(
+          children: [
+            // Index column
+            SizedBox(
+              width: _colIndexWidth,
+              child: Text('${index + 1}'),
+            ),
+            // Product column
+            Expanded(child: ProductField(...)),
+            // Actions column with conditional arrows
+            SizedBox(
+              width: _colActionsWidth,
+              child: Row(
+                children: [
+                  if (isHovered && index > 0)
+                    IconButton(
+                      icon: Icon(Icons.arrow_upward, size: 16),
+                      onPressed: () => _moveLineUp(index),
+                    ),
+                  if (isHovered && index < _lineItems.length - 1)
+                    IconButton(
+                      icon: Icon(Icons.arrow_downward, size: 16),
+                      onPressed: () => _moveLineDown(index),
+                    ),
+                  IconButton(
+                    icon: Icon(Icons.delete, size: 16),
+                    onPressed: () => _removeLine(index),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+```
+
+**Key Principles:**
+- ✅ Use `StatefulBuilder` for per-row hover state (not setState on whole list)
+- ✅ Use `MouseRegion` with `onEnter`/`onExit` callbacks
+- ✅ Conditional rendering: `if (isHovered) Widget(...)`
+- ✅ Keep hover state local to the widget (not global state)
+- ✅ Use small icons (size: 16) for compact inline actions
+- ✅ Always show critical actions (delete), hide secondary actions (reorder)
+
+**Apply To:** List items, table rows, cards, inline editing
+
+---
+
+## 6. Duplicate Items Handling in Lists
+
+**Pattern:** Allow same product/item on multiple lines (no auto-merge)
+
+**Problem:** Users expect e-commerce behavior (same product = separate lines, each customizable)
+
+**Implementation:**
+```dart
+// DON'T merge duplicates
+void _addProductLine(ProductSelection selection) {
+  // ❌ OLD: Check for duplicates and increment quantity
+  // final existingIndex = _lineItems.indexWhere((item) => 
+  //     item.productId == selection.product?.id);
+  // if (existingIndex >= 0) {
+  //   _lineItems[existingIndex].quantity += 1;
+  //   return;
+  // }
+  
+  // ✅ NEW: Always create new line
+  setState(() {
+    _lineItems.add(LineItem(
+      productId: selection.product?.id,
+      productName: selection.displayText,
+      quantity: 1,
+      price: selection.product?.price ?? 0,
+    ));
+  });
+}
+```
+
+**Key Principles:**
+- ✅ Each line is independent (separate quantity, discount, notes)
+- ✅ User can manually adjust quantities if they want consolidation
+- ✅ Matches e-commerce UX (Amazon, Shopify, etc.)
+- ✅ Allows different discounts per line for same product
+- ✅ Simpler code (no duplicate detection logic)
+
+**Apply To:** Invoice line items, cart items, order items, parts lists
+
+---
+
+## 7. Grid Table Layout Guidelines
+
+**When to use Grid Tables:**
+- Invoice line items (5+ columns)
+- Product lists with multiple attributes
+- Financial tables (journals, ledgers)
+- Any table with mixed input types (text, numbers, dropdowns)
+
+**Column Width Strategy:**
+```dart
+// Fixed columns (exact widths)
+const double _colIndexWidth = 40;      // Row number
+const double _colActionsWidth = 48;    // Icon buttons
+const double _colQuantityWidth = 120;  // Number inputs
+const double _colPriceWidth = 130;     // Currency values
+const double _colDiscountWidth = 130;  // Percentage/amount
+
+// Flexible column (takes remaining space)
+// Product name, description, notes
+final productColumnWidth = tableWidth - (
+  _colIndexWidth + _colQuantityWidth + _colPriceWidth + 
+  _colDiscountWidth + _colTotalWidth + _colActionsWidth
+);
+```
+
+**Column Sizing Rules:**
+- **Index/Row#:** 40px (max 2-digit numbers)
+- **Actions (icons):** 48px (Material design touch target)
+- **Numeric inputs:** 120-130px (fits 6-8 digits)
+- **Text/Description:** Flexible (minWidth: 250px, takes remaining space)
+- **Checkbox:** 48px (touch target)
+
+**Apply To:** Any complex data table with multiple column types
+
+---
+
+## 8. Common GUI Mistakes to AVOID
+
+❌ **Using absolute positioning for scrollable content**
+- Overlays detach from parent when scrolling
+- Use `CompositedTransformFollower` instead
+
+❌ **Fixed widths on flexible content**
+- Product names, descriptions need to expand
+- Use `minWidth` constraints, not fixed `width`
+
+❌ **No minimum width on dropdowns**
+- Narrow fields create unreadable dropdowns
+- Always set minimum (e.g., 300px for product search)
+
+❌ **Auto-merging duplicate items**
+- Users expect separate lines for flexibility
+- Let users manually consolidate if needed
+
+❌ **Removing overlays immediately on focus loss**
+- Tap events don't have time to register
+- Add 200ms delay before removal
+
+❌ **Global hover state for lists**
+- Causes entire list to rebuild on hover
+- Use `StatefulBuilder` for per-row state
+
+❌ **Non-resizable panels on desktop**
+- Different workflows need different layouts
+- Add drag handles with `SharedPreferences` persistence
+
+❌ **Tables that don't use available space**
+- Wasted whitespace on large screens
+- Use `LayoutBuilder` + `constraints.maxWidth`
+
+---
+
+## 9. Quick Reference: Apply These Patterns
+
+When creating **any form with line items** (invoices, orders, carts):
+1. Use grid table layout with fixed + flexible columns
+2. Set minTableWidth to 800px (or appropriate for your columns)
+3. Wrap in `LayoutBuilder` + `SingleChildScrollView(horizontal)`
+4. Allow duplicate products on separate lines
+5. Add hover-based reorder arrows (desktop only)
+
+When creating **any autocomplete/search field**:
+1. Use `CompositedTransformFollower` + `LayerLink` for overlay
+2. Set minimum dropdown width (300px for product search)
+3. Add 200ms delay before removing overlay on focus loss
+4. Wrap items in `InkWell` for reliable tap detection
+5. Use `MouseRegion` to keep overlay open on hover
+
+When creating **any resizable panel**:
+1. Add width management to service (`ChangeNotifier`)
+2. Use `SharedPreferences` to persist user preference
+3. Add `MouseRegion` with resize cursor
+4. Use `GestureDetector.onHorizontalDragUpdate` for dragging
+5. Clamp width to reasonable min/max
+
+**These patterns are PRODUCTION-TESTED and should be reused across ALL modules.**
+
+---
+
 # 🌍 Localization & Regional Context
 
 App is primarily used in Chile

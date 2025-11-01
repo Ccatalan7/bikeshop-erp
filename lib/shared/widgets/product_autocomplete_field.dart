@@ -36,20 +36,21 @@ class ProductAutocompleteField extends StatefulWidget {
 }
 
 class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
-  late final TextEditingController _controller;
-  final FocusNode _focusNode = FocusNode();
+  late TextEditingController _controller;
+  late FocusNode _focusNode;
   final LayerLink _layerLink = LayerLink();
-  late shared_inventory.InventoryService _inventoryService;
-  List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
-  bool _isLoading = false;
+  List<Product> _allProducts = [];
   Product? _selectedProduct;
+  bool _isLoading = false;
+  late shared_inventory.InventoryService _inventoryService;
   OverlayEntry? _overlayEntry;
 
   @override
   void initState() {
     super.initState();
     _controller = widget.controller ?? TextEditingController();
+    _focusNode = FocusNode();
     _inventoryService = Provider.of<shared_inventory.InventoryService>(context, listen: false);
     _controller.text = widget.initialValue ?? '';
     _loadProducts();
@@ -58,7 +59,12 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       if (_focusNode.hasFocus) {
         _showOverlay();
       } else {
-        _removeOverlay();
+        // Add small delay to allow tap events to register
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (!_focusNode.hasFocus && mounted) {
+            _removeOverlay();
+          }
+        });
       }
     });
   }
@@ -86,14 +92,32 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     final overlay = Overlay.of(context);
     final renderBox = context.findRenderObject() as RenderBox;
     final size = renderBox.size;
+    final position = renderBox.localToGlobal(Offset.zero);
+    
+    // Use minimum 300px width for dropdown to show product info properly
+    final dropdownWidth = size.width < 300 ? 300.0 : size.width;
+    
+    // Calculate available space below and above the field
+    final screenHeight = MediaQuery.of(context).size.height;
+    final spaceBelow = screenHeight - position.dy - size.height;
+    final spaceAbove = position.dy;
+    
+    // Dropdown max height
+    const maxDropdownHeight = 400.0;
+    
+    // Decide whether to show above or below
+    final showAbove = spaceBelow < maxDropdownHeight && spaceAbove > spaceBelow;
+    final offset = showAbove 
+        ? Offset(0, -(maxDropdownHeight + 4)) // Position above
+        : Offset(0, size.height + 4); // Position below
     
     _overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
-        width: size.width,
+        width: dropdownWidth,
         child: CompositedTransformFollower(
           link: _layerLink,
           showWhenUnlinked: false,
-          offset: Offset(0, size.height + 4),
+          offset: offset,
           child: Material(
             elevation: 8,
             borderRadius: BorderRadius.circular(8),
@@ -107,75 +131,88 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   }
 
   Widget _buildDropdownContent(ThemeData theme) {
-    return Container(
-      constraints: const BoxConstraints(maxHeight: 300),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.outline),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ListView.builder(
-        shrinkWrap: true,
-        padding: EdgeInsets.zero,
-        itemCount: _filteredProducts.length + (widget.allowCustomItems ? 1 : 0),
-        itemBuilder: (context, index) {
-          // Custom item option at the end
-          if (widget.allowCustomItems && index == _filteredProducts.length) {
-            if (_controller.text.trim().isEmpty) return const SizedBox.shrink();
-            
-            return ListTile(
-              leading: Icon(Icons.add_circle, color: theme.colorScheme.secondary),
-              title: Text('Agregar: "${_controller.text}"'),
-              subtitle: const Text('Artículo personalizado (no en catálogo)'),
+    return MouseRegion(
+      onEnter: (_) {
+        // Keep overlay open when mouse is over dropdown
+      },
+      child: Container(
+        constraints: const BoxConstraints(
+          maxHeight: 400, // Increased from 300 to show more items
+        ),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.colorScheme.outline),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: ListView.builder(
+            padding: EdgeInsets.zero,
+            itemCount: _filteredProducts.length + (widget.allowCustomItems ? 1 : 0),
+            itemBuilder: (context, index) {
+            // Custom item option at the end
+            if (widget.allowCustomItems && index == _filteredProducts.length) {
+              if (_controller.text.trim().isEmpty) return const SizedBox.shrink();
+              
+              return InkWell(
+                onTap: () {
+                  _selectCustomItem(_controller.text);
+                  _removeOverlay();
+                },
+                child: ListTile(
+                  leading: Icon(Icons.add_circle, color: theme.colorScheme.secondary),
+                  title: Text('Agregar: "${_controller.text}"'),
+                  subtitle: const Text('Artículo personalizado (no en catálogo)'),
+                ),
+              );
+            }
+
+            final product = _filteredProducts[index];
+            final hasStock = product.stockQuantity > 0;
+
+            return InkWell(
               onTap: () {
+                _selectProduct(product);
                 _removeOverlay();
-                _selectCustomItem(_controller.text);
               },
+              child: ListTile(
+                leading: product.imageUrl != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Image.network(
+                          product.imageUrl!,
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.inventory_2),
+                        ),
+                      )
+                    : const Icon(Icons.inventory_2),
+                title: Text(product.name),
+                subtitle: Text(
+                  'SKU: ${product.sku} • ${hasStock ? '${product.stockQuantity} ${product.unit.name}' : 'Sin stock'}',
+                  style: TextStyle(
+                    color: hasStock ? null : theme.colorScheme.error,
+                  ),
+                ),
+                trailing: Text(
+                  '\$${product.price.toStringAsFixed(0)}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             );
-          }
-
-          final product = _filteredProducts[index];
-          final hasStock = product.stockQuantity > 0;
-
-          return ListTile(
-            leading: product.imageUrl != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Image.network(
-                      product.imageUrl!,
-                      width: 40,
-                      height: 40,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.inventory_2),
-                    ),
-                  )
-                : const Icon(Icons.inventory_2),
-            title: Text(product.name),
-            subtitle: Text(
-              'SKU: ${product.sku} • ${hasStock ? '${product.stockQuantity} ${product.unit.name}' : 'Sin stock'}',
-              style: TextStyle(
-                color: hasStock ? null : theme.colorScheme.error,
-              ),
-            ),
-            trailing: Text(
-              '\$${product.price.toStringAsFixed(0)}',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            onTap: () {
-              _removeOverlay();
-              _selectProduct(product);
-            },
-          );
-        },
+          },
+        ),
+        ),
       ),
     );
   }

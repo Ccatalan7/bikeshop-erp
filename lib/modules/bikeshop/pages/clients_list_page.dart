@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
-import '../../../shared/services/database_service.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
+
+enum ClientsViewMode { table, board, calendar }
 
 class BikeshopClientsListPage extends StatefulWidget {
   const BikeshopClientsListPage({super.key});
@@ -32,6 +34,9 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
   bool _isLoading = true;
   String _searchTerm = '';
   JobStatus? _filterStatus;
+  ClientsViewMode _viewMode = ClientsViewMode.table;
+  DateTime _focusedMonth = DateTime.now();
+  DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
@@ -154,25 +159,44 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
     return MainLayout(
       child: Column(
         children: [
-          // Header
+          // Header with view switchers
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
               children: [
                 const Expanded(
                   child: Text(
-                    'Bikeshop - Clientes',
+                    'Gestión de clientes',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
+                // View mode switchers
+                _buildViewSwitcher(
+                  icon: Icons.table_chart,
+                  label: 'Table',
+                  mode: ClientsViewMode.table,
+                ),
+                const SizedBox(width: 8),
+                _buildViewSwitcher(
+                  icon: Icons.view_kanban,
+                  label: 'Board',
+                  mode: ClientsViewMode.board,
+                ),
+                const SizedBox(width: 8),
+                _buildViewSwitcher(
+                  icon: Icons.calendar_month,
+                  label: 'Calendar',
+                  mode: ClientsViewMode.calendar,
+                ),
+                const SizedBox(width: 16),
                 AppButton(
-                  text: 'Nuevo Trabajo',
-                  icon: Icons.add_circle,
+                  text: 'New',
+                  icon: Icons.add,
                   onPressed: () {
-                    context.push('/taller/pegas/new').then((_) => _loadData());
+                    context.push('/taller/pegas/nueva').then((_) => _loadData());
                   },
                 ),
               ],
@@ -248,15 +272,559 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
             ),
           const SizedBox(height: 16),
 
-          // Content
+          // Content - Switch based on view mode
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _buildCustomersList(),
+                : _buildViewContent(),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildViewContent() {
+    switch (_viewMode) {
+      case ClientsViewMode.table:
+        return _buildCustomersList();
+      case ClientsViewMode.board:
+        return _buildBoardView();
+      case ClientsViewMode.calendar:
+        return _buildCalendarView();
+    }
+  }
+
+  Widget _buildViewSwitcher({
+    required IconData icon,
+    required String label,
+    required ClientsViewMode mode,
+  }) {
+    final isSelected = _viewMode == mode;
+    final theme = Theme.of(context);
+    
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _viewMode = mode;
+        });
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? theme.primaryColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? theme.primaryColor : theme.dividerColor,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isSelected ? Colors.white : theme.colorScheme.onSurface,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : theme.colorScheme.onSurface,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBoardView() {
+    // Group customers by status of their latest job
+    final Map<JobStatus?, List<Customer>> customersByStatus = {};
+    
+    for (final customer in _filteredCustomers) {
+      final latestJob = _latestJobs[customer.id];
+      final status = latestJob?.status;
+      customersByStatus.putIfAbsent(status, () => []).add(customer);
+    }
+    
+    final statuses = [
+      JobStatus.pendiente,
+      JobStatus.diagnostico,
+      JobStatus.esperandoAprobacion,
+      JobStatus.enCurso,
+      JobStatus.esperandoRepuestos,
+      JobStatus.finalizado,
+    ];
+    
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: statuses.map((status) {
+          final customers = customersByStatus[status] ?? [];
+          return Container(
+            width: 300,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(status).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          status.displayName,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: _getStatusColor(status),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${customers.length}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: _getStatusColor(status),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: customers.length,
+                    itemBuilder: (context, index) {
+                      final customer = customers[index];
+                      final bikes = _customerBikes[customer.id] ?? [];
+                      final latestJob = _latestJobs[customer.id];
+                      
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: InkWell(
+                          onTap: () {
+                            context.push('/bikeshop/clientes/${customer.id}');
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  customer.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (customer.phone != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    customer.phone!,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                    ),
+                                  ),
+                                ],
+                                if (bikes.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '${bikes.first.brand} ${bikes.first.model}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                                if (latestJob != null) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Pega: ${latestJob.jobNumber}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildCalendarView() {
+    return Row(
+      children: [
+        // Calendar grid
+        Expanded(
+          flex: 7,
+          child: Card(
+            margin: const EdgeInsets.all(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildCalendarHeader(),
+                  const SizedBox(height: 16),
+                  Expanded(child: _buildCalendarGrid()),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Selected date details
+        Expanded(
+          flex: 3,
+          child: Card(
+            margin: const EdgeInsets.only(top: 16, right: 16, bottom: 16),
+            child: _buildSelectedDateJobs(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCalendarHeader() {
+    final monthFormat = DateFormat('MMMM yyyy', 'es');
+    
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.chevron_left),
+          onPressed: () {
+            setState(() {
+              _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+            });
+          },
+        ),
+        Text(
+          monthFormat.format(_focusedMonth),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Row(
+          children: [
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _focusedMonth = DateTime.now();
+                  _selectedDate = DateTime.now();
+                });
+              },
+              child: const Text('Today'),
+            ),
+            IconButton(
+              icon: const Icon(Icons.chevron_right),
+              onPressed: () {
+                setState(() {
+                  _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+                });
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCalendarGrid() {
+    final firstDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
+    final lastDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
+    final daysInMonth = lastDayOfMonth.day;
+    final firstWeekday = firstDayOfMonth.weekday % 7;
+
+    return Column(
+      children: [
+        // Weekday headers
+        Row(
+          children: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+              .map((day) => Expanded(
+                    child: Center(
+                      child: Text(
+                        day,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                      ),
+                    ),
+                  ))
+              .toList(),
+        ),
+        const SizedBox(height: 8),
+        // Calendar days
+        Expanded(
+          child: Column(
+            children: List.generate((daysInMonth + firstWeekday + 6) ~/ 7, (weekIndex) {
+              return Expanded(
+                child: Row(
+                  children: List.generate(7, (dayIndex) {
+                    final dayNumber = weekIndex * 7 + dayIndex - firstWeekday + 1;
+                    if (dayNumber < 1 || dayNumber > daysInMonth) {
+                      return const Expanded(child: SizedBox());
+                    }
+
+                    final date = DateTime(_focusedMonth.year, _focusedMonth.month, dayNumber);
+                    final isSelected = _selectedDate.year == date.year &&
+                        _selectedDate.month == date.month &&
+                        _selectedDate.day == date.day;
+                    final isToday = DateTime.now().year == date.year &&
+                        DateTime.now().month == date.month &&
+                        DateTime.now().day == date.day;
+                    final jobsOnDay = _getJobsForDate(date);
+
+                    return Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _selectedDate = date;
+                          });
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Theme.of(context).primaryColor.withOpacity(0.1)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: isToday
+                                ? Border.all(
+                                    color: Theme.of(context).primaryColor,
+                                    width: 2,
+                                  )
+                                : isSelected
+                                    ? Border.all(
+                                        color: Theme.of(context).primaryColor,
+                                        width: 1,
+                                      )
+                                    : null,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: Text(
+                                  '$dayNumber',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                                    color: isSelected
+                                        ? Theme.of(context).primaryColor
+                                        : Theme.of(context).colorScheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                              // List customer names like Notion
+                              if (jobsOnDay.isNotEmpty)
+                                Expanded(
+                                  child: ListView.builder(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                                    itemCount: jobsOnDay.length > 3 ? 3 : jobsOnDay.length,
+                                    itemBuilder: (context, index) {
+                                      final job = jobsOnDay[index];
+                                      final customerName = _customers
+                                          .firstWhere((c) => c.id == job.customerId,
+                                              orElse: () => Customer(
+                                                name: 'Unknown',
+                                                tenantId: '',
+                                                rut: '',
+                                              ))
+                                          .name;
+                                      
+                                      return Container(
+                                        margin: const EdgeInsets.only(bottom: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _getStatusColor(job.status).withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          customerName,
+                                          style: const TextStyle(fontSize: 10),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              if (jobsOnDay.length > 3)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                  child: Text(
+                                    '+${jobsOnDay.length - 3} more',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              );
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<MechanicJob> _getJobsForDate(DateTime date) {
+    final allJobs = _customerJobs.values.expand((jobs) => jobs).toList();
+    return allJobs.where((job) {
+      return job.arrivalDate.year == date.year &&
+          job.arrivalDate.month == date.month &&
+          job.arrivalDate.day == date.day;
+    }).toList();
+  }
+
+  Widget _buildSelectedDateJobs() {
+    final jobsForDate = _getJobsForDate(_selectedDate);
+    final dateFormat = DateFormat('EEEE, MMMM d, yyyy', 'es');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor,
+              ),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                dateFormat.format(_selectedDate),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${jobsForDate.length} trabajo${jobsForDate.length != 1 ? 's' : ''}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: jobsForDate.isEmpty
+              ? Center(
+                  child: Text(
+                    'No hay trabajos para esta fecha',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: jobsForDate.length,
+                  itemBuilder: (context, index) {
+                    final job = jobsForDate[index];
+                    final customer = _customers.firstWhere(
+                      (c) => c.id == job.customerId,
+                      orElse: () => Customer(
+                        name: 'Unknown',
+                        tenantId: '',
+                        rut: '',
+                      ),
+                    );
+                    final bikes = _customerBikes[job.customerId] ?? [];
+                    final bike = bikes.isNotEmpty ? bikes.first : null;
+
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: _getStatusColor(job.status).withOpacity(0.2),
+                        child: Icon(
+                          Icons.build,
+                          color: _getStatusColor(job.status),
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        customer.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (bike != null)
+                            Text(
+                              '${bike.brand} ${bike.model}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          const SizedBox(height: 4),
+                          _buildStatusBadge(job.status),
+                        ],
+                      ),
+                      onTap: () {
+                        // Navigate to job details
+                        context.push('/taller/pegas/${job.id}');
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Color _getStatusColor(JobStatus status) {
+    switch (status) {
+      case JobStatus.pendiente:
+        return Colors.grey;
+      case JobStatus.diagnostico:
+        return Colors.blue;
+      case JobStatus.esperandoAprobacion:
+        return Colors.amber;
+      case JobStatus.esperandoRepuestos:
+        return Colors.orange;
+      case JobStatus.enCurso:
+        return Colors.green;
+      case JobStatus.finalizado:
+        return Colors.teal;
+      case JobStatus.entregado:
+        return Colors.purple;
+      case JobStatus.cancelado:
+        return Colors.red;
+    }
   }
 
   Widget _buildFilterChip(String label, JobStatus? status) {

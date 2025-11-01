@@ -10,7 +10,6 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/tenant_service.dart';
-import '../../../shared/services/image_service.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
@@ -33,6 +32,18 @@ class MechanicJobFormPage extends StatefulWidget {
 class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   final _formKey = GlobalKey<FormState>();
 
+  // Column widths for parts table (same as invoice)
+  static const double _colIndexWidth = 40.0;
+  static const double _colQuantityWidth = 120.0;
+  static const double _colPriceWidth = 130.0;
+  static const double _colTotalWidth = 130.0;
+  static const double _colActionsWidth = 48.0;
+
+  // Column widths for labor table
+  static const double _colDateWidth = 120.0;
+  static const double _colHoursWidth = 100.0;
+  static const double _colRateWidth = 120.0;
+
   // Form controllers
   final _clientRequestController = TextEditingController();
   final _diagnosisController = TextEditingController();
@@ -52,6 +63,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // Parts and labor
   final List<_JobPartItem> _partItems = [];
   final List<_JobLaborItem> _laborItems = [];
+
+  // Key to reset autocomplete field after adding product
+  int _partAutocompleteKey = 0;
 
   // Data
   List<Customer> _customers = [];
@@ -252,26 +266,34 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     });
   }
 
-  void _addPartItem() async {
-    showDialog(
-      context: context,
-      builder: (context) => _PartItemDialog(
-        onItemAdded: (ProductSelection selection, int quantity, double price, String? notes) {
-          setState(() {
-            _partItems.add(_JobPartItem(
-              product: selection.product,
-              name: selection.isCatalogProduct 
-                  ? selection.product!.name 
-                  : selection.customDescription!,
-              isCatalogProduct: selection.isCatalogProduct,
-              quantity: quantity,
-              unitPrice: price,
-              notes: notes,
-            ));
-          });
-        },
-      ),
-    );
+  void _addCatalogPart(Product product) {
+    // Always add as new line (allow duplicates on different lines)
+    setState(() {
+      _partItems.add(_JobPartItem(
+        product: product,
+        name: product.name,
+        isCatalogProduct: true,
+        quantity: 1,
+        unitPrice: product.price,
+        notes: null,
+      ));
+      _partAutocompleteKey++; // Reset autocomplete field
+    });
+  }
+
+  void _addCustomPart(String description) {
+    // Ad-hoc part with no product reference
+    setState(() {
+      _partItems.add(_JobPartItem(
+        product: null,
+        name: description,
+        isCatalogProduct: false,
+        quantity: 1,
+        unitPrice: 0, // User must enter price manually
+        notes: null,
+      ));
+      _partAutocompleteKey++; // Reset autocomplete field
+    });
   }
 
   void _addLaborItem() {
@@ -478,7 +500,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             backgroundColor: Colors.green,
           ),
         );
-        context.pop();
+        // Navigate to pegas table after successful creation/update
+        context.go('/taller/pegas');
       }
     } catch (e) {
       if (mounted) {
@@ -650,11 +673,21 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     const SizedBox(height: 24),
                     _buildJobDetailsSection(),
                     const SizedBox(height: 24),
-                    _buildPartsSection(),
-                    const SizedBox(height: 24),
-                    _buildLaborSection(),
-                    const SizedBox(height: 24),
-                    _buildCostSummary(),
+                    // Products/Services and Cost Summary side-by-side
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 7,
+                          child: _buildPartsSection(),
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          flex: 3,
+                          child: _buildCostSummary(),
+                        ),
+                      ],
+                    ),
                     if (_existingJob?.invoiceId != null) ...[
                       const SizedBox(height: 24),
                       _buildInvoiceSection(),
@@ -1000,229 +1033,435 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   Widget _buildPartsSection() {
+    final theme = Theme.of(context);
+    
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Repuestos y Partes',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _addPartItem,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Agregar Repuesto'),
-                ),
-              ],
+            Text(
+              'Productos y Servicios',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 16),
-            if (_partItems.isEmpty)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    children: [
-                      Icon(Icons.build_circle_outlined,
-                          size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No hay repuestos agregados',
-                        style: TextStyle(color: Colors.grey[600]),
+            
+            // Responsive grid table (same as sales invoice)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const minTableWidth = 800.0;
+                final tableWidth = constraints.maxWidth > minTableWidth 
+                    ? constraints.maxWidth 
+                    : minTableWidth;
+                
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: tableWidth,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              Table(
-                border: TableBorder.all(color: Colors.grey[300]!),
-                columnWidths: const {
-                  0: FlexColumnWidth(3),
-                  1: FlexColumnWidth(1),
-                  2: FlexColumnWidth(1.5),
-                  3: FlexColumnWidth(1.5),
-                  4: FixedColumnWidth(60),
-                },
-                children: [
-                  TableRow(
-                    decoration: BoxDecoration(color: Colors.grey[200]),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Producto',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Cant.',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Precio Unit.',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Total',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          '',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  ..._partItems.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final item = entry.value;
-                    final isAdHoc = !item.isCatalogProduct;
-                    return TableRow(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            children: [
-                              // Product image or icon for ad-hoc
-                              if (item.product?.imageUrl != null)
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Table header
+                          Container(
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                            ),
+                            child: Row(
+                              children: [
+                                // # column
                                 Container(
-                                  width: 50,
-                                  height: 50,
-                                  margin: const EdgeInsets.only(right: 12),
-                                  child: ImageService.buildProductImage(
-                                    imageUrl: item.product!.imageUrl,
-                                    size: 50,
-                                  ),
-                                )
-                              else
-                                Container(
-                                  width: 50,
-                                  height: 50,
-                                  margin: const EdgeInsets.only(right: 12),
+                                  width: _colIndexWidth,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
                                   decoration: BoxDecoration(
-                                    color: isAdHoc ? Colors.orange.shade50 : Colors.grey.shade200,
-                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border(
+                                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                    ),
                                   ),
-                                  child: Icon(
-                                    isAdHoc ? Icons.edit_note : Icons.inventory_2_outlined,
-                                    color: isAdHoc ? Colors.orange : Colors.grey,
+                                  child: Center(
+                                    child: Text('#', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
                                   ),
                                 ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        if (isAdHoc)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            margin: const EdgeInsets.only(right: 8),
-                                            decoration: BoxDecoration(
-                                              color: Colors.orange.shade100,
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: const Text(
-                                              'Personalizado',
-                                              style: TextStyle(fontSize: 10, color: Colors.orange),
-                                            ),
-                                          ),
-                                        Expanded(
-                                          child: Text(
-                                            item.displayName,
-                                            style: const TextStyle(fontWeight: FontWeight.w500),
-                                          ),
-                                        ),
-                                      ],
+                                
+                                // Repuesto column (flex)
+                                Expanded(
+                                  child: Container(
+                                    constraints: const BoxConstraints(minWidth: 250),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                      ),
                                     ),
-                                    if (!isAdHoc && item.sku != null)
-                                      Text(
-                                        'SKU: ${item.sku} | Stock: ${item.product!.stockQuantity}',
-                                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                                      ),
-                                    if (item.notes != null && item.notes!.isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 4),
-                                        child: Text(
-                                          item.notes!,
-                                          style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                                    child: Text(
+                                      'PRODUCTO / SERVICIO',
+                                      style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ),
+                                
+                                // Cantidad column
+                                Container(
+                                  width: _colQuantityWidth,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text('CANTIDAD', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
+                                
+                                // Precio column
+                                Container(
+                                  width: _colPriceWidth,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text('PRECIO UNIT.', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
+                                
+                                // Total column
+                                Container(
+                                  width: _colTotalWidth,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  child: Text('TOTAL', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600), textAlign: TextAlign.right),
+                                ),
+                                
+                                // Actions column
+                                SizedBox(width: _colActionsWidth),
+                              ],
+                            ),
+                          ),
+                          
+                          // Header/Content divider
+                          Divider(height: 1, thickness: 1, color: theme.colorScheme.outline.withOpacity(0.2)),
+                          
+                          // Part items and add row
+                          Column(
+                            children: [
+                              // Existing part items
+                              if (_partItems.isNotEmpty)
+                                ..._partItems.asMap().entries.map((entry) => 
+                                  _buildPartRow(theme, entry.key + 1, entry.value, entry.key)
+                                ),
+                              
+                              // Add new part row (always show)
+                              Container(
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    top: _partItems.isNotEmpty 
+                                        ? BorderSide(color: theme.colorScheme.outline.withOpacity(0.2))
+                                        : BorderSide.none,
+                                  ),
+                                ),
+                                child: IntrinsicHeight(
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      // Empty # column
+                                      Container(
+                                        width: _colIndexWidth,
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                          ),
                                         ),
                                       ),
-                                  ],
+                                      
+                                      // Product autocomplete field
+                                      Expanded(
+                                        child: Container(
+                                          constraints: const BoxConstraints(minWidth: 250),
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            border: Border(
+                                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                            ),
+                                          ),
+                                          child: ProductAutocompleteField(
+                                            key: ValueKey(_partAutocompleteKey),
+                                            onProductSelected: (selection) {
+                                              if (selection.isCatalogProduct && selection.product != null) {
+                                                _addCatalogPart(selection.product!);
+                                              } else if (!selection.isCatalogProduct) {
+                                                _addCustomPart(selection.displayText);
+                                              }
+                                            },
+                                            allowCustomItems: true,
+                                            labelText: 'Agregar repuesto o parte',
+                                            hintText: 'Buscar en catálogo o escribir personalizado...',
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      // Empty columns for alignment
+                                      Container(
+                                        width: _colQuantityWidth,
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        width: _colPriceWidth,
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(width: _colTotalWidth),
+                                      SizedBox(width: _colActionsWidth),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(item.quantity.toString()),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(NumberFormat.currency(
-                                  symbol: '\$', decimalDigits: 0)
-                              .format(item.unitPrice)),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(
-                            NumberFormat.currency(
-                                    symbol: '\$', decimalDigits: 0)
-                                .format(item.quantity * item.unitPrice),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () {
-                              setState(() {
-                                _partItems.removeAt(index);
-                              });
-                            },
-                            iconSize: 20,
-                          ),
-                        ),
-                      ],
-                    );
-                  }),
-                ],
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPartRow(ThemeData theme, int index, _JobPartItem item, int itemIndex) {
+    final isAdHoc = !item.isCatalogProduct;
+    
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+        ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // # column
+            Container(
+              width: _colIndexWidth,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                ),
               ),
+              child: Center(
+                child: Text(
+                  '$index',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            
+            // Product details column
+            Expanded(
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 250),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Product image
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: isAdHoc 
+                            ? Colors.orange.shade50 
+                            : theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: theme.colorScheme.outline.withOpacity(0.2),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(5),
+                        child: item.product?.imageUrl != null
+                            ? Image.network(
+                                item.product!.imageUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Icon(
+                                  Icons.inventory_2_outlined,
+                                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                                  size: 24,
+                                ),
+                              )
+                            : Icon(
+                                isAdHoc ? Icons.edit_note : Icons.inventory_2_outlined,
+                                color: isAdHoc 
+                                    ? Colors.orange 
+                                    : theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                                size: 24,
+                              ),
+                      ),
+                    ),
+                    
+                    const SizedBox(width: 12),
+                    
+                    // Product name + details
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Product name with badge
+                          Row(
+                            children: [
+                              if (isAdHoc)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  margin: const EdgeInsets.only(right: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade100,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'PERSONALIZADO',
+                                    style: TextStyle(fontSize: 10, color: Colors.orange.shade900, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              Expanded(
+                                child: Text(
+                                  item.displayName,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          // SKU + Stock
+                          if (!isAdHoc && item.sku != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                'SKU: ${item.sku} | Stock: ${item.product!.stockQuantity.toInt()}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          
+                          // Notes
+                          if (item.notes != null && item.notes!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                item.notes!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 11,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Cantidad column
+            Container(
+              width: _colQuantityWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  item.quantity.toString(),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ),
+            
+            // Precio column
+            Container(
+              width: _colPriceWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.unitPrice),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ),
+            
+            // Total column
+            Container(
+              width: _colTotalWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Text(
+                NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.quantity * item.unitPrice),
+                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                textAlign: TextAlign.right,
+              ),
+            ),
+            
+            // Actions column
+            SizedBox(
+              width: _colActionsWidth,
+              child: Center(
+                child: IconButton(
+                  icon: Icon(Icons.delete_outline, size: 20, color: theme.colorScheme.error),
+                  onPressed: () {
+                    setState(() {
+                      _partItems.removeAt(itemIndex);
+                    });
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1230,208 +1469,396 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   Widget _buildLaborSection() {
+    final theme = Theme.of(context);
+    
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Mano de Obra',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _addLaborItem,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Agregar Mano de Obra'),
-                ),
-              ],
+            Text(
+              'Mano de Obra',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 16),
-            if (_laborItems.isEmpty)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    children: [
-                      Icon(Icons.work_outline,
-                          size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No hay mano de obra registrada',
-                        style: TextStyle(color: Colors.grey[600]),
+            
+            // Responsive grid table (same as parts)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const minTableWidth = 900.0;
+                final tableWidth = constraints.maxWidth > minTableWidth 
+                    ? constraints.maxWidth 
+                    : minTableWidth;
+                
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: tableWidth,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              Table(
-                border: TableBorder.all(color: Colors.grey[300]!),
-                columnWidths: const {
-                  0: FlexColumnWidth(3),
-                  1: FlexColumnWidth(1.5),
-                  2: FlexColumnWidth(1),
-                  3: FlexColumnWidth(1.5),
-                  4: FlexColumnWidth(1.5),
-                  5: FixedColumnWidth(60),
-                },
-                children: [
-                  TableRow(
-                    decoration: BoxDecoration(color: Colors.grey[200]),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Descripción',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Fecha',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Horas',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Tarifa/Hora',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Total',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          '',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  ..._laborItems.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final item = entry.value;
-                    return TableRow(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            children: [
-                              // Service image
-                              if (item.serviceProduct?.imageUrl != null)
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Table header
+                          Container(
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                            ),
+                            child: Row(
+                              children: [
+                                // # column
                                 Container(
-                                  width: 50,
-                                  height: 50,
-                                  margin: const EdgeInsets.only(right: 12),
-                                  child: ImageService.buildProductImage(
-                                    imageUrl: item.serviceProduct!.imageUrl,
-                                    size: 50,
+                                  width: _colIndexWidth,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text('#', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
                                   ),
                                 ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.displayName,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600),
+                                
+                                // Descripción column (flex)
+                                Expanded(
+                                  child: Container(
+                                    constraints: const BoxConstraints(minWidth: 250),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                      ),
                                     ),
-                                    if (item.hasCustomDescription)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 4),
-                                        child: Text(
-                                          item.description,
-                                          style:
-                                              Theme.of(context).textTheme.bodySmall,
+                                    child: Text(
+                                      'DESCRIPCIÓN',
+                                      style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ),
+                                
+                                // Fecha column
+                                Container(
+                                  width: _colDateWidth,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text('FECHA', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
+                                
+                                // Horas column
+                                Container(
+                                  width: _colHoursWidth,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text('HORAS', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
+                                
+                                // Tarifa column
+                                Container(
+                                  width: _colRateWidth,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text('TARIFA/H', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
+                                
+                                // Total column
+                                Container(
+                                  width: _colTotalWidth,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  child: Text('TOTAL', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600), textAlign: TextAlign.right),
+                                ),
+                                
+                                // Actions column
+                                SizedBox(width: _colActionsWidth),
+                              ],
+                            ),
+                          ),
+                          
+                          // Header/Content divider
+                          Divider(height: 1, thickness: 1, color: theme.colorScheme.outline.withOpacity(0.2)),
+                          
+                          // Labor items
+                          Column(
+                            children: [
+                              // Existing labor items
+                              if (_laborItems.isNotEmpty)
+                                ..._laborItems.asMap().entries.map((entry) => 
+                                  _buildLaborRow(theme, entry.key + 1, entry.value, entry.key)
+                                ),
+                              
+                              // Add labor button row (always show)
+                              Container(
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    top: _laborItems.isNotEmpty 
+                                        ? BorderSide(color: theme.colorScheme.outline.withOpacity(0.2))
+                                        : BorderSide.none,
+                                  ),
+                                ),
+                                child: IntrinsicHeight(
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      // Empty # column
+                                      Container(
+                                        width: _colIndexWidth,
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                          ),
                                         ),
                                       ),
-                                  ],
+                                      
+                                      // Add labor button spanning remaining columns
+                                      Expanded(
+                                        child: Container(
+                                          padding: const EdgeInsets.all(12),
+                                          child: FilledButton.icon(
+                                            onPressed: _addLaborItem,
+                                            icon: const Icon(Icons.add, size: 18),
+                                            label: const Text('Agregar Mano de Obra'),
+                                            style: FilledButton.styleFrom(
+                                              alignment: Alignment.centerLeft,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child:
-                              Text(DateFormat('dd/MM/yyyy').format(item.date)),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(item.hours.toStringAsFixed(2)),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(NumberFormat.currency(
-                                  symbol: '\$', decimalDigits: 0)
-                              .format(item.hourlyRate)),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(
-                            NumberFormat.currency(
-                                    symbol: '\$', decimalDigits: 0)
-                                .format(item.total),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () {
-                              setState(() {
-                                _laborItems.removeAt(index);
-                              });
-                            },
-                            iconSize: 20,
-                          ),
-                        ),
-                      ],
-                    );
-                  }),
-                ],
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLaborRow(ThemeData theme, int index, _JobLaborItem item, int itemIndex) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+        ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // # column
+            Container(
+              width: _colIndexWidth,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                ),
               ),
+              child: Center(
+                child: Text(
+                  '$index',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            
+            // Description column
+            Expanded(
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 250),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Service icon/image
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: theme.colorScheme.outline.withOpacity(0.2),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(5),
+                        child: item.serviceProduct?.imageUrl != null
+                            ? Image.network(
+                                item.serviceProduct!.imageUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Icon(
+                                  Icons.work_outline,
+                                  color: Colors.blue,
+                                  size: 24,
+                                ),
+                              )
+                            : Icon(
+                                Icons.work_outline,
+                                color: Colors.blue,
+                                size: 24,
+                              ),
+                      ),
+                    ),
+                    
+                    const SizedBox(width: 12),
+                    
+                    // Service name + description
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.displayName,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          
+                          // Custom description
+                          if (item.hasCustomDescription)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                item.description,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 11,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Fecha column
+            Container(
+              width: _colDateWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  DateFormat('dd/MM/yyyy').format(item.date),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ),
+            
+            // Horas column
+            Container(
+              width: _colHoursWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  item.hours.toStringAsFixed(2),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ),
+            
+            // Tarifa column
+            Container(
+              width: _colRateWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.hourlyRate),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ),
+            
+            // Total column
+            Container(
+              width: _colTotalWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Text(
+                NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.total),
+                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                textAlign: TextAlign.right,
+              ),
+            ),
+            
+            // Actions column
+            SizedBox(
+              width: _colActionsWidth,
+              child: Center(
+                child: IconButton(
+                  icon: Icon(Icons.delete_outline, size: 20, color: theme.colorScheme.error),
+                  onPressed: () {
+                    setState(() {
+                      _laborItems.removeAt(itemIndex);
+                    });
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1440,7 +1867,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   Widget _buildCostSummary() {
     return Card(
-      color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -1453,50 +1879,43 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   ),
             ),
             const SizedBox(height: 16),
-            Row(
+            Column(
               children: [
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    children: [
-                      _buildCostRow('Repuestos:', _partsCost, false),
-                      const SizedBox(height: 8),
-                      _buildCostRow('Mano de obra:', _laborCost, false),
-                      const Divider(),
-                      _buildCostRow('Subtotal:', _subtotal, true),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Descuento:',
-                              style: TextStyle(fontSize: 16)),
-                          SizedBox(
-                            width: 150,
-                            child: TextFormField(
-                              controller: _discountController,
-                              decoration: const InputDecoration(
-                                prefixText: '\$ ',
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                              ),
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.allow(
-                                    RegExp(r'^\d+\.?\d{0,2}')),
-                              ],
-                              onChanged: (_) => setState(() {}),
-                            ),
-                          ),
+                _buildCostRow('Repuestos:', _partsCost, false),
+                const SizedBox(height: 8),
+                _buildCostRow('Mano de obra:', _laborCost, false),
+                const Divider(),
+                _buildCostRow('Subtotal:', _subtotal, true),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Descuento:',
+                        style: TextStyle(fontSize: 16)),
+                    SizedBox(
+                      width: 150,
+                      child: TextFormField(
+                        controller: _discountController,
+                        decoration: const InputDecoration(
+                          prefixText: '\$ ',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d+\.?\d{0,2}')),
                         ],
+                        onChanged: (_) => setState(() {}),
                       ),
-                      const SizedBox(height: 8),
-                      _buildCostRow('IVA (19%):', _taxAmount, false),
-                      const Divider(thickness: 2),
-                      _buildCostRow('TOTAL:', _total, true, fontSize: 20),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 8),
+                _buildCostRow('IVA (19%):', _taxAmount, false),
+                const Divider(thickness: 2),
+                _buildCostRow('TOTAL:', _total, true, fontSize: 20),
               ],
             ),
           ],

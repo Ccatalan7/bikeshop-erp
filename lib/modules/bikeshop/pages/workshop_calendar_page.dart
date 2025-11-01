@@ -196,7 +196,7 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
                           children: [
                             _buildMonthHeader(),
                             const SizedBox(height: 16),
-                            _buildCalendarGrid(),
+                            Expanded(child: _buildCalendarGrid()),
                           ],
                         ),
                       ),
@@ -260,13 +260,15 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
     final lastDayOfMonth =
         DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
     final daysInMonth = lastDayOfMonth.day;
-    final firstWeekday = firstDayOfMonth.weekday % 7; // 0 = Sunday
+    // Monday = 1, Sunday = 7 in DateTime.weekday
+    // We want Monday = 0, so subtract 1
+    final firstWeekday = firstDayOfMonth.weekday - 1;
 
     return Column(
       children: [
-        // Weekday headers
+        // Weekday headers - Monday first
         Row(
-          children: ['D', 'L', 'M', 'M', 'J', 'V', 'S']
+          children: ['L', 'M', 'M', 'J', 'V', 'S', 'D']
               .map((day) => Expanded(
                     child: Center(
                       child: Text(
@@ -285,14 +287,15 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
         ),
         const SizedBox(height: 8),
         // Calendar days
-        ...List.generate((daysInMonth + firstWeekday + 6) ~/ 7, (weekIndex) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Row(
-              children: List.generate(7, (dayIndex) {
-                final dayNumber =
-                    weekIndex * 7 + dayIndex - firstWeekday + 1;
-                if (dayNumber < 1 || dayNumber > daysInMonth) {
+        Expanded(
+          child: Column(
+            children: List.generate((daysInMonth + firstWeekday + 6) ~/ 7, (weekIndex) {
+              return Expanded(
+                child: Row(
+                  children: List.generate(7, (dayIndex) {
+                    final dayNumber =
+                        weekIndex * 7 + dayIndex - firstWeekday + 1;
+                    if (dayNumber < 1 || dayNumber > daysInMonth) {
                   return const Expanded(child: SizedBox());
                 }
 
@@ -308,7 +311,6 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
                     DateTime.now().month == date.month &&
                     DateTime.now().day == date.day;
                 final jobsOnDay = _getJobsForDate(date);
-                final hasJobs = jobsOnDay.isNotEmpty;
 
                 return Expanded(
                   child: InkWell(
@@ -317,12 +319,11 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
                         _selectedDate = date;
                       });
                     },
-                    borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      height: 60,
+                      margin: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? Theme.of(context).primaryColor
+                            ? Theme.of(context).primaryColor.withOpacity(0.1)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                         border: isToday
@@ -330,35 +331,74 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
                                 color: Theme.of(context).primaryColor,
                                 width: 2,
                               )
-                            : null,
+                            : isSelected
+                                ? Border.all(
+                                    color: Theme.of(context).primaryColor,
+                                    width: 1,
+                                  )
+                                : null,
                       ),
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '$dayNumber',
-                            style: TextStyle(
-                              color: isSelected
-                                  ? Colors.white
-                                  : Theme.of(context).colorScheme.onSurface,
-                              fontWeight: isToday || hasJobs
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                          if (hasJobs) ...[
-                            const SizedBox(height: 4),
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
+                          Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Text(
+                              '$dayNumber',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                                 color: isSelected
-                                    ? Colors.white
-                                    : Theme.of(context).primaryColor,
-                                shape: BoxShape.circle,
+                                    ? Theme.of(context).primaryColor
+                                    : Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
-                          ],
+                          ),
+                          // List customer names like Notion - CLICKABLE & SCROLLABLE
+                          if (jobsOnDay.isNotEmpty)
+                            Expanded(
+                              child: ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                itemCount: jobsOnDay.length,
+                                itemBuilder: (context, index) {
+                                  final job = jobsOnDay[index];
+                                  final customerName = _customerNames[job.customerId] ?? 'Unknown';
+                                  final statusColor = _getStatusColorForJob(job.status);
+                                  
+                                  return InkWell(
+                                    onTap: () async {
+                                      setState(() {
+                                        _selectedDate = date;
+                                        _selectedJob = job;
+                                        _loadingDetails = true;
+                                      });
+                                      await _loadJobDetails(job);
+                                    },
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        customerName,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: statusColor.withOpacity(0.9),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -367,7 +407,9 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
               }),
             ),
           );
-        }),
+            }),
+          ),
+        ),
       ],
     );
   }
@@ -697,24 +739,100 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
             const SizedBox(height: 8),
           ],
           
-          // Deadline (compact and prominent)
+          // Deadline (compact and prominent) - EDITABLE
           if (job.deadline != null) ...[
-            Row(
-              children: [
-                Icon(
-                  Icons.event,
-                  size: 18,
-                  color: Colors.red.shade700,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Entrega: ${DateFormat('dd/MM/yyyy HH:mm').format(job.deadline!)}',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.red.shade700,
+            InkWell(
+              onTap: () async {
+                // Pick new date
+                final selectedDate = await showDatePicker(
+                  context: context,
+                  initialDate: job.deadline!,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2030),
+                  locale: const Locale('es', 'CL'),
+                );
+                
+                if (selectedDate == null) return;
+                
+                // Pick new time
+                final selectedTime = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay.fromDateTime(job.deadline!),
+                );
+                
+                if (selectedTime == null) return;
+                
+                // Combine date + time
+                final newDeadline = DateTime(
+                  selectedDate.year,
+                  selectedDate.month,
+                  selectedDate.day,
+                  selectedTime.hour,
+                  selectedTime.minute,
+                );
+                
+                // Update job
+                try {
+                  final bikeshopService = context.read<BikeshopService>();
+                  final updatedJob = job.copyWith(deadline: newDeadline);
+                  await bikeshopService.updateJob(updatedJob);
+                  
+                  // Reload data
+                  await _loadJobs();
+                  
+                  // Reload details if same job still selected
+                  if (_selectedJob?.id == job.id) {
+                    setState(() {
+                      _selectedJob = updatedJob;
+                      _loadingDetails = true;
+                    });
+                    await _loadJobDetails(updatedJob);
+                  }
+                  
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Fecha de entrega actualizada'),
+                        backgroundColor: Colors.green,
                       ),
-                ),
-              ],
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error al actualizar: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.event,
+                    size: 18,
+                    color: Colors.red.shade700,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Entrega: ${DateFormat('dd/MM/yyyy HH:mm').format(job.deadline!)}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.red.shade700,
+                          decoration: TextDecoration.underline,
+                          decorationStyle: TextDecorationStyle.dashed,
+                        ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.edit,
+                    size: 14,
+                    color: Colors.red.shade700.withAlpha(153),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
           ],
@@ -952,6 +1070,27 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
       ],
     );
   }
+
+  Color _getStatusColorForJob(JobStatus status) {
+    switch (status) {
+      case JobStatus.pendiente:
+        return Colors.grey;
+      case JobStatus.diagnostico:
+        return Colors.blue;
+      case JobStatus.esperandoAprobacion:
+        return Colors.amber;
+      case JobStatus.esperandoRepuestos:
+        return Colors.orange;
+      case JobStatus.enCurso:
+        return Colors.green;
+      case JobStatus.finalizado:
+        return Colors.teal;
+      case JobStatus.entregado:
+        return Colors.purple;
+      case JobStatus.cancelado:
+        return Colors.red;
+    }
+  }
 }
 
 // ============================================================
@@ -1018,12 +1157,6 @@ class _HoverImageWidgetState extends State<_HoverImageWidget> {
   }
 
   @override
-  void dispose() {
-    _hideZoomedImage();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return MouseRegion(
       onEnter: (_) {
@@ -1058,5 +1191,11 @@ class _HoverImageWidgetState extends State<_HoverImageWidget> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _hideZoomedImage();
+    super.dispose();
   }
 }

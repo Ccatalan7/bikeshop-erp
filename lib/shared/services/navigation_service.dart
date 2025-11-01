@@ -5,12 +5,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// This allows universal expand/collapse functionality across all pages
 class NavigationService extends ChangeNotifier {
   static const String _drawerVisibleKey = 'navigation_drawer_visible';
+  static const String _drawerWidthKey = 'navigation_drawer_width';
+  static const double _minDrawerWidth = 200.0;
+  static const double _maxDrawerWidth = 400.0;
+  static const double _defaultDrawerWidth = 280.0;
 
   bool _isDrawerVisible = true;
   bool _isInitialized = false;
+  double _drawerWidth = _defaultDrawerWidth;
 
   bool get isDrawerVisible => _isDrawerVisible;
   bool get isInitialized => _isInitialized;
+  double get drawerWidth => _drawerWidth;
 
   /// Initialize the service and load saved state
   Future<void> initialize() async {
@@ -19,12 +25,27 @@ class NavigationService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isDrawerVisible = prefs.getBool(_drawerVisibleKey) ?? true;
+      _drawerWidth = prefs.getDouble(_drawerWidthKey) ?? _defaultDrawerWidth;
       _isInitialized = true;
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading navigation state: $e');
       _isInitialized = true;
       notifyListeners();
+    }
+  }
+
+  /// Update drawer width (for resizing)
+  Future<void> updateDrawerWidth(double newWidth) async {
+    // Clamp width between min and max
+    _drawerWidth = newWidth.clamp(_minDrawerWidth, _maxDrawerWidth);
+    notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_drawerWidthKey, _drawerWidth);
+    } catch (e) {
+      debugPrint('Error saving drawer width: $e');
     }
   }
 

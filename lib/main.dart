@@ -114,7 +114,11 @@ class VinabikeApp extends StatelessWidget {
           });
           return service;
         }),
-        ChangeNotifierProvider(create: (_) => NavigationService()),
+        ChangeNotifierProvider(create: (_) {
+          final navigationService = NavigationService();
+          navigationService.initialize();
+          return navigationService;
+        }),
 
         // Business services
         // Shared inventory service (used by POS)
