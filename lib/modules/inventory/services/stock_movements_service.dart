@@ -29,8 +29,7 @@ class StockMovementsService extends ChangeNotifier {
           .from('stock_movements_view')
           .select()
           .eq('product_id', productId)
-          .order('transaction_date', ascending: false)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false); // Order by actual creation time (UTC), not transaction_date
 
       _movements = (response as List)
           .map((json) => StockMovement.fromJson(json))

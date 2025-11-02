@@ -763,6 +763,125 @@ create index if not exists idx_products_gtin on products(gtin);
 create index if not exists idx_products_hs_code on products(hs_code);
 
 -- ============================================================================
+-- STOCK ADJUSTMENTS TABLE - Track manual stock changes
+-- ============================================================================
+create table if not exists stock_adjustments (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  product_id uuid references products(id) on delete cascade not null,
+  adjustment_type text not null check (adjustment_type in ('manual', 'correction', 'initial', 'damage', 'loss', 'found')),
+  quantity integer not null, -- Positive or negative
+  stock_before integer not null,
+  stock_after integer not null,
+  reason text,
+  notes text,
+  created_by uuid references auth.users(id),
+  created_at timestamp with time zone not null default now(),
+  unique(tenant_id, id)
+);
+
+create index if not exists idx_stock_adjustments_tenant on stock_adjustments(tenant_id);
+create index if not exists idx_stock_adjustments_product on stock_adjustments(product_id);
+create index if not exists idx_stock_adjustments_created_at on stock_adjustments(created_at);
+
+-- Enable RLS
+alter table stock_adjustments enable row level security;
+
+drop policy if exists "stock_adjustments_select" on stock_adjustments;
+drop policy if exists "stock_adjustments_insert" on stock_adjustments;
+drop policy if exists "stock_adjustments_update" on stock_adjustments;
+drop policy if exists "stock_adjustments_delete" on stock_adjustments;
+
+create policy "stock_adjustments_select" on stock_adjustments
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "stock_adjustments_insert" on stock_adjustments
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "stock_adjustments_update" on stock_adjustments
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "stock_adjustments_delete" on stock_adjustments
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Trigger to auto-populate created_by
+drop trigger if exists trg_stock_adjustments_set_created_by on stock_adjustments;
+create trigger trg_stock_adjustments_set_created_by
+  before insert on stock_adjustments
+  for each row
+  execute function set_created_by();
+
+-- Trigger to track manual stock changes on products table
+create or replace function track_product_stock_changes()
+returns trigger as $$
+begin
+  -- CRITICAL: Only track MANUAL changes, not automatic ones from invoice triggers
+  -- Skip if this update is triggered by invoice consumption functions
+  -- We detect this by checking if the change comes from a trigger (TG_LEVEL != 0 means nested trigger)
+  if current_setting('app.skip_stock_adjustment_trigger', true) = 'true' then
+    return NEW;
+  end if;
+  
+  -- Only track if stock_quantity actually changed
+  if (TG_OP = 'UPDATE' and OLD.stock_quantity <> NEW.stock_quantity) then
+    insert into stock_adjustments (
+      tenant_id,
+      product_id,
+      adjustment_type,
+      quantity,
+      stock_before,
+      stock_after,
+      reason,
+      created_by
+    ) values (
+      NEW.tenant_id,
+      NEW.id,
+      'manual', -- Could be enhanced to detect type based on context
+      NEW.stock_quantity - OLD.stock_quantity,
+      OLD.stock_quantity,
+      NEW.stock_quantity,
+      'Manual adjustment via product form',
+      auth.uid()
+    );
+  elsif (TG_OP = 'INSERT' and NEW.stock_quantity > 0) then
+    -- Track initial stock when product is created with stock
+    insert into stock_adjustments (
+      tenant_id,
+      product_id,
+      adjustment_type,
+      quantity,
+      stock_before,
+      stock_after,
+      reason,
+      created_by
+    ) values (
+      NEW.tenant_id,
+      NEW.id,
+      'initial',
+      NEW.stock_quantity,
+      0,
+      NEW.stock_quantity,
+      'Initial stock on product creation',
+      auth.uid()
+    );
+  end if;
+  
+  return NEW;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_track_product_stock_changes on products;
+create trigger trg_track_product_stock_changes
+  after insert or update of stock_quantity
+  on products
+  for each row
+  execute function track_product_stock_changes();
+
+-- ============================================================================
 -- PRODUCT TRIGGERS - Sync denormalized fields
 -- ============================================================================
 
@@ -1146,11 +1265,19 @@ declare
   v_priority numeric(5,2);
   v_lead_time_days integer;
   v_estimated_stockout_date timestamp with time zone;
+  v_current_stock integer;
 begin
-  -- Only trigger when stock drops to or below minimum level
-  -- AND it wasn't already low before (to avoid duplicate entries on every update)
-  if (NEW.stock_quantity <= NEW.min_stock_level) and 
-     (OLD.stock_quantity is null or OLD.stock_quantity > NEW.min_stock_level) then
+  -- Sync stock_quantity and inventory_qty
+  if NEW.stock_quantity != NEW.inventory_qty then
+    NEW.stock_quantity := NEW.inventory_qty;
+  end if;
+  
+  -- Use whichever column is set (prefer stock_quantity as source of truth)
+  v_current_stock := coalesce(NEW.stock_quantity, NEW.inventory_qty, 0);
+  
+  -- Trigger when stock is at or below minimum level
+  -- Remove the restriction that prevents adding if already low
+  if v_current_stock <= NEW.min_stock_level then
     
     -- Check if product is already in the purchase list with pending/ordered status
     if exists (
@@ -1161,7 +1288,7 @@ begin
     ) then
       -- Already in list, just update the current stock
       update smart_purchase_list
-      set current_stock = NEW.stock_quantity,
+      set current_stock = v_current_stock,
           updated_at = now()
       where product_id = NEW.id
       and status in ('pending', 'ordered')
@@ -1207,7 +1334,7 @@ begin
     
     -- Suggested quantity: enough to reach max stock or at least cover 30 days
     v_suggested_qty := greatest(
-      NEW.max_stock_level - NEW.stock_quantity,
+      NEW.max_stock_level - v_current_stock,
       ceil(v_avg_daily_consumption * 30)::integer,
       1
     );
@@ -1217,7 +1344,7 @@ begin
     
     -- Estimated stockout date
     if v_avg_daily_consumption > 0 then
-      v_estimated_stockout_date := now() + (NEW.stock_quantity / v_avg_daily_consumption || ' days')::interval;
+      v_estimated_stockout_date := now() + (v_current_stock / v_avg_daily_consumption || ' days')::interval;
     else
       v_estimated_stockout_date := null;
     end if;
@@ -1226,7 +1353,7 @@ begin
     -- Formula: rotation * 0.6 + urgency * 0.3 + days_since_purchase * 0.1
     v_priority := least(100, greatest(0,
       (v_rotation_kpi * 10 * 0.6) + -- rotation scaled to 0-100
-      (case when NEW.stock_quantity = 0 then 100 else (1 - (NEW.stock_quantity::numeric / NEW.min_stock_level)) * 100 end * 0.3) + -- urgency
+      (case when v_current_stock = 0 then 100 else (1 - (v_current_stock::numeric / NEW.min_stock_level)) * 100 end * 0.3) + -- urgency
       (least(v_days_since_last_purchase, 100) * 0.1) -- days since last purchase capped at 100
     ));
     
@@ -1262,12 +1389,12 @@ begin
       v_priority,
       v_rotation_kpi,
       v_days_since_last_purchase,
-      NEW.stock_quantity,
+      v_current_stock,
       NEW.min_stock_level,
       v_avg_daily_consumption,
       v_lead_time_days,
       v_estimated_stockout_date,
-      'Auto-added: stock reached minimum level',
+      'Auto-added: stock at or below minimum level',
       now()
     );
     
@@ -1407,59 +1534,9 @@ $$;
 select public.backfill_stock_at_receipt_for_received_items();
 
 -- ============================================================================
--- STOCK MOVEMENTS VIEW - Comprehensive transaction tracking
+-- NOTE: stock_movements_view is defined later in this file (around line 4363)
+-- after all required columns have been added to sales_invoices and purchase_invoices
 -- ============================================================================
-create or replace view stock_movements_view as
--- Purchase Invoice Items (increases stock)
-select 
-  gen_random_uuid() as id,
-  (item->>'product_id')::uuid as product_id,
-  p.name as product_name,
-  p.sku as product_sku,
-  pi.date as transaction_date,
-  'purchase' as movement_type,
-  'manual_purchase' as source,
-  pi.id as reference_id,
-  pi.invoice_number as reference_number,
-  0 as stock_before, -- TODO: Calculate from audit trail
-  (item->>'quantity')::integer as quantity,
-  0 as stock_after, -- TODO: Calculate from audit trail
-  pi.notes,
-  null::uuid as created_by, -- Not tracked in purchase_invoices
-  pi.created_at,
-  pi.tenant_id
-from purchase_invoices pi,
-     jsonb_array_elements(pi.items) as item
-left join products p on (item->>'product_id')::uuid = p.id
-where pi.status in ('received', 'paid')
-
-union all
-
--- Sales Invoice Items (decreases stock)
-select 
-  gen_random_uuid() as id,
-  (item->>'product_id')::uuid as product_id,
-  p.name as product_name,
-  p.sku as product_sku,
-  si.date as transaction_date,
-  'sale' as movement_type,
-  'manual_sale' as source, -- Source not tracked in sales_invoices yet
-  si.id as reference_id,
-  si.invoice_number as reference_number,
-  0 as stock_before,
-  -(item->>'quantity')::integer as quantity, -- Negative for sales
-  0 as stock_after,
-  si.reference as notes, -- sales_invoices has 'reference' instead of 'notes'
-  null::uuid as created_by, -- Not tracked in sales_invoices
-  si.created_at,
-  si.tenant_id
-from sales_invoices si,
-     jsonb_array_elements(si.items) as item
-left join products p on (item->>'product_id')::uuid = p.id
-where si.status in ('sent', 'paid');
-
--- Enable RLS on the view
-alter view stock_movements_view set (security_invoker = on);
 
 create table if not exists accounts (
   id uuid primary key default gen_random_uuid(),
@@ -2071,6 +2148,32 @@ alter table public.sales_invoices
   add column if not exists paid_amount numeric(12,2) not null default 0,
   add column if not exists balance numeric(12,2) not null default 0,
   add column if not exists discount_amount numeric(12,2) not null default 0;
+
+-- Add source tracking for sales invoices (for stock movements)
+alter table public.sales_invoices
+  add column if not exists source text check (source in ('pos', 'manual_sale', 'ecommerce', 'mechanic_job'));
+
+-- Add created_by tracking for audit trail
+alter table public.sales_invoices
+  add column if not exists created_by uuid references auth.users(id);
+
+-- Function to auto-populate created_by on INSERT
+create or replace function set_created_by()
+returns trigger as $$
+begin
+  if new.created_by is null then
+    new.created_by := auth.uid();
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+-- Trigger to auto-populate created_by for sales_invoices
+drop trigger if exists trg_sales_invoices_set_created_by on sales_invoices;
+create trigger trg_sales_invoices_set_created_by
+  before insert on sales_invoices
+  for each row
+  execute function set_created_by();
 
 do $$
 begin
@@ -3372,6 +3475,8 @@ declare
   v_status text;
   v_items_count integer;
 begin
+  -- CRITICAL: Set flag to skip stock_adjustment trigger for automatic changes
+  perform set_config('app.skip_stock_adjustment_trigger', 'true', true);
   -- Early exit if invoice ID is null
   if p_invoice.id is null then
     raise notice 'consume_sales_invoice_inventory: invoice ID is null';
@@ -4154,6 +4259,17 @@ alter table public.purchase_invoices
   add column if not exists supplier_invoice_number text,
   add column if not exists supplier_invoice_date timestamp with time zone;
 
+-- Add created_by tracking for purchase invoices (for audit trail)
+alter table public.purchase_invoices
+  add column if not exists created_by uuid references auth.users(id);
+
+-- Trigger to auto-populate created_by for purchase_invoices
+drop trigger if exists trg_purchase_invoices_set_created_by on purchase_invoices;
+create trigger trg_purchase_invoices_set_created_by
+  before insert on purchase_invoices
+  for each row
+  execute function set_created_by();
+
 do $$
 begin
   if not exists (
@@ -4189,6 +4305,146 @@ create index if not exists idx_purchase_invoices_supplier_id
 
 create index if not exists idx_purchase_invoices_date
   on purchase_invoices(date);
+
+-- ============================================================================
+-- STOCK MOVEMENTS VIEW - FINAL VERSION (Recreated after column additions)
+-- ============================================================================
+-- Strategy: Calculate BACKWARD from current stock
+-- Most recent transaction: stock_after = products.stock_quantity
+-- Previous transactions: work backwards subtracting quantities
+
+-- Drop existing view first (needed when changing column structure)
+drop view if exists stock_movements_view cascade;
+
+create view stock_movements_view as
+with all_movements as (
+  -- Purchase Invoice Items (increases stock)
+  select 
+    gen_random_uuid() as id,
+    (item->>'product_id')::uuid as product_id,
+    p.name as product_name,
+    p.sku as product_sku,
+    pi.date as transaction_date,
+    'purchase' as movement_type,
+    'manual_purchase' as source,
+    pi.id as reference_id,
+    pi.invoice_number as reference_number,
+    (item->>'quantity')::integer as quantity,
+    pi.notes,
+    pi.created_by,
+    pi.created_at,
+    pi.tenant_id,
+    null::integer as stock_before,  -- Will be calculated
+    null::integer as stock_after    -- Will be calculated
+  from purchase_invoices pi,
+       jsonb_array_elements(pi.items) as item
+  left join products p on (item->>'product_id')::uuid = p.id
+  where pi.status in ('received', 'paid')
+  
+  union all
+  
+  -- Sales Invoice Items (decreases stock)
+  select 
+    gen_random_uuid() as id,
+    (item->>'product_id')::uuid as product_id,
+    p.name as product_name,
+    p.sku as product_sku,
+    si.date as transaction_date,
+    'sale' as movement_type,
+    coalesce(si.source, 'manual_sale') as source,
+    si.id as reference_id,
+    si.invoice_number as reference_number,
+    -(item->>'quantity')::integer as quantity, -- Negative for sales
+    si.reference as notes,
+    si.created_by,
+    si.created_at,
+    si.tenant_id,
+    null::integer as stock_before,  -- Will be calculated
+    null::integer as stock_after    -- Will be calculated
+  from sales_invoices si,
+       jsonb_array_elements(si.items) as item
+  left join products p on (item->>'product_id')::uuid = p.id
+  where si.status in ('sent', 'paid')
+  
+  union all
+  
+  -- Stock Adjustments (manual changes, corrections, etc.)
+  -- NOTE: Adjustments already have stock_before/stock_after stored, so we include them
+  select 
+    sa.id,
+    sa.product_id,
+    p.name as product_name,
+    p.sku as product_sku,
+    sa.created_at as transaction_date,
+    'adjustment' as movement_type,
+    sa.adjustment_type as source,
+    sa.id as reference_id,
+    'ADJ-' || to_char(sa.created_at, 'YYYYMMDD-HH24MISS') as reference_number,
+    sa.quantity,
+    sa.reason as notes,
+    sa.created_by,
+    sa.created_at,
+    sa.tenant_id,
+    sa.stock_before,  -- Already stored in table
+    sa.stock_after    -- Already stored in table
+  from stock_adjustments sa
+  left join products p on sa.product_id = p.id
+),
+movements_with_running_stock as (
+  select 
+    m.id,
+    m.product_id,
+    m.product_name,
+    m.product_sku,
+    m.transaction_date,
+    m.movement_type,
+    m.source,
+    m.reference_id,
+    m.reference_number,
+    m.quantity,
+    m.notes,
+    m.created_by,
+    m.created_at,
+    m.tenant_id,
+    m.stock_before as stored_stock_before,  -- From adjustments only
+    m.stock_after as stored_stock_after,    -- From adjustments only
+    p.stock_quantity as current_stock,
+    -- Calculate stock_after by working backwards from current stock
+    -- Subtract all changes that happened AFTER this transaction (newer transactions)
+    p.stock_quantity - coalesce(
+      sum(m.quantity) over (
+        partition by m.product_id, m.tenant_id 
+        order by m.created_at desc, m.id desc
+        rows between unbounded preceding and 1 preceding
+      ),
+      0
+    )::integer as calculated_stock_after
+  from all_movements m
+  left join products p on m.product_id = p.id and m.tenant_id = p.tenant_id
+)
+select 
+  id,
+  product_id,
+  product_name,
+  product_sku,
+  transaction_date,
+  movement_type,
+  source,
+  reference_id,
+  reference_number,
+  quantity,
+  -- For adjustments: use stored_stock_before, for sales/purchases: calculate it
+  coalesce(stored_stock_before, (calculated_stock_after - quantity)::integer) as stock_before,
+  -- For adjustments: use stored_stock_after, for sales/purchases: use calculated
+  coalesce(stored_stock_after, calculated_stock_after) as stock_after,
+  notes,
+  created_by,
+  created_at,
+  tenant_id
+from movements_with_running_stock;
+
+-- Ensure RLS is enabled
+alter view stock_movements_view set (security_invoker = on);
 
 create index if not exists idx_purchase_invoices_invoice_number
   on purchase_invoices(invoice_number);
@@ -6125,6 +6381,9 @@ declare
   v_quantity_numeric numeric;
   v_quantity_int integer;
 begin
+  -- CRITICAL: Set flag to skip stock_adjustment trigger for automatic changes
+  perform set_config('app.skip_stock_adjustment_trigger', 'true', true);
+  
   if p_invoice.id is null then
     raise notice 'consume_purchase_invoice_inventory: invoice ID is null, returning';
     return;

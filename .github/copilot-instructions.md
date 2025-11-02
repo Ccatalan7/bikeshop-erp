@@ -408,7 +408,151 @@ alter table my_table add column if not exists new_column text;
 
 ---
 
-# 🔧 COPILOT WORKFLOW CHECKLIST
+# � CRITICAL: INVENTORY COLUMNS PATTERN (inventory_qty vs stock_quantity)
+
+**⚠️ PRODUCTS TABLE HAS TWO INVENTORY COLUMNS - BOTH MUST BE UPDATED TOGETHER!**
+
+## The Two Columns
+
+```sql
+-- products table
+inventory_qty integer not null default 0,    -- Original column (Oct 2024)
+stock_quantity integer not null default 0,   -- Added Oct 13, 2025 for stock monitoring
+```
+
+## Historical Context
+
+**Timeline:**
+1. **Original:** `inventory_qty` created with products table (used everywhere)
+2. **Oct 13, 2025:** Added `stock_quantity` as "alias" + `min_stock_level` + `max_stock_level` for stock monitoring features
+3. **Nov 1, 2025:** Smart purchase list created, uses both columns
+
+**Why Both Exist:**
+- `inventory_qty` = Legacy column, used by older modules (sales, purchases, POS, accounting)
+- `stock_quantity` = Added for stock level monitoring (min/max thresholds, smart purchase list, auto-reorder)
+- Both columns store the SAME value and MUST be kept in sync
+
+## MANDATORY Pattern: Update BOTH Columns
+
+**❌ WRONG - Only updating one column:**
+```sql
+update products set inventory_qty = inventory_qty - 5 where id = product_id;
+```
+
+**✅ CORRECT - Always update BOTH:**
+```sql
+update products 
+   set inventory_qty = inventory_qty - 5,
+       stock_quantity = stock_quantity - 5
+ where id = product_id;
+```
+
+**✅ CORRECT - With safety checks:**
+```sql
+update products 
+   set inventory_qty = greatest(inventory_qty - 5, 0),
+       stock_quantity = greatest(stock_quantity - 5, 0)
+ where id = product_id;
+```
+
+## Where This Pattern is REQUIRED
+
+**Database Functions (ALL must update both):**
+- ✅ `consume_sales_invoice_inventory()` - Reduces stock on sales
+- ✅ `consume_purchase_invoice_inventory()` - Increases stock on purchases
+- ✅ `handle_sales_invoice_change()` - Trigger logic
+- ✅ `handle_purchase_invoice_change()` - Trigger logic
+- ✅ `restore_inventory()` - Reverses stock deductions
+- ✅ ANY function that modifies product inventory
+
+**Flutter/Dart Code:**
+```dart
+// ✅ CORRECT: inventory_models.dart Product.toJson()
+Map<String, dynamic> toJson() {
+  return {
+    'inventory_qty': inventoryQty,
+    'stock_quantity': inventoryQty,  // ← Both get same value!
+    // ... other fields
+  };
+}
+
+// ✅ CORRECT: When reading, prefer stock_quantity (more recent)
+final currentStock = product['stock_quantity'] as int? ?? 
+                     product['inventory_qty'] as int? ?? 0;
+```
+
+## Auto-Sync Trigger
+
+There's a trigger that auto-syncs when one is updated:
+
+```sql
+-- In auto_add_low_stock_to_purchase_list() function
+if NEW.stock_quantity != NEW.inventory_qty then
+  NEW.stock_quantity := NEW.inventory_qty;  -- Keep them in sync
+end if;
+```
+
+## Rules for New Code
+
+**When creating/modifying ANY inventory-related code:**
+
+1. ✅ **Database Functions:** Update BOTH columns in every UPDATE statement
+2. ✅ **Flutter Models:** Write to both columns in `toJson()`
+3. ✅ **Flutter Services:** When reading, use `stock_quantity` (or fallback to `inventory_qty`)
+4. ✅ **Views/Reports:** Prefer `stock_quantity` for consistency
+5. ✅ **Comments:** Always add comment: `-- Update BOTH inventory_qty (legacy) AND stock_quantity (current)`
+
+**⚠️ DO NOT:**
+- ❌ Remove either column (would break hundreds of references)
+- ❌ Update only one column (causes data inconsistency)
+- ❌ Create new inventory column (we already have redundancy)
+- ❌ Assume they auto-sync everywhere (manual sync required in most places)
+
+## Testing Checklist
+
+When making inventory changes, verify:
+- [ ] Both columns updated in database functions
+- [ ] Both columns updated in UPDATE statements
+- [ ] Both columns written in Dart `toJson()`
+- [ ] Stock value is same in both columns after operation
+- [ ] Smart purchase list still triggers correctly
+- [ ] POS transactions still work
+- [ ] Sales/purchase invoices still update stock
+
+## Common Mistakes
+
+```sql
+-- ❌ WRONG: Missing stock_quantity
+update products set inventory_qty = 100 where id = product_id;
+
+-- ❌ WRONG: Only in INSERT (both needed for consistency)
+insert into products (name, inventory_qty) values ('Product', 50);
+
+-- ✅ CORRECT: Both columns
+update products 
+   set inventory_qty = 100,
+       stock_quantity = 100
+ where id = product_id;
+
+-- ✅ CORRECT: Both in INSERT
+insert into products (name, inventory_qty, stock_quantity) 
+values ('Product', 50, 50);
+```
+
+## Why We Keep Both Columns
+
+**Benefits of redundancy:**
+1. ✅ Backward compatibility with existing code
+2. ✅ Safety net - if one gets corrupted, other is backup
+3. ✅ Different semantic meaning (legacy vs monitoring)
+4. ✅ Minimal storage cost, significant stability benefit
+5. ✅ Consolidation would require touching 100+ locations (high risk, low reward)
+
+**This pattern is PRODUCTION-TESTED and MUST be maintained going forward.**
+
+---
+
+# �🔧 COPILOT WORKFLOW CHECKLIST
 
 **For ANY database-related task:**
 
@@ -425,8 +569,10 @@ alter table my_table add column if not exists new_column text;
 8. ✅ **NEVER** create columns that are "nice to have" - only STRICTLY NECESSARY ones
 9. ✅ **VERIFY** column names match what's in `core_schema.sql`
 10. ✅ **IF YOU ADD A COLUMN:** Also add `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statement
-11. ✅ **INFORM** user: "I modified `core_schema.sql` at line X" or "I added function Y to `core_schema.sql`"
-12. ✅ **TELL USER:** "Deploy the updated `core_schema.sql` to Supabase"
+11. ✅ **IF MODIFYING INVENTORY:** Update BOTH `inventory_qty` AND `stock_quantity` columns (see inventory columns section above)
+12. ✅ **INFORM** user: "I modified `core_schema.sql` at line X" or "I added function Y to `core_schema.sql`"
+13. ✅ **TELL USER:** "Deploy the updated `core_schema.sql` to Supabase"
+14. ✅ **PROVIDE DEPLOYMENT SNIPPET:** Extract the exact lines to deploy and present them in a canvas artifact for easy copy-paste
 
 **⚠️ CRITICAL: Before creating ANY column:**
 - 🔍 Search for existing columns that could serve the same purpose
@@ -510,6 +656,52 @@ alter table my_table add column if not exists new_column text;
 - ✅ **ALWAYS check tenant_id != null before database operations**
 - ✅ **ALWAYS use DatabaseService for import services** (CSV/Excel imports)
 - ✅ **ALWAYS add ALTER TABLE when adding columns to existing tables**
+- ✅ **ALWAYS update BOTH inventory_qty AND stock_quantity when modifying product stock** (see inventory columns pattern)
+- ✅ **ALWAYS provide deployment snippet in canvas artifact after modifying core_schema.sql**
+
+---
+
+# 📤 DEPLOYMENT SNIPPET WORKFLOW
+
+**WHEN YOU MODIFY `core_schema.sql`, YOU MUST:**
+
+1. ✅ Make the changes to `core_schema.sql`
+2. ✅ Note the line numbers you modified (e.g., "lines 4309-4419")
+3. ✅ Tell user: "I modified `core_schema.sql` at lines X-Y (function/view/table name)"
+4. ✅ **EXTRACT the exact SQL code** from those lines
+5. ✅ **PRESENT in a canvas artifact** titled "Deploy to Supabase: [Description]"
+6. ✅ Include clear instructions: "Copy this SQL and run it in Supabase SQL Editor"
+
+**Example canvas format:**
+```
+Title: Deploy to Supabase: Stock Movements View Fix
+
+Content:
+-- Fix stock_movements_view calculation
+-- Lines 4309-4419 from core_schema.sql
+
+drop view if exists stock_movements_view cascade;
+
+create view stock_movements_view as
+-- ... full SQL here ...
+
+alter view stock_movements_view set (security_invoker = on);
+```
+
+**When to provide deployment snippet:**
+- ✅ Creating or modifying a VIEW
+- ✅ Creating or modifying a FUNCTION
+- ✅ Creating or modifying a TRIGGER
+- ✅ Adding/modifying RLS policies
+- ✅ Adding new tables with indexes
+- ✅ Any ALTER TABLE statements
+- ❌ NOT needed for Flutter code changes (those auto-deploy on app restart)
+
+**Benefits:**
+- User can copy-paste directly into Supabase SQL Editor
+- No need to search through 13,000+ line file
+- Clear documentation of what changed
+- Easy to review before deploying
 
 ---
 

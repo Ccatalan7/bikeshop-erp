@@ -143,8 +143,8 @@ class Invoice {
       'invoice_number': invoiceNumber,
       'customer_name': customerName,
       'customer_rut': customerRut,
-      'date': date.toIso8601String(),
-      'due_date': dueDate?.toIso8601String(),
+      'date': date.toUtc().toIso8601String(), // CRITICAL: Convert to UTC before sending
+      'due_date': dueDate?.toUtc().toIso8601String(), // CRITICAL: Convert to UTC
       'reference': reference,
       'status': status.name,
       'subtotal': subtotal,
@@ -363,7 +363,7 @@ class Payment {
       'invoice_reference': invoiceReference,
       'payment_method_id': paymentMethodId,
       'amount': amount,
-      'date': date.toIso8601String(),
+      'date': date.toUtc().toIso8601String(), // CRITICAL: Convert to UTC
       'reference': reference,
       'notes': notes,
     };

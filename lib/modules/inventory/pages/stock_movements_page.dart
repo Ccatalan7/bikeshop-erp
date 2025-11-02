@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/services/inventory_service.dart';
@@ -68,6 +69,60 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       _productListWidth = (_productListWidth + delta).clamp(_minPanelWidth, _maxPanelWidth);
     });
     _savePanelWidth(_productListWidth);
+  }
+
+  Future<void> _selectDateRange() async {
+    final result = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: _startDate != null && _endDate != null
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.blue,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (result != null) {
+      setState(() {
+        _startDate = result.start;
+        _endDate = result.end;
+      });
+    }
+  }
+
+  void _clearDateRange() {
+    setState(() {
+      _startDate = null;
+      _endDate = null;
+    });
+  }
+
+  void _navigateToReference(StockMovement movement) {
+    if (movement.referenceId == null) return;
+
+    if (movement.movementType == 'purchase') {
+      context.push(
+        '/purchases/invoice/${movement.referenceId}',
+        extra: {'readOnly': true},
+      );
+    } else if (movement.movementType == 'sale') {
+      context.push(
+        '/sales/invoice/${movement.referenceId}',
+        extra: {'readOnly': true},
+      );
+    }
   }
 
   @override
@@ -376,18 +431,30 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             ),
           ),
           const SizedBox(width: 16),
-          // Date range (simplified for now)
+          // Date range picker
           ElevatedButton.icon(
-            onPressed: () {
-              // TODO: Show date range picker
-            },
+            onPressed: _selectDateRange,
             icon: const Icon(Icons.date_range, size: 18),
-            label: const Text('Rango de fechas'),
+            label: Text(
+              _startDate != null && _endDate != null
+                  ? '${DateFormat('dd/MM/yy').format(_startDate!)} - ${DateFormat('dd/MM/yy').format(_endDate!)}'
+                  : 'Rango de fechas',
+            ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black87,
+              backgroundColor: _startDate != null && _endDate != null 
+                  ? Colors.blue.withOpacity(0.1)
+                  : Colors.white,
+              foregroundColor: _startDate != null && _endDate != null
+                  ? Colors.blue
+                  : Colors.black87,
             ),
           ),
+          if (_startDate != null || _endDate != null)
+            IconButton(
+              onPressed: _clearDateRange,
+              icon: const Icon(Icons.clear, size: 18),
+              tooltip: 'Limpiar filtro de fecha',
+            ),
         ],
       ),
     );
@@ -549,14 +616,22 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           // Reference
           SizedBox(
             width: 130,
-            child: Text(
-              movement.referenceNumber ?? '-',
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.blue,
-                decoration: TextDecoration.underline,
-              ),
-            ),
+            child: movement.referenceNumber != null
+                ? InkWell(
+                    onTap: () => _navigateToReference(movement),
+                    child: Text(
+                      movement.referenceNumber!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.blue,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  )
+                : const Text(
+                    '-',
+                    style: TextStyle(fontSize: 12),
+                  ),
           ),
           const SizedBox(width: 16),
           // Stock Before

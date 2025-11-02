@@ -16,6 +16,7 @@ class ProductImportService {
   final DatabaseService _db;
 
   static final List<ProductImportFieldDefinition> _fieldDefinitions = [
+    // 1. SKU (Referencia interna in Odoo)
     const ProductImportFieldDefinition(
       key: 'sku',
       label: 'SKU',
@@ -29,8 +30,11 @@ class ProductImportService {
         'código',
         'item code',
         'part number',
+        'referencia',
+        'referencia interna',
       ],
     ),
+    // 2. Nombre (Nombre in Odoo)
     const ProductImportFieldDefinition(
       key: 'name',
       label: 'Nombre',
@@ -44,6 +48,7 @@ class ProductImportService {
         'item name',
       ],
     ),
+    // 3. Categoría (Categoría del producto in Odoo)
     const ProductImportFieldDefinition(
       key: 'category_name',
       label: 'Categoría',
@@ -54,17 +59,25 @@ class ProductImportService {
         'categoria',
         'categoría',
         'product category',
+        'categoria del producto',
         'family',
         'familia',
       ],
     ),
+    // 4. Proveedor (Proveedores in Odoo)
     const ProductImportFieldDefinition(
       key: 'supplier_name',
       label: 'Proveedor',
       isRecommended: true,
       sampleValue: 'Proveedor Principal',
-      aliases: ['supplier', 'proveedor', 'vendor'],
+      aliases: [
+        'supplier',
+        'proveedor',
+        'proveedores',
+        'vendor',
+      ],
     ),
+    // 5. Marca (Marca in Odoo)
     const ProductImportFieldDefinition(
       key: 'brand',
       label: 'Marca',
@@ -72,32 +85,103 @@ class ProductImportService {
       sampleValue: 'VinaBike',
       aliases: ['brand', 'marca'],
     ),
+    // 6. Imagen (Imagen in Odoo - exports as Base64)
+    const ProductImportFieldDefinition(
+      key: 'image_base64',
+      label: 'Imagen',
+      isRecommended: true,
+      sampleValue: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA',
+      aliases: [
+        'image',
+        'imagen',
+        'image base64',
+        'imagen base64',
+        'imagen64',
+        'imagen principal',
+      ],
+    ),
+    // 7. Stock (Cantidad a la mano in Odoo)
+    const ProductImportFieldDefinition(
+      key: 'inventory_qty',
+      label: 'Stock disponible',
+      type: ProductImportFieldType.integer,
+      isRecommended: true,
+      sampleValue: '10',
+      aliases: [
+        'inventory',
+        'stock',
+        'cantidad',
+        'cantidad a la mano',
+        'existencias',
+      ],
+    ),
+    // 8. Precio de venta (Precio de venta in Odoo)
+    const ProductImportFieldDefinition(
+      key: 'price',
+      label: 'Precio venta (CLP)',
+      type: ProductImportFieldType.decimal,
+      isRecommended: true,
+      sampleValue: '899000',
+      aliases: [
+        'price',
+        'precio',
+        'sale price',
+        'precio venta',
+        'precio de venta',
+      ],
+    ),
+    // 9. Costo (Costo in Odoo)
+    const ProductImportFieldDefinition(
+      key: 'cost',
+      label: 'Costo (CLP)',
+      type: ProductImportFieldType.decimal,
+      isRecommended: true,
+      sampleValue: '540000',
+      aliases: [
+        'cost',
+        'costo',
+        'purchase cost',
+        'precio costo',
+      ],
+    ),
+    // 10. IVA (Impuesto de ventas in Odoo)
+    const ProductImportFieldDefinition(
+      key: 'tax_rate',
+      label: 'IVA (%)',
+      type: ProductImportFieldType.decimal,
+      isRecommended: true,
+      sampleValue: '19',
+      aliases: [
+        'iva',
+        'tax',
+        'tax rate',
+        'impuesto',
+        'impuesto de ventas',
+      ],
+    ),
+    // Optional fields (not in Odoo export but useful for our system)
     const ProductImportFieldDefinition(
       key: 'image_url',
-      label: 'Imagen principal (URL)',
-      isRecommended: true,
+      label: 'Imagen URL',
+      isRecommended: false,
       sampleValue: 'https://example.com/imagenes/mtb.jpg',
-      aliases: ['image', 'image url', 'imagen'],
+      aliases: [
+        'image url',
+        'imagen url',
+      ],
     ),
     const ProductImportFieldDefinition(
       key: 'image_urls',
       label: 'Galería de imágenes (URLs separadas por coma)',
-      isRecommended: true,
+      isRecommended: false,
       sampleValue:
           'https://example.com/imagenes/mtb-1.jpg, https://example.com/imagenes/mtb-2.jpg',
       aliases: ['imagenes', 'images', 'gallery', 'image gallery'],
     ),
     const ProductImportFieldDefinition(
-      key: 'image_base64',
-      label: 'Imagen principal (Base64)',
-      isRecommended: true,
-      sampleValue: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA',
-      aliases: ['image base64', 'imagen base64', 'imagen64'],
-    ),
-    const ProductImportFieldDefinition(
       key: 'image_gallery_base64',
       label: 'Galería de imágenes (Base64 separadas por coma)',
-      isRecommended: true,
+      isRecommended: false,
       sampleValue:
           'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ, data:image/png;base64,iVBORw0KGgoAAAANSUhEUg',
       aliases: [
@@ -108,42 +192,10 @@ class ProductImportService {
       ],
     ),
     const ProductImportFieldDefinition(
-      key: 'inventory_qty',
-      label: 'Stock disponible',
-      type: ProductImportFieldType.integer,
-      isRecommended: true,
-      sampleValue: '10',
-      aliases: ['inventory', 'stock', 'cantidad', 'existencias'],
-    ),
-    const ProductImportFieldDefinition(
-      key: 'price',
-      label: 'Precio venta (CLP)',
-      type: ProductImportFieldType.decimal,
-      isRecommended: true,
-      sampleValue: '899000',
-      aliases: ['price', 'precio', 'sale price', 'precio venta'],
-    ),
-    const ProductImportFieldDefinition(
-      key: 'cost',
-      label: 'Costo (CLP)',
-      type: ProductImportFieldType.decimal,
-      isRecommended: true,
-      sampleValue: '540000',
-      aliases: ['cost', 'costo', 'purchase cost', 'precio costo'],
-    ),
-    const ProductImportFieldDefinition(
-      key: 'tax_rate',
-      label: 'IVA (%)',
-      type: ProductImportFieldType.decimal,
-      isRecommended: true,
-      sampleValue: '19',
-      aliases: ['iva', 'tax', 'tax rate', 'impuesto'],
-    ),
-    const ProductImportFieldDefinition(
       key: 'is_published',
       label: 'Publicado en tienda',
       type: ProductImportFieldType.boolean,
-      isRecommended: true,
+      isRecommended: false,
       sampleValue: 'TRUE',
       aliases: [
         'is_published',

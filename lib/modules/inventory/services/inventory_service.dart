@@ -127,6 +127,30 @@ class InventoryService extends ChangeNotifier {
         throw Exception('ID de producto inválido');
       }
 
+      // Check if stock quantity changed - if so, create stock_adjustments record
+      final existingProduct = await getProductById(product.id!);
+      if (existingProduct != null && existingProduct.inventoryQty != product.inventoryQty) {
+        final difference = product.inventoryQty - existingProduct.inventoryQty;
+        
+        // Create stock_adjustments record (NOT stock_movements)
+        final tenantId = await _tenantService.getTenantId();
+        if (tenantId != null) {
+          try {
+            await _db.insert('stock_adjustments', {
+              'product_id': product.id!,
+              'adjustment_type': 'manual',
+              'quantity': difference,
+              'stock_before': existingProduct.inventoryQty,
+              'stock_after': product.inventoryQty,
+              'reason': 'Ajuste manual desde formulario de producto',
+            });
+          } catch (e) {
+            if (kDebugMode) print('⚠️ Error creating stock adjustment record: $e');
+            // Don't fail the whole update if adjustment logging fails
+          }
+        }
+      }
+
       final data =
           await _db.update('products', product.id!, updatedProduct.toJson());
       notifyListeners();
