@@ -32,6 +32,7 @@ import '../../modules/inventory/pages/category_form_page.dart';
 import '../../modules/inventory/pages/brand_list_page.dart';
 import '../../modules/inventory/pages/brand_form_page.dart';
 import '../../modules/inventory/pages/stock_movement_list_page.dart';
+import '../../modules/inventory/pages/stock_movements_page.dart';
 import '../../modules/sales/pages/invoice_list_page.dart';
 import '../../modules/sales/pages/invoice_form_page.dart';
 import '../../modules/sales/pages/invoice_payment_page.dart';
@@ -43,6 +44,7 @@ import '../../modules/purchases/pages/purchase_invoice_list_page.dart';
 import '../../modules/purchases/pages/purchase_invoice_form_page.dart';
 import '../../modules/purchases/pages/purchase_invoice_detail_page.dart';
 import '../../modules/purchases/pages/purchase_payments_list_page.dart';
+import '../../modules/purchases/pages/smart_purchase_list_page.dart';
 import '../../modules/pos/pages/pos_dashboard_page.dart';
 import '../../modules/pos/pages/pos_cart_page.dart';
 import '../../modules/pos/pages/pos_payment_page.dart';
@@ -668,6 +670,14 @@ class AppRouter {
           ),
         ),
         GoRoute(
+          path: '/inventory/movements',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const StockMovementsPage(),
+          ),
+        ),
+        GoRoute(
           path: '/inventory/brands/new',
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
@@ -843,6 +853,14 @@ class AppRouter {
             const MainLayout(
               child: PurchasePaymentsListPage(),
             ),
+          ),
+        ),
+        GoRoute(
+          path: '/purchases/smart-list',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const SmartPurchaseListPage(),
           ),
         ),
 

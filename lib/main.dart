@@ -19,12 +19,14 @@ import 'shared/config/supabase_config.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/inventory/services/inventory_service.dart' as module_inventory;
 import 'modules/inventory/services/brand_service.dart';
+import 'modules/inventory/services/stock_movements_service.dart';
 import 'modules/crm/services/customer_service.dart';
 import 'modules/accounting/services/accounting_service.dart';
 import 'modules/accounting/services/financial_reports_service.dart';
 import 'modules/accounting/services/expense_service.dart';
 import 'modules/pos/services/pos_service.dart';
 import 'modules/purchases/services/purchase_service.dart';
+import 'modules/purchases/services/smart_purchase_list_service.dart';
 import 'modules/sales/services/sales_service.dart';
 import 'modules/settings/services/appearance_service.dart';
 import 'modules/bikeshop/services/bikeshop_service.dart';
@@ -141,6 +143,7 @@ class VinabikeApp extends StatelessWidget {
             create: (context) => BrandService(
                   Provider.of<DatabaseService>(context, listen: false),
                 )),
+        ChangeNotifierProvider(create: (_) => StockMovementsService()),
         ChangeNotifierProvider(
             create: (context) => CustomerService(
                   Provider.of<DatabaseService>(context, listen: false),
@@ -167,6 +170,7 @@ class VinabikeApp extends StatelessWidget {
                   Provider.of<DatabaseService>(context, listen: false),
                   Provider.of<TenantService>(context, listen: false),
                 )),
+        ChangeNotifierProvider(create: (_) => SmartPurchaseListService()),
         ChangeNotifierProvider(
             create: (context) => HRService(
                   Provider.of<TenantService>(context, listen: false),

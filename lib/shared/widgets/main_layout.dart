@@ -135,6 +135,11 @@ const String _salesSectionKey = 'sales';
 
 const List<MenuSubItem> _purchasesMenuItems = [
   MenuSubItem(
+    icon: Icons.list_alt,
+    title: 'Lista Inteligente',
+    route: '/purchases/smart-list',
+  ),
+  MenuSubItem(
     icon: Icons.storefront_outlined,
     title: 'Proveedores',
     route: '/purchases/suppliers',

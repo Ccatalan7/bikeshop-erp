@@ -68,10 +68,12 @@ class PaymentMethodService extends ChangeNotifier {
     }
   }
 
-  /// Get a payment method by code
+  /// Get a payment method by code (case-insensitive)
   PaymentMethod? getPaymentMethodByCode(String code) {
     try {
-      return _paymentMethods.firstWhere((pm) => pm.code == code);
+      return _paymentMethods.firstWhere(
+        (pm) => pm.code.toUpperCase() == code.toUpperCase(),
+      );
     } catch (e) {
       return null;
     }

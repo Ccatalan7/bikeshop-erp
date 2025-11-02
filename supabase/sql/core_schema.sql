@@ -1057,6 +1057,410 @@ begin
   end if;
 end $$;
 
+-- ============================================================================
+-- SMART PURCHASE LIST - Intelligent purchase planning
+-- ============================================================================
+create table if not exists smart_purchase_list (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  product_id uuid references products(id) on delete cascade,
+  product_name text not null,
+  product_sku text,
+  supplier_id uuid references suppliers(id) on delete set null,
+  supplier_name text,
+  suggested_quantity integer not null default 1,
+  actual_quantity integer, -- User can override suggested quantity
+  status text not null default 'pending'
+    check (status in ('pending','ordered','received','ignored','cancelled')),
+  priority numeric(5,2) not null default 50, -- 0-100 scale
+  rotation_kpi numeric(5,2), -- How fast the item moves (sales per day)
+  days_since_last_purchase integer,
+  current_stock integer not null default 0,
+  min_stock_level integer not null default 0,
+  stock_at_order integer, -- Stock quantity when purchase order was generated
+  stock_at_receipt integer, -- Stock quantity when invoice was received (final stock after purchase)
+  avg_daily_consumption numeric(10,2), -- Average units sold per day
+  lead_time_days integer not null default 0,
+  estimated_stockout_date timestamp with time zone, -- When stock will run out
+  notes text,
+  added_by uuid references auth.users(id) on delete set null,
+  added_date timestamp with time zone not null default now(),
+  linked_purchase_invoice_id uuid references purchase_invoices(id) on delete set null,
+  linked_expense_id uuid references expenses(id) on delete set null,
+  ordered_date timestamp with time zone,
+  received_date timestamp with time zone,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_smart_purchase_list_tenant on smart_purchase_list(tenant_id);
+create index if not exists idx_smart_purchase_list_product on smart_purchase_list(product_id);
+create index if not exists idx_smart_purchase_list_supplier on smart_purchase_list(supplier_id);
+create index if not exists idx_smart_purchase_list_status on smart_purchase_list(status);
+create index if not exists idx_smart_purchase_list_priority on smart_purchase_list(priority desc);
+create index if not exists idx_smart_purchase_list_added_date on smart_purchase_list(added_date desc);
+
+-- Add stock_at_order column if it doesn't exist (migration for existing tables)
+alter table smart_purchase_list add column if not exists stock_at_order integer;
+
+-- Add stock_at_receipt column if it doesn't exist (migration for existing tables)
+alter table smart_purchase_list add column if not exists stock_at_receipt integer;
+
+-- Enable RLS for smart_purchase_list
+alter table smart_purchase_list enable row level security;
+
+drop policy if exists "smart_purchase_list_select" on smart_purchase_list;
+drop policy if exists "smart_purchase_list_insert" on smart_purchase_list;
+drop policy if exists "smart_purchase_list_update" on smart_purchase_list;
+drop policy if exists "smart_purchase_list_delete" on smart_purchase_list;
+
+create policy "smart_purchase_list_select" on smart_purchase_list
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "smart_purchase_list_insert" on smart_purchase_list
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "smart_purchase_list_update" on smart_purchase_list
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "smart_purchase_list_delete" on smart_purchase_list
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Trigger function to auto-add products to smart purchase list when stock is low
+create or replace function public.auto_add_low_stock_to_purchase_list()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  v_supplier_id uuid;
+  v_supplier_name text;
+  v_rotation_kpi numeric(5,2);
+  v_avg_daily_consumption numeric(10,2);
+  v_days_since_last_purchase integer;
+  v_suggested_qty integer;
+  v_priority numeric(5,2);
+  v_lead_time_days integer;
+  v_estimated_stockout_date timestamp with time zone;
+begin
+  -- Only trigger when stock drops to or below minimum level
+  -- AND it wasn't already low before (to avoid duplicate entries on every update)
+  if (NEW.stock_quantity <= NEW.min_stock_level) and 
+     (OLD.stock_quantity is null or OLD.stock_quantity > NEW.min_stock_level) then
+    
+    -- Check if product is already in the purchase list with pending/ordered status
+    if exists (
+      select 1 from smart_purchase_list
+      where product_id = NEW.id
+      and status in ('pending', 'ordered')
+      and tenant_id = NEW.tenant_id
+    ) then
+      -- Already in list, just update the current stock
+      update smart_purchase_list
+      set current_stock = NEW.stock_quantity,
+          updated_at = now()
+      where product_id = NEW.id
+      and status in ('pending', 'ordered')
+      and tenant_id = NEW.tenant_id;
+      
+      return NEW;
+    end if;
+    
+    -- Get supplier info (use default supplier if product has one)
+    select s.id, s.name into v_supplier_id, v_supplier_name
+    from suppliers s
+    where s.tenant_id = NEW.tenant_id
+    and s.is_active = true
+    order by s.created_at asc
+    limit 1;
+    
+    -- Calculate rotation KPI (sales per day over last 30 days)
+    -- Use JSONB items array since we don't have a separate line items table
+    select 
+      coalesce(
+        (select count(*)::numeric / 30.0
+         from sales_invoices si,
+         jsonb_array_elements(si.items) as item
+         where item->>'product_id' = NEW.id::text
+         and si.tenant_id = NEW.tenant_id
+         and si.date >= now() - interval '30 days'),
+        0
+      ) into v_rotation_kpi;
+    
+    -- Average daily consumption
+    v_avg_daily_consumption := greatest(v_rotation_kpi, 0.1);
+    
+    -- Days since last purchase
+    -- Use JSONB items array since we don't have a separate line items table
+    select 
+      extract(day from now() - max(pi.date))::integer into v_days_since_last_purchase
+    from purchase_invoices pi,
+    jsonb_array_elements(pi.items) as item
+    where item->>'product_id' = NEW.id::text
+    and pi.tenant_id = NEW.tenant_id;
+    
+    v_days_since_last_purchase := coalesce(v_days_since_last_purchase, 999);
+    
+    -- Suggested quantity: enough to reach max stock or at least cover 30 days
+    v_suggested_qty := greatest(
+      NEW.max_stock_level - NEW.stock_quantity,
+      ceil(v_avg_daily_consumption * 30)::integer,
+      1
+    );
+    
+    -- Lead time (default 7 days, could be supplier-specific in the future)
+    v_lead_time_days := 7;
+    
+    -- Estimated stockout date
+    if v_avg_daily_consumption > 0 then
+      v_estimated_stockout_date := now() + (NEW.stock_quantity / v_avg_daily_consumption || ' days')::interval;
+    else
+      v_estimated_stockout_date := null;
+    end if;
+    
+    -- Calculate priority (0-100 scale)
+    -- Formula: rotation * 0.6 + urgency * 0.3 + days_since_purchase * 0.1
+    v_priority := least(100, greatest(0,
+      (v_rotation_kpi * 10 * 0.6) + -- rotation scaled to 0-100
+      (case when NEW.stock_quantity = 0 then 100 else (1 - (NEW.stock_quantity::numeric / NEW.min_stock_level)) * 100 end * 0.3) + -- urgency
+      (least(v_days_since_last_purchase, 100) * 0.1) -- days since last purchase capped at 100
+    ));
+    
+    -- Insert into smart purchase list
+    insert into smart_purchase_list (
+      tenant_id,
+      product_id,
+      product_name,
+      product_sku,
+      supplier_id,
+      supplier_name,
+      suggested_quantity,
+      status,
+      priority,
+      rotation_kpi,
+      days_since_last_purchase,
+      current_stock,
+      min_stock_level,
+      avg_daily_consumption,
+      lead_time_days,
+      estimated_stockout_date,
+      notes,
+      added_date
+    ) values (
+      NEW.tenant_id,
+      NEW.id,
+      NEW.name,
+      NEW.sku,
+      v_supplier_id,
+      v_supplier_name,
+      v_suggested_qty,
+      'pending',
+      v_priority,
+      v_rotation_kpi,
+      v_days_since_last_purchase,
+      NEW.stock_quantity,
+      NEW.min_stock_level,
+      v_avg_daily_consumption,
+      v_lead_time_days,
+      v_estimated_stockout_date,
+      'Auto-added: stock reached minimum level',
+      now()
+    );
+    
+    raise notice '✅ Auto-added product % (%) to purchase list with priority %', NEW.name, NEW.sku, v_priority;
+  end if;
+  
+  return NEW;
+end;
+$$;
+
+-- Trigger on products table to monitor stock levels
+drop trigger if exists trg_auto_add_low_stock on products;
+create trigger trg_auto_add_low_stock
+  after insert or update of stock_quantity, inventory_qty
+  on products
+  for each row
+  execute function public.auto_add_low_stock_to_purchase_list();
+
+-- Function to update smart_purchase_list when purchase invoice status changes
+create or replace function public.auto_update_purchase_list_on_invoice_status()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  v_item jsonb;
+  v_product_id uuid;
+begin
+  -- When invoice is confirmed or received, mark linked items as ordered
+  if NEW.status in ('confirmed', 'received') and OLD.status not in ('confirmed', 'received') then
+    -- Loop through items in the JSONB array
+    for v_item in select * from jsonb_array_elements(NEW.items)
+    loop
+      v_product_id := (v_item->>'product_id')::uuid;
+      
+      if v_product_id is not null then
+        update smart_purchase_list spl
+        set 
+          status = 'ordered',
+          linked_purchase_invoice_id = NEW.id,
+          ordered_date = coalesce(ordered_date, now()),
+          stock_at_order = (select stock_quantity from products where id = v_product_id),
+          updated_at = now()
+        where spl.product_id = v_product_id
+          and spl.tenant_id = NEW.tenant_id
+          and spl.status = 'pending'
+          and (spl.linked_purchase_invoice_id is null or spl.linked_purchase_invoice_id = NEW.id);
+      end if;
+    end loop;
+  end if;
+  
+  -- When invoice is received or paid, UPDATE status to 'received' (keep history!)
+  if NEW.status in ('received', 'paid') and OLD.status not in ('received', 'paid') then
+    -- Loop through items in the JSONB array
+    for v_item in select * from jsonb_array_elements(NEW.items)
+    loop
+      v_product_id := (v_item->>'product_id')::uuid;
+      
+      if v_product_id is not null then
+        -- Update status to 'received' and record the date + final stock
+        update smart_purchase_list
+        set 
+          status = 'received',
+          received_date = now(),
+          stock_at_receipt = (select stock_quantity from products where id = v_product_id),
+          updated_at = now()
+        where product_id = v_product_id
+          and tenant_id = NEW.tenant_id
+          and status in ('pending', 'ordered')
+          and (linked_purchase_invoice_id is null or linked_purchase_invoice_id = NEW.id);
+        
+        raise notice '✅ Marked product % as received in purchase list (invoice % received)', v_product_id, NEW.id;
+      end if;
+    end loop;
+  end if;
+  
+  return NEW;
+end;
+$$;
+
+-- Trigger on purchase_invoices to update purchase list when status changes
+drop trigger if exists trg_update_purchase_list_on_status_change on purchase_invoices;
+create trigger trg_update_purchase_list_on_status_change
+  after update of status
+  on purchase_invoices
+  for each row
+  execute function public.auto_update_purchase_list_on_invoice_status();
+
+-- Function to backfill stock_at_receipt for existing received items
+-- This calculates the stock at receipt by adding purchased quantity to stock_at_order
+create or replace function public.backfill_stock_at_receipt_for_received_items()
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  v_item record;
+  v_purchased_qty integer;
+  v_invoice_item jsonb;
+begin
+  -- Loop through all received items that don't have stock_at_receipt yet
+  for v_item in 
+    select 
+      spl.id,
+      spl.product_id,
+      spl.stock_at_order,
+      spl.linked_purchase_invoice_id,
+      spl.tenant_id
+    from smart_purchase_list spl
+    where spl.status = 'received'
+      and spl.stock_at_receipt is null
+      and spl.linked_purchase_invoice_id is not null
+      and spl.stock_at_order is not null
+  loop
+    -- Get the purchased quantity from the invoice
+    select 
+      sum((item->>'quantity')::integer) into v_purchased_qty
+    from purchase_invoices pi,
+         jsonb_array_elements(pi.items) as item
+    where pi.id = v_item.linked_purchase_invoice_id
+      and (item->>'product_id')::uuid = v_item.product_id;
+    
+    if v_purchased_qty is not null then
+      -- Calculate stock_at_receipt = stock_at_order + purchased_quantity
+      update smart_purchase_list
+      set stock_at_receipt = v_item.stock_at_order + v_purchased_qty
+      where id = v_item.id;
+      
+      raise notice '✅ Backfilled stock_at_receipt for product % (was %, purchased %, now %)', 
+        v_item.product_id, v_item.stock_at_order, v_purchased_qty, v_item.stock_at_order + v_purchased_qty;
+    end if;
+  end loop;
+end;
+$$;
+
+-- Run the backfill function for existing data (safe to run multiple times)
+select public.backfill_stock_at_receipt_for_received_items();
+
+-- ============================================================================
+-- STOCK MOVEMENTS VIEW - Comprehensive transaction tracking
+-- ============================================================================
+create or replace view stock_movements_view as
+-- Purchase Invoice Items (increases stock)
+select 
+  gen_random_uuid() as id,
+  (item->>'product_id')::uuid as product_id,
+  p.name as product_name,
+  p.sku as product_sku,
+  pi.date as transaction_date,
+  'purchase' as movement_type,
+  'manual_purchase' as source,
+  pi.id as reference_id,
+  pi.invoice_number as reference_number,
+  0 as stock_before, -- TODO: Calculate from audit trail
+  (item->>'quantity')::integer as quantity,
+  0 as stock_after, -- TODO: Calculate from audit trail
+  pi.notes,
+  null::uuid as created_by, -- Not tracked in purchase_invoices
+  pi.created_at,
+  pi.tenant_id
+from purchase_invoices pi,
+     jsonb_array_elements(pi.items) as item
+left join products p on (item->>'product_id')::uuid = p.id
+where pi.status in ('received', 'paid')
+
+union all
+
+-- Sales Invoice Items (decreases stock)
+select 
+  gen_random_uuid() as id,
+  (item->>'product_id')::uuid as product_id,
+  p.name as product_name,
+  p.sku as product_sku,
+  si.date as transaction_date,
+  'sale' as movement_type,
+  'manual_sale' as source, -- Source not tracked in sales_invoices yet
+  si.id as reference_id,
+  si.invoice_number as reference_number,
+  0 as stock_before,
+  -(item->>'quantity')::integer as quantity, -- Negative for sales
+  0 as stock_after,
+  si.reference as notes, -- sales_invoices has 'reference' instead of 'notes'
+  null::uuid as created_by, -- Not tracked in sales_invoices
+  si.created_at,
+  si.tenant_id
+from sales_invoices si,
+     jsonb_array_elements(si.items) as item
+left join products p on (item->>'product_id')::uuid = p.id
+where si.status in ('sent', 'paid');
+
+-- Enable RLS on the view
+alter view stock_movements_view set (security_invoker = on);
+
 create table if not exists accounts (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
@@ -1817,32 +2221,33 @@ begin
   end if;
 
   -- Insert default payment methods (only if they don't exist)
+  -- CRITICAL: Use lowercase codes to match Flutter POS expectations
   v_count := 0;
   
-  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'CASH') then
+  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'cash') then
     insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
-    values (p_tenant_id, 'CASH', 'Efectivo', v_cash_account_id, false, 'cash', 1, true);
+    values (p_tenant_id, 'cash', 'Efectivo', v_cash_account_id, false, 'cash', 1, true);
     v_count := v_count + 1;
     raise notice 'Created payment method: Efectivo';
   end if;
 
-  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'TRANSFER') then
+  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'transfer') then
     insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
-    values (p_tenant_id, 'TRANSFER', 'Transferencia', v_bank_account_id, true, 'bank', 2, true);
+    values (p_tenant_id, 'transfer', 'Transferencia', v_bank_account_id, true, 'bank', 2, true);
     v_count := v_count + 1;
     raise notice 'Created payment method: Transferencia';
   end if;
 
-  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'CHECK') then
+  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'check') then
     insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
-    values (p_tenant_id, 'CHECK', 'Cheque', v_bank_account_id, true, 'receipt', 3, true);
+    values (p_tenant_id, 'check', 'Cheque', v_bank_account_id, true, 'receipt', 3, true);
     v_count := v_count + 1;
     raise notice 'Created payment method: Cheque';
   end if;
 
-  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'CARD') then
+  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'card') then
     insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
-    values (p_tenant_id, 'CARD', 'Tarjeta de Crédito/Débito', v_bank_account_id, false, 'credit_card', 4, true);
+    values (p_tenant_id, 'card', 'Tarjeta de Crédito/Débito', v_bank_account_id, false, 'credit_card', 4, true);
     v_count := v_count + 1;
     raise notice 'Created payment method: Tarjeta';
   end if;
@@ -3033,9 +3438,10 @@ begin
       continue;
     end if;
 
-    -- Reduce inventory (check both inventory_qty and stock_quantity columns)
+    -- Reduce inventory (update BOTH inventory_qty and stock_quantity)
     update public.products
        set inventory_qty = coalesce(inventory_qty, 0) - v_quantity_int,
+           stock_quantity = greatest(coalesce(stock_quantity, 0) - v_quantity_int, 0),
            updated_at = now()
      where id = v_resolved_product_id
        and coalesce(is_service, false) = false;
@@ -5602,8 +6008,10 @@ end $$;
 create or replace function public.handle_order_item_insert()
 returns trigger as $$
 begin
+  -- Update BOTH inventory_qty (legacy) AND stock_quantity (current)
   update products
-     set inventory_qty = inventory_qty - new.quantity
+     set inventory_qty = inventory_qty - new.quantity,
+         stock_quantity = greatest(stock_quantity - new.quantity, 0)
    where id = new.product_id;
   return new;
 end;
@@ -5648,8 +6056,10 @@ begin
     raise exception 'No default warehouse configured for company %', v_company_id;
   end if;
 
+  -- Update BOTH inventory_qty (legacy) AND stock_quantity (current)
   update public.products
-     set inventory_qty = inventory_qty - new.quantity
+     set inventory_qty = inventory_qty - new.quantity,
+         stock_quantity = greatest(stock_quantity - new.quantity, 0)
    where id = new.product_id
      and is_service = false;
 
@@ -5683,8 +6093,10 @@ begin
     raise exception 'No default warehouse configured for company %', v_company_id;
   end if;
 
+  -- Update BOTH inventory_qty (legacy) AND stock_quantity (current)
   update public.products
-     set inventory_qty = inventory_qty + new.quantity
+     set inventory_qty = inventory_qty + new.quantity,
+         stock_quantity = stock_quantity + new.quantity
    where id = new.product_id
      and is_service = false;
 
@@ -5748,8 +6160,11 @@ begin
     end if;
 
     -- INCREASE inventory (purchase = IN movement)
+    -- Update BOTH inventory_qty (legacy) AND stock_quantity (current)
     update public.products
-    set inventory_qty = inventory_qty + v_quantity_int
+    set 
+      inventory_qty = inventory_qty + v_quantity_int,
+      stock_quantity = stock_quantity + v_quantity_int
     where id = v_resolved_product_id;
 
     -- Record stock movement
@@ -5830,8 +6245,12 @@ begin
       continue;
     end if;
 
+    -- DECREASE inventory (restore = undo IN movement)
+    -- Update BOTH inventory_qty (legacy) AND stock_quantity (current)
     update public.products
-    set inventory_qty = greatest(inventory_qty - v_quantity_int, 0)
+    set 
+      inventory_qty = greatest(inventory_qty - v_quantity_int, 0),
+      stock_quantity = greatest(stock_quantity - v_quantity_int, 0)
     where id = v_resolved_product_id;
   end loop;
 

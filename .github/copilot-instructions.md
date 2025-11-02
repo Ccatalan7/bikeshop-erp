@@ -312,7 +312,57 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 - ✅ Be EXPLICIT: "I modified `core_schema.sql` at line X" or "I updated function Y in `core_schema.sql`"
 - ❌ NEVER create new SQL files (`FIX_*.sql`, `DEPLOY_*.sql`, etc.)
 
-**⚠️ CRITICAL: AVOID DUPLICATES!**
+**⚠️ CRITICAL: NEVER CREATE UNNECESSARY COLUMNS OR FUNCTIONS!**
+
+**BEFORE creating ANY database column/function/trigger, you MUST:**
+
+1. 🔍 **SEARCH FIRST - Is there an existing column/function that does this?**
+   - Don't create `stock_at_order` if `current_stock` already exists and can be used
+   - Don't create `received_stock` if you can calculate it from existing data
+   - Don't create new functions if existing ones can be extended
+
+2. 🤔 **ASK: Can this be calculated/derived instead of stored?**
+   - ❌ BAD: Adding `total_cost` column when you can calculate `quantity * price`
+   - ❌ BAD: Adding `stock_difference` column when you can calculate `current - initial`
+   - ✅ GOOD: Store only raw data, calculate derived values in code or views
+
+3. 📊 **Check if a VIEW or Dart getter can do this instead:**
+   - Use database VIEWs for complex joins/calculations (read-only)
+   - Use Dart getters for simple calculations (no DB change needed)
+   - Only create columns for data that MUST be persisted
+
+4. 🔄 **Reuse existing patterns and columns:**
+   - If table has `created_at`, DON'T add `creation_date`
+   - If table has `updated_at`, DON'T add `last_modified`
+   - If table has `status`, DON'T add `is_active` (use status values)
+
+5. 🚫 **NEVER add columns "just in case" or "for future use"**
+   - Only add what's STRICTLY NECESSARY for the current feature
+   - You can always add columns later with ALTER TABLE if truly needed
+
+**⚠️ CRITICAL: ALTER TABLE FOR EXISTING COLUMNS!**
+
+**When adding a new column to an existing table:**
+
+```sql
+-- ✅ CORRECT: Add the column to CREATE TABLE definition
+create table if not exists my_table (
+  id uuid primary key,
+  tenant_id uuid not null,
+  new_column text,  -- Added here
+  created_at timestamp with time zone default now()
+);
+
+-- ✅ CORRECT: ALSO add ALTER TABLE for existing tables
+alter table my_table add column if not exists new_column text;
+```
+
+**WHY?**
+- `CREATE TABLE IF NOT EXISTS` won't modify existing tables
+- You MUST use `ALTER TABLE ADD COLUMN IF NOT EXISTS` to update live tables
+- Otherwise deployed schema won't actually add the column!
+
+**⚠️ AVOID DUPLICATES!**
 
 **BEFORE creating ANY database object, you MUST:**
 1. 🔍 **READ `core_schema.sql` first** - check the ENTIRE file if needed
@@ -324,6 +374,7 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
    - ❌ Creating `handle_purchase_invoice_change()` when `handle_sales_invoice_change()` pattern already exists
    - ❌ Creating `create_purchase_journal_entry()` when similar function already exists
    - ❌ Creating new triggers without checking for existing trigger patterns
+   - ❌ Creating `stock_at_order` when existing columns can track this
 7. ✅ **Example of what TO do:**
    - ✅ Find existing `handle_sales_invoice_change()` function
    - ✅ Check how it works and what pattern it uses
@@ -337,15 +388,21 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 - ❌ Not checking existing trigger patterns before creating new ones
 - ❌ Assuming tables/columns don't exist without checking
 - ❌ Creating inconsistent naming (one module uses `handle_*_change`, another uses `process_*_update`)
+- ❌ **Adding columns without ALTER TABLE statements for existing tables**
+- ❌ **Creating columns that could be calculated/derived instead**
+- ❌ **Adding "nice to have" columns instead of only "must have"**
 
 **Before making any database changes:**
 1. 🔍 **ALWAYS check `core_schema.sql` first**
 2. 🔍 **SEARCH for existing functions/triggers with similar names or purposes**
 3. 📖 Read the relevant section (tables, functions, triggers)
 4. 🤔 **Ask: "Does something similar already exist?"**
-5. ✏️ Make changes directly in `core_schema.sql`
-6. 💾 Save and inform user: "Deploy the updated `core_schema.sql` to Supabase"
-7. 📝 **BE EXPLICIT:** Tell user which file and line number you modified
+5. 🤔 **Ask: "Can this be calculated instead of stored?"**
+6. 🤔 **Ask: "Is this column STRICTLY NECESSARY?"**
+7. ✏️ Make changes directly in `core_schema.sql`
+8. ✏️ **Add ALTER TABLE if modifying existing table structure**
+9. 💾 Save and inform user: "Deploy the updated `core_schema.sql` to Supabase"
+10. 📝 **BE EXPLICIT:** Tell user which file and line number you modified
 
 **This is the ONLY database schema file to edit. The 3-file split is for deployment only.**
 
@@ -357,15 +414,29 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 
 1. ✅ **READ** `supabase/sql/core_schema.sql` first - ENTIRE file if needed
 2. ✅ **SEARCH** for existing tables/functions/triggers with similar names or purposes
-3. ✅ **CHECK** if similar patterns already exist (e.g., `handle_sales_invoice_change` → use same pattern for purchases)
-4. ✅ **REUSE** existing helper functions (`ensure_account`, `consume_inventory`, etc.)
-5. ✅ **UPDATE** existing code or add new code following EXISTING patterns
-6. ✅ **NEVER** create duplicate functions/triggers with different names
-7. ✅ **VERIFY** column names match what's in `core_schema.sql`
-8. ✅ **INFORM** user: "I modified `core_schema.sql` at line X" or "I added function Y to `core_schema.sql`"
-9. ✅ **TELL USER:** "Deploy the updated `core_schema.sql` to Supabase"
+3. ✅ **ASK YOURSELF: "Can I solve this WITHOUT adding new columns?"**
+   - Can I use existing columns?
+   - Can I calculate this in Dart instead of storing it?
+   - Can I use a database VIEW instead of a new column?
+4. ✅ **CHECK** if similar patterns already exist (e.g., `handle_sales_invoice_change` → use same pattern for purchases)
+5. ✅ **REUSE** existing helper functions (`ensure_account`, `consume_inventory`, etc.)
+6. ✅ **UPDATE** existing code or add new code following EXISTING patterns
+7. ✅ **NEVER** create duplicate functions/triggers with different names
+8. ✅ **NEVER** create columns that are "nice to have" - only STRICTLY NECESSARY ones
+9. ✅ **VERIFY** column names match what's in `core_schema.sql`
+10. ✅ **IF YOU ADD A COLUMN:** Also add `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statement
+11. ✅ **INFORM** user: "I modified `core_schema.sql` at line X" or "I added function Y to `core_schema.sql`"
+12. ✅ **TELL USER:** "Deploy the updated `core_schema.sql` to Supabase"
 
-**CRITICAL: Before creating ANY function/trigger:**
+**⚠️ CRITICAL: Before creating ANY column:**
+- 🔍 Search for existing columns that could serve the same purpose
+- 🤔 Ask: "Can I calculate this value instead of storing it?"
+- 🤔 Ask: "Will this column DEFINITELY be used, or is it speculative?"
+- 🤔 Ask: "Can a Dart getter or database VIEW solve this instead?"
+- ❌ If answer is "maybe" or "just in case" → DON'T CREATE IT
+- ✅ Only create if it's ABSOLUTELY ESSENTIAL for the feature to work
+
+**⚠️ CRITICAL: Before creating ANY function/trigger:**
 - 🔍 Search `core_schema.sql` for: `CREATE OR REPLACE FUNCTION public.[function_name]`
 - 🔍 Search for similar patterns (e.g., if creating purchase trigger, look for sales trigger)
 - 🔍 Check what helper functions exist (ensure_account, consume_inventory, etc.)
@@ -396,6 +467,9 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
    - ⚠️ **MUST have `tenant_id` column** (except auth/system tables)
    - ⚠️ **MUST have index on `tenant_id`**
    - ⚠️ **MUST have RLS policies filtering by `tenant_id`**
+   - ⚠️ **ASK: Can I build this WITHOUT adding new columns?**
+   - ⚠️ **ONLY add columns that are STRICTLY NECESSARY**
+   - ⚠️ **IF adding columns: MUST add ALTER TABLE statement**
    - Check what tables/functions/triggers already exist
    - Follow existing patterns and naming conventions
    - Reuse existing helper functions
@@ -416,22 +490,26 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 - 🚫 No markdown guides for simple tasks
 - 🚫 No assumptions about schema - always check first
 - 🚫 No creating new patterns when existing patterns work
+- 🚫 **NO COLUMNS UNLESS STRICTLY NECESSARY** (can't be calculated, can't use existing)
 - 🚫 **NO TABLES WITHOUT `tenant_id`** (except auth/system)
 - 🚫 **NO GLOBAL UNIQUE CONSTRAINTS** (must be per-tenant)
 - 🚫 **NO QUERIES WITHOUT `tenant_id` FILTER** (authenticated OR anonymous)
 - 🚫 **NO ORDER/INSERT WITHOUT `tenant_id`** (public store guest checkout)
 - 🚫 **NO DIRECT SUPABASE QUERIES IN PUBLIC STORE** (use PublicInventoryService or filter by tenant_id)
 - 🚫 **NO DIRECT SUPABASE CLIENT IN IMPORT SERVICES** (use DatabaseService for auto-injection)
+- 🚫 **NO ADDING COLUMNS WITHOUT ALTER TABLE STATEMENTS**
 - ✅ Always search for existing similar code
 - ✅ Always follow existing naming conventions
 - ✅ Always reuse existing helper functions
 - ✅ Always verify changes compile before finishing
+- ✅ **ASK: "Can I calculate this instead of storing it?"**
 - ✅ **ALWAYS add `tenant_id` to new tables**
 - ✅ **ALWAYS create RLS policies for tenant isolation**
 - ✅ **ALWAYS test with multiple tenants to verify isolation**
 - ✅ **ALWAYS use PublicStoreTenantProvider for public store pages**
 - ✅ **ALWAYS check tenant_id != null before database operations**
 - ✅ **ALWAYS use DatabaseService for import services** (CSV/Excel imports)
+- ✅ **ALWAYS add ALTER TABLE when adding columns to existing tables**
 
 ---
 

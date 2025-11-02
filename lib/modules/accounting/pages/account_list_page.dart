@@ -7,6 +7,7 @@ import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../models/account.dart';
 import '../services/accounting_service.dart';
+import 'account_ledger_page.dart';
 
 class AccountListPage extends StatefulWidget {
   const AccountListPage({super.key});
@@ -376,58 +377,11 @@ class _AccountListPageState extends State<AccountListPage> {
   }
 
   void _showAccountDetails(Account account) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${account.code} - ${account.name}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDetailRow('Código', account.code),
-            _buildDetailRow('Nombre', account.name),
-            _buildDetailRow('Tipo', account.type.displayName),
-            _buildDetailRow('Categoría', account.category.displayName),
-            if (account.description != null)
-              _buildDetailRow('Descripción', account.description!),
-            _buildDetailRow('Estado', account.isActive ? 'Activa' : 'Inactiva'),
-            if (account.createdAt != null)
-              _buildDetailRow(
-                  'Creada', account.createdAt.toString().split(' ')[0]),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cerrar'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              context.push('/accounting/accounts/${account.id}/edit');
-            },
-            child: const Text('Editar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          Expanded(child: Text(value)),
-        ],
+    // Navigate to account ledger page instead of showing dialog
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AccountLedgerPage(account: account),
       ),
     );
   }

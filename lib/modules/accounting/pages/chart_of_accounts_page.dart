@@ -7,6 +7,7 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/database_service.dart';
 import '../models/account.dart';
 import '../services/accounting_service.dart';
+import 'account_ledger_page.dart';
 
 class ChartOfAccountsPage extends StatefulWidget {
   const ChartOfAccountsPage({super.key});
@@ -218,6 +219,15 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
           ),
         ],
       ),
+      onTap: () {
+        // Navigate to account ledger
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AccountLedgerPage(account: account),
+          ),
+        );
+      },
     );
   }
 

@@ -20,11 +20,17 @@ import '../services/purchase_service.dart';
 class PurchaseInvoiceFormPage extends StatefulWidget {
   final String? invoiceId;
   final bool isPrepayment;
+  final String? initialSupplierId;
+  final List<Map<String, dynamic>>? initialLineItems;
+  final bool readOnly; // View-only mode (no editing, no status changes)
 
   const PurchaseInvoiceFormPage({
     super.key,
     this.invoiceId,
     this.isPrepayment = false,
+    this.initialSupplierId,
+    this.initialLineItems,
+    this.readOnly = false,
   });
 
   @override
@@ -222,6 +228,55 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         }
       } else {
         _invoiceNumberController.text = _buildSuggestedNumber();
+        
+        // Pre-fill from smart purchase list if provided
+        if (widget.initialSupplierId != null && _supplierCache.isNotEmpty) {
+          try {
+            _selectedSupplier = _supplierCache.firstWhere(
+              (s) => s.id == widget.initialSupplierId,
+            );
+          } catch (e) {
+            // Supplier not found, leave null
+          }
+        }
+        
+        if (widget.initialLineItems != null && widget.initialLineItems!.isNotEmpty) {
+          for (final item in widget.initialLineItems!) {
+            final productId = item['product_id'] as String?;
+            final suggestedQty = (item['suggested_quantity'] as int?) ?? 1;
+            
+            if (productId != null && _productCache.isNotEmpty) {
+              try {
+                final product = _productCache.firstWhere(
+                  (p) => p.id == productId,
+                );
+                
+                // Add line with suggested quantity
+                final entry = _PurchaseLineEntry(
+                  line: PurchaseInvoiceItem(
+                    productId: product.id,
+                    productName: product.name,
+                    productSku: product.sku,
+                    quantity: suggestedQty.toDouble(),
+                    unitCost: product.cost > 0 ? product.cost : product.price,
+                    discount: 0,
+                    ivaRate: _ivaRate,
+                  ),
+                );
+                entry.attachListeners(_recalculateTotals);
+                _lineEntries.add(entry);
+              } catch (e) {
+                // Product not found in cache, skip
+                debugPrint('⚠️ Product $productId not found: $e');
+              }
+            }
+          }
+          
+          // Recalculate totals after adding all lines
+          if (_lineEntries.isNotEmpty) {
+            _recalculateTotals();
+          }
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -921,16 +976,16 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   Widget _buildHeader() {
     final canMarkAsReceived =
-        widget.invoiceId != null && _status == PurchaseInvoiceStatus.draft;
+        widget.invoiceId != null && _status == PurchaseInvoiceStatus.draft && !widget.readOnly;
     final canMarkAsPaid =
-        widget.invoiceId != null && _status == PurchaseInvoiceStatus.received;
+        widget.invoiceId != null && _status == PurchaseInvoiceStatus.received && !widget.readOnly;
     final canRevertToDraft = widget.invoiceId != null &&
         (_status == PurchaseInvoiceStatus.received ||
-            _status == PurchaseInvoiceStatus.paid);
+            _status == PurchaseInvoiceStatus.paid) && !widget.readOnly;
     final canRevertToReceived =
-        widget.invoiceId != null && _status == PurchaseInvoiceStatus.paid;
+        widget.invoiceId != null && _status == PurchaseInvoiceStatus.paid && !widget.readOnly;
     final canDelete =
-        widget.invoiceId != null && _status == PurchaseInvoiceStatus.draft;
+        widget.invoiceId != null && _status == PurchaseInvoiceStatus.draft && !widget.readOnly;
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -947,7 +1002,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               children: [
                 Text(
                   widget.invoiceId != null
-                      ? 'Editar factura de compra'
+                      ? widget.readOnly 
+                          ? 'Factura de compra' 
+                          : 'Editar factura de compra'
                       : 'Nueva factura de compra',
                   style: const TextStyle(
                       fontSize: 24, fontWeight: FontWeight.bold),
@@ -961,118 +1018,121 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             ),
           ),
           const SizedBox(width: 8),
-          // Delete button (only for draft invoices)
-          if (canDelete) ...[
-            IconButton(
-              onPressed: _isUpdatingStatus ? null : _deleteInvoice,
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
-              tooltip: 'Eliminar factura',
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.red.withOpacity(0.1),
+          // Hide all action buttons in read-only mode
+          if (!widget.readOnly) ...[
+            // Delete button (only for draft invoices)
+            if (canDelete) ...[
+              IconButton(
+                onPressed: _isUpdatingStatus ? null : _deleteInvoice,
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                tooltip: 'Eliminar factura',
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.red.withOpacity(0.1),
+                ),
               ),
+              const SizedBox(width: 8),
+            ],
+            // Reversal buttons (backward flow)
+            if (canRevertToReceived) ...[
+              ElevatedButton.icon(
+                onPressed: _isUpdatingStatus ? null : _revertToReceived,
+                icon: _isUpdatingStatus
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.undo),
+                label: const Text('Volver a Recibida'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            if (canRevertToDraft) ...[
+              ElevatedButton.icon(
+                onPressed: _isUpdatingStatus ? null : _revertToDraft,
+                icon: _isUpdatingStatus
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.undo),
+                label: const Text('Volver a Borrador'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey[700],
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            // Forward flow buttons
+            if (canMarkAsReceived) ...[
+              ElevatedButton.icon(
+                onPressed: _isUpdatingStatus ? null : _markAsReceived,
+                icon: _isUpdatingStatus
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.inventory_2),
+                label: const Text('Marcar como Recibida'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            if (canMarkAsPaid) ...[
+              ElevatedButton.icon(
+                onPressed: _isUpdatingStatus ? null : _markAsPaid,
+                icon: _isUpdatingStatus
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.payment),
+                label: const Text('Marcar como Pagada'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            if (_canEditFields) ...[
+              IconButton(
+                onPressed: _toggleScanner,
+                icon: Icon(
+                  _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
+                  color: _scannerEnabled ? Colors.green : null,
+                ),
+                tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+                style: IconButton.styleFrom(
+                  backgroundColor: _scannerEnabled 
+                      ? Colors.green.withOpacity(0.1) 
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            AppButton(
+              text: 'Guardar',
+              icon: Icons.save,
+              onPressed: _isSaving ? null : _saveInvoice,
+              isLoading: _isSaving,
             ),
-            const SizedBox(width: 8),
-          ],
-          // Reversal buttons (backward flow)
-          if (canRevertToReceived) ...[
-            ElevatedButton.icon(
-              onPressed: _isUpdatingStatus ? null : _revertToReceived,
-              icon: _isUpdatingStatus
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.undo),
-              label: const Text('Volver a Recibida'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          if (canRevertToDraft) ...[
-            ElevatedButton.icon(
-              onPressed: _isUpdatingStatus ? null : _revertToDraft,
-              icon: _isUpdatingStatus
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.undo),
-              label: const Text('Volver a Borrador'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey[700],
-                foregroundColor: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          // Forward flow buttons
-          if (canMarkAsReceived) ...[
-            ElevatedButton.icon(
-              onPressed: _isUpdatingStatus ? null : _markAsReceived,
-              icon: _isUpdatingStatus
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.inventory_2),
-              label: const Text('Marcar como Recibida'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          if (canMarkAsPaid) ...[
-            ElevatedButton.icon(
-              onPressed: _isUpdatingStatus ? null : _markAsPaid,
-              icon: _isUpdatingStatus
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.payment),
-              label: const Text('Marcar como Pagada'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          if (_canEditFields) ...[
-            IconButton(
-              onPressed: _toggleScanner,
-              icon: Icon(
-                _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
-                color: _scannerEnabled ? Colors.green : null,
-              ),
-              tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
-              style: IconButton.styleFrom(
-                backgroundColor: _scannerEnabled 
-                    ? Colors.green.withOpacity(0.1) 
-                    : null,
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          AppButton(
-            text: 'Guardar',
-            icon: Icons.save,
-            onPressed: _isSaving ? null : _saveInvoice,
-            isLoading: _isSaving,
-          ),
+          ], // End of !widget.readOnly check
         ],
       ),
     );
