@@ -50,6 +50,7 @@ class PurchaseService extends ChangeNotifier {
           .toList()
         ..sort((a, b) => a.name.compareTo(b.name));
       _suppliersLoaded = true;
+      notifyListeners(); // Notify UI after loading suppliers
       return activeOnly
           ? _supplierCache.where((s) => s.isActive).toList()
           : _supplierCache;
@@ -146,6 +147,7 @@ class PurchaseService extends ChangeNotifier {
       _invoiceCache = data.map((row) => PurchaseInvoice.fromJson(row)).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
       _invoicesLoaded = true;
+      notifyListeners(); // Notify UI to rebuild after loading invoices
       return _invoiceCache;
     } catch (e) {
       throw Exception('No se pudieron cargar las facturas de compra: $e');

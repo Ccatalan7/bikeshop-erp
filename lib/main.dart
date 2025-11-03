@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -42,6 +43,17 @@ import 'public_store/services/public_inventory_service.dart';
 import 'shared/routes/app_router.dart';
 import 'shared/services/error_reporting_service.dart';
 import 'shared/services/tenant_detection_service.dart';
+
+// Custom scroll behavior to prevent browser navigation gestures on trackpad
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.trackpad,
+      };
+}
 
 Future<void> main() async {
   runZonedGuarded(() async {
@@ -271,6 +283,7 @@ class VinabikeApp extends StatelessWidget {
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: ThemeMode.light, // Force light mode for public store
+            scrollBehavior: AppScrollBehavior(), // Prevent trackpad navigation gestures
             routerConfig: AppRouter.createRouter(
               authService,
               forcePublicStoreHost: isPublicStoreHost,

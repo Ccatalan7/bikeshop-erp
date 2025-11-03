@@ -21,6 +21,8 @@ class PurchaseInvoiceListPage extends StatefulWidget {
 class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   String _searchTerm = '';
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _headerScrollController = ScrollController();
+  final ScrollController _bodyScrollController = ScrollController();
   
   PurchaseInvoice? _selectedInvoice;
   double _listPaneWidth = 600.0;
@@ -54,6 +56,20 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   void initState() {
     super.initState();
     _loadPreferences();
+    
+    // Sync scroll positions
+    _headerScrollController.addListener(() {
+      if (_bodyScrollController.offset != _headerScrollController.offset) {
+        _bodyScrollController.jumpTo(_headerScrollController.offset);
+      }
+    });
+    
+    _bodyScrollController.addListener(() {
+      if (_headerScrollController.offset != _bodyScrollController.offset) {
+        _headerScrollController.jumpTo(_bodyScrollController.offset);
+      }
+    });
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PurchaseService>().getPurchaseInvoices(forceRefresh: true);
     });
@@ -62,6 +78,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _headerScrollController.dispose();
+    _bodyScrollController.dispose();
     super.dispose();
   }
   
@@ -548,6 +566,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       );
     }
     
+    final tableWidth = MediaQuery.of(context).size.width - (isFullWidth ? 0 : 400);
+    
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -558,15 +578,29 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
       child: Column(
         children: [
-          _buildTableHeader(isFullWidth),
+          SingleChildScrollView(
+            controller: _headerScrollController,
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: tableWidth,
+              child: _buildTableHeader(isFullWidth),
+            ),
+          ),
           Expanded(
-            child: ListView.builder(
-              itemCount: invoices.length,
-              itemBuilder: (context, index) {
-                final invoice = invoices[index];
-                final isSelected = _selectedInvoice?.id == invoice.id;
-                return _buildInvoiceRow(invoice, isSelected, isFullWidth);
-              },
+            child: SingleChildScrollView(
+              controller: _bodyScrollController,
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: tableWidth,
+                child: ListView.builder(
+                  itemCount: invoices.length,
+                  itemBuilder: (context, index) {
+                    final invoice = invoices[index];
+                    final isSelected = _selectedInvoice?.id == invoice.id;
+                    return _buildInvoiceRow(invoice, isSelected, isFullWidth);
+                  },
+                ),
+              ),
             ),
           ),
         ],

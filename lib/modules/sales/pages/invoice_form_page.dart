@@ -856,16 +856,19 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return MainLayout(
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                _buildHeader(theme),
-                Expanded(
-                  child: _buildForm(theme),
-                ),
-              ],
+      child: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            _buildHeader(theme),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _buildForm(theme),
             ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1067,116 +1070,121 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   Widget _buildForm(ThemeData theme) {
-    return Form(
-      key: _formKey,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth > 1180;
-          if (isWide) {
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          if (_shouldShowReadOnlyNotice)
-                            _buildReadOnlyNotice(theme),
-                          if (_shouldShowReadOnlyNotice) const SizedBox(height: 16),
-                        _buildSectionCard(
-                          theme,
-                          icon: Icons.person_outline,
-                          title: 'Cliente',
-                          children: [_buildCustomerSection(theme)],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildSectionCard(
-                          theme,
-                          icon: Icons.shopping_basket_outlined,
-                          title: 'Productos y servicios',
-                          children: [_buildLineItemsSection(theme)],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildSectionCard(
-                          theme,
-                          icon: Icons.notes_outlined,
-                          title: 'Referencia',
-                          children: [_buildReferenceField(theme)],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 24),
-                SizedBox(
-                  width: 360,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 1180;
+        if (isWide) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
                   child: SingleChildScrollView(
                     child: Column(
                       children: [
-                        _buildSectionCard(
-                          theme,
-                          icon: Icons.event_available_outlined,
-                          title: 'Fechas y estado',
-                          children: [_buildDatesAndStatus(theme)],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildSectionCard(
-                          theme,
-                          icon: Icons.calculate_outlined,
-                          title: 'Resumen',
-                          children: [_buildSummary(theme)],
-                        ),
-                      ],
-                    ),
+                        if (_shouldShowReadOnlyNotice)
+                          _buildReadOnlyNotice(theme),
+                        if (_shouldShowReadOnlyNotice) const SizedBox(height: 16),
+                      _buildSectionCard(
+                        theme,
+                        icon: Icons.person_outline,
+                        title: 'Cliente',
+                        children: [_buildCustomerSection(theme)],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildSectionCard(
+                        theme,
+                        icon: Icons.shopping_basket_outlined,
+                        title: 'Productos y servicios',
+                        children: [_buildLineItemsSection(theme)],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildSectionCard(
+                        theme,
+                        icon: Icons.notes_outlined,
+                        title: 'Referencia',
+                        children: [_buildReferenceField(theme)],
+                      ),
+                    ],
                   ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              SizedBox(
+                width: 360,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildSectionCard(
+                        theme,
+                        icon: Icons.event_available_outlined,
+                        title: 'Fechas y estado',
+                        children: [_buildDatesAndStatus(theme)],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildSectionCard(
+                        theme,
+                        icon: Icons.calculate_outlined,
+                        title: 'Resumen',
+                        children: [_buildSummary(theme)],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+            );
+        }
+
+        return SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                if (_shouldShowReadOnlyNotice)
+                  _buildReadOnlyNotice(theme),
+                if (_shouldShowReadOnlyNotice) const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.person_outline,
+                  title: 'Cliente',
+                  children: [_buildCustomerSection(theme)],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.shopping_basket_outlined,
+                  title: 'Productos y servicios',
+                  children: [_buildLineItemsSection(theme)],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.event_available_outlined,
+                  title: 'Fechas y estado',
+                  children: [_buildDatesAndStatus(theme)],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.calculate_outlined,
+                  title: 'Resumen',
+                  children: [_buildSummary(theme)],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.notes_outlined,
+                  title: 'Referencia',
+                  children: [_buildReferenceField(theme)],
                 ),
               ],
             ),
-              );
-          }
-
-          return Column(
-            children: [
-              _buildSectionCard(
-                theme,
-                icon: Icons.person_outline,
-                title: 'Cliente',
-                children: [_buildCustomerSection(theme)],
-              ),
-              const SizedBox(height: 16),
-              _buildSectionCard(
-                theme,
-                icon: Icons.shopping_basket_outlined,
-                title: 'Productos y servicios',
-                children: [_buildLineItemsSection(theme)],
-              ),
-              const SizedBox(height: 16),
-              _buildSectionCard(
-                theme,
-                icon: Icons.event_available_outlined,
-                title: 'Fechas y estado',
-                children: [_buildDatesAndStatus(theme)],
-              ),
-              const SizedBox(height: 16),
-              _buildSectionCard(
-                theme,
-                icon: Icons.calculate_outlined,
-                title: 'Resumen',
-                children: [_buildSummary(theme)],
-              ),
-              const SizedBox(height: 16),
-              _buildSectionCard(
-                theme,
-                icon: Icons.notes_outlined,
-                title: 'Referencia',
-                children: [_buildReferenceField(theme)],
-              ),
-            ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
