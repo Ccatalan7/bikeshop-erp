@@ -35,6 +35,10 @@ dependencies:
   cross_file: ^0.3.4+2
   file_picker: ^8.1.6
   
+  # PDF Generation & Printing
+  pdf: ^3.11.1
+  printing: ^5.13.2
+  
   # Localization
   intl: ^0.20.0
   

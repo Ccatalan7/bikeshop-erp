@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'dart:html' as html;
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
+import 'invoice_form_page.dart';
 
 class InvoiceListPage extends StatefulWidget {
   const InvoiceListPage({super.key});
@@ -809,6 +813,54 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               ),
             ),
             ..._buildRowCells(invoice, isFullWidth),
+            // Actions menu
+            SizedBox(
+              width: 48,
+              height: 38,
+              child: PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, size: 18, color: Colors.grey[600]),
+                tooltip: '',
+                padding: EdgeInsets.zero,
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 16),
+                        SizedBox(width: 8),
+                        Text('Editar'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Eliminar', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => InvoiceFormPage(
+                          invoiceId: invoice.id,
+                        ),
+                      ),
+                    ).then((_) {
+                      context.read<SalesService>().loadInvoices();
+                    });
+                  } else if (value == 'delete') {
+                    _confirmDeleteInvoice(invoice);
+                  }
+                },
+              ),
+            ),
           ],
         ),
       ),
@@ -966,13 +1018,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                // Use full width minus padding
-                final double contentWidth = constraints.maxWidth - 40;
+                final double availableWidth = constraints.maxWidth - 40;
                 
                 return SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Container(
-                    width: contentWidth,
+                    width: availableWidth,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       boxShadow: [
@@ -983,7 +1034,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                         ),
                       ],
                     ),
-                    child: _buildInvoiceDocument(invoice),
+                    child: _buildInvoiceDocument(invoice, availableWidth),
                   ),
                 );
               },
@@ -995,69 +1046,586 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   }
   
   Widget _buildActionBar(Invoice invoice) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[200]!),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // TOP ROW: Invoice number + utility icons
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          color: Colors.white,
+          child: Row(
+            children: [
+              // Invoice number on the left
+              Text(
+                invoice.invoiceNumber,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              const Spacer(),
+              
+              // Attachment icon
+              IconButton(
+                icon: const Icon(Icons.attach_file, size: 20),
+                onPressed: () => debugPrint('TODO: Attach file'),
+                tooltip: 'Adjuntar archivo',
+                color: Colors.grey[600],
+                padding: const EdgeInsets.all(8),
+              ),
+              const SizedBox(width: 4),
+              
+              // Comment icon
+              IconButton(
+                icon: const Icon(Icons.comment_outlined, size: 20),
+                onPressed: () => debugPrint('TODO: Add comment'),
+                tooltip: 'Comentarios',
+                color: Colors.grey[600],
+                padding: const EdgeInsets.all(8),
+              ),
+              const SizedBox(width: 4),
+              
+              // Close button
+              IconButton(
+                icon: const Icon(Icons.close, size: 20),
+                onPressed: () => setState(() => _selectedInvoice = null),
+                tooltip: 'Cerrar',
+                color: Colors.grey[600],
+                padding: const EdgeInsets.all(8),
+              ),
+            ],
+          ),
+        ),
+        
+        // BOTTOM ROW: Action buttons bar (light gray background)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEEEEEE),
+            border: Border(
+              top: BorderSide(color: Colors.grey[200]!),
+            ),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                // Editar button
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => InvoiceFormPage(
+                          invoiceId: invoice.id,
+                        ),
+                      ),
+                    ).then((_) {
+                      // Refresh the list when returning from edit
+                      context.read<SalesService>().loadInvoices();
+                    });
+                  },
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text('Editar'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF666666),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+                  ),
+                ),
+                
+                // Enviar correo button
+                TextButton.icon(
+                  onPressed: () => _sendEmailInvoice(invoice),
+                  icon: const Icon(Icons.email_outlined, size: 16),
+                  label: const Text('Enviar correo electrónico'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF666666),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+                  ),
+                ),
+                
+                // Compartir button
+                TextButton.icon(
+                  onPressed: () => _shareInvoice(invoice),
+                  icon: const Icon(Icons.share_outlined, size: 16),
+                  label: const Text('Compartir'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF666666),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+                  ),
+                ),
+                
+                // PDF/Imprimir dropdown
+                PopupMenuButton<String>(
+                  offset: const Offset(0, 40),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.picture_as_pdf_outlined, size: 16, color: Colors.grey[600]),
+                        const SizedBox(width: 6),
+                        Text(
+                          'PDF/Imprimir',
+                          style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w400),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(Icons.arrow_drop_down, size: 18, color: Colors.grey[600]),
+                      ],
+                    ),
+                  ),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'download',
+                      child: Row(
+                        children: [
+                          Icon(Icons.download_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('Descargar PDF', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'print',
+                      child: Row(
+                        children: [
+                          Icon(Icons.print_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('Imprimir', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ],
+                  onSelected: (value) {
+                    if (value == 'download') {
+                      _downloadInvoicePDF(invoice);
+                    } else if (value == 'print') {
+                      _printInvoice(invoice);
+                    }
+                  },
+                ),
+                const SizedBox(width: 8),
+                
+                // Three dots menu
+                PopupMenuButton<String>(
+                  offset: const Offset(0, 40),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Icon(Icons.more_horiz, size: 18, color: Colors.grey[600]),
+                  ),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'duplicate',
+                      child: Row(
+                        children: [
+                          Icon(Icons.content_copy_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('Duplicar', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Eliminar', style: TextStyle(color: Colors.red, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ],
+                  onSelected: (value) {
+                    if (value == 'duplicate') {
+                      debugPrint('TODO: Duplicate invoice');
+                    } else if (value == 'delete') {
+                      _confirmDeleteInvoice(invoice);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Future<void> _downloadInvoicePDF(Invoice invoice) async {
+    try {
+      final pdf = await _generateInvoicePDF(invoice);
+      final bytes = await pdf.save();
+      
+      // Create a blob and download link for web
+      final blob = html.Blob([bytes], 'application/pdf');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: url)
+        ..setAttribute('download', '${invoice.invoiceNumber}.pdf')
+        ..click();
+      html.Url.revokeObjectUrl(url);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PDF descargado exitosamente')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al generar PDF: $e')),
+        );
+      }
+    }
+  }
+  
+  Future<void> _printInvoice(Invoice invoice) async {
+    try {
+      final pdf = await _generateInvoicePDF(invoice);
+      final bytes = await pdf.save();
+      
+      // Open PDF in new window for printing
+      final blob = html.Blob([bytes], 'application/pdf');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      html.window.open(url, '_blank');
+      
+      // Cleanup after a delay
+      Future.delayed(const Duration(seconds: 1), () {
+        html.Url.revokeObjectUrl(url);
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PDF abierto en nueva ventana para imprimir')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al imprimir: $e')),
+        );
+      }
+    }
+  }
+  
+  Future<void> _previewInvoicePDF(Invoice invoice) async {
+    try {
+      final pdf = await _generateInvoicePDF(invoice);
+      final bytes = await pdf.save();
+      
+      // Open PDF in new window for preview
+      final blob = html.Blob([bytes], 'application/pdf');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      html.window.open(url, '_blank');
+      
+      // Cleanup after a delay
+      Future.delayed(const Duration(seconds: 1), () {
+        html.Url.revokeObjectUrl(url);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al mostrar vista previa: $e')),
+        );
+      }
+    }
+  }
+  
+  Future<pw.Document> _generateInvoicePDF(Invoice invoice) async {
+    final pdf = pw.Document();
+    
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.letter,
+        margin: const pw.EdgeInsets.all(40),
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            // Header - much more compact
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'VIÑABIKE',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue800,
+                  ),
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      '# ${invoice.invoiceNumber}',
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Text(
+                      'Saldo adeudado',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 1),
+                    pw.Text(
+                      ChileanUtils.formatCurrency(invoice.balance),
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            
+            pw.SizedBox(height: 16),
+            
+            // Company info - smaller
+            pw.Text('Viñabike', style: const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+            pw.Text('Valparaíso', style: const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+            pw.Text('Chile', style: const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+            
+            pw.SizedBox(height: 16),
+            
+            // Customer and date info - more compact
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'Facturar a',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      invoice.customerName ?? 'Sin registro',
+                      style: pw.TextStyle(
+                        fontSize: 11,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue700,
+                      ),
+                    ),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      'Fecha de la factura :',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      ChileanUtils.formatDate(invoice.date),
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            
+            pw.SizedBox(height: 16),
+            
+            // Items table - much tighter
+            pw.Table(
+              border: pw.TableBorder.all(
+                color: PdfColors.grey300,
+                width: 0.3, // Ultra thin borders
+              ),
+              columnWidths: {
+                0: const pw.FixedColumnWidth(35),
+                1: const pw.FlexColumnWidth(3),
+                2: const pw.FixedColumnWidth(60),
+                3: const pw.FixedColumnWidth(70),
+                4: const pw.FixedColumnWidth(70),
+              },
+              children: [
+                // Header row
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey800),
+                  children: [
+                    _buildPdfTableCell('#', isHeader: true),
+                    _buildPdfTableCell('Artículo & Descripción', isHeader: true),
+                    _buildPdfTableCell('Cant.', isHeader: true),
+                    _buildPdfTableCell('Tarifa', isHeader: true),
+                    _buildPdfTableCell('Cantidad', isHeader: true),
+                  ],
+                ),
+                // Data rows
+                ...invoice.items.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  return pw.TableRow(
+                    children: [
+                      _buildPdfTableCell('${index + 1}'),
+                      _buildPdfTableCell(item.productName ?? 'Sin nombre'),
+                      _buildPdfTableCell('${item.quantity.toStringAsFixed(2)}'),
+                      _buildPdfTableCell(ChileanUtils.formatCurrency(item.unitPrice)),
+                      _buildPdfTableCell(ChileanUtils.formatCurrency(item.lineTotal)),
+                    ],
+                  );
+                }),
+              ],
+            ),
+            
+            pw.SizedBox(height: 16),
+            
+            // Totals - tighter
+            pw.Row(
+              children: [
+                pw.Spacer(),
+                pw.SizedBox(
+                  width: 250,
+                  child: pw.Column(
+                    children: [
+                      _buildPdfTotalRow('Subtotal', invoice.subtotal),
+                      pw.Divider(thickness: 0.3, color: PdfColors.grey400),
+                      _buildPdfTotalRow('Total', invoice.total, isTotal: true),
+                      if (invoice.paidAmount > 0) ...[
+                        pw.Divider(thickness: 0.3, color: PdfColors.grey400),
+                        _buildPdfTotalRow('Pago realizado', -invoice.paidAmount),
+                      ],
+                      pw.Divider(thickness: 1, color: PdfColors.grey800),
+                      _buildPdfTotalRow('Saldo adeudado', invoice.balance, isTotal: true),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-      child: Row(
+    );
+    
+    return pdf;
+  }
+  
+  pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          color: isHeader ? PdfColors.white : PdfColors.black,
+          fontWeight: isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,
+          fontSize: isHeader ? 9 : 10,
+        ),
+      ),
+    );
+  }
+  
+  pw.Widget _buildPdfTotalRow(String label, double amount, {bool isTotal = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 5),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            invoice.invoiceNumber,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
+          pw.Text(
+            label,
+            style: pw.TextStyle(
+              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
+              fontSize: isTotal ? 12 : 11,
+              color: PdfColors.black,
             ),
           ),
-          const Spacer(),
-          OutlinedButton.icon(
-            onPressed: () => debugPrint('TODO: Edit invoice'),
-            icon: const Icon(Icons.edit_outlined, size: 16),
-            label: const Text('Editar'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              textStyle: const TextStyle(fontSize: 13),
+          pw.Text(
+            ChileanUtils.formatCurrency(amount.abs()),
+            style: pw.TextStyle(
+              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
+              fontSize: isTotal ? 12 : 11,
+              color: PdfColors.black,
             ),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: () => debugPrint('TODO: Send email'),
-            icon: const Icon(Icons.email_outlined, size: 16),
-            label: const Text('Enviar correo'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              textStyle: const TextStyle(fontSize: 13),
-            ),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: () => debugPrint('TODO: Share'),
-            icon: const Icon(Icons.share_outlined, size: 16),
-            label: const Text('Compartir'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              textStyle: const TextStyle(fontSize: 13),
-            ),
-          ),
-          const SizedBox(width: 16),
-          IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: () => setState(() => _selectedInvoice = null),
-            tooltip: 'Cerrar',
-            splashRadius: 20,
           ),
         ],
       ),
     );
   }
   
-  Widget _buildInvoiceDocument(Invoice invoice) {
+  void _sendEmailInvoice(Invoice invoice) {
+    // TODO: Implement email sending
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Función de envío de correo próximamente')),
+    );
+  }
+  
+  void _shareInvoice(Invoice invoice) {
+    // TODO: Implement sharing
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Función de compartir próximamente')),
+    );
+  }
+  
+  void _confirmDeleteInvoice(Invoice invoice) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar factura'),
+        content: Text('¿Está seguro que desea eliminar la factura ${invoice.invoiceNumber}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Delete invoice
+              setState(() => _selectedInvoice = null);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Factura eliminada')),
+              );
+            },
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildInvoiceDocument(Invoice invoice, double containerWidth) {
+    // Calculate responsive sizes based on width
+    final double scale = (containerWidth / 800.0).clamp(0.6, 1.0);
+    final double padding = 40 * scale;
+    final double companyNameSize = 22 * scale;
+    final double invoiceNumberSize = 15 * scale;
+    final double labelSize = 12 * scale;
+    final double dataSize = 13 * scale;
+    final double spacing = 24 * scale;
+    
     return Padding(
-      padding: const EdgeInsets.all(40), // Reduced from 48
+      padding: EdgeInsets.all(padding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1068,7 +1636,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               Text(
                 'VIÑABIKE',
                 style: TextStyle(
-                  fontSize: 22, // Reduced from headlineMedium
+                  fontSize: companyNameSize,
                   fontWeight: FontWeight.bold,
                   color: Colors.blue[800],
                 ),
@@ -1079,26 +1647,26 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 children: [
                   Text(
                     '# ${invoice.invoiceNumber}',
-                    style: const TextStyle(
-                      fontSize: 15, // Reduced from 16
+                    style: TextStyle(
+                      fontSize: invoiceNumberSize,
                       fontWeight: FontWeight.w700,
                       color: Colors.black87,
                     ),
                   ),
-                  const SizedBox(height: 12), // Reduced from 16
+                  SizedBox(height: 12 * scale),
                   Text(
                     'Saldo adeudado',
                     style: TextStyle(
-                      fontSize: 12, // Reduced from 13
+                      fontSize: labelSize,
                       fontWeight: FontWeight.w600,
                       color: Colors.grey[700],
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2 * scale),
                   Text(
                     ChileanUtils.formatCurrency(invoice.balance),
-                    style: const TextStyle(
-                      fontSize: 16, // Reduced from 18
+                    style: TextStyle(
+                      fontSize: 16 * scale,
                       fontWeight: FontWeight.w700,
                       color: Colors.black87,
                     ),
@@ -1107,11 +1675,11 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               ),
             ],
           ),
-          const SizedBox(height: 24), // Reduced from 32
-          Text('Viñabike', style: TextStyle(fontSize: 13)),
-          Text('Valparaíso', style: TextStyle(fontSize: 13)),
-          Text('Chile', style: TextStyle(fontSize: 13)),
-          const SizedBox(height: 24), // Reduced from 32
+          SizedBox(height: spacing),
+          Text('Viñabike', style: TextStyle(fontSize: dataSize)),
+          Text('Valparaíso', style: TextStyle(fontSize: dataSize)),
+          Text('Chile', style: TextStyle(fontSize: dataSize)),
+          SizedBox(height: spacing),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1122,16 +1690,16 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                     Text(
                       'Facturar a',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: labelSize,
                         fontWeight: FontWeight.w600,
                         color: Colors.grey[700],
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6 * scale),
                     Text(
                       invoice.customerName ?? 'Sin registro',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 14 * scale,
                         fontWeight: FontWeight.bold,
                         color: Colors.blue[700],
                       ),
@@ -1145,41 +1713,42 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   Text(
                     'Fecha de la factura :',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: labelSize,
                       color: Colors.grey[700],
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4 * scale),
                   Text(
                     ChileanUtils.formatDate(invoice.date),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w500,
-                      fontSize: 13,
+                      fontSize: dataSize,
                     ),
                   ),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 24), // Reduced from 32
+          SizedBox(height: spacing),
+          SizedBox(height: spacing),
           Table(
             border: TableBorder.all(color: Colors.grey[300]!),
-            columnWidths: const {
-              0: FixedColumnWidth(50), // Reduced from 60
+            columnWidths: {
+              0: FixedColumnWidth(50 * scale),
               1: FlexColumnWidth(3),
-              2: FixedColumnWidth(80), // Reduced from 100
-              3: FixedColumnWidth(90), // Reduced from 100
-              4: FixedColumnWidth(100), // Reduced from 120
+              2: FixedColumnWidth(80 * scale),
+              3: FixedColumnWidth(90 * scale),
+              4: FixedColumnWidth(100 * scale),
             },
             children: [
               TableRow(
                 decoration: BoxDecoration(color: Colors.grey[800]),
                 children: [
-                  _buildTableCell('#', isHeader: true),
-                  _buildTableCell('Artículo & Descripción', isHeader: true),
-                  _buildTableCell('Cant.', isHeader: true),
-                  _buildTableCell('Tarifa', isHeader: true),
-                  _buildTableCell('Cantidad', isHeader: true),
+                  _buildTableCell('#', isHeader: true, scale: scale),
+                  _buildTableCell('Artículo & Descripción', isHeader: true, scale: scale),
+                  _buildTableCell('Cant.', isHeader: true, scale: scale),
+                  _buildTableCell('Tarifa', isHeader: true, scale: scale),
+                  _buildTableCell('Cantidad', isHeader: true, scale: scale),
                 ],
               ),
               ...invoice.items.asMap().entries.map((entry) {
@@ -1188,36 +1757,37 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 
                 return TableRow(
                   children: [
-                    _buildTableCell('${index + 1}'),
+                    _buildTableCell('${index + 1}', scale: scale),
                     _buildTableCell(
                       item.productName ?? 'Sin nombre',
                       subtitle: item.description,
+                      scale: scale,
                     ),
-                    _buildTableCell('${item.quantity.toStringAsFixed(2)}'),
-                    _buildTableCell(ChileanUtils.formatCurrency(item.unitPrice)),
-                    _buildTableCell(ChileanUtils.formatCurrency(item.lineTotal)),
+                    _buildTableCell('${item.quantity.toStringAsFixed(2)}', scale: scale),
+                    _buildTableCell(ChileanUtils.formatCurrency(item.unitPrice), scale: scale),
+                    _buildTableCell(ChileanUtils.formatCurrency(item.lineTotal), scale: scale),
                   ],
                 );
               }),
             ],
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: spacing),
           Row(
             children: [
               const Spacer(),
               SizedBox(
-                width: 300,
+                width: 300 * scale,
                 child: Column(
                   children: [
-                    _buildTotalRow('Subtotal', invoice.subtotal),
+                    _buildTotalRow('Subtotal', invoice.subtotal, scale: scale),
                     const Divider(),
-                    _buildTotalRow('Total', invoice.total, isTotal: true),
+                    _buildTotalRow('Total', invoice.total, isTotal: true, scale: scale),
                     if (invoice.paidAmount > 0) ...[
                       const Divider(),
-                      _buildTotalRow('Pago realizado', -invoice.paidAmount, isNegative: true),
+                      _buildTotalRow('Pago realizado', -invoice.paidAmount, isNegative: true, scale: scale),
                     ],
                     const Divider(thickness: 2),
-                    _buildTotalRow('Saldo adeudado', invoice.balance, isTotal: true),
+                    _buildTotalRow('Saldo adeudado', invoice.balance, isTotal: true, scale: scale),
                   ],
                 ),
               ),
@@ -1228,9 +1798,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     );
   }
   
-  Widget _buildTableCell(String text, {bool isHeader = false, String? subtitle}) {
+  Widget _buildTableCell(String text, {bool isHeader = false, String? subtitle, double scale = 1.0}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), // More compact
+      padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 8 * scale),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1239,16 +1809,16 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             style: TextStyle(
               color: isHeader ? Colors.white : Colors.black87,
               fontWeight: isHeader ? FontWeight.w600 : FontWeight.normal,
-              fontSize: isHeader ? 12 : 13, // Smaller fonts
+              fontSize: (isHeader ? 12 : 13) * scale,
             ),
           ),
           if (subtitle != null) ...[
-            const SizedBox(height: 3),
+            SizedBox(height: 3 * scale),
             Text(
               subtitle,
               style: TextStyle(
                 color: Colors.grey[600], 
-                fontSize: 11, // Smaller subtitle
+                fontSize: 11 * scale,
               ),
             ),
           ],
@@ -1257,9 +1827,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     );
   }
   
-  Widget _buildTotalRow(String label, double amount, {bool isTotal = false, bool isNegative = false}) {
+  Widget _buildTotalRow(String label, double amount, {bool isTotal = false, bool isNegative = false, double scale = 1.0}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: 8 * scale),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -1267,14 +1837,14 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             label,
             style: TextStyle(
               fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              fontSize: isTotal ? 16 : 14,
+              fontSize: (isTotal ? 16 : 14) * scale,
             ),
           ),
           Text(
             (isNegative && amount > 0 ? '(-) ' : '') + ChileanUtils.formatCurrency(amount.abs()),
             style: TextStyle(
               fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
-              fontSize: isTotal ? 16 : 14,
+              fontSize: (isTotal ? 16 : 14) * scale,
               color: isNegative ? Colors.red : Colors.black87,
             ),
           ),

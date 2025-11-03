@@ -91,7 +91,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   bool get _canRegisterPayment =>
       _currentInvoiceId != null &&
-      _status == InvoiceStatus.sent &&
+      (_status == InvoiceStatus.sent || _status == InvoiceStatus.confirmed) &&
       _outstandingAmount > 0.01;
   bool get _shouldShowReadOnlyNotice =>
       !_canEditFields && _status == InvoiceStatus.draft;
@@ -426,13 +426,13 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
   }
 
-  Future<void> _markAsSent() async {
+  Future<void> _updateStatus(InvoiceStatus newStatus) async {
     final invoiceId = _currentInvoiceId;
     if (invoiceId == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Guarda la factura como borrador antes de enviarla.'),
+            content: Text('Guarda la factura como borrador antes de cambiar el estado.'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -443,7 +443,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     setState(() => _isUpdatingStatus = true);
     try {
       final updated = await _salesService.updateInvoiceStatus(
-          invoiceId, InvoiceStatus.sent);
+          invoiceId, newStatus);
       if (updated != null && mounted) {
         _applyInvoice(updated);
         await _refreshInvoiceById(invoiceId);
@@ -451,9 +451,30 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         await _refreshInvoiceById(invoiceId);
       }
       if (mounted) {
+        String message = 'Estado actualizado';
+        switch (newStatus) {
+          case InvoiceStatus.draft:
+            message = 'Factura devuelta a borrador';
+            break;
+          case InvoiceStatus.sent:
+            message = 'Factura marcada como enviada';
+            break;
+          case InvoiceStatus.confirmed:
+            message = 'Factura confirmada - Stock deducido';
+            break;
+          case InvoiceStatus.paid:
+            message = 'Factura marcada como pagada';
+            break;
+          case InvoiceStatus.cancelled:
+            message = 'Factura cancelada';
+            break;
+          case InvoiceStatus.overdue:
+            message = 'Factura marcada como vencida';
+            break;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Factura marcada como enviada'),
+          SnackBar(
+            content: Text(message),
             backgroundColor: Colors.green,
           ),
         );
@@ -487,6 +508,82 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
     if (didRegisterPayment && mounted) {
       await _refreshInvoiceById(invoiceId);
+    }
+  }
+
+  Future<void> _undoLastPayment() async {
+    final invoiceId = _currentInvoiceId;
+    if (invoiceId == null) {
+      return;
+    }
+
+    // Get all payments for this invoice
+    final payments = _salesService.getPaymentsForInvoice(invoiceId);
+    if (payments.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No hay pagos para deshacer'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Get the last payment (most recent)
+    payments.sort((a, b) => b.date.compareTo(a.date));
+    final lastPayment = payments.first;
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Deshacer pago'),
+        content: Text(
+          'Se eliminará el pago de ${ChileanUtils.formatCurrency(lastPayment.amount)} '
+          'y su asiento contable asociado. ¿Continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Eliminar pago'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    try {
+      await _salesService.deletePayment(lastPayment.id!);
+      if (mounted) {
+        await _refreshInvoiceById(invoiceId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pago eliminado correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al eliminar el pago: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -822,6 +919,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         ),
       );
     } else {
+      // Not editing - show workflow buttons based on status
       if (_status == InvoiceStatus.draft) {
         actionButtons.add(
           OutlinedButton.icon(
@@ -830,10 +928,11 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             label: const Text('Editar'),
           ),
         );
+        actionButtons.add(const SizedBox(width: 8));
         if (_canMarkAsSent) {
           actionButtons.add(
             FilledButton.icon(
-              onPressed: _isUpdatingStatus ? null : _markAsSent,
+              onPressed: _isUpdatingStatus ? null : () => _updateStatus(InvoiceStatus.sent),
               icon: _isUpdatingStatus
                   ? const SizedBox(
                       height: 16,
@@ -841,16 +940,58 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.send_outlined),
-              label: const Text('Marcar como enviado'),
+              label: const Text('Enviar'),
             ),
           );
         }
-      } else if (_canRegisterPayment) {
+      } else if (_status == InvoiceStatus.sent) {
+        actionButtons.add(
+          OutlinedButton.icon(
+            onPressed: _isUpdatingStatus ? null : () => _updateStatus(InvoiceStatus.draft),
+            icon: const Icon(Icons.undo_outlined),
+            label: const Text('Volver a borrador'),
+          ),
+        );
+        actionButtons.add(const SizedBox(width: 8));
         actionButtons.add(
           FilledButton.icon(
-            onPressed: _openPaymentForm,
-            icon: const Icon(Icons.payments_outlined),
-            label: const Text('Pagar factura'),
+            onPressed: _isUpdatingStatus ? null : () => _updateStatus(InvoiceStatus.confirmed),
+            icon: _isUpdatingStatus
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check_circle_outline),
+            label: const Text('Confirmar'),
+          ),
+        );
+      } else if (_status == InvoiceStatus.confirmed) {
+        actionButtons.add(
+          OutlinedButton.icon(
+            onPressed: _isUpdatingStatus ? null : () => _updateStatus(InvoiceStatus.sent),
+            icon: const Icon(Icons.undo_outlined),
+            label: const Text('Volver a enviado'),
+          ),
+        );
+        actionButtons.add(const SizedBox(width: 8));
+        if (_canRegisterPayment) {
+          actionButtons.add(
+            FilledButton.icon(
+              onPressed: _openPaymentForm,
+              icon: const Icon(Icons.payments_outlined),
+              label: const Text('Registrar pago'),
+            ),
+          );
+        }
+      } else if (_status == InvoiceStatus.paid) {
+        // Paid status: Can only undo payment (which deletes payment record)
+        // Status will auto-revert to 'confirmed' via database trigger
+        actionButtons.add(
+          OutlinedButton.icon(
+            onPressed: _undoLastPayment,
+            icon: const Icon(Icons.undo_outlined, color: Colors.red),
+            label: const Text('Deshacer pago', style: TextStyle(color: Colors.red)),
           ),
         );
       }
