@@ -1,0 +1,1560 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/utils/chilean_utils.dart';
+import '../models/sales_models.dart';
+import '../services/sales_service.dart';
+
+class InvoiceListPage extends StatefulWidget {
+  const InvoiceListPage({super.key});
+
+  @override
+  State<InvoiceListPage> createState() => _InvoiceListPageState();
+}
+
+class _InvoiceListPageState extends State<InvoiceListPage> {
+  String _searchTerm = '';
+  Invoice? _selectedInvoice;
+  
+  // Panel resizing
+  static const double _minListWidth = 350.0;
+  static const double _maxListWidth = 800.0;
+  static const double _defaultListWidth = 550.0;
+  double _invoiceListWidth = _defaultListWidth;
+  
+  // Column widths (resizable)
+  Map<String, double> _columnWidths = {
+    'date': 100.0,
+    'invoice_number': 130.0,
+    'customer': 200.0,
+    'status': 110.0,
+    'total': 130.0,
+    'balance': 130.0,
+  };
+  
+  // Column visibility
+  Map<String, bool> _columnVisibility = {
+    'date': true,
+    'invoice_number': true,
+    'customer': true,
+    'status': true,
+    'total': true,
+    'balance': true,
+  };
+  
+  // Sorting
+  String? _sortColumn;
+  bool _sortAscending = true;
+  
+  static const double _minColumnWidth = 80.0;
+  static const double _maxColumnWidth = 400.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshInvoices(showErrors: true);
+    });
+  }
+  
+  Future<void> _loadPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Load panel width
+      final savedWidth = prefs.getDouble('invoice_list_panel_width');
+      if (savedWidth != null) {
+        setState(() {
+          _invoiceListWidth = savedWidth;
+        });
+      }
+      
+      // Load column widths
+      _columnWidths.forEach((key, defaultValue) {
+        final savedColWidth = prefs.getDouble('invoice_col_width_$key');
+        if (savedColWidth != null) {
+          _columnWidths[key] = savedColWidth;
+        }
+      });
+      
+      // Load column visibility
+      _columnVisibility.forEach((key, defaultValue) {
+        final savedVisibility = prefs.getBool('invoice_col_visible_$key');
+        if (savedVisibility != null) {
+          _columnVisibility[key] = savedVisibility;
+        }
+      });
+      
+      setState(() {});
+    } catch (e) {
+      debugPrint('Error loading preferences: $e');
+    }
+  }
+  
+  Future<void> _saveColumnWidth(String columnKey, double width) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble('invoice_col_width_$columnKey', width);
+    } catch (e) {
+      debugPrint('Error saving column width: $e');
+    }
+  }
+  
+  Future<void> _saveListWidth(double width) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble('invoice_list_panel_width', width);
+    } catch (e) {
+      debugPrint('Error saving list width: $e');
+    }
+  }
+  
+  void _updateColumnWidth(String columnKey, double delta) {
+    setState(() {
+      final newWidth = (_columnWidths[columnKey]! + delta)
+          .clamp(_minColumnWidth, _maxColumnWidth);
+      _columnWidths[columnKey] = newWidth;
+      _saveColumnWidth(columnKey, newWidth);
+    });
+  }
+  
+  void _updateListWidth(double delta) {
+    setState(() {
+      _invoiceListWidth = (_invoiceListWidth + delta)
+          .clamp(_minListWidth, _maxListWidth);
+      _saveListWidth(_invoiceListWidth);
+    });
+  }
+  
+  void _sortInvoices(String columnKey, List<Invoice> invoices) {
+    setState(() {
+      if (_sortColumn == columnKey) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortColumn = columnKey;
+        _sortAscending = true;
+      }
+      
+      invoices.sort((a, b) {
+        int comparison = 0;
+        
+        switch (columnKey) {
+          case 'date':
+            comparison = a.date.compareTo(b.date);
+            break;
+          case 'invoice_number':
+            comparison = a.invoiceNumber.compareTo(b.invoiceNumber);
+            break;
+          case 'customer':
+            comparison = (a.customerName ?? '').compareTo(b.customerName ?? '');
+            break;
+          case 'status':
+            comparison = a.status.index.compareTo(b.status.index);
+            break;
+          case 'total':
+            comparison = a.total.compareTo(b.total);
+            break;
+          case 'balance':
+            comparison = a.balance.compareTo(b.balance);
+            break;
+        }
+        
+        return _sortAscending ? comparison : -comparison;
+      });
+    });
+  }
+
+  Future<void> _refreshInvoices({bool showErrors = false}) async {
+    final salesService = context.read<SalesService>();
+    await salesService.loadInvoices(forceRefresh: true);
+
+    if (!mounted || !showErrors) return;
+
+    final error = salesService.invoiceError;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showColumnCustomizer() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Personalizar Columnas'),
+        content: StatefulBuilder(
+          builder: (context, setState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: _columnVisibility.keys.map((key) {
+                final labels = {
+                  'date': 'Fecha',
+                  'invoice_number': 'N.º de Factura',
+                  'customer': 'Cliente',
+                  'status': 'Estado',
+                  'total': 'Total',
+                  'balance': 'Saldo',
+                };
+                return CheckboxListTile(
+                  title: Text(labels[key]!),
+                  value: _columnVisibility[key],
+                  onChanged: (value) {
+                    setState(() {
+                      _columnVisibility[key] = value!;
+                    });
+                    this.setState(() {});
+                  },
+                );
+              }).toList(),
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final salesService = context.watch<SalesService>();
+    final isLoading = salesService.isLoadingInvoices;
+    final invoices = _searchTerm.isEmpty
+        ? salesService.invoices
+        : salesService.searchInvoices(_searchTerm);
+
+    // Calculate summary stats
+    final totalInvoices = invoices.length;
+    final totalAmount = invoices.fold<double>(0, (sum, inv) => sum + inv.total);
+    final totalPaid = invoices.fold<double>(0, (sum, inv) => sum + inv.paidAmount);
+    final totalBalance = invoices.fold<double>(0, (sum, inv) => sum + inv.balance);
+
+    return MainLayout(
+      child: Column(
+        children: [
+          // Header with title and new invoice button
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Facturas de Venta',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                AppButton(
+                  text: 'Nueva Factura',
+                  icon: Icons.add,
+                  onPressed: () {
+                    context.push('/sales/invoices/new').then((_) {
+                      _refreshInvoices(showErrors: false);
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          // Summary cards - only show if there are invoices
+          if (invoices.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildSummaryCard(
+                      'Total Facturas',
+                      totalInvoices.toString(),
+                      Icons.receipt_long,
+                      Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildSummaryCard(
+                      'Monto Total',
+                      ChileanUtils.formatCurrency(totalAmount),
+                      Icons.attach_money,
+                      Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildSummaryCard(
+                      'Total Pagado',
+                      ChileanUtils.formatCurrency(totalPaid),
+                      Icons.payments,
+                      Colors.purple,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildSummaryCard(
+                      'Saldo Pendiente',
+                      ChileanUtils.formatCurrency(totalBalance),
+                      Icons.pending_actions,
+                      totalBalance > 0 ? Colors.orange : Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 16),
+
+          // Content
+          Expanded(
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _selectedInvoice == null
+                    ? _buildFullWidthTable(invoices)  // Default: full-width table
+                    : _buildSplitView(invoices),      // Selected: split view
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFullWidthTable(List<Invoice> invoices) {
+    if (invoices.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.receipt_long,
+              size: 80,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _searchTerm.isEmpty
+                  ? 'No hay facturas registradas'
+                  : 'No se encontraron facturas',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+            ),
+            if (_searchTerm.isEmpty) ...[
+              const SizedBox(height: 16),
+              AppButton(
+                text: 'Crear Primera Factura',
+                onPressed: () {
+                  context.push('/sales/invoices/new').then((_) {
+                    _refreshInvoices(showErrors: false);
+                  });
+                },
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        // Search bar
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Buscar en Facturas ( / )',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            onChanged: (value) => setState(() => _searchTerm = value),
+          ),
+        ),
+        
+        // Table header
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            border: Border(
+              bottom: BorderSide(color: Colors.grey[300]!),
+            ),
+          ),
+          child: Row(
+            children: [
+              // Settings icon (left side)
+              SizedBox(
+                width: 40,
+                child: IconButton(
+                  icon: Icon(Icons.tune, size: 16, color: Colors.grey[600]),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                  ),
+                  onPressed: _showColumnCustomizer,
+                  tooltip: 'Personalizar columnas',
+                ),
+              ),
+              // Column headers
+              if (_columnVisibility['date']!) 
+                _buildSortableHeader('FECHA', 'date'),
+              if (_columnVisibility['invoice_number']!) 
+                _buildSortableHeader('N.º DE FACTURA', 'invoice_number'),
+              if (_columnVisibility['customer']!) 
+                Expanded(child: _buildSortableHeader('NOMBRE DEL CLIENTE', 'customer', flex: 1)),
+              if (_columnVisibility['status']!) 
+                _buildSortableHeader('ESTADO DE LA FACTURA', 'status'),
+              if (_columnVisibility['total']!) 
+                _buildSortableHeader('IMPORTE DE LA FACTURA', 'total'),
+              if (_columnVisibility['balance']!) 
+                _buildSortableHeader('SALDO', 'balance'),
+            ],
+          ),
+        ),
+        
+        // Table rows
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _refreshInvoices(showErrors: true),
+            child: ListView.builder(
+              itemCount: invoices.length,
+              itemBuilder: (context, index) {
+                final invoice = invoices[index];
+                
+                return InkWell(
+                  onTap: () => setState(() => _selectedInvoice = invoice),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey[200]!),
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Row(
+                      children: [
+                        // Settings icon spacer
+                        const SizedBox(width: 40),
+                        // Data cells
+                        if (_columnVisibility['date']!)
+                          _buildDataCell(
+                            ChileanUtils.formatDate(invoice.date),
+                            _columnWidths['date']!,
+                          ),
+                        if (_columnVisibility['invoice_number']!)
+                          _buildDataCell(
+                            invoice.invoiceNumber,
+                            _columnWidths['invoice_number']!,
+                            color: Colors.blue,
+                          ),
+                        if (_columnVisibility['customer']!)
+                          Expanded(
+                            child: _buildDataCell(
+                              invoice.customerName ?? 'Sin cliente',
+                              _columnWidths['customer']!,
+                              flex: 1,
+                            ),
+                          ),
+                        if (_columnVisibility['status']!)
+                          _buildStatusCell(invoice.status, _columnWidths['status']!),
+                        if (_columnVisibility['total']!)
+                          _buildDataCell(
+                            ChileanUtils.formatCurrency(invoice.total),
+                            _columnWidths['total']!,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        if (_columnVisibility['balance']!)
+                          _buildDataCell(
+                            ChileanUtils.formatCurrency(invoice.balance),
+                            _columnWidths['balance']!,
+                            color: invoice.balance > 0 ? Colors.orange : Colors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryCard(String label, String value, IconData icon, Color color) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildSplitView(List<Invoice> invoices) {
+    return Row(
+      children: [
+        // Left: Invoice list (resizable)
+        SizedBox(
+          width: _invoiceListWidth,
+          child: _buildInvoicesList(invoices),
+        ),
+        
+        // Resizable divider
+        MouseRegion(
+          cursor: SystemMouseCursors.resizeColumn,
+          child: GestureDetector(
+            onHorizontalDragUpdate: (details) {
+              _updateListWidth(details.delta.dx);
+            },
+            child: Container(
+              width: 8,
+              color: Colors.transparent,
+              child: Center(
+                child: Container(
+                  width: 1,
+                  color: Theme.of(context).dividerColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+        
+        // Right: Invoice detail panel
+        Expanded(
+          child: _buildInvoiceDetailPanel(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInvoicesList(List<Invoice> invoices) {
+    // Compact card-based list for split view (like Zoho screenshot 2)
+    return Column(
+      children: [
+        // Dropdown header (like Zoho)
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            border: Border(
+              bottom: BorderSide(color: Colors.grey[300]!),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.add, size: 20, color: Colors.blue[700]),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () {
+                  // Show dropdown menu (not implementing full dropdown for now)
+                },
+                child: Row(
+                  children: [
+                    const Text(
+                      'Todas las factur...',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.arrow_drop_down, size: 20, color: Colors.grey[700]),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.more_horiz, size: 20),
+                onPressed: () {},
+                tooltip: 'Más opciones',
+              ),
+            ],
+          ),
+        ),
+        
+        // Compact invoice cards
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _refreshInvoices(showErrors: true),
+            child: ListView.builder(
+              itemCount: invoices.length,
+              padding: EdgeInsets.zero,
+              itemBuilder: (context, index) {
+                final invoice = invoices[index];
+                final isSelected = _selectedInvoice?.id == invoice.id;
+                
+                return InkWell(
+                  onTap: () => setState(() => _selectedInvoice = invoice),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue.withOpacity(0.08) : null,
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey[200]!),
+                        left: isSelected 
+                            ? BorderSide(color: Colors.blue[700]!, width: 3)
+                            : BorderSide.none,
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    child: Row(
+                      children: [
+                        // Checkbox
+                        Checkbox(
+                          value: false,
+                          onChanged: (value) {},
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        const SizedBox(width: 8),
+                        // Invoice info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                invoice.customerName ?? 'Sin cliente',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${invoice.invoiceNumber} • ${ChileanUtils.formatDate(invoice.date)}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: _getStatusColor(invoice.status),
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                    child: Text(
+                                      _getStatusText(invoice.status),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Amount
+                        Text(
+                          ChileanUtils.formatCurrency(invoice.total),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _getStatusColor(InvoiceStatus status) {
+    switch (status) {
+      case InvoiceStatus.draft:
+        return Colors.grey;
+      case InvoiceStatus.sent:
+        return Colors.blue;
+      case InvoiceStatus.confirmed:
+        return Colors.purple;
+      case InvoiceStatus.paid:
+        return Colors.green;
+      case InvoiceStatus.overdue:
+        return Colors.red;
+      case InvoiceStatus.cancelled:
+        return Colors.red[900]!;
+    }
+  }
+
+  String _getStatusText(InvoiceStatus status) {
+    switch (status) {
+      case InvoiceStatus.draft:
+        return 'BORRADOR';
+      case InvoiceStatus.sent:
+        return 'ENVIADA';
+      case InvoiceStatus.confirmed:
+        return 'CONFIRMADA';
+      case InvoiceStatus.paid:
+        return 'PAGADO';
+      case InvoiceStatus.overdue:
+        return 'VENCIDA';
+      case InvoiceStatus.cancelled:
+        return 'CANCELADA';
+    }
+  }
+  
+  Widget _buildSortableHeader(String text, String columnKey, {int? flex}) {
+    final isSorted = _sortColumn == columnKey;
+    
+    if (flex != null) {
+      // Flexible column (customer) - no resize handle
+      return Expanded(
+        flex: flex,
+        child: InkWell(
+          onTap: () {
+            final salesService = context.read<SalesService>();
+            final invoices = _searchTerm.isEmpty
+                ? salesService.invoices
+                : salesService.searchInvoices(_searchTerm);
+            _sortInvoices(columnKey, invoices);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[700],
+                      letterSpacing: 0.5,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isSorted)
+                  Icon(
+                    _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                    size: 14,
+                    color: Colors.grey[700],
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    
+    // Fixed-width columns with hover-based resize handle
+    return _ResizableHeaderCell(
+      text: text,
+      columnKey: columnKey,
+      width: _columnWidths[columnKey]!,
+      isSorted: isSorted,
+      sortAscending: _sortAscending,
+      onTap: () {
+        final salesService = context.read<SalesService>();
+        final invoices = _searchTerm.isEmpty
+            ? salesService.invoices
+            : salesService.searchInvoices(_searchTerm);
+        _sortInvoices(columnKey, invoices);
+      },
+      onResize: (delta) => _updateColumnWidth(columnKey, delta),
+    );
+  }
+
+  Widget _buildDataCell(String text, double width, {int? flex, Color? color, FontWeight? fontWeight}) {
+    final child = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          color: color ?? Colors.black87,
+          fontWeight: fontWeight,
+        ),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+      ),
+    );
+    
+    if (flex != null) {
+      return Expanded(flex: flex, child: child);
+    }
+    return SizedBox(width: width, child: child);
+  }
+  
+  Widget _buildStatusCell(InvoiceStatus status, double width) {
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: _buildStatusChip(status),
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(InvoiceStatus status) {
+    Color backgroundColor;
+    Color textColor;
+    String text;
+
+    switch (status) {
+      case InvoiceStatus.draft:
+        backgroundColor = Colors.grey[200]!;
+        textColor = Colors.grey[800]!;
+        text = 'BORRADOR';
+        break;
+      case InvoiceStatus.sent:
+        backgroundColor = Colors.blue[100]!;
+        textColor = Colors.blue[800]!;
+        text = 'ENVIADA';
+        break;
+      case InvoiceStatus.confirmed:
+        backgroundColor = Colors.purple[100]!;
+        textColor = Colors.purple[800]!;
+        text = 'CONFIRMADA';
+        break;
+      case InvoiceStatus.paid:
+        backgroundColor = Colors.green[100]!;
+        textColor = Colors.green[800]!;
+        text = 'PAGADO';
+        break;
+      case InvoiceStatus.overdue:
+        backgroundColor = Colors.red[100]!;
+        textColor = Colors.red[800]!;
+        text = 'VENCIDA';
+        break;
+      case InvoiceStatus.cancelled:
+        backgroundColor = Colors.red[100]!;
+        textColor = Colors.red[800]!;
+        text = 'CANCELADA';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: textColor,
+          letterSpacing: 0.5,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget _buildInvoiceDetailPanel() {
+    if (_selectedInvoice == null) {
+      return Center(
+        child: Text(
+          'Selecciona una factura para ver los detalles',
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.grey[600],
+          ),
+        ),
+      );
+    }
+
+    final invoice = _selectedInvoice!;
+
+    return Column(
+      children: [
+        // Action bar
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            border: Border(
+              bottom: BorderSide(color: Colors.grey[300]!),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Factura ${invoice.invoiceNumber}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit),
+                tooltip: 'Editar',
+                onPressed: () {
+                  context.push('/sales/invoices/${invoice.id}/edit').then((_) {
+                    _refreshInvoices(showErrors: false);
+                  });
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.email_outlined),
+                tooltip: 'Enviar por email',
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Función de email en desarrollo')),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.share),
+                tooltip: 'Compartir',
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Función de compartir en desarrollo')),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.print),
+                tooltip: 'Imprimir PDF',
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Función de PDF en desarrollo')),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Cerrar',
+                onPressed: () => setState(() => _selectedInvoice = null),
+              ),
+            ],
+          ),
+        ),
+        
+        // Invoice preview (PDF-style like Zoho)
+        Expanded(
+          child: Container(
+            color: Colors.grey[100],
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(32),
+              child: Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      // Main content
+                      Padding(
+                        padding: const EdgeInsets.all(48),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Logo and invoice number
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      // Logo placeholder (VIÑABIKE)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        child: Text(
+                                          'VIÑABIKE',
+                                          style: TextStyle(
+                                            fontSize: 36,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.blue[900],
+                                            letterSpacing: 2,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      // Company info
+                                      Text(
+                                        'Viñabike',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey[800],
+                                        ),
+                                      ),
+                                      Text(
+                                        'Valparaíso',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                      Text(
+                                        'Chile',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Invoice number on right
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '# ${invoice.invoiceNumber}',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Saldo adeudado',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    Text(
+                                      ChileanUtils.formatCurrency(invoice.balance),
+                                      style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            
+                            const SizedBox(height: 40),
+                            
+                            // Customer and date info
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Left: Customer info
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Facturar a',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        invoice.customerName ?? 'Sin cliente',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blue[800],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Right: Date
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'Fecha de la factura :',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      ChileanUtils.formatDate(invoice.date),
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            
+                            const SizedBox(height: 32),
+                            
+                            // Line items table (like Zoho)
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                              ),
+                              child: Column(
+                                children: [
+                                  // Table header (dark background)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[800],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 40,
+                                          child: Text(
+                                            '#',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Text(
+                                            'Artículo & Descripción',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(
+                                          width: 80,
+                                          child: Text(
+                                            'Cant.',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                        SizedBox(
+                                          width: 100,
+                                          child: Text(
+                                            'Tarifa',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                            textAlign: TextAlign.right,
+                                          ),
+                                        ),
+                                        SizedBox(
+                                          width: 100,
+                                          child: Text(
+                                            'Cantidad',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                            textAlign: TextAlign.right,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Table rows (placeholder - you'll need to fetch line items)
+                                  _buildLineItemsPlaceholder(),
+                                ],
+                              ),
+                            ),
+                            
+                            const SizedBox(height: 24),
+                            
+                            // Total section
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                SizedBox(
+                                  width: 300,
+                                  child: Column(
+                                    children: [
+                                      _buildTotalRow('Sub Total', invoice.total - (invoice.total * 0.19)),
+                                      const SizedBox(height: 8),
+                                      _buildTotalRow('IVA (19%)', invoice.total * 0.19),
+                                      const Divider(),
+                                      _buildTotalRow('Total', invoice.total, bold: true),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      // Status ribbon (top-left corner like Zoho)
+                      if (invoice.status == InvoiceStatus.paid)
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          child: Container(
+                            width: 120,
+                            height: 120,
+                            child: Stack(
+                              children: [
+                                // Triangle background
+                                CustomPaint(
+                                  size: Size(120, 120),
+                                  painter: _TrianglePainter(Colors.green[600]!),
+                                ),
+                                // Text
+                                Positioned(
+                                  top: 30,
+                                  left: 10,
+                                  child: Transform.rotate(
+                                    angle: -0.785398, // -45 degrees
+                                    child: Text(
+                                      'PAGADO',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLineItemsPlaceholder() {
+    // Placeholder for line items - you'll need to implement fetching actual line items
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Text(
+        'Items de la factura aparecerán aquí',
+        style: TextStyle(
+          fontSize: 13,
+          color: Colors.grey[600],
+          fontStyle: FontStyle.italic,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTotalRow(String label, double amount, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+              color: Colors.grey[800],
+            ),
+          ),
+          Text(
+            ChileanUtils.formatCurrency(amount),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+              color: Colors.grey[800],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Custom painter for the green "PAGADO" triangle ribbon
+class _TrianglePainter extends CustomPainter {
+  final Color color;
+  
+  _TrianglePainter(this.color);
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(0, size.height)
+      ..close();
+    
+    canvas.drawPath(path, paint);
+  }
+  
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+  Widget _buildDataCell(String text, double width, {int? flex, Color? color, FontWeight? fontWeight}) {
+    final child = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          color: color ?? Colors.black87,
+          fontWeight: fontWeight,
+        ),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+      ),
+    );
+    
+    if (flex != null) {
+      return Expanded(flex: flex, child: child);
+    }
+    return SizedBox(width: width, child: child);
+  }
+  
+  Widget _buildStatusCell(InvoiceStatus status, double width) {
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: _buildStatusChip(status),
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(InvoiceStatus status) {
+    Color backgroundColor;
+    Color textColor;
+    String text;
+
+    switch (status) {
+      case InvoiceStatus.draft:
+        backgroundColor = Colors.grey[200]!;
+        textColor = Colors.grey[800]!;
+        text = 'BORRADOR';
+        break;
+      case InvoiceStatus.sent:
+        backgroundColor = Colors.blue[100]!;
+        textColor = Colors.blue[800]!;
+        text = 'ENVIADA';
+        break;
+      case InvoiceStatus.confirmed:
+        backgroundColor = Colors.purple[100]!;
+        textColor = Colors.purple[800]!;
+        text = 'CONFIRMADA';
+        break;
+      case InvoiceStatus.paid:
+        backgroundColor = Colors.green[100]!;
+        textColor = Colors.green[800]!;
+        text = 'PAGADO';
+        break;
+      case InvoiceStatus.overdue:
+        backgroundColor = Colors.red[100]!;
+        textColor = Colors.red[800]!;
+        text = 'VENCIDA';
+        break;
+      case InvoiceStatus.cancelled:
+        backgroundColor = Colors.red[100]!;
+        textColor = Colors.red[800]!;
+        text = 'CANCELADA';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: textColor,
+          letterSpacing: 0.5,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+// Separate StatefulWidget for resizable header cells
+class _ResizableHeaderCell extends StatefulWidget {
+  final String text;
+  final String columnKey;
+  final double width;
+  final bool isSorted;
+  final bool sortAscending;
+  final VoidCallback onTap;
+  final void Function(double delta) onResize;
+
+  const _ResizableHeaderCell({
+    required this.text,
+    required this.columnKey,
+    required this.width,
+    required this.isSorted,
+    required this.sortAscending,
+    required this.onTap,
+    required this.onResize,
+  });
+
+  @override
+  State<_ResizableHeaderCell> createState() => _ResizableHeaderCellState();
+}
+
+class _ResizableHeaderCellState extends State<_ResizableHeaderCell> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: SizedBox(
+        width: widget.width,
+        child: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: widget.onTap,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.text,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[700],
+                            letterSpacing: 0.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (widget.isSorted)
+                        Icon(
+                          widget.sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                          size: 14,
+                          color: Colors.grey[700],
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Resize handle - only visible on hover
+            if (_isHovered)
+              MouseRegion(
+                cursor: SystemMouseCursors.resizeColumn,
+                child: GestureDetector(
+                  onHorizontalDragUpdate: (details) {
+                    widget.onResize(details.delta.dx);
+                  },
+                  child: Container(
+                    width: 8,
+                    height: 40,
+                    alignment: Alignment.center,
+                    child: Container(
+                      width: 2,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[400],
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

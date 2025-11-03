@@ -244,7 +244,7 @@ class MainLayout extends StatelessWidget {
             Expanded(
               child: Stack(
                 children: [
-                  // Main content with border
+                  // Main content with border (no app bar)
                   Container(
                     decoration: navigationService.isDrawerVisible
                         ? BoxDecoration(
@@ -256,79 +256,7 @@ class MainLayout extends StatelessWidget {
                             ),
                           )
                         : null,
-                    child: Column(
-                  children: [
-                    // Top App Bar
-                    Container(
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Theme.of(context).dividerColor,
-                            width: 1,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                      children: [
-                        // Toggle drawer button
-                        IconButton(
-                          icon: Icon(
-                            navigationService.isDrawerVisible
-                                ? Icons.menu_open
-                                : Icons.menu,
-                          ),
-                          tooltip: navigationService.isDrawerVisible
-                              ? 'Ocultar menú'
-                              : 'Mostrar menú',
-                          onPressed: () {
-                            navigationService.toggleDrawer();
-                          },
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            title ?? 'Vinabike ERP',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ),
-                        const Spacer(),
-                        // Action buttons
-                        IconButton(
-                          icon: const Icon(Icons.notifications_outlined),
-                          onPressed: () {
-                            // TODO: Implement notifications
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.settings_outlined),
-                          onPressed: () {
-                            context.push('/settings');
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.logout_outlined),
-                          onPressed: () => _handleLogout(context),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                    ),
-                  ),
-                  // Page Content
-                  Expanded(
-                    child: Container(
-                      color: Theme.of(context).colorScheme.background,
-                      child: body ?? child,
-                    ),
-                  ),
-                ],
-              ),
+                    child: body ?? child,
                   ),
                   // Invisible resize handle on left edge (12px wide)
                   if (navigationService.isDrawerVisible)
@@ -348,6 +276,29 @@ class MainLayout extends StatelessWidget {
                           },
                           child: Container(
                             color: Colors.transparent,
+                          ),
+                        ),
+                      ),
+                    ),
+                  // Small toggle button (bottom-left, only when drawer is hidden)
+                  if (!navigationService.isDrawerVisible)
+                    Positioned(
+                      left: 8,
+                      bottom: 8,
+                      child: Material(
+                        elevation: 4,
+                        borderRadius: BorderRadius.circular(20),
+                        child: InkWell(
+                          onTap: () => navigationService.showDrawer(),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Icon(Icons.menu, size: 20),
                           ),
                         ),
                       ),
@@ -713,7 +664,6 @@ class _AppSidebarState extends State<AppSidebar> {
 
           // Bottom section
           Container(
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               border: Border(
                 top: BorderSide(
@@ -722,14 +672,79 @@ class _AppSidebarState extends State<AppSidebar> {
                 ),
               ),
             ),
-            child: _buildSidebarItem(
-              context,
-              icon: Icons.settings_outlined,
-              activeIcon: Icons.settings,
-              title: 'Configuración',
-              route: '/settings',
-              currentLocation: currentLocation,
-              enabled: true,
+            child: Column(
+              children: [
+                // Settings
+                _buildSidebarItem(
+                  context,
+                  icon: Icons.settings_outlined,
+                  activeIcon: Icons.settings,
+                  title: 'Configuración',
+                  route: '/settings',
+                  currentLocation: currentLocation,
+                  enabled: true,
+                ),
+                
+                // Logout
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => _handleLogout(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.logout_outlined,
+                              size: 20,
+                              color: theme.colorScheme.onSurface.withOpacity(0.7),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Cerrar Sesión',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurface.withOpacity(0.7),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                
+                // Hide navigation button (bottom-right, small like Zoho)
+                Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+                  child: IconButton(
+                    icon: const Icon(Icons.chevron_left, size: 18),
+                    iconSize: 18,
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                    tooltip: 'Ocultar menú',
+                    onPressed: () {
+                      final navigationService = context.read<NavigationService>();
+                      navigationService.hideDrawer();
+                    },
+                    style: IconButton.styleFrom(
+                      backgroundColor: theme.colorScheme.surface,
+                      foregroundColor: theme.colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
