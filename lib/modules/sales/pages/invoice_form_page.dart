@@ -862,11 +862,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               children: [
                 _buildHeader(theme),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: _buildForm(theme),
-                  ),
+                  child: _buildForm(theme),
                 ),
               ],
             ),
@@ -1077,61 +1073,68 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         builder: (context, constraints) {
           final isWide = constraints.maxWidth > 1180;
           if (isWide) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      if (_shouldShowReadOnlyNotice)
-                        _buildReadOnlyNotice(theme),
-                      if (_shouldShowReadOnlyNotice) const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.person_outline,
-                        title: 'Cliente',
-                        children: [_buildCustomerSection(theme)],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.shopping_basket_outlined,
-                        title: 'Productos y servicios',
-                        children: [_buildLineItemsSection(theme)],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.notes_outlined,
-                        title: 'Referencia',
-                        children: [_buildReferenceField(theme)],
-                      ),
-                    ],
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          if (_shouldShowReadOnlyNotice)
+                            _buildReadOnlyNotice(theme),
+                          if (_shouldShowReadOnlyNotice) const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.person_outline,
+                          title: 'Cliente',
+                          children: [_buildCustomerSection(theme)],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.shopping_basket_outlined,
+                          title: 'Productos y servicios',
+                          children: [_buildLineItemsSection(theme)],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.notes_outlined,
+                          title: 'Referencia',
+                          children: [_buildReferenceField(theme)],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 24),
                 SizedBox(
                   width: 360,
-                  child: Column(
-                    children: [
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.event_available_outlined,
-                        title: 'Fechas y estado',
-                        children: [_buildDatesAndStatus(theme)],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.calculate_outlined,
-                        title: 'Resumen',
-                        children: [_buildSummary(theme)],
-                      ),
-                    ],
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.event_available_outlined,
+                          title: 'Fechas y estado',
+                          children: [_buildDatesAndStatus(theme)],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.calculate_outlined,
+                          title: 'Resumen',
+                          children: [_buildSummary(theme)],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
-            );
+            ),
+              );
           }
 
           return Column(

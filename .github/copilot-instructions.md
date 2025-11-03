@@ -804,6 +804,19 @@ Use Supabase Auth with OAuth2 (Google, GitHub, etc.) for secure login. Supports:
 
 # 🎨 GUI Design System
 
+**📘 CRITICAL: Read `.github/GUI_DESIGN_PRINCIPLES.md` for complete design guidelines**
+
+**Core Principles:**
+- **Minimalism:** Professional, clean, data-dense (no circus colors/excessive icons)
+- **Typography:** 14px body, 13px labels, 18-24px headers
+- **Colors:** Whites/grays + single accent (blue), semantic colors sparingly
+- **Tables:** Subtle borders, compact spacing (48px rows), right-align numbers
+- **Buttons:** 1 primary (filled), 2-3 secondary (outlined/text), strategic icons only
+- **Forms:** Two-column layout (desktop), grouped fields, 12-16px spacing
+- **Split-Pane:** Use ONLY for list+detail modules (invoices, customers, products), NOT for dashboards/reports/settings
+
+**Reference Implementation:** `lib/modules/sales/pages/invoice_list_page.dart`
+
 Use a unified widget set across all screens:
 
 - Buttons: consistent style (primary, secondary, danger)

@@ -6,7 +6,6 @@ import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
-import 'purchase_payment_form_page.dart';
 
 /// Purchase Invoice Detail Page with 5-status workflow
 /// Handles both Standard and Prepayment models with conditional buttons
@@ -826,14 +825,9 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
   }
 
   Future<void> _navigateToPayment() async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PurchasePaymentFormPage(
-          invoiceId: _invoice!.id!,
-          invoice: _invoice!,
-        ),
-      ),
+    // Navigate to payment form using go_router
+    final result = await context.push<bool>(
+      '/purchases/invoices/${_invoice!.id}/payment',
     );
 
     if (result == true) {

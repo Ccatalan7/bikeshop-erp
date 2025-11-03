@@ -42,7 +42,7 @@ import '../../modules/purchases/pages/supplier_list_page.dart';
 import '../../modules/purchases/pages/supplier_form_page.dart';
 import '../../modules/purchases/pages/purchase_invoice_list_page.dart';
 import '../../modules/purchases/pages/purchase_invoice_form_page.dart';
-import '../../modules/purchases/pages/purchase_invoice_detail_page.dart';
+import '../../modules/purchases/pages/purchase_payment_form_page.dart';
 import '../../modules/purchases/pages/purchase_payments_list_page.dart';
 import '../../modules/purchases/pages/smart_purchase_list_page.dart';
 import '../../modules/pos/pages/pos_dashboard_page.dart';
@@ -809,6 +809,7 @@ class AppRouter {
             const PurchaseInvoiceListPage(),
           ),
         ),
+        // Specific routes MUST come before dynamic :id route
         GoRoute(
           path: '/purchases/new',
           pageBuilder: (context, state) {
@@ -820,28 +821,6 @@ class AppRouter {
               context,
               state,
               PurchaseInvoiceFormPage(isPrepayment: isPrepayment),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/purchases/:id/detail',
-          pageBuilder: (context, state) {
-            final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
-              context,
-              state,
-              PurchaseInvoiceDetailPage(invoiceId: id),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/purchases/:id/edit',
-          pageBuilder: (context, state) {
-            final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
-              context,
-              state,
-              PurchaseInvoiceFormPage(invoiceId: id),
             );
           },
         ),
@@ -862,6 +841,54 @@ class AppRouter {
             state,
             const SmartPurchaseListPage(),
           ),
+        ),
+        // Dynamic route for viewing/editing invoices
+        GoRoute(
+          path: '/purchases/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            // Single page for create, edit, and workflow (like sales invoice)
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PurchaseInvoiceFormPage(invoiceId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/purchases/:id/detail',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            // DEPRECATED: Detail page is no longer used, redirects to form page
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PurchaseInvoiceFormPage(invoiceId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/purchases/:id/edit',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            // DEPRECATED: Edit route is no longer used, redirects to form page
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PurchaseInvoiceFormPage(invoiceId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/purchases/invoices/:id/payment',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PurchasePaymentFormPage(invoiceId: id),
+            );
+          },
         ),
 
         // POS Module

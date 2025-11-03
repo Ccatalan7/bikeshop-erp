@@ -13,6 +13,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
@@ -40,6 +41,14 @@ class PurchaseInvoiceFormPage extends StatefulWidget {
 
 class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   static const double _ivaRate = 0.19;
+  
+  // Table column widths (match sales invoice)
+  static const double _colIndexWidth = 40.0;
+  static const double _colQuantityWidth = 120.0;
+  static const double _colPriceWidth = 130.0;
+  static const double _colDiscountWidth = 130.0;
+  static const double _colTotalWidth = 130.0;
+  static const double _colActionsWidth = 48.0;
 
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _invoiceNumberController =
@@ -61,6 +70,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isUpdatingStatus = false;
+  bool _isEditing = false; // Edit mode toggle (like sales invoice)
 
   List<shared_supplier.Supplier> _supplierCache = const [];
   List<Product> _productCache = const [];
@@ -68,12 +78,20 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   StreamSubscription? _scanSubscription;
   final _remoteScannerService = RemoteScannerService();
   bool _scannerEnabled = false;
+  int _autocompleteKey = 0; // Reset autocomplete field after adding product
 
   @override
   void initState() {
     super.initState();
     print('🔍 DEBUG Form: isPrepayment = ${widget.isPrepayment}');
     _dueDate = _issueDate.add(const Duration(days: 30));
+    
+    // Set initial editing state:
+    // - New invoice (invoiceId == null) → editing mode
+    // - Existing draft → view mode (user clicks "Editar" to edit)
+    // - Other statuses → always view mode
+    _isEditing = widget.invoiceId == null;
+    
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
     
     // Listen for barcode scans
@@ -96,7 +114,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     super.dispose();
   }
   
-  bool get _canEditFields => _status == PurchaseInvoiceStatus.draft;
+  // Can edit fields only when status is draft AND in editing mode
+  bool get _canEditFields => _status == PurchaseInvoiceStatus.draft && _isEditing;
   
   Future<void> _toggleScanner() async {
     if (!_canEditFields) {
@@ -428,67 +447,6 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
-  Future<void> _openProductSelector() async {
-    if (_productCache.isEmpty) {
-      try {
-        _productCache = await _inventoryService.getProducts(forceRefresh: true);
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error al cargar productos: $e'),
-              backgroundColor: Colors.red),
-        );
-        return;
-      }
-    }
-
-    if (!mounted) return;
-
-    // Filter only products (not services) for purchase invoices
-    final purchasableProducts = _productCache
-        .where((p) => p.productType == ProductType.product)
-        .toList();
-
-    final selected = await showModalBottomSheet<Product>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => _ProductSelector(products: purchasableProducts),
-    );
-
-    if (selected != null) {
-      _addProductLine(selected);
-    }
-  }
-
-  void _addProductLine(Product product) {
-    for (final entry in _lineEntries) {
-      if (entry.line.productId == product.id) {
-        entry.line = entry.line.copyWith(quantity: entry.line.quantity + 1);
-        entry.quantityController.text = entry.line.quantity.toStringAsFixed(0);
-        _recalculateTotals();
-        return;
-      }
-    }
-
-    final entry = _PurchaseLineEntry(
-      line: PurchaseInvoiceItem(
-        productId: product.id,
-        productName: product.name,
-        productSku: product.sku,
-        quantity: 1,
-        unitCost: product.cost > 0 ? product.cost : product.price,
-        discount: 0,
-        ivaRate: _ivaRate,
-      ),
-    );
-    entry.attachListeners(_recalculateTotals);
-
-    setState(() {
-      _lineEntries.add(entry);
-    });
-  }
-
   Future<void> _pickDate({required bool isIssueDate}) async {
     final initial = isIssueDate
         ? _issueDate
@@ -622,265 +580,6 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
-  Future<void> _markAsReceived() async {
-    if (widget.invoiceId == null) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar recepción'),
-        content: const Text(
-          '¿Marcar esta factura como recibida?\n\n'
-          'Esto aumentará el inventario de todos los productos '
-          'y creará los asientos contables correspondientes.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('Confirmar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isUpdatingStatus = true);
-
-    try {
-      final updated = await _purchaseService.markAsReceived(widget.invoiceId!);
-      if (!mounted) return;
-
-      if (updated != null) {
-        setState(() {
-          _status = updated.status;
-          _loadedInvoice = updated;
-        });
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Factura marcada como recibida. Inventario actualizado.'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al actualizar estado: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isUpdatingStatus = false);
-      }
-    }
-  }
-
-  Future<void> _markAsPaid() async {
-    if (widget.invoiceId == null) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar pago'),
-        content: const Text(
-          '¿Marcar esta factura como pagada?\n\n'
-          'Esto registrará el pago de la factura en el sistema contable.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-            child: const Text('Confirmar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isUpdatingStatus = true);
-
-    try {
-      final updated = await _purchaseService.markAsPaid(widget.invoiceId!);
-      if (!mounted) return;
-
-      if (updated != null) {
-        setState(() {
-          _status = updated.status;
-          _loadedInvoice = updated;
-        });
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Factura marcada como pagada'),
-          backgroundColor: Colors.blue,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al actualizar estado: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isUpdatingStatus = false);
-      }
-    }
-  }
-
-  Future<void> _revertToDraft() async {
-    if (widget.invoiceId == null) return;
-
-    final statusName =
-        _status == PurchaseInvoiceStatus.received ? 'recibida' : 'pagada';
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('⚠️ Confirmar reversión'),
-        content: Text(
-          '¿Volver esta factura $statusName a BORRADOR?\n\n'
-          '⚠️ ADVERTENCIA: Esto reversará:\n'
-          '• Los movimientos de inventario (reducirá el stock)\n'
-          '• Los asientos contables (creará asientos de reverso)\n\n'
-          'Solo usa esta opción si cometiste un error.\n\n'
-          '¿Estás seguro?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Sí, revertir'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isUpdatingStatus = true);
-
-    try {
-      final updated = await _purchaseService.revertToDraft(widget.invoiceId!);
-      if (!mounted) return;
-
-      if (updated != null) {
-        setState(() {
-          _status = updated.status;
-          _loadedInvoice = updated;
-        });
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Factura revertida a borrador. Inventario y contabilidad actualizados.'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 4),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al revertir: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isUpdatingStatus = false);
-      }
-    }
-  }
-
-  Future<void> _revertToReceived() async {
-    if (widget.invoiceId == null) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar reversión'),
-        content: const Text(
-          '¿Volver esta factura pagada a RECIBIDA?\n\n'
-          'Esto solo cambiará el estado. El inventario y '
-          'la contabilidad se mantendrán intactos.\n\n'
-          '¿Continuar?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: const Text('Sí, revertir'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isUpdatingStatus = true);
-
-    try {
-      final updated =
-          await _purchaseService.revertToReceived(widget.invoiceId!);
-      if (!mounted) return;
-
-      if (updated != null) {
-        setState(() {
-          _status = updated.status;
-          _loadedInvoice = updated;
-        });
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Factura revertida a recibida'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al revertir: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isUpdatingStatus = false);
-      }
-    }
-  }
-
   Future<void> _deleteInvoice() async {
     if (widget.invoiceId == null) return;
 
@@ -947,6 +646,181 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
+  /// Generic status update method (similar to sales invoice)
+  Future<void> _updateStatus(PurchaseInvoiceStatus newStatus) async {
+    if (widget.invoiceId == null) return;
+
+    setState(() => _isUpdatingStatus = true);
+
+    try {
+      // Update status via service
+      final updated = await _purchaseService.updateInvoiceStatus(
+        widget.invoiceId!,
+        newStatus,
+      );
+      
+      if (!mounted) return;
+
+      if (updated != null) {
+        setState(() {
+          _status = updated.status;
+          _loadedInvoice = updated;
+        });
+      }
+
+      String message;
+      switch (newStatus) {
+        case PurchaseInvoiceStatus.sent:
+          message = 'Factura enviada al proveedor';
+          break;
+        case PurchaseInvoiceStatus.confirmed:
+          message = 'Factura confirmada';
+          break;
+        case PurchaseInvoiceStatus.received:
+          message = 'Factura marcada como recibida. Inventario actualizado.';
+          break;
+        case PurchaseInvoiceStatus.draft:
+          message = 'Factura revertida a borrador';
+          break;
+        default:
+          message = 'Estado actualizado';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al actualizar estado: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingStatus = false);
+      }
+    }
+  }
+
+  /// Navigate to payment form (similar to sales invoice)
+  Future<void> _openPaymentForm() async {
+    final invoiceId = widget.invoiceId;
+    if (invoiceId == null) {
+      return;
+    }
+
+    final didRegisterPayment = await context.push<bool>(
+          '/purchases/invoices/$invoiceId/payment',
+        ) ??
+        false;
+
+    if (didRegisterPayment && mounted) {
+      await _refreshInvoiceById(invoiceId);
+    }
+  }
+
+  /// Undo last payment (similar to sales invoice)
+  Future<void> _undoLastPayment() async {
+    final invoiceId = widget.invoiceId;
+    if (invoiceId == null) {
+      return;
+    }
+
+    // Get all payments for this invoice
+    final payments = await _purchaseService.getPaymentsForInvoice(invoiceId);
+    if (payments.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No hay pagos para deshacer'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Get the last payment (most recent)
+    payments.sort((a, b) => b.date.compareTo(a.date));
+    final lastPayment = payments.first;
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Deshacer pago'),
+        content: Text(
+          'Se eliminará el pago de ${ChileanUtils.formatCurrency(lastPayment.amount)} '
+          'y su asiento contable asociado.\n\n'
+          'El estado de la factura se revertirá automáticamente. ¿Continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Eliminar pago'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    try {
+      await _purchaseService.deletePayment(lastPayment.id!);
+      if (mounted) {
+        await _refreshInvoiceById(invoiceId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pago eliminado correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al eliminar el pago: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Refresh invoice after payment changes
+  Future<void> _refreshInvoiceById(String invoiceId) async {
+    try {
+      final invoices = await _purchaseService.getPurchaseInvoices(forceRefresh: true);
+      final updated = invoices.firstWhere((inv) => inv.id == invoiceId);
+      
+      if (mounted) {
+        setState(() {
+          _status = updated.status;
+          _loadedInvoice = updated;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error refreshing invoice: $e');
+    }
+  }
+
   void _removeLine(_PurchaseLineEntry entry) {
     setState(() {
       _lineEntries.remove(entry);
@@ -975,535 +849,892 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   Widget _buildHeader() {
-    final canMarkAsReceived =
-        widget.invoiceId != null && _status == PurchaseInvoiceStatus.draft && !widget.readOnly;
-    final canMarkAsPaid =
-        widget.invoiceId != null && _status == PurchaseInvoiceStatus.received && !widget.readOnly;
-    final canRevertToDraft = widget.invoiceId != null &&
-        (_status == PurchaseInvoiceStatus.received ||
-            _status == PurchaseInvoiceStatus.paid) && !widget.readOnly;
-    final canRevertToReceived =
-        widget.invoiceId != null && _status == PurchaseInvoiceStatus.paid && !widget.readOnly;
-    final canDelete =
-        widget.invoiceId != null && _status == PurchaseInvoiceStatus.draft && !widget.readOnly;
+    final theme = Theme.of(context);
+    
+    // Determine title based on context
+    String title;
+    if (widget.invoiceId == null) {
+      title = 'Nueva factura de compra';
+    } else if (_isEditing) {
+      title = 'Editando factura de compra';
+    } else {
+      title = 'Factura de compra';
+    }
+
+    // Workflow buttons based on status and prepayment model
+    final actionButtons = <Widget>[];
+    
+    if (!widget.readOnly && widget.invoiceId != null) {
+      // Get prepayment model from loaded invoice
+      final isPrepayment = _loadedInvoice?.prepaymentModel ?? widget.isPrepayment;
+      
+      if (_status == PurchaseInvoiceStatus.draft) {
+        // Draft: Can edit (if not editing), send to supplier, or delete
+        
+        // Show "Editar" button when viewing draft (not editing)
+        if (!_isEditing) {
+          actionButtons.add(
+            OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _isEditing = true;
+                });
+              },
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Editar'),
+            ),
+          );
+          actionButtons.add(const SizedBox(width: 8));
+        }
+        
+        actionButtons.add(
+          OutlinedButton.icon(
+            onPressed: _deleteInvoice,
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            label: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        );
+        actionButtons.add(const SizedBox(width: 8));
+        actionButtons.add(
+          FilledButton.icon(
+            onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.sent),
+            icon: _isUpdatingStatus
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.send_outlined),
+            label: const Text('Enviar'),
+          ),
+        );
+      } else if (_status == PurchaseInvoiceStatus.sent) {
+        // Sent: Can revert to draft or confirm
+        actionButtons.add(
+          OutlinedButton.icon(
+            onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.draft),
+            icon: const Icon(Icons.undo_outlined),
+            label: const Text('Volver a borrador'),
+          ),
+        );
+        actionButtons.add(const SizedBox(width: 8));
+        actionButtons.add(
+          FilledButton.icon(
+            onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
+            icon: _isUpdatingStatus
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check_circle_outline),
+            label: const Text('Confirmar'),
+          ),
+        );
+      } else if (_status == PurchaseInvoiceStatus.confirmed) {
+        // Confirmed: Next step depends on prepayment model
+        actionButtons.add(
+          OutlinedButton.icon(
+            onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.sent),
+            icon: const Icon(Icons.undo_outlined),
+            label: const Text('Volver a enviado'),
+          ),
+        );
+        actionButtons.add(const SizedBox(width: 8));
+        
+        if (isPrepayment) {
+          // Prepayment: Pay first, then receive
+          actionButtons.add(
+            FilledButton.icon(
+              onPressed: _openPaymentForm,
+              icon: const Icon(Icons.payments_outlined),
+              label: const Text('Registrar pago'),
+            ),
+          );
+        } else {
+          // Standard: Receive first, then pay
+          actionButtons.add(
+            FilledButton.icon(
+              onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.received),
+              icon: _isUpdatingStatus
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.inventory_2_outlined),
+              label: const Text('Marcar como recibida'),
+            ),
+          );
+        }
+      } else if (_status == PurchaseInvoiceStatus.received) {
+        // Received (standard workflow): Can register payment
+        actionButtons.add(
+          OutlinedButton.icon(
+            onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
+            icon: const Icon(Icons.undo_outlined),
+            label: const Text('Volver a confirmado'),
+          ),
+        );
+        actionButtons.add(const SizedBox(width: 8));
+        actionButtons.add(
+          FilledButton.icon(
+            onPressed: _openPaymentForm,
+            icon: const Icon(Icons.payments_outlined),
+            label: const Text('Registrar pago'),
+          ),
+        );
+      } else if (_status == PurchaseInvoiceStatus.paid) {
+        // Paid: Can undo payment or mark as received (prepayment only)
+        final isPrepayment = _loadedInvoice?.prepaymentModel ?? widget.isPrepayment;
+        
+        actionButtons.add(
+          OutlinedButton.icon(
+            onPressed: _undoLastPayment,
+            icon: const Icon(Icons.undo_outlined, color: Colors.red),
+            label: const Text('Deshacer pago', style: TextStyle(color: Colors.red)),
+          ),
+        );
+        
+        if (isPrepayment) {
+          // Prepayment workflow: After payment, can mark as received
+          actionButtons.add(const SizedBox(width: 8));
+          actionButtons.add(
+            FilledButton.icon(
+              onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.received),
+              icon: _isUpdatingStatus
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.inventory_2_outlined),
+              label: const Text('Marcar como recibida'),
+            ),
+          );
+        }
+      }
+    }
+
+    // Build action widgets with status badge and total
+    final actionWidgets = <Widget>[];
+    
+    if (widget.invoiceId != null) {
+      // Total amount badge
+      actionWidgets.add(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.payments_outlined,
+                  size: 16, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Text(
+                ChileanUtils.formatCurrency(_total),
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      
+      // Status chip
+      actionWidgets.add(_buildStatusChip(theme));
+    }
+    
+    actionWidgets.addAll(actionButtons);
 
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
         children: [
           IconButton(
             onPressed: () => context.pop(),
             icon: const Icon(Icons.arrow_back),
+            tooltip: 'Volver',
           ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.invoiceId != null
-                      ? widget.readOnly 
-                          ? 'Factura de compra' 
-                          : 'Editar factura de compra'
-                      : 'Nueva factura de compra',
-                  style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.bold),
+                  title,
+                  style: theme.textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
-                if (widget.invoiceId != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: _buildStatusChip(_status),
+                const SizedBox(height: 4),
+                Text(
+                  widget.isPrepayment
+                      ? 'Prepago: pagar antes de recibir mercancía'
+                      : 'Flujo estándar: recibir y luego pagar',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
+                ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          // Hide all action buttons in read-only mode
-          if (!widget.readOnly) ...[
-            // Delete button (only for draft invoices)
-            if (canDelete) ...[
-              IconButton(
-                onPressed: _isUpdatingStatus ? null : _deleteInvoice,
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                tooltip: 'Eliminar factura',
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.red.withOpacity(0.1),
-                ),
+          const SizedBox(width: 16),
+          if (!widget.readOnly && _canEditFields) ...[
+            IconButton(
+              onPressed: _toggleScanner,
+              icon: Icon(
+                _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
+                color: _scannerEnabled ? Colors.green : null,
               ),
-              const SizedBox(width: 8),
-            ],
-            // Reversal buttons (backward flow)
-            if (canRevertToReceived) ...[
-              ElevatedButton.icon(
-                onPressed: _isUpdatingStatus ? null : _revertToReceived,
-                icon: _isUpdatingStatus
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.undo),
-                label: const Text('Volver a Recibida'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
-                ),
+              tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+              style: IconButton.styleFrom(
+                backgroundColor: _scannerEnabled 
+                    ? Colors.green.withOpacity(0.1) 
+                    : null,
               ),
-              const SizedBox(width: 8),
-            ],
-            if (canRevertToDraft) ...[
-              ElevatedButton.icon(
-                onPressed: _isUpdatingStatus ? null : _revertToDraft,
-                icon: _isUpdatingStatus
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.undo),
-                label: const Text('Volver a Borrador'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[700],
-                  foregroundColor: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-            // Forward flow buttons
-            if (canMarkAsReceived) ...[
-              ElevatedButton.icon(
-                onPressed: _isUpdatingStatus ? null : _markAsReceived,
-                icon: _isUpdatingStatus
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.inventory_2),
-                label: const Text('Marcar como Recibida'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-            if (canMarkAsPaid) ...[
-              ElevatedButton.icon(
-                onPressed: _isUpdatingStatus ? null : _markAsPaid,
-                icon: _isUpdatingStatus
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.payment),
-                label: const Text('Marcar como Pagada'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-            if (_canEditFields) ...[
-              IconButton(
-                onPressed: _toggleScanner,
-                icon: Icon(
-                  _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
-                  color: _scannerEnabled ? Colors.green : null,
-                ),
-                tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
-                style: IconButton.styleFrom(
-                  backgroundColor: _scannerEnabled 
-                      ? Colors.green.withOpacity(0.1) 
-                      : null,
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
+            ),
+            const SizedBox(width: 8),
             AppButton(
               text: 'Guardar',
               icon: Icons.save,
               onPressed: _isSaving ? null : _saveInvoice,
               isLoading: _isSaving,
             ),
-          ], // End of !widget.readOnly check
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(PurchaseInvoiceStatus status) {
-    Color color;
-    IconData icon;
-
-    switch (status) {
-      case PurchaseInvoiceStatus.draft:
-        color = Colors.grey;
-        icon = Icons.edit;
-        break;
-      case PurchaseInvoiceStatus.sent:
-        color = Colors.orange;
-        icon = Icons.send;
-        break;
-      case PurchaseInvoiceStatus.confirmed:
-        color = Colors.purple;
-        icon = Icons.verified;
-        break;
-      case PurchaseInvoiceStatus.received:
-        color = Colors.green;
-        icon = Icons.inventory_2;
-        break;
-      case PurchaseInvoiceStatus.paid:
-        color = Colors.blue;
-        icon = Icons.check_circle;
-        break;
-      case PurchaseInvoiceStatus.cancelled:
-        color = Colors.red;
-        icon = Icons.cancel;
-        break;
-    }
-
-    return Chip(
-      avatar: Icon(icon, size: 16, color: Colors.white),
-      label: Text(
-        status.displayName,
-        style: const TextStyle(color: Colors.white, fontSize: 12),
-      ),
-      backgroundColor: color,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      visualDensity: VisualDensity.compact,
-    );
-  }
-
-  Widget _buildForm() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: ListView(
-        children: [
-          _buildSupplierCard(),
-          const SizedBox(height: 16),
-          _buildInvoiceMetaCard(),
-          const SizedBox(height: 16),
-          _buildLinesCard(),
-          const SizedBox(height: 16),
-          _buildSummaryCard(),
-          const SizedBox(height: 32),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSupplierCard() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey[300]!)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.store_outlined),
-                const SizedBox(width: 8),
-                const Text('Proveedor',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: _openSupplierSelector,
-                  icon: const Icon(Icons.search),
-                  label: Text(
-                      _selectedSupplier == null ? 'Seleccionar' : 'Cambiar'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_selectedSupplier == null)
-              const Text(
-                'No hay proveedor seleccionado. Toca "Seleccionar" para elegir uno o crear uno nuevo.',
-                style: TextStyle(color: Colors.grey),
-              )
-            else
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _selectedSupplier!.name,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  if (_selectedSupplier!.rut != null &&
-                      _selectedSupplier!.rut!.isNotEmpty)
-                    Text(
-                        'RUT: ${ChileanUtils.formatRut(_selectedSupplier!.rut!)}'),
-                  if (_selectedSupplier!.email != null &&
-                      _selectedSupplier!.email!.isNotEmpty)
-                    Text('Email: ${_selectedSupplier!.email}'),
-                  if (_selectedSupplier!.phone != null &&
-                      _selectedSupplier!.phone!.isNotEmpty)
-                    Text('Teléfono: ${_selectedSupplier!.phone}'),
-                  if (_selectedSupplier!.address != null &&
-                      _selectedSupplier!.address!.isNotEmpty)
-                    Text('Dirección: ${_selectedSupplier!.address}'),
-                ],
-              ),
+            const SizedBox(width: 16),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInvoiceMetaCard() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey[300]!)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Detalles de la factura',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _invoiceNumberController,
-                    decoration: const InputDecoration(
-                      labelText: 'Número de factura',
-                      hintText: 'Ej: FC-0001',
-                    ),
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
-                            ? 'Ingresa el número de factura'
-                            : null,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: DropdownButtonFormField<PurchaseInvoiceStatus>(
-                    value: _status,
-                    decoration: const InputDecoration(labelText: 'Estado'),
-                    items: PurchaseInvoiceStatus.values
-                        .map((status) => DropdownMenuItem(
-                              value: status,
-                              child: Text(status.displayName),
-                            ))
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _status = value);
-                      }
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickDate(isIssueDate: true),
-                    child: IgnorePointer(
-                      child: TextFormField(
-                        decoration: const InputDecoration(
-                          labelText: 'Fecha de emisión',
-                          suffixIcon: Icon(Icons.calendar_today),
-                        ),
-                        controller: TextEditingController(
-                          text: ChileanUtils.formatDate(_issueDate),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickDate(isIssueDate: false),
-                    child: IgnorePointer(
-                      child: TextFormField(
-                        decoration: const InputDecoration(
-                          labelText: 'Fecha de vencimiento',
-                          suffixIcon: Icon(Icons.event),
-                        ),
-                        controller: TextEditingController(
-                          text: ChileanUtils.formatDate(_dueDate ??
-                              _issueDate.add(const Duration(days: 30))),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _referenceController,
-              decoration: const InputDecoration(
-                labelText: 'Referencia (opcional)',
-                hintText: 'Orden de compra, guía de despacho, etc.',
+          Flexible(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: actionWidgets,
               ),
             ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notas internas (opcional)',
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLinesCard() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey[300]!)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.list_alt_outlined),
-                const SizedBox(width: 8),
-                const Text('Productos y servicios',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: _openProductSelector,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Agregar producto'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_lineEntries.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24.0),
-                child: Center(
-                  child: Text(
-                    'Agrega productos o servicios para registrar el costo de la compra.',
-                    style: TextStyle(color: Colors.grey),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              )
-            else
-              Column(
-                children: [
-                  _buildLinesTableHeader(),
-                  const Divider(),
-                  ..._lineEntries.map((entry) => _PurchaseLineRow(
-                        entry: entry,
-                        onRemove: () => _removeLine(entry),
-                      )),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLinesTableHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: const [
-          Expanded(
-              flex: 4,
-              child: Text('Producto',
-                  style: TextStyle(fontWeight: FontWeight.w600))),
-          Expanded(
-              flex: 2,
-              child: Text('Cantidad',
-                  style: TextStyle(fontWeight: FontWeight.w600))),
-          Expanded(
-              flex: 2,
-              child: Text('Costo unitario',
-                  style: TextStyle(fontWeight: FontWeight.w600))),
-          Expanded(
-              flex: 2,
-              child: Text('Descuento',
-                  style: TextStyle(fontWeight: FontWeight.w600))),
-          Expanded(
-              flex: 2,
-              child: Text('Subtotal',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                  textAlign: TextAlign.end)),
-          SizedBox(width: 40),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey[300]!)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Resumen',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            _buildSummaryRow(
-                'Subtotal', ChileanUtils.formatCurrency(_subtotal)),
-            _buildSummaryRow('IVA (19%)', ChileanUtils.formatCurrency(_iva)),
-            const Divider(),
-            _buildSummaryRow(
-                'Total a pagar', ChileanUtils.formatCurrency(_total),
-                isTotal: true),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryRow(String label, String value, {bool isTotal = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          Expanded(
-              child: Text(label,
-                  style: TextStyle(
-                      fontWeight:
-                          isTotal ? FontWeight.bold : FontWeight.normal))),
-          Text(
-            value,
-            style: TextStyle(
-                fontSize: isTotal ? 18 : 16,
-                fontWeight: isTotal ? FontWeight.bold : FontWeight.w600),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatusChip(ThemeData theme) {
+    final color = _statusColor(theme);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        _status.displayName,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Color _statusColor(ThemeData theme) {
+    switch (_status) {
+      case PurchaseInvoiceStatus.draft:
+        return Colors.grey;
+      case PurchaseInvoiceStatus.sent:
+        return Colors.orange;
+      case PurchaseInvoiceStatus.confirmed:
+        return Colors.purple;
+      case PurchaseInvoiceStatus.received:
+        return Colors.green;
+      case PurchaseInvoiceStatus.paid:
+        return Colors.blue;
+      case PurchaseInvoiceStatus.cancelled:
+        return Colors.red;
+    }
+  }
+
+  Widget _buildForm() {
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 1180;
+        if (isWide) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.store_outlined,
+                          title: 'Proveedor',
+                          children: [_buildSupplierSection(theme)],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.shopping_basket_outlined,
+                          title: 'Productos y servicios',
+                          children: [_buildLineItemsSection(theme)],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.notes_outlined,
+                          title: 'Referencia',
+                          children: [_buildReferenceSection(theme)],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                SizedBox(
+                  width: 360,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.calendar_today_outlined,
+                          title: 'Fechas y estado',
+                          children: [_buildInvoiceMetaSection(theme)],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSummaryCard(theme),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        } else {
+          // Narrow layout: stack vertically
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.store_outlined,
+                  title: 'Proveedor',
+                  children: [_buildSupplierSection(theme)],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.calendar_today_outlined,
+                  title: 'Fechas y estado',
+                  children: [_buildInvoiceMetaSection(theme)],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.shopping_basket_outlined,
+                  title: 'Productos y servicios',
+                  children: [_buildLineItemsSection(theme)],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.notes_outlined,
+                  title: 'Referencia',
+                  children: [_buildReferenceSection(theme)],
+                ),
+                const SizedBox(height: 16),
+                _buildSummaryCard(theme),
+                const SizedBox(height: 32),
+              ],
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildSectionCard(
+    ThemeData theme, {
+    required IconData icon,
+    required String title,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+                  child: Icon(icon, color: theme.colorScheme.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSupplierSection(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: _invoiceNumberController,
+          enabled: _canEditFields,
+          decoration: const InputDecoration(
+            labelText: 'Número de factura',
+            helperText: 'Puedes modificar el folio si tu numeración es manual',
+          ),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Ingresa un número de factura';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 20),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: CircleAvatar(
+            backgroundColor: _selectedSupplier == null
+                ? theme.colorScheme.surfaceVariant
+                : theme.colorScheme.primary.withOpacity(0.12),
+            child: Icon(
+              Icons.store,
+              color: _selectedSupplier == null
+                  ? theme.colorScheme.onSurfaceVariant
+                  : theme.colorScheme.primary,
+            ),
+          ),
+          title: Text(_selectedSupplier?.name ?? 'Selecciona un proveedor'),
+          subtitle: _selectedSupplier != null && _selectedSupplier!.rut != null
+              ? Text('RUT: ${ChileanUtils.formatRut(_selectedSupplier!.rut!)}')
+              : const Text('Necesario para facturación y reportes'),
+          trailing: FilledButton.tonalIcon(
+            onPressed: _canEditFields ? _openSupplierSelector : null,
+            icon: Icon(_selectedSupplier == null ? Icons.search : Icons.edit,
+                size: 18),
+            label: Text(_selectedSupplier == null ? 'Buscar proveedor' : 'Cambiar'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInvoiceMetaSection(ThemeData theme) {
+    return Column(
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.event_note),
+          title: const Text('Fecha de emisión'),
+          subtitle: Text(ChileanUtils.formatDate(_issueDate)),
+          trailing: TextButton(
+            onPressed:
+                _canEditFields ? () => _pickDate(isIssueDate: true) : null,
+            child: const Text('Cambiar'),
+          ),
+        ),
+        const Divider(),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.schedule_outlined),
+          title: const Text('Fecha de vencimiento'),
+          subtitle: Text(ChileanUtils.formatDate(
+              _dueDate ?? _issueDate.add(const Duration(days: 30)))),
+          trailing: TextButton(
+            onPressed:
+                _canEditFields ? () => _pickDate(isIssueDate: false) : null,
+            child: const Text('Cambiar'),
+          ),
+        ),
+        const Divider(),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.flag_outlined),
+          title: const Text('Estado de la factura'),
+          subtitle: Text(_statusDisplayName(_status)),
+          trailing: _status == PurchaseInvoiceStatus.draft
+              ? Text(
+                  _canEditFields ? 'Editando' : 'Solo lectura',
+                  style: theme.textTheme.labelMedium,
+                )
+              : null,
+        ),
+      ],
+    );
+  }
+
+  String _statusDisplayName(PurchaseInvoiceStatus status) {
+    switch (status) {
+      case PurchaseInvoiceStatus.draft:
+        return 'Borrador';
+      case PurchaseInvoiceStatus.sent:
+        return 'Enviada';
+      case PurchaseInvoiceStatus.confirmed:
+        return 'Confirmada';
+      case PurchaseInvoiceStatus.received:
+        return 'Recibida';
+      case PurchaseInvoiceStatus.paid:
+        return 'Pagada';
+      case PurchaseInvoiceStatus.cancelled:
+        return 'Cancelada';
+    }
+  }
+
+  Widget _buildLineItemsSection(ThemeData theme) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Calculate minimum required width based on columns
+        const minTableWidth = 800.0;
+        // Use available width if larger, otherwise use minimum (enables scroll)
+        final tableWidth = constraints.maxWidth > minTableWidth 
+            ? constraints.maxWidth 
+            : minTableWidth;
+        
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: tableWidth,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  // Table header
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(7),
+                        topRight: Radius.circular(7),
+                      ),
+                    ),
+                    child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // # column
+                  Container(
+                    width: _colIndexWidth,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text('#', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  
+                  // Product details column (expandable)
+                  Expanded(
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 250),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                        ),
+                      ),
+                      child: Text('DETALLES DEL ARTÍCULO', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  
+                  // Cantidad column
+                  Container(
+                    width: _colQuantityWidth,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text('CANTIDAD', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  
+                  // Tarifa column
+                  Container(
+                    width: _colPriceWidth,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text('TARIFA', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  
+                  // Descuento column
+                  Container(
+                    width: _colDiscountWidth,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text('DESCUENTO', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  
+                  // Importe column
+                  Container(
+                    width: _colTotalWidth,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Text('IMPORTE', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600), textAlign: TextAlign.right),
+                  ),
+                  
+                  // Actions column
+                  SizedBox(width: _colActionsWidth),
+                ],
+              ),
+            ),
+          ),
+          
+          // Header/Content divider
+          Divider(height: 1, thickness: 1, color: theme.colorScheme.outline.withOpacity(0.2)),
+        
+          // Line items
+          Column(
+            children: [
+              // Existing line items
+              if (_lineEntries.isNotEmpty)
+                ..._lineEntries.map((lineEntry) => 
+                  _PurchaseLineRow(
+                    entry: lineEntry,
+                    onRemove: () => _removeLine(lineEntry),
+                    canEdit: _canEditFields,
+                  )
+                ),
+                
+              // Add new line (search field)
+              if (_canEditFields)
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                    ),
+                  ),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Empty space for # column
+                        Container(
+                          width: _colIndexWidth,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                            ),
+                          ),
+                        ),
+                        
+                        // Search field spanning the product details column
+                        Expanded(
+                          child: Container(
+                            constraints: const BoxConstraints(minWidth: 250),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                              ),
+                            ),
+                            child: _buildProductSearchField(),
+                          ),
+                        ),
+                        
+                        // Empty spaces for other columns to maintain alignment
+                        Container(
+                          width: _colQuantityWidth,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          width: _colPriceWidth,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          width: _colDiscountWidth,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: _colTotalWidth),
+                        SizedBox(width: _colActionsWidth),
+                      ],
+                    ),
+                  ),
+                ),
+              
+              // Empty state
+              if (_lineEntries.isEmpty && !_canEditFields)
+                Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Text(
+                    'No hay artículos en esta factura de compra',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProductSearchField() {
+    return ProductAutocompleteField(
+      key: ValueKey(_autocompleteKey), // Reset field when key changes
+      onProductSelected: (selection) {
+        if (selection.isCatalogProduct && selection.product != null) {
+          _addProduct(selection.product!);
+        }
+        // Custom items not supported yet for purchases
+      },
+      allowCustomItems: false, // Purchases use catalog products only
+      labelText: 'Agregar producto o servicio',
+      hintText: 'Buscar por nombre o SKU...',
+    );
+  }
+
+  void _addProduct(Product product) {
+    if (!_canEditFields) return;
+    
+    final entry = _PurchaseLineEntry(
+      line: PurchaseInvoiceItem(
+        productId: product.id,
+        productName: product.name,
+        productSku: product.sku,
+        quantity: 1,
+        unitCost: product.cost > 0 ? product.cost : product.price,
+        discount: 0,
+        ivaRate: _ivaRate,
+      ),
+    );
+    entry.attachListeners(_recalculateTotals);
+
+    setState(() {
+      _lineEntries.add(entry);
+      _autocompleteKey++; // Reset autocomplete field
+    });
+  }
+
+  Widget _buildReferenceSection(ThemeData theme) {
+    return Column(
+      children: [
+        TextFormField(
+          controller: _referenceController,
+          enabled: _canEditFields,
+          decoration: const InputDecoration(
+            labelText: 'Referencia (opcional)',
+            hintText: 'Ej: Orden de compra, guía de despacho...',
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _notesController,
+          enabled: _canEditFields,
+          decoration: const InputDecoration(
+            labelText: 'Notas internas (opcional)',
+            hintText: 'Observaciones adicionales...',
+            alignLabelWithHint: true,
+          ),
+          maxLines: 3,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryCard(ThemeData theme) {
+    return _buildSectionCard(
+      theme,
+      icon: Icons.calculate_outlined,
+      title: 'Resumen',
+      children: [_buildSummary(theme)],
+    );
+  }
+
+  Widget _buildSummary(ThemeData theme) {
+    final textStyle =
+        theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
+    return Column(
+      children: [
+        _buildSummaryRow('Subtotal', ChileanUtils.formatCurrency(_subtotal),
+            textStyle, theme),
+        const SizedBox(height: 8),
+        _buildSummaryRow(
+            'IVA (19%)', ChileanUtils.formatCurrency(_iva), textStyle, theme),
+        const Divider(height: 24),
+        _buildSummaryRow(
+          'Total',
+          ChileanUtils.formatCurrency(_total),
+          theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.primary,
+          ),
+          theme,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryRow(
+      String label, String value, TextStyle? style, ThemeData theme) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: theme.textTheme.bodyMedium),
+        Text(value, style: style),
+      ],
     );
   }
 }
@@ -1557,89 +1788,248 @@ class _PurchaseLineEntry {
   }
 }
 
-class _PurchaseLineRow extends StatelessWidget {
+class _PurchaseLineRow extends StatefulWidget {
   final _PurchaseLineEntry entry;
   final VoidCallback onRemove;
+  final bool canEdit;
 
-  const _PurchaseLineRow({required this.entry, required this.onRemove});
+  const _PurchaseLineRow({
+    required this.entry,
+    required this.onRemove,
+    required this.canEdit,
+  });
+
+  @override
+  State<_PurchaseLineRow> createState() => _PurchaseLineRowState();
+}
+
+class _PurchaseLineRowState extends State<_PurchaseLineRow> {
+  bool _isHovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            flex: 4,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(entry.line.productName ?? 'Producto',
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                if (entry.line.productSku != null &&
-                    entry.line.productSku!.isNotEmpty)
-                  Text('SKU: ${entry.line.productSku}',
-                      style: const TextStyle(color: Colors.grey)),
-              ],
-            ),
+    final theme = Theme.of(context);
+    final line = widget.entry.line;
+    
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _isHovered ? theme.colorScheme.surfaceVariant.withOpacity(0.3) : null,
+          border: Border(
+            bottom: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
           ),
-          Expanded(
-            flex: 2,
-            child: TextField(
-              controller: entry.quantityController,
-              decoration: const InputDecoration(labelText: 'Cantidad'),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 2,
-            child: TextField(
-              controller: entry.unitCostController,
-              decoration: const InputDecoration(labelText: 'Costo'),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 2,
-            child: TextField(
-              controller: entry.discountController,
-              decoration: const InputDecoration(labelText: 'Descuento'),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 2,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                ChileanUtils.formatCurrency(entry.line.netAmountClamped),
-                style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // # column (placeholder, no reordering for now)
+              Container(
+                width: 40.0,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                  ),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.drag_indicator,
+                    size: 18,
+                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                  ),
+                ),
               ),
-            ),
+      
+              // Product details column
+              Expanded(
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 250),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Product image placeholder
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: theme.colorScheme.outline.withOpacity(0.2),
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.inventory_2_outlined,
+                          color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                          size: 24,
+                        ),
+                      ),
+                      
+                      const SizedBox(width: 12),
+                      
+                      // Product name + SKU
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Product name
+                            Text(
+                              line.productName ?? 'Producto',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            
+                            // SKU
+                            if (line.productSku != null && line.productSku!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  'SKU (Código de artículo): ${line.productSku}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Quantity column
+              Container(
+                width: 120.0,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                  ),
+                ),
+                child: widget.canEdit
+                    ? TextField(
+                        controller: widget.entry.quantityController,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          isDense: true,
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium,
+                      )
+                    : Center(
+                        child: Text(
+                          widget.entry.quantityController.text,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+              ),
+              
+              // Price column
+              Container(
+                width: 130.0,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                  ),
+                ),
+                child: widget.canEdit
+                    ? TextField(
+                        controller: widget.entry.unitCostController,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          isDense: true,
+                          prefixText: '\$',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textAlign: TextAlign.right,
+                        style: theme.textTheme.bodyMedium,
+                      )
+                    : Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          ChileanUtils.formatCurrency(line.unitCost),
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+              ),
+              
+              // Discount column
+              Container(
+                width: 130.0,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                  ),
+                ),
+                child: widget.canEdit
+                    ? TextField(
+                        controller: widget.entry.discountController,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          isDense: true,
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium,
+                      )
+                    : Center(
+                        child: Text(
+                          widget.entry.discountController.text,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+              ),
+              
+              // Total column
+              Container(
+                width: 130.0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    ChileanUtils.formatCurrency(line.netAmountClamped),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Actions column
+              SizedBox(
+                width: 48.0,
+                child: widget.canEdit
+                    ? IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        color: Colors.red,
+                        onPressed: widget.onRemove,
+                        tooltip: 'Eliminar línea',
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            color: Colors.red,
-            onPressed: onRemove,
-            tooltip: 'Eliminar línea',
-          ),
-        ],
+        ),
       ),
     );
   }

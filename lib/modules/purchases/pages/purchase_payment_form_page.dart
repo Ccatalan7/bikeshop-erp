@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/models/payment_method.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../models/purchase_invoice.dart';
+import '../services/purchase_service.dart';
 
 /// Payment Form Page for Purchase Invoices
 /// Handles payment registration for both Standard and Prepayment models
 /// Uses dynamic payment methods from database
 class PurchasePaymentFormPage extends StatefulWidget {
   final String invoiceId;
-  final PurchaseInvoice invoice;
 
   const PurchasePaymentFormPage({
     super.key,
     required this.invoiceId,
-    required this.invoice,
   });
 
   @override
@@ -36,6 +36,8 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
   PaymentMethod? _selectedPaymentMethod;
   DateTime _paymentDate = DateTime.now();
   bool _isSaving = false;
+  bool _isLoading = true;
+  PurchaseInvoice? _invoice;
 
   List<PaymentMethod> _paymentMethods = [];
   bool _isLoadingPaymentMethods = true;
@@ -43,9 +45,35 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
   @override
   void initState() {
     super.initState();
-    // Pre-fill amount with invoice balance
-    _amountController.text = widget.invoice.balance.toStringAsFixed(0);
+    _loadInvoice();
     _loadPaymentMethods();
+  }
+
+  Future<void> _loadInvoice() async {
+    try {
+      final purchaseService = context.read<PurchaseService>();
+      final invoices = await purchaseService.getPurchaseInvoices(forceRefresh: true);
+      final invoice = invoices.firstWhere((inv) => inv.id == widget.invoiceId);
+      
+      if (mounted) {
+        setState(() {
+          _invoice = invoice;
+          _isLoading = false;
+          // Pre-fill amount with invoice balance
+          _amountController.text = invoice.balance.toStringAsFixed(0);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar factura: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -127,14 +155,14 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
       return;
     }
 
-    if (amount > widget.invoice.balance) {
+    if (amount > _invoice!.balance) {
       final confirm = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Monto mayor al saldo'),
           content: Text(
             'El monto ingresado (${ChileanUtils.formatCurrency(amount)}) '
-            'es mayor al saldo de la factura (${ChileanUtils.formatCurrency(widget.invoice.balance)}).\n\n'
+            'es mayor al saldo de la factura (${ChileanUtils.formatCurrency(_invoice!.balance)}).\n\n'
             '¿Desea continuar de todas formas?',
           ),
           actions: [
@@ -254,12 +282,14 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
             ),
         ],
       ),
-      body: _isLoadingPaymentMethods
+      body: _isLoading || _invoice == null
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
+          : _isLoadingPaymentMethods
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Form(
+                    key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -283,26 +313,26 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Factura ${widget.invoice.invoiceNumber}',
+              'Factura ${_invoice!.invoiceNumber}',
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 8),
-            if (widget.invoice.supplierName != null)
+            if (_invoice!.supplierName != null)
               Text(
-                widget.invoice.supplierName!,
+                _invoice!.supplierName!,
                 style: const TextStyle(color: Colors.grey),
               ),
             const Divider(height: 24),
             _buildInfoRow(
-                'Total', ChileanUtils.formatCurrency(widget.invoice.total)),
+                'Total', ChileanUtils.formatCurrency(_invoice!.total)),
             _buildInfoRow('Pagado',
-                ChileanUtils.formatCurrency(widget.invoice.paidAmount)),
+                ChileanUtils.formatCurrency(_invoice!.paidAmount)),
             _buildInfoRow(
               'Saldo',
-              ChileanUtils.formatCurrency(widget.invoice.balance),
+              ChileanUtils.formatCurrency(_invoice!.balance),
               highlight: true,
             ),
           ],

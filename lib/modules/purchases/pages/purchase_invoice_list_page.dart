@@ -449,8 +449,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   ],
                 ),
                 onTap: () async {
+                  // Navigate to form page (same page for create and workflow, like sales invoice)
                   final refreshed = await context
-                      .push<bool>('/purchases/${invoice.id}/detail');
+                      .push<bool>('/purchases/${invoice.id}');
                   if (refreshed == true) {
                     _loadInvoices(refresh: true);
                   }
