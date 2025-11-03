@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -24,6 +26,9 @@ class PurchaseService extends ChangeNotifier {
   bool _suppliersLoaded = false;
   bool _invoicesLoaded = false;
   bool _paymentsLoaded = false;
+  
+  // Public getters for reactive UI
+  UnmodifiableListView<PurchaseInvoice> get purchaseInvoices => UnmodifiableListView(_invoiceCache);
 
   static void setAccountingService(AccountingService accountingService) {
     _accountingService = accountingService;
