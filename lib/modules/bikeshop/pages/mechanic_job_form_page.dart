@@ -658,399 +658,587 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return MainLayout(
-      title: widget.jobId != null ? 'Editar Pega' : 'Nueva Pega',
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
-              key: _formKey,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildCustomerBikeSection(),
-                    const SizedBox(height: 24),
-                    _buildJobDetailsSection(),
-                    const SizedBox(height: 24),
-                    // Products/Services and Cost Summary side-by-side
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 7,
-                          child: _buildPartsSection(),
-                        ),
-                        const SizedBox(width: 24),
-                        Expanded(
-                          flex: 3,
-                          child: _buildCostSummary(),
-                        ),
-                      ],
-                    ),
-                    if (_existingJob?.invoiceId != null) ...[
-                      const SizedBox(height: 24),
-                      _buildInvoiceSection(),
-                    ],
-                    const SizedBox(height: 32),
-                    _buildActionButtons(),
-                  ],
-                ),
-              ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            _buildHeader(theme),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _buildForm(theme),
             ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildCustomerBikeSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Cliente y Bicicleta',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+  Widget _buildHeader(ThemeData theme) {
+    final isEditing = widget.jobId != null;
+    final title = isEditing ? 'Editar Pega' : 'Nueva Pega';
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: theme.dividerColor,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<Customer>(
-                    value: _selectedCustomer,
-                    decoration: const InputDecoration(
-                      labelText: 'Cliente *',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.person),
+          ),
+          const Spacer(),
+          OutlinedButton.icon(
+            onPressed: _isSaving ? null : () => context.pop(),
+            icon: const Icon(Icons.close),
+            label: const Text('Cancelar'),
+          ),
+          const SizedBox(width: 12),
+          FilledButton.icon(
+            onPressed: _isSaving ? null : _saveJob,
+            icon: _isSaving
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
                     ),
-                    items: _customers.map((customer) {
-                      return DropdownMenuItem(
-                        value: customer,
-                        child: Text(customer.name),
-                      );
-                    }).toList(),
-                    onChanged: widget.jobId != null
-                        ? null // Disable editing customer in edit mode
-                        : (customer) {
-                            if (customer != null) {
-                              _selectCustomer(customer);
-                            }
-                          },
-                    validator: (value) =>
-                        value == null ? 'Seleccione un cliente' : null,
+                  )
+                : const Icon(Icons.save),
+            label: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildForm(ThemeData theme) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 1180;
+        
+        if (isWide) {
+          // Two-column layout for wide screens
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // LEFT COLUMN - Details and Products (main content)
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.build_outlined,
+                          title: 'Detalles del Trabajo',
+                          child: _buildJobDetailsSection(),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.shopping_basket_outlined,
+                          title: 'Productos y Servicios',
+                          child: _buildPartsSection(),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                if (_selectedCustomer != null) ...[
-                  const SizedBox(width: 16),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final newBike = await showDialog<Bike?>(
-                        context: context,
-                        builder: (context) => BikeFormDialog(
-                          customerId: _selectedCustomer!.id!,
+                const SizedBox(width: 24),
+                // RIGHT COLUMN - Customer and Summary (fixed width sidebar)
+                SizedBox(
+                  width: 360,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.pedal_bike,
+                          title: 'Cliente y Bicicleta',
+                          child: _buildCustomerBikeSection(),
                         ),
-                      );
-
-                      // Reload bikes for this customer (handles both creation and any unexpected deletion)
-                      final bikeshopService =
-                          Provider.of<BikeshopService>(context, listen: false);
-                      final bikes = await bikeshopService.getBikes(
-                          customerId: _selectedCustomer!.id);
-
-                      setState(() {
-                        _bikes = bikes;
-                        // Auto-select the newly created bike if it exists
-                        if (newBike != null) {
-                          _selectedBike = _bikes.firstWhere(
-                            (bike) => bike.id == newBike.id,
-                            orElse: () => newBike,
-                          );
-                        }
-                      });
-
-                      if (mounted && newBike != null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                                'Bicicleta "${newBike.displayName}" creada exitosamente'),
-                            backgroundColor: Colors.green,
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.calculate_outlined,
+                          title: 'Resumen de Costos',
+                          child: _buildCostSummary(),
+                        ),
+                        if (_existingJob?.invoiceId != null) ...[
+                          const SizedBox(height: 16),
+                          _buildSectionCard(
+                            theme,
+                            icon: Icons.receipt_outlined,
+                            title: 'Factura Vinculada',
+                            child: _buildInvoiceSection(),
                           ),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.add),
-                    label: const Text('Nueva Bici'),
+                        ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    onPressed: _bikes.isEmpty
-                        ? null
-                        : () => _showBikeManagementDialog(),
-                    icon: const Icon(Icons.settings),
-                    label: const Text('Gestionar Bicis'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          // Single-column layout for narrow screens
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.pedal_bike,
+                  title: 'Cliente y Bicicleta',
+                  child: _buildCustomerBikeSection(),
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.build_outlined,
+                  title: 'Detalles del Trabajo',
+                  child: _buildJobDetailsSection(),
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.shopping_basket_outlined,
+                  title: 'Productos y Servicios',
+                  child: _buildPartsSection(),
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.calculate_outlined,
+                  title: 'Resumen de Costos',
+                  child: _buildCostSummary(),
+                ),
+                if (_existingJob?.invoiceId != null) ...[
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    theme,
+                    icon: Icons.receipt_outlined,
+                    title: 'Factura Vinculada',
+                    child: _buildInvoiceSection(),
                   ),
                 ],
               ],
             ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<Bike>(
-              value: _selectedBike,
-              decoration: const InputDecoration(
-                labelText: 'Bicicleta *',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.pedal_bike),
-              ),
-              items: _bikes.map((bike) {
-                return DropdownMenuItem(
-                  value: bike,
-                  child: Text(
-                      '${bike.displayName} ${bike.serialNumber != null ? '(S/N: ${bike.serialNumber})' : ''}'),
-                );
-              }).toList(),
-              onChanged: widget.jobId != null
-                  ? null // Disable editing bike in edit mode
-                  : (bike) {
-                      setState(() {
-                        _selectedBike = bike;
-                      });
-                    },
-              validator: (value) =>
-                  value == null ? 'Seleccione una bicicleta' : null,
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildSectionCard(
+    ThemeData theme, {
+    required IconData icon,
+    required String title,
+    required Widget child,
+  }) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+                  child: Icon(icon, color: theme.colorScheme.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
             ),
-            if (_selectedBike != null && _selectedBike!.isUnderWarranty) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green[300]!),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.verified_user, color: Colors.green[700]),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Esta bicicleta está bajo garantía hasta ${DateFormat('dd/MM/yyyy').format(_selectedBike!.warrantyUntil!)}',
-                        style: TextStyle(color: Colors.green[900]),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            const SizedBox(height: 20),
+            child,
           ],
         ),
       ),
     );
   }
 
-  Widget _buildJobDetailsSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Detalles de la Pega',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+  Widget _buildCustomerBikeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<Customer>(
+          value: _selectedCustomer,
+          decoration: const InputDecoration(
+            labelText: 'Cliente *',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.person),
+          ),
+          items: _customers.map((customer) {
+            return DropdownMenuItem(
+              value: customer,
+              child: Text(customer.name),
+            );
+          }).toList(),
+          onChanged: widget.jobId != null
+              ? null // Disable editing customer in edit mode
+              : (customer) {
+                  if (customer != null) {
+                    _selectCustomer(customer);
+                  }
+                },
+          validator: (value) =>
+              value == null ? 'Seleccione un cliente' : null,
+        ),
+        const SizedBox(height: 16),
+        // Custom bike dropdown with action buttons
+        if (_selectedCustomer != null)
+          PopupMenuButton<String>(
+            enabled: widget.jobId == null, // Disable in edit mode
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Bicicleta *',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.pedal_bike),
+                suffixIcon: Icon(Icons.arrow_drop_down),
+              ),
+              child: Text(
+                _selectedBike != null
+                    ? '${_selectedBike!.displayName}${_selectedBike!.serialNumber != null ? ' (S/N: ${_selectedBike!.serialNumber})' : ''}'
+                    : 'Seleccione una bicicleta',
+                style: _selectedBike != null
+                    ? null
+                    : TextStyle(color: Colors.grey[600]),
+              ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<JobPriority>(
-                    value: _selectedPriority,
-                    decoration: const InputDecoration(
-                      labelText: 'Prioridad',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.flag),
+            itemBuilder: (context) => [
+              // Bike list
+              ..._bikes.map((bike) => PopupMenuItem<String>(
+                    value: 'bike_${bike.id}',
+                    child: Text(
+                      '${bike.displayName}${bike.serialNumber != null ? ' (S/N: ${bike.serialNumber})' : ''}',
                     ),
-                    items: JobPriority.values.map((priority) {
-                      return DropdownMenuItem(
-                        value: priority,
-                        child: Text(priority.displayName),
-                      );
-                    }).toList(),
-                    onChanged: (priority) {
-                      if (priority != null) {
-                        setState(() {
-                          _selectedPriority = priority;
-                        });
-                      }
+                    onTap: () {
+                      setState(() {
+                        _selectedBike = bike;
+                      });
                     },
-                  ),
+                  )),
+              // Divider
+              if (_bikes.isNotEmpty) const PopupMenuDivider(),
+              // Nueva Bici button
+              PopupMenuItem<String>(
+                value: 'new_bike',
+                child: Row(
+                  children: const [
+                    Icon(Icons.add, size: 18),
+                    SizedBox(width: 8),
+                    Text('Nueva bicicleta'),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: DropdownButtonFormField<JobStatus>(
-                    value: _selectedStatus,
-                    decoration: const InputDecoration(
-                      labelText: 'Estado',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.swap_horiz),
+                onTap: () async {
+                  // Delay to let menu close
+                  await Future.delayed(const Duration(milliseconds: 100));
+                  if (!mounted) return;
+                  
+                  final newBike = await showDialog<Bike?>(
+                    context: context,
+                    builder: (context) => BikeFormDialog(
+                      customerId: _selectedCustomer!.id!,
                     ),
-                    items: JobStatus.values.map((status) {
-                      return DropdownMenuItem(
-                        value: status,
-                        child: Text(status.displayName),
+                  );
+
+                  if (!mounted) return;
+                  
+                  // Reload bikes for this customer
+                  final bikeshopService =
+                      Provider.of<BikeshopService>(context, listen: false);
+                  final bikes = await bikeshopService.getBikes(
+                      customerId: _selectedCustomer!.id);
+
+                  setState(() {
+                    _bikes = bikes;
+                    // Auto-select the newly created bike
+                    if (newBike != null) {
+                      _selectedBike = _bikes.firstWhere(
+                        (bike) => bike.id == newBike.id,
+                        orElse: () => newBike,
                       );
-                    }).toList(),
-                    onChanged: (status) {
-                      if (status != null) {
-                        setState(() {
-                          _selectedStatus = status;
-                        });
-                      }
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDeadline ??
-                            DateTime.now().add(const Duration(days: 7)),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                      );
-                      if (date != null) {
-                        setState(() {
-                          _selectedDeadline = date;
-                        });
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Fecha de entrega',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.calendar_today),
+                    }
+                  });
+
+                  if (mounted && newBike != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                            'Bicicleta "${newBike.displayName}" creada exitosamente'),
+                        backgroundColor: Colors.green,
                       ),
-                      child: Text(
-                        _selectedDeadline != null
-                            ? DateFormat('dd/MM/yyyy')
-                                .format(_selectedDeadline!)
-                            : 'Seleccionar fecha',
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextFormField(
-                    controller: _estimatedDurationController,
-                    decoration: const InputDecoration(
-                      labelText: 'Duración estimada (horas)',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.access_time),
-                    ),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d+\.?\d{0,2}')),
+                    );
+                  }
+                },
+              ),
+              // Gestionar Bicis button
+              if (_bikes.isNotEmpty)
+                PopupMenuItem<String>(
+                  value: 'manage_bikes',
+                  child: Row(
+                    children: const [
+                      Icon(Icons.settings, size: 18),
+                      SizedBox(width: 8),
+                      Text('Gestionar bicicletas'),
                     ],
                   ),
+                  onTap: () async {
+                    await Future.delayed(const Duration(milliseconds: 100));
+                    if (mounted) {
+                      _showBikeManagementDialog();
+                    }
+                  },
                 ),
-              ],
+            ],
+          )
+        else
+          // Show disabled field when no customer selected
+          InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Bicicleta *',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.pedal_bike),
+              enabled: false,
             ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _clientRequestController,
-              decoration: const InputDecoration(
-                labelText: 'Solicitud del cliente',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.comment),
-                hintText: 'Ej: Ruidos en la cadena, frenos suaves...',
-              ),
-              maxLines: 2,
+            child: Text(
+              'Primero seleccione un cliente',
+              style: TextStyle(color: Colors.grey[600]),
             ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _diagnosisController,
-              decoration: const InputDecoration(
-                labelText: 'Diagnóstico',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.description),
-                hintText: 'Descripción técnica del problema...',
-              ),
-              maxLines: 3,
+          ),
+        if (_selectedBike != null && _selectedBike!.isUnderWarranty) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.green[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green[300]!),
             ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _technicianNotesController,
-              decoration: const InputDecoration(
-                labelText: 'Notas del técnico',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.notes),
-                hintText: 'Notas internas...',
-              ),
-              maxLines: 2,
-            ),
-            const SizedBox(height: 16),
-            Row(
+            child: Row(
               children: [
+                Icon(Icons.verified_user, color: Colors.green[700]),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: CheckboxListTile(
-                    title: const Text('Requiere aprobación del cliente'),
-                    value: _requiresApproval,
-                    onChanged: (value) {
-                      setState(() {
-                        _requiresApproval = value ?? false;
-                      });
-                    },
-                    controlAffinity: ListTileControlAffinity.leading,
-                  ),
-                ),
-                Expanded(
-                  child: CheckboxListTile(
-                    title: const Text('Trabajo de garantía'),
-                    value: _isWarrantyJob,
-                    onChanged: (value) {
-                      setState(() {
-                        _isWarrantyJob = value ?? false;
-                      });
-                    },
-                    controlAffinity: ListTileControlAffinity.leading,
+                  child: Text(
+                    'Esta bicicleta está bajo garantía hasta ${DateFormat('dd/MM/yyyy').format(_selectedBike!.warrantyUntil!)}',
+                    style: TextStyle(color: Colors.green[900]),
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildJobDetailsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<JobPriority>(
+                value: _selectedPriority,
+                decoration: const InputDecoration(
+                  labelText: 'Prioridad',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.flag),
+                ),
+                items: JobPriority.values.map((priority) {
+                  return DropdownMenuItem(
+                    value: priority,
+                    child: Text(priority.displayName),
+                  );
+                }).toList(),
+                onChanged: (priority) {
+                  if (priority != null) {
+                    setState(() {
+                      _selectedPriority = priority;
+                    });
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: DropdownButtonFormField<JobStatus>(
+                value: _selectedStatus,
+                decoration: const InputDecoration(
+                  labelText: 'Estado',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.swap_horiz),
+                ),
+                items: JobStatus.values.map((status) {
+                  return DropdownMenuItem(
+                    value: status,
+                    child: Text(status.displayName),
+                  );
+                }).toList(),
+                onChanged: (status) {
+                  if (status != null) {
+                    setState(() {
+                      _selectedStatus = status;
+                    });
+                  }
+                },
+              ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDeadline ??
+                        DateTime.now().add(const Duration(days: 7)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (date != null) {
+                    setState(() {
+                      _selectedDeadline = date;
+                    });
+                  }
+                },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Fecha de entrega',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.calendar_today),
+                  ),
+                  child: Text(
+                    _selectedDeadline != null
+                        ? DateFormat('dd/MM/yyyy')
+                            .format(_selectedDeadline!)
+                        : 'Seleccionar fecha',
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _estimatedDurationController,
+                decoration: const InputDecoration(
+                  labelText: 'Duración estimada (horas)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.access_time),
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d+\.?\d{0,2}')),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _clientRequestController,
+          decoration: const InputDecoration(
+            labelText: 'Solicitud del cliente',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.comment),
+            hintText: 'Ej: Ruidos en la cadena, frenos suaves...',
+          ),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _diagnosisController,
+          decoration: const InputDecoration(
+            labelText: 'Diagnóstico',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.description),
+            hintText: 'Descripción técnica del problema...',
+          ),
+          maxLines: 3,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _technicianNotesController,
+          decoration: const InputDecoration(
+            labelText: 'Notas del técnico',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.notes),
+            hintText: 'Notas internas...',
+          ),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: CheckboxListTile(
+                title: const Text('Requiere aprobación del cliente'),
+                value: _requiresApproval,
+                onChanged: (value) {
+                  setState(() {
+                    _requiresApproval = value ?? false;
+                  });
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+            ),
+            Expanded(
+              child: CheckboxListTile(
+                title: const Text('Trabajo de garantía'),
+                value: _isWarrantyJob,
+                onChanged: (value) {
+                  setState(() {
+                    _isWarrantyJob = value ?? false;
+                  });
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
   Widget _buildPartsSection() {
     final theme = Theme.of(context);
     
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Productos y Servicios',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // Responsive grid table (same as sales invoice)
-            LayoutBuilder(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Responsive grid table (same as sales invoice)
+        LayoutBuilder(
               builder: (context, constraints) {
                 const minTableWidth = 800.0;
                 final tableWidth = constraints.maxWidth > minTableWidth 
@@ -1243,8 +1431,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               },
             ),
           ],
-        ),
-      ),
     );
   }
 
@@ -1418,20 +1604,35 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ),
             ),
             
-            // Precio column
+            // Precio column - EDITABLE
             Container(
               width: _colPriceWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 border: Border(
                   right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
                 ),
               ),
-              child: Center(
-                child: Text(
-                  NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.unitPrice),
-                  style: theme.textTheme.bodyMedium,
+              child: TextFormField(
+                initialValue: item.unitPrice.toStringAsFixed(0),
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  border: OutlineInputBorder(),
+                  prefixText: '\$ ',
                 ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                ],
+                onChanged: (value) {
+                  final newPrice = double.tryParse(value) ?? 0;
+                  setState(() {
+                    item.unitPrice = newPrice;
+                  });
+                },
               ),
             ),
             
@@ -1866,61 +2067,45 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   Widget _buildCostSummary() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCostRow('Repuestos:', _partsCost, false),
+        const SizedBox(height: 8),
+        _buildCostRow('Mano de obra:', _laborCost, false),
+        const Divider(),
+        _buildCostRow('Subtotal:', _subtotal, true),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Resumen de Costos',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            Column(
-              children: [
-                _buildCostRow('Repuestos:', _partsCost, false),
-                const SizedBox(height: 8),
-                _buildCostRow('Mano de obra:', _laborCost, false),
-                const Divider(),
-                _buildCostRow('Subtotal:', _subtotal, true),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Descuento:',
-                        style: TextStyle(fontSize: 16)),
-                    SizedBox(
-                      width: 150,
-                      child: TextFormField(
-                        controller: _discountController,
-                        decoration: const InputDecoration(
-                          prefixText: '\$ ',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                        ),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d+\.?\d{0,2}')),
-                        ],
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                  ],
+            const Text('Descuento:',
+                style: TextStyle(fontSize: 16)),
+            SizedBox(
+              width: 150,
+              child: TextFormField(
+                controller: _discountController,
+                decoration: const InputDecoration(
+                  prefixText: '\$ ',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
                 ),
-                const SizedBox(height: 8),
-                _buildCostRow('IVA (19%):', _taxAmount, false),
-                const Divider(thickness: 2),
-                _buildCostRow('TOTAL:', _total, true, fontSize: 20),
-              ],
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d+\.?\d{0,2}')),
+                ],
+                onChanged: (_) => setState(() {}),
+              ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 8),
+        _buildCostRow('IVA (19%):', _taxAmount, false),
+        const Divider(thickness: 2),
+        _buildCostRow('TOTAL:', _total, true, fontSize: 20),
+      ],
     );
   }
 
@@ -1949,97 +2134,56 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   Widget _buildInvoiceSection() {
-    return Card(
-      color: Colors.green[50],
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.receipt, color: Colors.green[700]),
-                const SizedBox(width: 12),
-                Text(
-                  'Factura Vinculada',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green[900],
-                      ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green[50],
+        border: Border.all(color: Colors.green[300]!),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.receipt, color: Colors.green[700]),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Factura: ${_existingJob?.invoiceId ?? "N/A"}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green[900],
+                  ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.green[300]!),
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.white,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Factura: ${_existingJob?.invoiceId ?? "N/A"}',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Estado: Factura creada automáticamente con los repuestos y servicios de esta pega',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      if (_existingJob?.invoiceId != null) {
-                        context
-                            .push('/sales/invoices/${_existingJob!.invoiceId}');
-                      }
-                    },
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('Ver Factura'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green[700],
-                    ),
-                  ),
-                ],
-              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Estado: Factura creada automáticamente con los repuestos y servicios de esta pega',
+            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: () {
+              if (_existingJob?.invoiceId != null) {
+                context
+                    .push('/sales/invoices/${_existingJob!.invoiceId}/edit');
+              }
+            },
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Ver Factura'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green[700],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildActionButtons() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        OutlinedButton(
-          onPressed: _isSaving ? null : () => context.pop(),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            child: Text('Cancelar'),
-          ),
-        ),
-        const SizedBox(width: 16),
-        ElevatedButton(
-          onPressed: _isSaving ? null : _saveJob,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(widget.jobId != null ? 'Actualizar Pega' : 'Crear Pega'),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 // Helper classes for form items
@@ -2048,7 +2192,7 @@ class _JobPartItem {
   final String name; // For ad-hoc items
   final bool isCatalogProduct;
   final int quantity;
-  final double unitPrice;
+  double unitPrice; // MUTABLE - allow price editing
   final String? notes; // Additional notes for any part
 
   _JobPartItem({
