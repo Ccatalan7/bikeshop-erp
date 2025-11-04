@@ -16,7 +16,11 @@ class SmartPurchaseListPage extends StatefulWidget {
   State<SmartPurchaseListPage> createState() => _SmartPurchaseListPageState();
 }
 
-class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
+class _SmartPurchaseListPageState extends State<SmartPurchaseListPage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   String _statusFilter = 'pending';
   String _supplierFilter = 'all';
   String _priorityFilter = 'all';
@@ -146,6 +150,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // REQUIRED for AutomaticKeepAliveClientMixin
+    
     final buildStart = DateTime.now();
     debugPrint('⏱️ [PAGE BUILD] Starting build...');
     

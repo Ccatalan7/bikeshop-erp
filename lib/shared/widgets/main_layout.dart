@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/navigation_service.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import 'expandable_menu_item.dart';
+import 'app_tab_bar.dart';
 
 const List<MenuSubItem> _accountingMenuItems = [
   MenuSubItem(
@@ -244,7 +245,7 @@ class MainLayout extends StatelessWidget {
             Expanded(
               child: Stack(
                 children: [
-                  // Main content with border (no app bar)
+                  // Main content with border and tab bar
                   Container(
                     decoration: navigationService.isDrawerVisible
                         ? BoxDecoration(
@@ -256,7 +257,17 @@ class MainLayout extends StatelessWidget {
                             ),
                           )
                         : null,
-                    child: body ?? child,
+                    child: Column(
+                      children: [
+                        // Tab bar
+                        const AppTabBar(),
+                        
+                        // Content area
+                        Expanded(
+                          child: body ?? child ?? const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
                   ),
                   // Invisible resize handle on left edge (12px wide)
                   if (navigationService.isDrawerVisible)
@@ -785,42 +796,48 @@ class _AppSidebarState extends State<AppSidebar> {
                   }
                 }
               : null,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: isSelected
-                  ? theme.primaryColor.withOpacity(0.1)
-                  : Colors.transparent,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  isSelected ? activeIcon : icon,
-                  size: 20,
-                  color: enabled
-                      ? (isSelected
-                          ? theme.primaryColor
-                          : theme.colorScheme.onSurface.withOpacity(0.7))
-                      : theme.disabledColor,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: enabled
-                          ? (isSelected
-                              ? theme.primaryColor
-                              : theme.colorScheme.onSurface)
-                          : theme.disabledColor,
-                    ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: isSelected
+                        ? theme.primaryColor.withOpacity(0.1)
+                        : Colors.transparent,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isSelected ? activeIcon : icon,
+                        size: 20,
+                        color: enabled
+                            ? (isSelected
+                                ? theme.primaryColor
+                                : theme.colorScheme.onSurface.withOpacity(0.7))
+                            : theme.disabledColor,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.normal,
+                            color: enabled
+                                ? (isSelected
+                                    ? theme.primaryColor
+                                    : theme.colorScheme.onSurface)
+                                : theme.disabledColor,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

@@ -14,6 +14,7 @@ import 'shared/services/database_service.dart';
 import 'shared/services/inventory_service.dart';
 import 'shared/services/payment_method_service.dart';
 import 'shared/services/navigation_service.dart';
+import 'shared/services/tab_navigation_service.dart';
 import 'shared/services/tenant_service.dart';
 import 'shared/services/user_management_service.dart';
 import 'shared/config/supabase_config.dart';
@@ -133,6 +134,7 @@ class VinabikeApp extends StatelessWidget {
           navigationService.initialize();
           return navigationService;
         }),
+        ChangeNotifierProvider(create: (_) => TabNavigationService()),
 
         // Business services
         // Shared inventory service (used by POS)

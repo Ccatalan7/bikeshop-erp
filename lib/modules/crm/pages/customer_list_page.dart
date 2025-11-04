@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
-import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../models/crm_models.dart';
 import '../services/customer_service.dart';

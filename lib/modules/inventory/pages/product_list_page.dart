@@ -37,7 +37,11 @@ class ProductListPage extends StatefulWidget {
   State<ProductListPage> createState() => _ProductListPageState();
 }
 
-class _ProductListPageState extends State<ProductListPage> {
+class _ProductListPageState extends State<ProductListPage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _tableScrollController = ScrollController();
 
@@ -337,6 +341,8 @@ class _ProductListPageState extends State<ProductListPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // REQUIRED for AutomaticKeepAliveClientMixin
+    
     final theme = Theme.of(context);
     return MainLayout(
       child: Column(
