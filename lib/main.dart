@@ -182,7 +182,7 @@ class VinabikeApp extends StatelessWidget {
                   Provider.of<DatabaseService>(context, listen: false),
                   Provider.of<TenantService>(context, listen: false),
                 )),
-        ChangeNotifierProvider(create: (_) => SmartPurchaseListService()),
+        ChangeNotifierProvider.value(value: SmartPurchaseListService()), // Singleton - persists across app
         ChangeNotifierProvider(
             create: (context) => HRService(
                   Provider.of<TenantService>(context, listen: false),

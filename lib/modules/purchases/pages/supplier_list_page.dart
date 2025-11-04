@@ -48,14 +48,16 @@ class _SupplierListPageState extends State<SupplierListPage> {
     try {
       setState(() => _isLoading = true);
       final suppliers = await _purchaseService.getSuppliers(forceRefresh: true);
-      setState(() {
-        _suppliers = suppliers;
-        _filteredSuppliers = suppliers;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() {
+          _suppliers = suppliers;
+          _filteredSuppliers = suppliers;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al cargar proveedores: $e'),

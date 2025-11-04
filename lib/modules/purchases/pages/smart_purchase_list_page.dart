@@ -24,63 +24,84 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   final Set<String> _selectedItems = {};
   bool _selectAll = false;
   List<Supplier> _suppliers = [];
+  
+  // Cache for invoice data to avoid multiple queries
+  final Map<String, Map<String, dynamic>> _invoiceCache = {};
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _initializeService();
     _loadSuppliers();
+    _preloadInvoiceData();
+  }
+  
+  /// Preload all invoice data in one query
+  Future<void> _preloadInvoiceData() async {
+    final preloadStart = DateTime.now();
+    debugPrint('⏱️ [INVOICE CACHE] Starting preload...');
+    
+    try {
+      final response = await Supabase.instance.client
+          .from('purchase_invoices')
+          .select('id, invoice_number, created_at');
+      
+      for (final invoice in response) {
+        _invoiceCache[invoice['id'] as String] = invoice;
+      }
+      
+      final preloadTime = DateTime.now().difference(preloadStart).inMilliseconds;
+      debugPrint('✅ [INVOICE CACHE] Preloaded ${_invoiceCache.length} invoices in ${preloadTime}ms');
+      
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('❌ [INVOICE CACHE] Error: $e');
+    }
   }
 
-  void _loadData() {
+  /// Initialize service once (sets up real-time listeners)
+  void _initializeService() {
+    final pageStartTime = DateTime.now();
+    debugPrint('⏱️ [PAGE] Smart Purchase List page mounted');
+    
+    final service = context.read<SmartPurchaseListService>();
+    
+    // If already initialized, data is instantly available - no need for post-frame callback
+    if (service.isInitialized) {
+      final cachedTime = DateTime.now().difference(pageStartTime).inMilliseconds;
+      debugPrint('✅ [PAGE] Using cached data - ready instantly in ${cachedTime}ms');
+      return;
+    }
+    
+    // Only use post-frame callback if we need to do async initialization
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final callbackTime = DateTime.now().difference(pageStartTime).inMilliseconds;
+      debugPrint('⏱️ [PAGE] Post-frame callback executed after ${callbackTime}ms');
+      
       if (mounted) {
-        try {
-          context.read<SmartPurchaseListService>().loadItems(
-            statusFilter: _statusFilter,
-            supplierFilter: _supplierFilter,
-            searchQuery: _searchQuery,
-          );
-        } catch (e) {
-          debugPrint('Error loading items: $e');
-        }
+        debugPrint('⏱️ [PAGE] Calling service.initialize()...');
+        service.initialize().then((_) {
+          final totalPageTime = DateTime.now().difference(pageStartTime).inMilliseconds;
+          debugPrint('✅ [PAGE] TOTAL PAGE LOAD TIME: ${totalPageTime}ms');
+        });
       }
     });
   }
 
-  Future<String?> _getInvoiceNumber(String? invoiceId) async {
+  String? _getInvoiceNumber(String? invoiceId) {
     if (invoiceId == null) return null;
-    
-    try {
-      final response = await Supabase.instance.client
-          .from('purchase_invoices')
-          .select('invoice_number')
-          .eq('id', invoiceId)
-          .maybeSingle();
-      
-      return response?['invoice_number'] as String?;
-    } catch (e) {
-      debugPrint('Error fetching invoice number: $e');
-      return null;
-    }
+    return _invoiceCache[invoiceId]?['invoice_number'] as String?;
   }
 
-  Future<DateTime?> _getInvoiceCreatedDate(String? invoiceId) async {
+  DateTime? _getInvoiceCreatedDate(String? invoiceId) {
     if (invoiceId == null) return null;
     
+    final createdAtStr = _invoiceCache[invoiceId]?['created_at'] as String?;
+    if (createdAtStr == null) return null;
+    
     try {
-      final response = await Supabase.instance.client
-          .from('purchase_invoices')
-          .select('created_at')
-          .eq('id', invoiceId)
-          .maybeSingle();
-      
-      if (response?['created_at'] != null) {
-        return DateTime.parse(response!['created_at'] as String);
-      }
-      return null;
+      return DateTime.parse(createdAtStr);
     } catch (e) {
-      debugPrint('Error fetching invoice created date: $e');
       return null;
     }
   }
@@ -125,7 +146,10 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
   @override
   Widget build(BuildContext context) {
-    return MainLayout(
+    final buildStart = DateTime.now();
+    debugPrint('⏱️ [PAGE BUILD] Starting build...');
+    
+    final widget = MainLayout(
       title: 'Lista Inteligente de Compras',
       child: Column(
         children: [
@@ -138,17 +162,23 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                 OutlinedButton.icon(
                   icon: const Icon(Icons.refresh),
                   label: const Text('Recargar'),
-                  onPressed: () {
+                  onPressed: () async {
                     try {
-                      context.read<SmartPurchaseListService>().loadItems(
-                        statusFilter: _statusFilter,
-                        supplierFilter: _supplierFilter,
-                        searchQuery: _searchQuery,
-                      );
+                      await context.read<SmartPurchaseListService>().refresh();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('✅ Lista actualizada'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
                     } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: $e')),
-                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e')),
+                        );
+                      }
                     }
                   },
                 ),
@@ -193,13 +223,15 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                         Text('Error: ${service.error}'),
                         const SizedBox(height: 16),
                         ElevatedButton(
-                          onPressed: () => service.loadItems(),
+                          onPressed: () => service.refresh(),
                           child: const Text('Reintentar'),
                         ),
                       ],
                     ),
                   );
                 }
+
+                final filteredItems = _getFilteredItems(service);
 
                 return SingleChildScrollView(
                   child: Padding(
@@ -219,7 +251,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                         if (_selectedItems.isNotEmpty) const SizedBox(height: 16),
                         
                         // Items List
-                        service.items.isEmpty
+                        filteredItems.isEmpty
                             ? _buildEmptyState()
                             : _buildItemsList(service),
                       ],
@@ -232,6 +264,11 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         ],
       ),
     );
+    
+    final buildTime = DateTime.now().difference(buildStart).inMilliseconds;
+    debugPrint('✅ [PAGE BUILD] Completed in ${buildTime}ms');
+    
+    return widget;
   }
 
   Widget _buildDashboard(SmartPurchaseListService service) {
@@ -518,31 +555,42 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   }
 
   List<SmartPurchaseListItem> _getFilteredItems(SmartPurchaseListService service) {
-    if (_priorityFilter == 'all') {
-      return service.items;
+    // Get items with current filters applied
+    var items = service.getFilteredItems(
+      statusFilter: _statusFilter,
+      supplierFilter: _supplierFilter,
+      searchQuery: _searchQuery,
+    );
+    
+    // Apply priority filter
+    if (_priorityFilter != 'all') {
+      items = items.where((item) {
+        final priority = item.priority;
+        switch (_priorityFilter) {
+          case 'critical':
+            return priority > 80;
+          case 'high':
+            return priority >= 60 && priority <= 80;
+          case 'medium':
+            return priority >= 40 && priority < 60;
+          case 'low':
+            return priority < 40;
+          default:
+            return true;
+        }
+      }).toList();
     }
-
-    return service.items.where((item) {
-      final priority = item.priority;
-      switch (_priorityFilter) {
-        case 'critical':
-          return priority > 80;
-        case 'high':
-          return priority >= 60 && priority <= 80;
-        case 'medium':
-          return priority >= 40 && priority < 60;
-        case 'low':
-          return priority < 40;
-        default:
-          return true;
-      }
-    }).toList();
+    
+    return items;
   }
 
   Widget _buildItemsList(SmartPurchaseListService service) {
+    final buildStart = DateTime.now();
     final filteredItems = _getFilteredItems(service);
+    
+    debugPrint('⏱️ [LIST BUILD] Building list with ${filteredItems.length} items...');
 
-    return Column(
+    final widget = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -550,6 +598,11 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         ...filteredItems.map((item) => _buildItemRow(item, service)),
       ],
     );
+    
+    final buildTime = DateTime.now().difference(buildStart).inMilliseconds;
+    debugPrint('✅ [LIST BUILD] Completed in ${buildTime}ms');
+    
+    return widget;
   }
 
   Widget _buildTableHeader() {
@@ -749,21 +802,13 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             ),
             const SizedBox(width: 16),
             
-            // N° Factura (invoice number)
+            // N° Factura (invoice number) - Synchronous cache lookup
             SizedBox(
               width: 130,
-              child: FutureBuilder<String?>(
-                future: _getInvoiceNumber(item.linkedPurchaseInvoiceId),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    );
-                  }
+              child: Builder(
+                builder: (context) {
+                  final invoiceNumber = _getInvoiceNumber(item.linkedPurchaseInvoiceId);
                   
-                  final invoiceNumber = snapshot.data;
                   if (invoiceNumber == null) {
                     return Text(
                       '-',
@@ -788,21 +833,13 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             ),
             const SizedBox(width: 16),
             
-            // Creado el (invoice creation date)
+            // Creado el (invoice creation date) - Synchronous cache lookup
             SizedBox(
               width: 120,
-              child: FutureBuilder<DateTime?>(
-                future: _getInvoiceCreatedDate(item.linkedPurchaseInvoiceId),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    );
-                  }
+              child: Builder(
+                builder: (context) {
+                  final createdDate = _getInvoiceCreatedDate(item.linkedPurchaseInvoiceId);
                   
-                  final createdDate = snapshot.data;
                   if (createdDate == null) {
                     return Text(
                       '-',

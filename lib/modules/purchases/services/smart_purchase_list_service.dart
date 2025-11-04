@@ -15,17 +15,34 @@ class ScanResult {
 }
 
 class SmartPurchaseListService extends ChangeNotifier {
+  // Singleton pattern - persists across app lifecycle
+  static final SmartPurchaseListService _instance = SmartPurchaseListService._internal();
+  factory SmartPurchaseListService() => _instance;
+  SmartPurchaseListService._internal();
+
   final DatabaseService _db = DatabaseService();
   final TenantService _tenantService = TenantService();
   final SupabaseClient _client = Supabase.instance.client;
 
   List<SmartPurchaseListItem> _items = [];
   bool _isLoading = false;
+  bool _isInitialized = false;
   String? _error;
+  
+  // Real-time subscriptions
+  RealtimeChannel? _purchaseListChannel;
+  RealtimeChannel? _productsChannel;
+  
+  // Cache for enriched product data (product_id → product details)
+  final Map<String, Map<String, dynamic>> _productCache = {};
+  
+  // Timestamp of last full sync
+  DateTime? _lastFullSync;
 
   List<SmartPurchaseListItem> get items => _items;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get isInitialized => _isInitialized;
 
   // Dashboard KPIs
   int get totalPendingItems => _items.where((i) => i.isPending).length;
@@ -45,129 +62,367 @@ class SmartPurchaseListService extends ChangeNotifier {
     if (itemsBySupplier.isEmpty) return null;
     return itemsBySupplier.entries.reduce((a, b) => a.value > b.value ? a : b).key;
   }
+  
+  /// Initialize service with real-time listeners (call once on app start or page mount)
+  Future<void> initialize() async {
+    if (_isInitialized) {
+      debugPrint('⚡ SmartPurchaseListService already initialized - using cached data (0ms)');
+      return;
+    }
+    
+    final initStartTime = DateTime.now();
+    debugPrint('⏱️ [PERF] Starting Smart Purchase List initialization...');
+    
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    
+    try {
+      final tenantStartTime = DateTime.now();
+      final tenantId = await _tenantService.getTenantId();
+      final tenantDuration = DateTime.now().difference(tenantStartTime).inMilliseconds;
+      debugPrint('⏱️ [PERF] Got tenant ID in ${tenantDuration}ms');
+      
+      if (tenantId == null) {
+        throw Exception('No tenant ID found');
+      }
 
-  /// Load all purchase list items
+      // 1. Initial load - fetch base data WITHOUT per-item enrichment
+      final dataStartTime = DateTime.now();
+      await _loadBaseData(tenantId);
+      final dataDuration = DateTime.now().difference(dataStartTime).inMilliseconds;
+      debugPrint('⏱️ [PERF] Loaded base data in ${dataDuration}ms');
+      
+      // 2. Set up real-time listeners for incremental updates
+      final listenerStartTime = DateTime.now();
+      _setupRealtimeListeners(tenantId);
+      final listenerDuration = DateTime.now().difference(listenerStartTime).inMilliseconds;
+      debugPrint('⏱️ [PERF] Set up realtime listeners in ${listenerDuration}ms');
+      
+      _isInitialized = true;
+      _lastFullSync = DateTime.now();
+      
+      final totalDuration = DateTime.now().difference(initStartTime).inMilliseconds;
+      debugPrint('✅ [PERF] TOTAL INITIALIZATION TIME: ${totalDuration}ms (${_items.length} items)');
+      debugPrint('   ├─ Tenant ID fetch: ${tenantDuration}ms');
+      debugPrint('   ├─ Database query: ${dataDuration}ms');
+      debugPrint('   ├─ Realtime setup: ${listenerDuration}ms');
+      debugPrint('   └─ Last sync: ${_lastFullSync}');
+    } catch (e) {
+      _error = 'Error initializing service: $e';
+      debugPrint('❌ $_error');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+      
+      final notifyDuration = DateTime.now().difference(initStartTime).inMilliseconds;
+      debugPrint('⏱️ [PERF] UI notified after ${notifyDuration}ms');
+    }
+  }
+  
+  /// Load base data from smart_purchase_list (fast, no enrichment)
+  Future<void> _loadBaseData(String tenantId) async {
+    final queryStartTime = DateTime.now();
+    
+    final response = await _client
+        .from('smart_purchase_list')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('priority', ascending: false)
+        .order('added_date', ascending: false);
+    
+    final queryDuration = DateTime.now().difference(queryStartTime).inMilliseconds;
+    debugPrint('⏱️ [PERF]   ├─ Supabase query executed in ${queryDuration}ms');
+    
+    final parseStartTime = DateTime.now();
+    final items = response as List<dynamic>;
+    
+    _items = items
+        .map((json) => SmartPurchaseListItem.fromJson(json))
+        .toList();
+    
+    final parseDuration = DateTime.now().difference(parseStartTime).inMilliseconds;
+    debugPrint('⏱️ [PERF]   └─ Parsed ${_items.length} items in ${parseDuration}ms');
+  }
+  
+  /// Set up Supabase Realtime listeners for automatic updates
+  void _setupRealtimeListeners(String tenantId) {
+    // Unsubscribe from previous channels if any
+    _purchaseListChannel?.unsubscribe();
+    _productsChannel?.unsubscribe();
+    
+    debugPrint('🔌 Setting up Realtime listeners for tenant: $tenantId');
+    
+    // Listen to smart_purchase_list changes
+    _purchaseListChannel = _client
+        .channel('smart_purchase_list_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'smart_purchase_list',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'tenant_id',
+            value: tenantId,
+          ),
+          callback: (payload) => _handlePurchaseListChange(payload),
+        )
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            debugPrint('✅ Subscribed to smart_purchase_list changes');
+          } else if (status == RealtimeSubscribeStatus.channelError) {
+            debugPrint('❌ Failed to subscribe to smart_purchase_list: $error');
+          }
+        });
+    
+    // Listen to products table changes (for stock updates)
+    _productsChannel = _client
+        .channel('products_stock_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'products',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'tenant_id',
+            value: tenantId,
+          ),
+          callback: (payload) => _handleProductStockChange(payload),
+        )
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            debugPrint('✅ Subscribed to products stock changes');
+          } else if (status == RealtimeSubscribeStatus.channelError) {
+            debugPrint('❌ Failed to subscribe to products: $error');
+          }
+        });
+    
+    debugPrint('🔔 Real-time listeners setup complete');
+  }
+  
+  /// Handle real-time changes to smart_purchase_list table
+  void _handlePurchaseListChange(PostgresChangePayload payload) {
+    debugPrint('🔔 [REALTIME] Purchase list change detected! (Page may be closed)');
+    debugPrint('   Event Type: ${payload.eventType}');
+    debugPrint('   Current items count: ${_items.length}');
+    
+    try {
+      switch (payload.eventType) {
+        case PostgresChangeEvent.insert:
+          final newItem = SmartPurchaseListItem.fromJson(payload.newRecord);
+          _items.insert(0, newItem); // Add to top (highest priority)
+          debugPrint('➕ [REALTIME] Added item: ${newItem.productName} (${newItem.productSku})');
+          debugPrint('   Total items now: ${_items.length}');
+          break;
+          
+        case PostgresChangeEvent.update:
+          final updatedItem = SmartPurchaseListItem.fromJson(payload.newRecord);
+          final index = _items.indexWhere((i) => i.id == updatedItem.id);
+          if (index >= 0) {
+            _items[index] = updatedItem;
+            debugPrint('🔄 [REALTIME] Updated item: ${updatedItem.productName} at index $index');
+          } else {
+            debugPrint('⚠️ [REALTIME] Item not found for update: ${updatedItem.id}');
+          }
+          break;
+          
+        case PostgresChangeEvent.delete:
+          final deletedId = payload.oldRecord['id'] as String;
+          final beforeCount = _items.length;
+          _items.removeWhere((i) => i.id == deletedId);
+          final afterCount = _items.length;
+          debugPrint('➖ [REALTIME] Removed item: $deletedId');
+          debugPrint('   Items before: $beforeCount, after: $afterCount');
+          break;
+          
+        default:
+          debugPrint('⚠️ [REALTIME] Unknown event type: ${payload.eventType}');
+          break;
+      }
+      
+      debugPrint('📢 [REALTIME] Notifying listeners... (${_items.length} items total)');
+      notifyListeners();
+      debugPrint('✅ [REALTIME] Listeners notified - data persisted in singleton');
+    } catch (e, stackTrace) {
+      debugPrint('❌ [REALTIME] Error handling purchase list change: $e');
+      debugPrint('Stack trace: $stackTrace');
+    }
+  }
+  
+  /// Handle real-time stock changes in products table
+  void _handleProductStockChange(PostgresChangePayload payload) {
+    debugPrint('📦 [REALTIME] Product stock change detected!');
+    
+    final productId = payload.newRecord['id'] as String?;
+    if (productId == null) {
+      debugPrint('⚠️ [REALTIME] No product ID in payload');
+      return;
+    }
+    
+    final newStock = payload.newRecord['stock_quantity'] as int? ?? 0;
+    final minStock = payload.newRecord['min_stock_level'] as int? ?? 0;
+    final productName = payload.newRecord['name'] as String? ?? 'Unknown';
+    
+    debugPrint('   Product: $productName ($productId)');
+    debugPrint('   Stock: $newStock, Min: $minStock');
+    
+    // Update cache
+    _productCache[productId] = payload.newRecord;
+    
+    // If stock is now above minimum, remove pending items for this product
+    if (newStock > minStock) {
+      debugPrint('   ✓ Stock is above minimum - checking for items to remove...');
+      final removed = _items.where((i) => i.productId == productId && i.status == 'pending').toList();
+      if (removed.isNotEmpty) {
+        final beforeCount = _items.length;
+        _items.removeWhere((i) => i.productId == productId && i.status == 'pending');
+        final afterCount = _items.length;
+        
+        for (var item in removed) {
+          debugPrint('🗑️ [REALTIME] Auto-removed item: ${item.productName} (${item.productSku})');
+          debugPrint('   Reason: Stock restored ($newStock > $minStock)');
+        }
+        debugPrint('   Items before: $beforeCount, after: $afterCount');
+        debugPrint('📢 [REALTIME] Notifying listeners...');
+        notifyListeners();
+        debugPrint('✅ [REALTIME] Listeners notified');
+        return; // Exit early, no need to update
+      } else {
+        debugPrint('   ℹ️ No pending items found for this product');
+      }
+    } else {
+      debugPrint('   ℹ️ Stock still at/below minimum - no removal needed');
+    }
+    
+    // Update any items using this product (if still in list)
+    bool updated = false;
+    for (var i = 0; i < _items.length; i++) {
+      if (_items[i].productId == productId) {
+        final item = _items[i];
+        _items[i] = SmartPurchaseListItem(
+          id: item.id,
+          productId: item.productId,
+          productName: payload.newRecord['name'] ?? item.productName,
+          productSku: payload.newRecord['sku'] ?? item.productSku,
+          supplierId: item.supplierId,
+          supplierName: item.supplierName,
+          suggestedQuantity: item.suggestedQuantity,
+          actualQuantity: item.actualQuantity,
+          status: item.status,
+          priority: item.priority,
+          rotationKpi: item.rotationKpi,
+          daysSinceLastPurchase: item.daysSinceLastPurchase,
+          currentStock: newStock,
+          minStockLevel: minStock,
+          stockAtOrder: item.stockAtOrder,
+          stockAtReceipt: item.stockAtReceipt,
+          avgDailyConsumption: item.avgDailyConsumption,
+          leadTimeDays: item.leadTimeDays,
+          estimatedStockoutDate: item.estimatedStockoutDate,
+          notes: item.notes,
+          addedBy: item.addedBy,
+          addedDate: item.addedDate,
+          orderedDate: item.orderedDate,
+          receivedDate: item.receivedDate,
+          linkedPurchaseInvoiceId: item.linkedPurchaseInvoiceId,
+          linkedExpenseId: item.linkedExpenseId,
+          createdAt: item.createdAt,
+          updatedAt: DateTime.now(), // Mark as updated
+        );
+        updated = true;
+        debugPrint('📦 Updated stock for ${item.productName}: $newStock / $minStock');
+      }
+    }
+    
+    if (updated) {
+      notifyListeners();
+    }
+  }
+
+  /// Load items with filters (uses cached data + in-memory filtering)
   Future<void> loadItems({
     String? statusFilter,
     String? supplierFilter,
     String searchQuery = '',
   }) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
-        throw Exception('No tenant ID found');
-      }
-
-      // First, get the purchase list items
-      PostgrestFilterBuilder<PostgrestList> query = _client
-          .from('smart_purchase_list')
-          .select('*')
-          .eq('tenant_id', tenantId);
-
-      // Apply status filter only (supplier filter will be applied after enrichment)
-      if (statusFilter != null && statusFilter != 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      final response = await query
-          .order('priority', ascending: false)
-          .order('added_date', ascending: false);
-      
-      final items = response as List<dynamic>;
-      
-      // Now enrich each item with fresh product and supplier data
-      final enrichedItems = <Map<String, dynamic>>[];
-      
-      for (final item in items) {
-        final itemMap = Map<String, dynamic>.from(item);
-        final productId = itemMap['product_id'];
-        
-        if (productId != null) {
-          try {
-            // Fetch fresh product data with supplier and stock levels
-            final productData = await _client
-                .from('products')
-                .select('''
-                  id,
-                  name,
-                  sku,
-                  stock_quantity,
-                  min_stock_level,
-                  supplier_id,
-                  suppliers(id, name)
-                ''')
-                .eq('id', productId)
-                .maybeSingle();
-            
-            if (productData != null) {
-              // Update with fresh product data
-              itemMap['product_name'] = productData['name'] ?? itemMap['product_name'];
-              itemMap['product_sku'] = productData['sku'] ?? itemMap['product_sku'];
-              
-              // Update stock levels with LIVE data from products table
-              itemMap['current_stock'] = productData['stock_quantity'] ?? itemMap['current_stock'];
-              itemMap['min_stock_level'] = productData['min_stock_level'] ?? itemMap['min_stock_level'];
-              
-              // Update supplier from product
-              if (productData['supplier_id'] != null) {
-                itemMap['supplier_id'] = productData['supplier_id'];
-                
-                final supplier = productData['suppliers'] as Map<String, dynamic>?;
-                if (supplier != null) {
-                  itemMap['supplier_name'] = supplier['name'];
-                }
-              } else {
-                // Product has no supplier
-                itemMap['supplier_id'] = null;
-                itemMap['supplier_name'] = null;
-              }
-            }
-          } catch (e) {
-            debugPrint('⚠️ Error fetching product $productId: $e');
-            // Keep the cached data from smart_purchase_list
-          }
-        }
-        
-        enrichedItems.add(itemMap);
-      }
-      
-      _items = enrichedItems
-          .map((json) => SmartPurchaseListItem.fromJson(json))
-          .toList();
-
-      // Apply supplier filter in memory (after enrichment with fresh data)
-      if (supplierFilter != null && supplierFilter != 'all') {
-        if (supplierFilter == 'none' || supplierFilter == '') {
-          // Filter for products with no supplier
-          _items = _items.where((item) => item.supplierId == null).toList();
-        } else {
-          // Filter by specific supplier
-          _items = _items.where((item) => item.supplierId == supplierFilter).toList();
-        }
-      }
-
-      // Apply search filter in memory (for product name/SKU)
-      if (searchQuery.isNotEmpty) {
-        final lowerQuery = searchQuery.toLowerCase();
-        _items = _items.where((item) {
-          return item.productName.toLowerCase().contains(lowerQuery) ||
-              (item.productSku?.toLowerCase().contains(lowerQuery) ?? false);
-        }).toList();
-      }
-
-      debugPrint('✅ Loaded ${_items.length} items from smart_purchase_list (after filters)');
-      _error = null;
-    } catch (e) {
-      _error = 'Error loading purchase list: $e';
-      debugPrint('❌ $_error');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+    // If not initialized, do full initialization
+    if (!_isInitialized) {
+      await initialize();
+      return;
     }
+    
+    // Otherwise, just apply filters to cached data (instant!)
+    debugPrint('⚡ Applying filters to cached data (instant)');
+    notifyListeners(); // Trigger UI update with current data
+  }
+  
+  /// Get filtered items (computed property for UI)
+  List<SmartPurchaseListItem> getFilteredItems({
+    String? statusFilter,
+    String? supplierFilter,
+    String searchQuery = '',
+  }) {
+    var filtered = List<SmartPurchaseListItem>.from(_items);
+    
+    // Apply status filter
+    if (statusFilter != null && statusFilter != 'all') {
+      filtered = filtered.where((item) => item.status == statusFilter).toList();
+    }
+    
+    // Apply supplier filter
+    if (supplierFilter != null && supplierFilter != 'all') {
+      if (supplierFilter == 'none' || supplierFilter == '') {
+        filtered = filtered.where((item) => item.supplierId == null).toList();
+      } else {
+        filtered = filtered.where((item) => item.supplierId == supplierFilter).toList();
+      }
+    }
+    
+    // Apply search filter
+    if (searchQuery.isNotEmpty) {
+      final lowerQuery = searchQuery.toLowerCase();
+      filtered = filtered.where((item) {
+        return item.productName.toLowerCase().contains(lowerQuery) ||
+            (item.productSku?.toLowerCase().contains(lowerQuery) ?? false);
+      }).toList();
+    }
+    
+    return filtered;
+  }
+  
+  /// Force refresh (manual reload)
+  Future<void> refresh() async {
+    final refreshStartTime = DateTime.now();
+    debugPrint('🔄 Force refresh requested');
+    
+    _isInitialized = false;
+    _productCache.clear();
+    await initialize();
+    
+    final refreshDuration = DateTime.now().difference(refreshStartTime).inMilliseconds;
+    debugPrint('✅ [PERF] Refresh completed in ${refreshDuration}ms');
+  }
+  
+  /// Clear all cached data (call on logout)
+  void clearCache() {
+    debugPrint('🗑️ Clearing Smart Purchase List cache');
+    _isInitialized = false;
+    _items.clear();
+    _productCache.clear();
+    _purchaseListChannel?.unsubscribe();
+    _productsChannel?.unsubscribe();
+    _purchaseListChannel = null;
+    _productsChannel = null;
+    _lastFullSync = null;
+    notifyListeners();
+  }
+  
+  /// Dispose and cleanup
+  @override
+  void dispose() {
+    clearCache();
+
+    super.dispose();
   }
 
   /// Auto-add product to purchase list when stock is low

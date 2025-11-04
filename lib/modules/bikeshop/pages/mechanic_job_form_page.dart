@@ -116,11 +116,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           .where((product) => product.productType == ProductType.service)
           .toList();
 
-      setState(() {
-        _customers = customers.cast<Customer>();
-        _products = products;
-        _serviceProducts = serviceProducts;
-      });
+      if (mounted) {
+        setState(() {
+          _customers = customers.cast<Customer>();
+          _products = products;
+          _serviceProducts = serviceProducts;
+        });
+      }
 
       // If editing, load existing job
       if (widget.jobId != null) {
@@ -136,14 +138,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         await _selectCustomer(customer);
       }
 
-      setState(() {
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
       if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al cargar datos: $e')),
         );
@@ -178,71 +182,73 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final parts = await bikeshopService.getJobItems(job.id!);
       final labor = await bikeshopService.getJobLabor(job.id!);
 
-      setState(() {
-        _existingJob = job;
-        _selectedCustomer = customer;
-        _selectedBike = bike;
-        _selectedPriority = job.priority;
-        _selectedStatus = job.status;
-        _selectedDeadline = job.deadline;
-        _requiresApproval = job.requiresApproval;
-        _isWarrantyJob = job.isWarrantyJob;
+      if (mounted) {
+        setState(() {
+          _existingJob = job;
+          _selectedCustomer = customer;
+          _selectedBike = bike;
+          _selectedPriority = job.priority;
+          _selectedStatus = job.status;
+          _selectedDeadline = job.deadline;
+          _requiresApproval = job.requiresApproval;
+          _isWarrantyJob = job.isWarrantyJob;
 
-        _clientRequestController.text = job.clientRequest ?? '';
-        _diagnosisController.text = job.diagnosis ?? '';
-        _technicianNotesController.text = job.notes ?? '';
-        _discountController.text = job.discountAmount.toString();
-        _estimatedDurationController.text = '';
+          _clientRequestController.text = job.clientRequest ?? '';
+          _diagnosisController.text = job.diagnosis ?? '';
+          _technicianNotesController.text = job.notes ?? '';
+          _discountController.text = job.discountAmount.toString();
+          _estimatedDurationController.text = '';
 
-        // Convert parts to form items
-        _partItems.clear();
-        for (final part in parts) {
-          final product = _products.firstWhere(
-            (p) => p.id == part.productId,
-            orElse: () => Product(
-              id: part.productId ?? '',
+          // Convert parts to form items
+          _partItems.clear();
+          for (final part in parts) {
+            final product = _products.firstWhere(
+              (p) => p.id == part.productId,
+              orElse: () => Product(
+                id: part.productId ?? '',
+                name: part.productName,
+                sku: 'N/A',
+                price: part.unitPrice,
+                cost: 0,
+                stockQuantity: 0,
+                category: ProductCategory.other,
+                productType: ProductType.product,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
+              ),
+            );
+            _partItems.add(_JobPartItem(
+              product: part.productId != null ? product : null,
               name: part.productName,
-              sku: 'N/A',
-              price: part.unitPrice,
-              cost: 0,
-              stockQuantity: 0,
-              category: ProductCategory.other,
-              productType: ProductType.product,
-              createdAt: DateTime.now(),
-              updatedAt: DateTime.now(),
-            ),
-          );
-          _partItems.add(_JobPartItem(
-            product: part.productId != null ? product : null,
-            name: part.productName,
-            isCatalogProduct: part.productId != null,
-            quantity: part.quantity.toInt(),
-            unitPrice: part.unitPrice,
-            notes: null, // TODO: Load from database if stored
-          ));
-        }
-
-        // Convert labor to form items
-        _laborItems.clear();
-        for (final l in labor) {
-          Product? serviceProduct;
-          if (l.serviceProductId != null) {
-            try {
-              serviceProduct = _serviceProducts
-                  .firstWhere((p) => p.id == l.serviceProductId);
-            } catch (_) {
-              serviceProduct = null;
-            }
+              isCatalogProduct: part.productId != null,
+              quantity: part.quantity.toInt(),
+              unitPrice: part.unitPrice,
+              notes: null, // TODO: Load from database if stored
+            ));
           }
-          _laborItems.add(_JobLaborItem(
-            serviceProduct: serviceProduct,
-            description: l.description ?? serviceProduct?.name ?? '',
-            hours: l.hoursWorked,
-            hourlyRate: l.hourlyRate,
-            date: l.workDate,
-          ));
-        }
-      });
+
+          // Convert labor to form items
+          _laborItems.clear();
+          for (final l in labor) {
+            Product? serviceProduct;
+            if (l.serviceProductId != null) {
+              try {
+                serviceProduct = _serviceProducts
+                    .firstWhere((p) => p.id == l.serviceProductId);
+              } catch (_) {
+                serviceProduct = null;
+              }
+            }
+            _laborItems.add(_JobLaborItem(
+              serviceProduct: serviceProduct,
+              description: l.description ?? serviceProduct?.name ?? '',
+              hours: l.hoursWorked,
+              hourlyRate: l.hourlyRate,
+              date: l.workDate,
+            ));
+          }
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

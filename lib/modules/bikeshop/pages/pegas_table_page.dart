@@ -177,19 +177,21 @@ class _PegasTablePageState extends State<PegasTablePage>
         }
       }
 
-      setState(() {
-        _jobs = jobs;
-        _filteredJobs = jobs;
-        _customers = customerMap;
-        _bikes = bikeMap;
-        _invoices = invoiceMap;
-        _isLoading = false;
-      });
-
-      _applyFiltersAndSort();
-    } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() {
+          _jobs = jobs;
+          _filteredJobs = jobs;
+          _customers = customerMap;
+          _bikes = bikeMap;
+          _invoices = invoiceMap;
+          _isLoading = false;
+        });
+
+        _applyFiltersAndSort();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
@@ -241,15 +243,17 @@ class _PegasTablePageState extends State<PegasTablePage>
         debugPrint('Error loading product images: $e');
       }
       
-      setState(() {
-        _selectedJobItems = items;
-        _selectedJobLabor = labor;
-        _productImages = productImages;
-        _loadingDetails = false;
-      });
-    } catch (e) {
-      setState(() => _loadingDetails = false);
       if (mounted) {
+        setState(() {
+          _selectedJobItems = items;
+          _selectedJobLabor = labor;
+          _productImages = productImages;
+          _loadingDetails = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingDetails = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al cargar detalles: $e')),
         );

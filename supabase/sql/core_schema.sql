@@ -1305,8 +1305,21 @@ begin
   -- Use whichever column is set (prefer stock_quantity as source of truth)
   v_current_stock := coalesce(NEW.stock_quantity, NEW.inventory_qty, 0);
   
-  -- Trigger when stock is at or below minimum level
-  -- Remove the restriction that prevents adding if already low
+  -- AUTO-REMOVAL: If stock is now ABOVE minimum level, remove from pending list
+  if v_current_stock > NEW.min_stock_level then
+    delete from smart_purchase_list
+    where product_id = NEW.id
+    and status = 'pending'
+    and tenant_id = NEW.tenant_id;
+    
+    if found then
+      raise notice '🗑️ Auto-removed product % (%) from purchase list - stock restored to %', NEW.name, NEW.sku, v_current_stock;
+    end if;
+    
+    return NEW;
+  end if;
+  
+  -- AUTO-ADD: Trigger when stock is at or below minimum level
   if v_current_stock <= NEW.min_stock_level then
     
     -- Check if product is already in the purchase list with pending/ordered status
