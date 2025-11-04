@@ -443,6 +443,36 @@ exception
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in company_settings';
 end $$;
 
+-- Migration: Drop old single-tenant constraint, ensure multi-tenant constraint exists
+do $$ 
+begin
+  -- Drop old global unique constraint on 'key' alone (wrong for multi-tenant)
+  if exists (
+    select 1 from pg_constraint 
+    where conname = 'company_settings_key_key'
+  ) then
+    alter table company_settings drop constraint company_settings_key_key;
+    raise notice '✓ Dropped old global unique constraint on key';
+  end if;
+  
+  -- Ensure correct per-tenant unique constraint exists
+  if not exists (
+    select 1 from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    where t.relname = 'company_settings'
+    and c.contype = 'u'
+    and array_length(c.conkey, 1) = 2  -- Composite constraint (tenant_id, key)
+  ) then
+    alter table company_settings add constraint company_settings_tenant_key_unique unique (tenant_id, key);
+    raise notice '✓ Created per-tenant unique constraint (tenant_id, key)';
+  else
+    raise notice '✓ Per-tenant unique constraint already exists';
+  end if;
+exception
+  when others then
+    raise notice '⚠ Constraint migration: %', SQLERRM;
+end $$;
+
 -- Note: Default settings will be seeded via trigger when tenant is created
 
 create table if not exists product_brands (
@@ -4121,7 +4151,7 @@ begin
 
   elsif TG_OP = 'DELETE' then
     v_old_status := lower(coalesce(OLD.status, 'draft'));
-    raise notice 'handle_sales_invoice_change: DELETE invoice %, status %', OLD.id, v_old_status;
+    raise notice '🔵 handle_sales_invoice_change: DELETE invoice %, status %', OLD.id, v_old_status;
     
     -- If was posted, restore inventory
     if not (v_old_status = any (v_non_posted)) then
@@ -4133,6 +4163,7 @@ begin
     where source_module = 'sales_invoices'
       and source_reference = OLD.id::text;
     
+    raise notice '🔵 handle_sales_invoice_change: DELETE completed, now cascade trigger should fire';
     return OLD;
   end if;
 
@@ -7897,7 +7928,7 @@ create table if not exists mechanic_jobs (
   total_cost numeric(12,2) not null default 0,
   
   -- Invoicing
-  invoice_id uuid references sales_invoices(id) on delete set null,
+  invoice_id uuid references sales_invoices(id) on delete cascade, -- CHANGED: cascade delete instead of set null
   is_invoiced boolean not null default false,
   is_paid boolean not null default false,
   
@@ -7920,6 +7951,19 @@ create table if not exists mechanic_jobs (
 -- Migration: Add missing columns to mechanic_jobs table
 do $$
 begin
+  -- CRITICAL: Update foreign key constraint for invoice_id (from SET NULL to CASCADE)
+  -- This ensures pega is deleted when invoice is deleted (bidirectional cascade)
+  if exists (
+    select 1 from information_schema.table_constraints
+    where constraint_name = 'mechanic_jobs_invoice_id_fkey'
+      and table_name = 'mechanic_jobs'
+  ) then
+    alter table mechanic_jobs drop constraint mechanic_jobs_invoice_id_fkey;
+    alter table mechanic_jobs add constraint mechanic_jobs_invoice_id_fkey
+      foreign key (invoice_id) references sales_invoices(id) on delete cascade;
+    raise notice '✅ Updated mechanic_jobs.invoice_id foreign key to ON DELETE CASCADE';
+  end if;
+  
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'job_number') then
     alter table mechanic_jobs add column job_number text not null unique;
   end if;
@@ -7993,7 +8037,7 @@ begin
     alter table mechanic_jobs add column total_cost numeric(12,2) not null default 0;
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'invoice_id') then
-    alter table mechanic_jobs add column invoice_id uuid references sales_invoices(id) on delete set null;
+    alter table mechanic_jobs add column invoice_id uuid references sales_invoices(id) on delete cascade;
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'is_invoiced') then
     alter table mechanic_jobs add column is_invoiced boolean not null default false;
@@ -8221,42 +8265,125 @@ create index if not exists idx_mechanic_job_timeline_created_at on mechanic_job_
 -- Function: Cascade delete between mechanic jobs and invoices
 -- When a pega is deleted, also delete its associated invoice
 -- When an invoice is deleted, also delete its associated pega
+-- ============================================================
+-- BIDIRECTIONAL CASCADE DELETE - Trigger Approach (RLS-Compatible)
+-- ============================================================
+-- Foreign key CASCADE doesn't work with RLS policies, so we use triggers
+-- with SECURITY DEFINER to bypass RLS when cascading deletes.
+-- ============================================================
+
 create or replace function public.cascade_delete_pega_invoice()
 returns trigger
 language plpgsql
-security definer
+security definer  -- Run with function owner's privileges (bypasses RLS)
 set search_path = public
 as $$
+declare
+  v_count int;
+  v_recursion_guard boolean;
+  v_pega_id uuid;
+  v_invoice_id uuid;
 begin
-  -- Prevent infinite recursion
-  if pg_trigger_depth() > 1 then
+  -- Get recursion guard from transaction-level setting
+  begin
+    v_recursion_guard := current_setting('app.cascade_delete_in_progress', true)::boolean;
+  exception
+    when others then
+      v_recursion_guard := false;
+  end;
+  
+  -- If already in recursion, skip to prevent infinite loop
+  if v_recursion_guard then
+    raise notice '⏭️ Skipping cascade (recursion guard active)';
     return OLD;
   end if;
-
-  if TG_TABLE_NAME = 'mechanic_jobs' then
-    -- Pega deleted → delete its invoice
-    if OLD.invoice_id is not null then
-      delete from sales_invoices where id = OLD.invoice_id;
-      raise notice 'Deleted invoice % for pega %', OLD.invoice_id, OLD.id;
+  
+  -- Set recursion guard
+  perform set_config('app.cascade_delete_in_progress', 'true', true);
+  
+  -- Handle invoice deletion → delete pega
+  if TG_TABLE_NAME = 'sales_invoices' then
+    raise notice '🗑️ [TRIGGER] Invoice % deleted (tenant=%)', OLD.id, OLD.tenant_id;
+    
+    -- Find linked pegas
+    select id into v_pega_id
+    from mechanic_jobs
+    where invoice_id = OLD.id 
+      and tenant_id = OLD.tenant_id
+    limit 1;
+    
+    if v_pega_id is not null then
+      raise notice '🔍 Found pega % linked to invoice %', v_pega_id, OLD.id;
+      
+      -- Delete using direct SQL (SECURITY DEFINER bypasses RLS)
+      execute format('delete from mechanic_jobs where id = %L', v_pega_id);
+      
+      get diagnostics v_count = ROW_COUNT;
+      
+      if v_count > 0 then
+        raise notice '✅ Deleted pega % linked to invoice %', v_pega_id, OLD.id;
+      else
+        raise notice '❌ Failed to delete pega %', v_pega_id;
+      end if;
+    else
+      raise notice '⚠️ No pega found with invoice_id=%', OLD.id;
     end if;
-  elsif TG_TABLE_NAME = 'sales_invoices' then
-    -- Invoice deleted → delete associated pega (if any)
-    delete from mechanic_jobs where invoice_id = OLD.id;
-    raise notice 'Deleted pega(s) for invoice %', OLD.id;
   end if;
 
+  -- Handle pega deletion → delete invoice  
+  if TG_TABLE_NAME = 'mechanic_jobs' then
+    if OLD.invoice_id is not null then
+      raise notice '🗑️ [TRIGGER] Pega % deleted (tenant=%)', OLD.id, OLD.tenant_id;
+      raise notice '🔍 Looking for linked invoice %', OLD.invoice_id;
+      
+      -- Verify invoice exists
+      select id into v_invoice_id
+      from sales_invoices
+      where id = OLD.invoice_id
+        and tenant_id = OLD.tenant_id;
+      
+      if v_invoice_id is not null then
+        raise notice '🔍 Found invoice % linked to pega %', v_invoice_id, OLD.id;
+        
+        -- Delete using direct SQL (SECURITY DEFINER bypasses RLS)
+        execute format('delete from sales_invoices where id = %L', v_invoice_id);
+        
+        get diagnostics v_count = ROW_COUNT;
+        
+        if v_count > 0 then
+          raise notice '✅ Deleted invoice % linked to pega %', v_invoice_id, OLD.id;
+        else
+          raise notice '❌ Failed to delete invoice %', v_invoice_id;
+        end if;
+      else
+        raise notice '⚠️ Invoice % not found (may already be deleted)', OLD.invoice_id;
+      end if;
+    else
+      raise notice '⚠️ Pega % has no linked invoice_id', OLD.id;
+    end if;
+  end if;
+  
+  -- Clear recursion guard
+  perform set_config('app.cascade_delete_in_progress', 'false', true);
+  
   return OLD;
+exception
+  when others then
+    -- Clear recursion guard on error
+    perform set_config('app.cascade_delete_in_progress', 'false', true);
+    raise notice '❌ ERROR in cascade_delete_pega_invoice: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
+    return OLD;
 end;
 $$;
 
--- Create triggers for cascade delete (AFTER DELETE to avoid row modification conflict)
-drop trigger if exists trg_delete_pega_cascade_invoice on mechanic_jobs;
+-- Create triggers for BOTH directions
+drop trigger if exists trg_delete_pega_cascade_invoice on mechanic_jobs cascade;
 create trigger trg_delete_pega_cascade_invoice
   after delete on mechanic_jobs
   for each row
   execute function public.cascade_delete_pega_invoice();
 
-drop trigger if exists trg_delete_invoice_cascade_pega on sales_invoices;
+drop trigger if exists trg_delete_invoice_cascade_pega on sales_invoices cascade;
 create trigger trg_delete_invoice_cascade_pega
   after delete on sales_invoices
   for each row
@@ -8349,6 +8476,15 @@ $$;
 -- Function: Create sales invoice from mechanic job
 -- Automatically creates an invoice with parts, labor, and IVA (19%)
 -- Called AFTER job insert to link job to invoice
+-- ============================================================================
+-- PEGA (MECHANIC JOB) → INVOICE AUTOMATIC LINKING (Updated Nov 3, 2025)
+-- ============================================================================
+-- CHANGES:
+-- 1. Use job.arrival_date instead of job.created_at for invoice date
+-- 2. Allow invoice creation even with empty items (draft for future work)
+-- 3. Invoice created as 'draft' status for user review before posting
+-- ============================================================================
+
 create or replace function public.create_invoice_from_mechanic_job(p_job_id uuid)
 returns uuid
 language plpgsql
@@ -8401,8 +8537,9 @@ begin
     return null;
   end if;
   
-  -- Set invoice date to job creation date
-  v_invoice_date := v_job.created_at;
+  -- ✅ CRITICAL FIX: Use arrival_date instead of created_at for invoice date
+  -- This ensures invoice date matches when the job/work actually started
+  v_invoice_date := coalesce(v_job.arrival_date, v_job.created_at);
   
   -- Add parts/items from mechanic_job_items
   for v_job_item in
@@ -8470,18 +8607,10 @@ begin
     );
   end loop;
   
-  -- Skip invoice creation when there are no billable items
-  if v_item_counter = 0 then
-    update public.mechanic_jobs
-    set invoice_id = null,
-        is_invoiced = false,
-        updated_at = now()
-    where id = p_job_id;
-
-    raise notice 'Skipping invoice for job %: no parts or labor captured', v_job.job_number;
-    return null;
-  end if;
-
+  -- ✅ CHANGED: Allow invoice creation even with empty items
+  -- Draft invoices can be created for future work planning
+  -- User can add items later before posting
+  
   -- Calculate IVA (19% for Chile)
   v_iva := round(v_subtotal * 0.19, 2);
   v_total := v_subtotal + v_iva;
@@ -8489,7 +8618,7 @@ begin
   -- Generate invoice number (will be updated if needed)
   v_invoice_number := 'INV-' || to_char(v_invoice_date, 'YYYYMMDD') || '-' || gen_random_uuid()::text;
   
-  -- Create the invoice
+  -- Create the invoice with status 'draft' for user review
   insert into public.sales_invoices (
     tenant_id,
     invoice_number,
@@ -8514,10 +8643,10 @@ begin
     v_customer.id,
     v_customer.name,
     v_customer.rut,
-    v_invoice_date,
+    v_invoice_date,  -- ✅ Now uses arrival_date
     v_invoice_date + interval '30 days',  -- 30-day payment terms
     'Pega ' || v_job.job_number,
-    'draft',
+    'draft',  -- Always start as draft for review
     v_subtotal,
     v_iva,
     v_total,
@@ -8535,12 +8664,117 @@ begin
       updated_at = now()
   where id = p_job_id;
   
-  raise notice 'Created invoice % for job % (customer: %, total: $%)', 
-    v_invoice_id, v_job.job_number, v_customer.name, v_total;
+  raise notice 'Created draft invoice % for job % (customer: %, date: %, total: $%)', 
+    v_invoice_id, v_job.job_number, v_customer.name, v_invoice_date, v_total;
   
   return v_invoice_id;
 end;
 $$;
+
+-- ============================================================================
+-- AUTO-CREATE INVOICE TRIGGER FOR NEW PEGAS
+-- ============================================================================
+-- Automatically creates a draft invoice when a new pega is created
+-- This ensures strong bidirectional linking from the moment of creation
+-- ============================================================================
+
+create or replace function public.auto_create_invoice_for_new_job()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice_id uuid;
+begin
+  -- Only create invoice if customer is specified
+  if NEW.customer_id is not null then
+    -- Create draft invoice linked to this job
+    -- Job now exists in DB (AFTER INSERT), so function can query it
+    v_invoice_id := public.create_invoice_from_mechanic_job(NEW.id);
+    
+    -- Update the job record with the invoice_id
+    if v_invoice_id is not null then
+      update public.mechanic_jobs
+      set invoice_id = v_invoice_id,
+          is_invoiced = true
+      where id = NEW.id;
+      
+      raise notice 'Auto-created invoice % for new pega %', v_invoice_id, NEW.job_number;
+    end if;
+  end if;
+  
+  return NEW;
+end;
+$$;
+
+-- Drop old trigger if exists
+drop trigger if exists trg_auto_create_invoice_for_job on public.mechanic_jobs;
+
+-- Create trigger to auto-create invoice on pega INSERT
+-- CHANGED TO AFTER INSERT so job exists in DB when function queries it
+create trigger trg_auto_create_invoice_for_job
+  after insert on public.mechanic_jobs
+  for each row
+  execute function public.auto_create_invoice_for_new_job();
+
+-- ============================================================================
+-- SYNC INVOICE CHANGES BACK TO PEGA (Bidirectional Sync)
+-- ============================================================================
+-- When invoice items are modified, sync them back to the mechanic job
+-- This ensures pega always reflects the latest invoice state
+-- ============================================================================
+
+create or replace function public.sync_invoice_to_job_on_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_job_id uuid;
+begin
+  -- Skip if invoice is not linked to a pega
+  -- Check if this invoice references a mechanic job
+  select id into v_job_id
+  from public.mechanic_jobs
+  where invoice_id = NEW.id
+  limit 1;
+  
+  if v_job_id is null then
+    -- Not a pega-linked invoice, skip sync
+    return NEW;
+  end if;
+  
+  -- Prevent circular triggers (invoice → job → invoice → ...)
+  -- Check if we're already inside a job sync operation
+  if current_setting('app.syncing_invoice_to_job', true) = 'true' then
+    raise notice 'Skipping invoice→job sync (circular prevention)';
+    return NEW;
+  end if;
+  
+  -- Set flag to prevent circular sync
+  perform set_config('app.syncing_invoice_to_job', 'true', true);
+  
+  -- Call existing sync function to update job items from invoice
+  -- Function only needs invoice_id, it finds the job internally
+  perform public.sync_invoice_items_to_job(NEW.id);
+  
+  raise notice 'Synced invoice % changes to pega %', NEW.id, v_job_id;
+  
+  return NEW;
+end;
+$$;
+
+-- Drop old trigger if exists
+drop trigger if exists trg_sync_invoice_to_job on public.sales_invoices;
+
+-- Create trigger to sync invoice changes to job
+create trigger trg_sync_invoice_to_job
+  after update of items on public.sales_invoices
+  for each row
+  when (OLD.items is distinct from NEW.items)
+  execute function public.sync_invoice_to_job_on_change();
 
 -- ============================================================================
 -- CRITICAL: BI-DIRECTIONAL PEGA ↔ INVOICE SYNC
@@ -8787,33 +9021,12 @@ begin
 end;
 $$;
 
--- Function: Handle invoice deletion - clear job reference
-create or replace function public.handle_invoice_deleted_for_job()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  -- Clear invoice_id from any linked jobs
-  update mechanic_jobs
-  set 
-    invoice_id = null,
-    is_invoiced = false,
-    is_paid = false,
-    updated_at = now()
-  where invoice_id = OLD.id;
-  
-  raise notice 'Cleared invoice reference from jobs for deleted invoice %', OLD.id;
-  return OLD;
-end;
-$$;
-
--- Trigger: Clear job reference when invoice is deleted
-drop trigger if exists trg_invoice_deleted_clear_job on sales_invoices;
-create trigger trg_invoice_deleted_clear_job
-  before delete on sales_invoices
-  for each row execute procedure public.handle_invoice_deleted_for_job();
+-- ============================================================
+-- REMOVED: handle_invoice_deleted_for_job trigger
+-- Reason: Conflicts with cascade_delete_pega_invoice trigger
+-- The cascade delete provides proper bidirectional deletion
+-- (delete invoice → delete pega, delete pega → delete invoice)
+-- ============================================================
 
 -- ============================================================
 -- REVERSE SYNC: Job → Invoice
@@ -10617,7 +10830,6 @@ end $$;
 create table if not exists online_order_items (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  tenant_id uuid references tenants(id) on delete cascade not null,
   order_id uuid references online_orders(id) on delete cascade,
   product_id uuid references products(id) on delete set null,
   product_name text not null, -- Store name for historical record
@@ -11947,10 +12159,18 @@ end $$;
 
 -- Company Settings: Tenant isolation (CRITICAL - logo/company data)
 do $$ begin
-  create policy "company_settings_select" on company_settings for select using (tenant_id = public.user_tenant_id());
-  create policy "company_settings_insert" on company_settings for insert with check (tenant_id = public.user_tenant_id());
-  create policy "company_settings_update" on company_settings for update using (tenant_id = public.user_tenant_id());
-  create policy "company_settings_delete" on company_settings for delete using (tenant_id = public.user_tenant_id());
+  create policy "company_settings_select" on company_settings 
+    for select to authenticated
+    using (tenant_id = public.user_tenant_id());
+  create policy "company_settings_insert" on company_settings 
+    for insert to authenticated
+    with check (tenant_id = public.user_tenant_id());
+  create policy "company_settings_update" on company_settings 
+    for update to authenticated
+    using (tenant_id = public.user_tenant_id());
+  create policy "company_settings_delete" on company_settings 
+    for delete to authenticated
+    using (tenant_id = public.user_tenant_id());
   raise notice '✓ Created RLS policies for company_settings';
 exception
   when undefined_table then raise notice '⚠ Table company_settings does not exist yet';

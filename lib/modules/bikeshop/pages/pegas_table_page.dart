@@ -129,7 +129,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Future<void> _openInvoice(String invoiceId) async {
     _markNeedsRefresh();
-    await context.push('/sales/invoices/$invoiceId');
+    // Use the new invoice form page (consolidated view with edit/workflow)
+    await context.push('/sales/invoices/$invoiceId/edit');
     if (!mounted) return;
     await _loadData();
   }

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/image_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/constants/storage_constants.dart';
 
 class AppearanceService extends ChangeNotifier {
@@ -111,15 +112,35 @@ class AppearanceService extends ChangeNotifier {
 
   Future<void> setHomeIcon(IconData icon, String iconCode) async {
     try {
-      // Save to Supabase database (synced across devices)
-      await _supabase.from('company_settings').upsert(
-        {
+      // Get tenant_id
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant found');
+      }
+
+      // Check if setting exists
+      final existing = await _supabase
+          .from('company_settings')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('key', _homeIconKey)
+          .maybeSingle();
+
+      if (existing != null) {
+        // Update existing record
+        await _supabase.from('company_settings').update({
+          'value': iconCode,
+          'updated_at': DateTime.now().toIso8601String()
+        }).eq('tenant_id', tenantId).eq('key', _homeIconKey);
+      } else {
+        // Insert new record
+        await _supabase.from('company_settings').insert({
+          'tenant_id': tenantId,
           'key': _homeIconKey,
           'value': iconCode,
           'updated_at': DateTime.now().toIso8601String()
-        },
-        onConflict: 'key',
-      );
+        });
+      }
 
       _homeIcon = icon;
       notifyListeners();
@@ -139,6 +160,12 @@ class AppearanceService extends ChangeNotifier {
 
   Future<void> uploadCompanyLogo(Uint8List imageBytes, String fileName) async {
     try {
+      // Get tenant_id
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant found');
+      }
+
       // Upload to Supabase storage
       final imageUrl = await ImageService.uploadBytes(
         bytes: imageBytes,
@@ -148,16 +175,29 @@ class AppearanceService extends ChangeNotifier {
       );
 
       if (imageUrl != null) {
-        // Save to Supabase database (synced across devices)
-        // Don't add cache-buster to stored URL - we add it dynamically in the getter
-        await _supabase.from('company_settings').upsert(
-          {
+        // Check if setting exists
+        final existing = await _supabase
+            .from('company_settings')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('key', _companyLogoKey)
+            .maybeSingle();
+
+        if (existing != null) {
+          // Update existing record
+          await _supabase.from('company_settings').update({
+            'value': imageUrl,
+            'updated_at': DateTime.now().toIso8601String()
+          }).eq('tenant_id', tenantId).eq('key', _companyLogoKey);
+        } else {
+          // Insert new record
+          await _supabase.from('company_settings').insert({
+            'tenant_id': tenantId,
             'key': _companyLogoKey,
             'value': imageUrl,
             'updated_at': DateTime.now().toIso8601String()
-          },
-          onConflict: 'key',
-        );
+          });
+        }
 
         _companyLogoUrl = imageUrl;
         // Update cache-buster to force reload on all devices
@@ -174,11 +214,17 @@ class AppearanceService extends ChangeNotifier {
 
   Future<void> removeCompanyLogo() async {
     try {
+      // Get tenant_id
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant found');
+      }
+
       // Remove from Supabase database (synced across devices)
       await _supabase.from('company_settings').update({
         'value': null,
         'updated_at': DateTime.now().toIso8601String()
-      }).eq('key', _companyLogoKey);
+      }).eq('tenant_id', tenantId).eq('key', _companyLogoKey);
 
       _companyLogoUrl = null;
       notifyListeners();

@@ -1639,22 +1639,43 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             child: const Text('Cancelar'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              // TODO: Delete invoice
-              setState(() => _selectedInvoice = null);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Factura eliminada')),
-              );
+              // Delete invoice via service
+              try {
+                final salesService = context.read<SalesService>();
+                final messenger = ScaffoldMessenger.of(context); // Capture before async
+                
+                await salesService.deleteInvoice(invoice.id!);
+                setState(() => _selectedInvoice = null);
+                await salesService.loadInvoices(); // Reload list
+                
+                if (mounted) {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Factura eliminada correctamente'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  final messenger = ScaffoldMessenger.of(context);
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Error al eliminar factura: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
             },
             child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
-  }
-  
-  Widget _buildInvoiceDocument(Invoice invoice, double containerWidth) {
+  }  Widget _buildInvoiceDocument(Invoice invoice, double containerWidth) {
     // Calculate responsive sizes based on width
     final double scale = (containerWidth / 800.0).clamp(0.6, 1.0);
     final double padding = 40 * scale;
