@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:app_links/app_links.dart';
+import 'package:go_router/go_router.dart';
 
 import 'shared/themes/app_theme.dart';
 import 'shared/services/auth_service.dart';
@@ -16,7 +17,9 @@ import 'shared/services/payment_method_service.dart';
 import 'shared/services/navigation_service.dart';
 import 'shared/services/tenant_service.dart';
 import 'shared/services/user_management_service.dart';
+import 'shared/services/workspace_manager.dart';
 import 'shared/config/supabase_config.dart';
+import 'shared/widgets/workspace_tab_bar.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/inventory/services/inventory_service.dart' as module_inventory;
 import 'modules/inventory/services/brand_service.dart';
@@ -133,6 +136,7 @@ class VinabikeApp extends StatelessWidget {
           navigationService.initialize();
           return navigationService;
         }),
+        ChangeNotifierProvider(create: (_) => WorkspaceManager()),
 
         // Business services
         // Shared inventory service (used by POS)
@@ -264,7 +268,6 @@ class VinabikeApp extends StatelessWidget {
               Provider.of<AccountingService>(context, listen: false);
           PurchaseService.setAccountingService(accountingService);
 
-          final authService = context.read<AuthService>();
           final isPublicStoreHost = _detectPublicStoreHost();
 
           // Detect tenant for public store (subdomain-based routing)
@@ -278,37 +281,127 @@ class VinabikeApp extends StatelessWidget {
             });
           }
 
-          return MaterialApp.router(
+          final authService = context.read<AuthService>();
+
+          // Public store or not authenticated = single router
+          if (isPublicStoreHost || !authService.isAuthenticated) {
+            return MaterialApp.router(
+              title: 'Vinabike',
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: ThemeMode.light,
+              scrollBehavior: AppScrollBehavior(),
+              routerConfig: AppRouter.createRouter(
+                authService,
+                forcePublicStoreHost: isPublicStoreHost,
+                initialLocationOverride: isPublicStoreHost ? '/tienda' : null,
+              ),
+              debugShowCheckedModeBanner: false,
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [
+                Locale('es', ''),
+                Locale('en', ''),
+              ],
+              locale: const Locale('es', ''),
+            );
+          }
+
+          // Authenticated = workspace system with OUTER Material context
+          return MaterialApp(
             title: 'Vinabike',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: ThemeMode.light, // Force light mode for public store
-            scrollBehavior: AppScrollBehavior(), // Prevent trackpad navigation gestures
-            routerConfig: AppRouter.createRouter(
-              authService,
-              forcePublicStoreHost: isPublicStoreHost,
-              initialLocationOverride: isPublicStoreHost ? '/tienda' : null,
-            ),
+            themeMode: ThemeMode.light,
+            scrollBehavior: AppScrollBehavior(),
             debugShowCheckedModeBanner: false,
-            // Add localization support
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: const [
-              Locale('es', ''), // Spanish (default for Chile)
-              Locale('en', ''), // English
+              Locale('es', ''),
+              Locale('en', ''),
             ],
-            locale: const Locale('es', ''), // Default locale
-            builder: (context, child) {
-              // Global error overlay disabled - errors will show in debug console
-              return child ?? const SizedBox.shrink();
-            },
+            locale: const Locale('es', ''),
+            home: Scaffold(
+              body: Column(
+                children: [
+                  Container(
+                    color: Colors.white,
+                    child: const WorkspaceTabBar(),
+                  ),
+                  Expanded(
+                    child: Consumer<WorkspaceManager>(
+                      builder: (context, workspaceManager, _) {
+                        return IndexedStack(
+                          index: workspaceManager.activeIndex,
+                          sizing: StackFit.expand,
+                          children: workspaceManager.workspaces.map((workspace) {
+                            return _WorkspaceRouterView(
+                              key: ValueKey(workspace.id),
+                              workspace: workspace,
+                              authService: authService,
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           );
         },
       ),
     );
+  }
+}
+
+class _WorkspaceRouterView extends StatefulWidget {
+  final Workspace workspace;
+  final AuthService authService;
+
+  const _WorkspaceRouterView({
+    required super.key,
+    required this.workspace,
+    required this.authService,
+  });
+
+  @override
+  State<_WorkspaceRouterView> createState() => _WorkspaceRouterViewState();
+}
+
+class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
+    with AutomaticKeepAliveClientMixin {
+  late final GoRouter _router;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _router = AppRouter.createRouter(
+      widget.authService,
+      initialLocationOverride: widget.workspace.initialRoute,
+    );
+  }
+
+  @override
+  void dispose() {
+    _router.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Router.withConfig(config: _router);
   }
 }
 

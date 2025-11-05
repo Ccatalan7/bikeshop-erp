@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/auth_service.dart';
 import '../services/navigation_service.dart';
+import '../services/workspace_manager.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import 'expandable_menu_item.dart';
 
@@ -182,6 +183,55 @@ const List<MenuSubItem> _posMenuItems = [
 ];
 
 const String _posSectionKey = 'pos';
+
+/// Helper function to open a route in a new workspace tab
+/// If workspace system is not available (e.g., not authenticated), falls back to regular navigation
+void _openInWorkspace(BuildContext context, String route, String title) {
+  try {
+    final workspaceManager = context.read<WorkspaceManager>();
+    // Try to switch to existing workspace with this route first
+    if (!workspaceManager.switchToExistingWorkspaceWithRoute(route)) {
+      // If not found, create new workspace
+      workspaceManager.addWorkspace(
+        title: title,
+        initialRoute: route,
+      );
+    }
+  } catch (e) {
+    // WorkspaceManager not available, fall back to regular navigation
+    context.go(route);
+  }
+}
+
+/// Helper to get a friendly title from a route
+String _getTitleFromRoute(String route) {
+  final routeTitles = {
+    '/dashboard': 'Dashboard',
+    '/accounting/accounts': 'Contabilidad',
+    '/accounting/expenses': 'Gastos',
+    '/accounting/journal-entries': 'Asientos',
+    '/clientes': 'Clientes',
+    '/taller/pegas': 'Pegas',
+    '/taller/bicicletas': 'Bicicletas',
+    '/inventory/products': 'Productos',
+    '/inventory/categories': 'Categorías',
+    '/sales/invoices': 'Ventas',
+    '/purchases/suppliers': 'Compras',
+    '/pos': 'POS',
+    '/hr/employees': 'Empleados',
+    '/website': 'Sitio Web',
+    '/settings': 'Configuración',
+  };
+  
+  return routeTitles[route] ?? route.split('/').last.capitalize();
+}
+
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return '${this[0].toUpperCase()}${substring(1)}';
+  }
+}
 
 const List<MenuSubItem> _hrMenuItems = [
   MenuSubItem(
@@ -473,7 +523,7 @@ class _AppSidebarState extends State<AppSidebar> {
                 return InkWell(
                   onTap: () {
                     // Navigate to dashboard when header is clicked
-                    context.go('/dashboard');
+                    _openInWorkspace(context, '/dashboard', 'Dashboard');
                   },
                   borderRadius: BorderRadius.circular(6),
                   child: Row(
@@ -781,7 +831,7 @@ class _AppSidebarState extends State<AppSidebar> {
           onTap: enabled
               ? () {
                   if (!isSelected) {
-                    context.go(route);
+                    _openInWorkspace(context, route, _getTitleFromRoute(route));
                   }
                 }
               : null,
@@ -918,7 +968,7 @@ class AppDrawer extends StatelessWidget {
                   onTap: () {
                     // Navigate to dashboard when header is clicked
                     Navigator.pop(context); // Close drawer first
-                    context.go('/dashboard');
+                    _openInWorkspace(context, '/dashboard', 'Dashboard');
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: appearanceService.hasCustomLogo
@@ -1150,7 +1200,7 @@ class AppDrawer extends StatelessWidget {
       selectedTileColor: theme.colorScheme.primary.withOpacity(0.08),
       onTap: () {
         if (!isSelected) {
-          context.go(item.route);
+          _openInWorkspace(context, item.route, item.title);
         }
         Navigator.pop(context);
       },
@@ -1188,7 +1238,7 @@ class AppDrawer extends StatelessWidget {
       onTap: enabled
           ? () {
               if (!isSelected) {
-                context.go(route);
+                _openInWorkspace(context, route, title);
               }
               Navigator.pop(context);
             }

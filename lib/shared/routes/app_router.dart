@@ -61,6 +61,7 @@ import '../../modules/hr/pages/employee_list_page.dart';
 import '../../modules/hr/pages/attendances_page.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
 import '../../modules/website/pages/website_management_page.dart';
+import '../widgets/workspace_demo_page.dart';
 
 // Public Store Pages
 import '../../public_store/pages/public_home_page.dart';
@@ -351,6 +352,16 @@ class AppRouter {
             context,
             state,
             const DashboardScreen(),
+          ),
+        ),
+
+        // Workspace Demo (for testing workspace tab system)
+        GoRoute(
+          path: '/workspace-demo',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const WorkspaceDemoPage(),
           ),
         ),
 

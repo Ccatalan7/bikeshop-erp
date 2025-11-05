@@ -168,6 +168,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Colors.purple,
                   () => context.go('/taller/pegas'),
                 ),
+                // Workspace Demo (for testing)
+                _buildModuleCard(
+                  context,
+                  'Workspace Demo',
+                  'Test TradingView-style tabs',
+                  Icons.tab,
+                  Colors.deepOrange,
+                  () => context.go('/workspace-demo'),
+                ),
               ],
             ),
           ],
