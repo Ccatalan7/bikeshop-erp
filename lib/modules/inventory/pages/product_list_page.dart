@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/models/supplier.dart';
-import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/remote_scanner_service.dart';
@@ -49,6 +48,11 @@ class _ProductListPageState extends State<ProductListPage> {
   List<Product> _filteredProducts = [];
   List<Category> _categories = [];
   List<Supplier> _suppliers = [];
+  
+  // Detail pane resize
+  double _detailPaneWidth = 520.0;
+  static const double _minDetailPaneWidth = 300.0;
+  static const double _maxDetailPaneWidth = 600.0;
 
   bool _isLoading = true;
   String _searchTerm = '';
@@ -57,6 +61,7 @@ class _ProductListPageState extends State<ProductListPage> {
   bool _showLowStockOnly = false;
   bool _showInactive = false;
   ProductViewMode _viewMode = ProductViewMode.table;
+  Product? _selectedProduct; // For split-pane detail view
   
   StreamSubscription? _scanSubscription;
   final _remoteScannerService = RemoteScannerService();
@@ -339,128 +344,209 @@ class _ProductListPageState extends State<ProductListPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return MainLayout(
+      child: _buildBody(theme),
+    );
+  }
+
+  Widget _buildBody(ThemeData theme) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_filteredProducts.isEmpty) {
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+            _buildCleanHeader(theme),
+            _buildEmptyState(theme),
+          ],
+        ),
+      );
+    }
+
+    // For table view, use custom scrolling structure
+    if (_viewMode == ProductViewMode.table) {
+      return _buildTableViewWithScrollableHeader(theme);
+    }
+
+    // For card view, wrap header + content in scrollable
+    return SingleChildScrollView(
       child: Column(
         children: [
-          _buildHeader(theme),
-          const SizedBox(height: 8),
-          _buildFilters(theme),
-          if (!_isLoading && _products.isNotEmpty) _buildSummary(theme),
-          Expanded(child: _buildBody(theme)),
+          _buildCleanHeader(theme),
+          SizedBox(
+            height: MediaQuery.of(context).size.height - 300,
+            child: _buildCardGridScrollable(theme),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildHeader(ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildTableViewWithScrollableHeader(ThemeData theme) {
+    return Row(
+      children: [
+        // Main area with fixed header and table header
+        Expanded(
+          child: Column(
             children: [
-              Text(
-                'Productos',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Administra tu catálogo, stock y márgenes',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              // Fixed top bar
+              _buildCleanHeader(theme),
+              // Fixed table header
+              _buildTableHeader(theme),
+              // Scrollable table rows only
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      right: BorderSide(
+                        color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+                      ),
+                    ),
+                  ),
+                  child: ListView.builder(
+                    controller: _tableScrollController,
+                    itemCount: _filteredProducts.length,
+                    itemBuilder: (context, index) {
+                      final product = _filteredProducts[index];
+                      final isSelected = _selectedProduct?.id == product.id;
+                      return _buildZohoTableRow(product, theme, isSelected);
+                    },
+                  ),
                 ),
               ),
             ],
           ),
-          const Spacer(),
-          SegmentedButton<ProductViewMode>(
-            segments: const [
-              ButtonSegment<ProductViewMode>(
-                value: ProductViewMode.table,
-                label: Text('Tabla'),
-                icon: Icon(Icons.table_rows_outlined),
-              ),
-              ButtonSegment<ProductViewMode>(
-                value: ProductViewMode.cards,
-                label: Text('Tarjetas'),
-                icon: Icon(Icons.dashboard_outlined),
-              ),
-            ],
-            selected: <ProductViewMode>{_viewMode},
-            onSelectionChanged: (selection) =>
-                _onViewModeChanged(selection.first),
-          ),
-          const SizedBox(width: 16),
-          IconButton(
-            onPressed: _toggleScanner,
-            icon: Icon(
-              _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
-              color: _scannerEnabled ? Colors.green : null,
-            ),
-            tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
-            style: IconButton.styleFrom(
-              backgroundColor: _scannerEnabled 
-                  ? Colors.green.withOpacity(0.1) 
-                  : null,
-            ),
-          ),
-          const SizedBox(width: 16),
-          AppButton(
-            text: 'Importar',
-            icon: Icons.file_upload_outlined,
-            type: ButtonType.outline,
-            onPressed: () {
-              context.push('/inventory/products/import').then((_) {
-                _loadProducts();
-              });
-            },
-          ),
-          const SizedBox(width: 12),
-          AppButton(
-            text: 'Nuevo producto',
-            icon: Icons.add,
-            onPressed: () {
-              context.push('/inventory/products/new').then((_) {
-                _loadProducts();
-              });
-            },
-          ),
-        ],
-      ),
+        ),
+        // Split-pane detail view
+        if (_selectedProduct != null)
+          _buildDetailPane(theme),
+      ],
     );
   }
 
-  Widget _buildFilters(ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+  Widget _buildCleanHeader(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+          ),
+        ),
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SearchBarWidget(
-            controller: _searchController,
-            hintText: 'Buscar por nombre, SKU, marca o categoría…',
-            onChanged: _onSearchChanged,
+          // Title and primary actions
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Productos',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              // View mode toggle
+              SegmentedButton<ProductViewMode>(
+                segments: const [
+                  ButtonSegment<ProductViewMode>(
+                    value: ProductViewMode.table,
+                    icon: Icon(Icons.table_rows_outlined, size: 16),
+                  ),
+                  ButtonSegment<ProductViewMode>(
+                    value: ProductViewMode.cards,
+                    icon: Icon(Icons.dashboard_outlined, size: 16),
+                  ),
+                ],
+                selected: <ProductViewMode>{_viewMode},
+                onSelectionChanged: (selection) =>
+                    _onViewModeChanged(selection.first),
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  padding: MaterialStateProperty.all(
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Scanner button
+              IconButton(
+                onPressed: _toggleScanner,
+                icon: Icon(
+                  _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
+                  size: 18,
+                ),
+                tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(
+                  backgroundColor: _scannerEnabled 
+                      ? Colors.green.withOpacity(0.1) 
+                      : null,
+                  foregroundColor: _scannerEnabled ? Colors.green : null,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Import button
+              AppButton(
+                text: 'Importar',
+                icon: Icons.file_upload_outlined,
+                type: ButtonType.outline,
+                onPressed: () {
+                  context.push('/inventory/products/import').then((_) {
+                    _loadProducts();
+                  });
+                },
+              ),
+              const SizedBox(width: 8),
+              // New product button
+              AppButton(
+                text: 'Nuevo producto',
+                icon: Icons.add,
+                onPressed: () {
+                  context.push('/inventory/products/new').then((_) {
+                    _loadProducts();
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // Search and filters row
+          Row(
             children: [
+              // Search bar
+              Expanded(
+                flex: 2,
+                child: SearchBarWidget(
+                  controller: _searchController,
+                  hintText: 'Buscar por nombre, SKU, marca o categoría…',
+                  onChanged: _onSearchChanged,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Category filter
               SizedBox(
-                width: 260,
+                width: 180,
                 child: DropdownButtonFormField<String>(
                   value: _selectedCategoryId,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Categoría',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    isDense: true,
                   ),
+                  style: theme.textTheme.bodySmall,
                   items: [
                     const DropdownMenuItem<String>(
                       value: null,
-                      child: Text('Todas las categorías'),
+                      child: Text('Todas'),
                     ),
                     ..._categories.map((category) {
                       return DropdownMenuItem<String>(
@@ -472,18 +558,26 @@ class _ProductListPageState extends State<ProductListPage> {
                   onChanged: _onCategoryChanged,
                 ),
               ),
+              const SizedBox(width: 8),
+              // Supplier filter
               SizedBox(
-                width: 260,
+                width: 180,
                 child: DropdownButtonFormField<String>(
                   value: _selectedSupplierId,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Proveedor',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    isDense: true,
                   ),
+                  style: theme.textTheme.bodySmall,
                   items: [
                     const DropdownMenuItem<String>(
                       value: null,
-                      child: Text('Todos los proveedores'),
+                      child: Text('Todos'),
                     ),
                     ..._suppliers.map((supplier) {
                       return DropdownMenuItem<String>(
@@ -495,143 +589,794 @@ class _ProductListPageState extends State<ProductListPage> {
                   onChanged: _onSupplierChanged,
                 ),
               ),
+              const SizedBox(width: 8),
+              // Filter chips
               FilterChip(
                 avatar: Icon(
                   Icons.warning_amber_outlined,
+                  size: 16,
                   color: _showLowStockOnly
                       ? theme.colorScheme.error
                       : theme.colorScheme.onSurfaceVariant,
                 ),
-                selectedColor:
-                    theme.colorScheme.errorContainer.withOpacity(0.3),
-                label: const Text('Solo stock crítico'),
+                label: const Text('Stock crítico'),
+                labelStyle: theme.textTheme.labelSmall,
                 selected: _showLowStockOnly,
                 onSelected: _onLowStockToggle,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
               ),
+              const SizedBox(width: 6),
               FilterChip(
                 avatar: Icon(
                   Icons.visibility_off_outlined,
+                  size: 16,
                   color: _showInactive
                       ? theme.colorScheme.primary
                       : theme.colorScheme.onSurfaceVariant,
                 ),
-                label: const Text('Mostrar inactivos'),
+                label: const Text('Inactivos'),
+                labelStyle: theme.textTheme.labelSmall,
                 selected: _showInactive,
                 onSelected: _onInactiveToggle,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
               ),
+              const SizedBox(width: 6),
+              // Refresh button
               IconButton(
                 tooltip: 'Actualizar',
-                icon: const Icon(Icons.refresh_outlined),
+                icon: const Icon(Icons.refresh_outlined, size: 18),
                 onPressed: _loadProducts,
+                visualDensity: VisualDensity.compact,
               ),
             ],
+          ),
+          // Summary stats (compact)
+          if (!_isLoading && _products.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildCompactSummary(theme),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactSummary(ThemeData theme) {
+    final lowStock = _products.where((p) => p.isLowStock).length;
+    final outOfStock = _products.where((p) => p.isOutOfStock).length;
+    final inventoryValue = _products.fold<double>(
+      0.0,
+      (total, product) => total + product.inventoryValue,
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          _buildCompactStat(
+            theme,
+            icon: Icons.inventory_2_outlined,
+            label: 'Total',
+            value: _products.length.toString(),
+          ),
+          const SizedBox(width: 20),
+          _buildCompactStat(
+            theme,
+            icon: Icons.warning_amber_outlined,
+            label: 'Crítico',
+            value: lowStock.toString(),
+            color: lowStock > 0 ? theme.colorScheme.error : null,
+          ),
+          const SizedBox(width: 20),
+          _buildCompactStat(
+            theme,
+            icon: Icons.block_outlined,
+            label: 'Sin stock',
+            value: outOfStock.toString(),
+            color: outOfStock > 0 ? theme.colorScheme.error : null,
+          ),
+          const Spacer(),
+          _buildCompactStat(
+            theme,
+            icon: Icons.attach_money,
+            label: 'Valor',
+            value: ChileanUtils.formatCurrency(inventoryValue),
+            color: theme.colorScheme.primary,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSummary(ThemeData theme) {
-    final lowStock = _products.where((p) => p.isLowStock).length;
-    final outOfStock = _products.where((p) => p.isOutOfStock).length;
-    final inactive = _products.where((p) => !p.isActive).length;
-    final inventoryValue = _products.fold<double>(
-      0.0,
-      (total, product) => total + product.inventoryValue,
-    );
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Card(
-        elevation: 0,
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Wrap(
-            spacing: 24,
-            runSpacing: 16,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _buildStatTile(
-                theme,
-                icon: Icons.inventory_2_outlined,
-                color: theme.colorScheme.primary,
-                label: 'Productos totales',
-                value: _products.length.toString(),
-              ),
-              _buildStatTile(
-                theme,
-                icon: Icons.warning_amber_outlined,
-                color: theme.colorScheme.error,
-                label: 'Stock crítico',
-                value: lowStock.toString(),
-              ),
-              _buildStatTile(
-                theme,
-                icon: Icons.block_outlined,
-                color: theme.colorScheme.error,
-                label: 'Sin stock',
-                value: outOfStock.toString(),
-              ),
-              _buildStatTile(
-                theme,
-                icon: Icons.visibility_off_outlined,
+  Widget _buildCompactStat(
+    ThemeData theme, {
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? color,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          size: 14,
+          color: color ?? theme.colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 4),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
-                label: 'Inactivos',
-                value: inactive.toString(),
+                fontSize: 10,
               ),
-              _buildStatTile(
-                theme,
-                icon: Icons.attach_money,
-                color: theme.colorScheme.tertiary,
-                label: 'Valor inventario',
-                value: ChileanUtils.formatCurrency(inventoryValue),
+            ),
+            Text(
+              value,
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: color,
+                fontSize: 12,
               ),
-              _buildStatTile(
-                theme,
-                icon: Icons.filter_alt_outlined,
-                color: theme.colorScheme.primary,
-                label: 'Mostrando',
-                value: _filteredProducts.length.toString(),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContentArea(ThemeData theme) {
+    return _viewMode == ProductViewMode.table
+        ? _buildZohoTableView(theme)
+        : _buildCardGridScrollable(theme);
+  }
+
+  Widget _buildZohoTableView(ThemeData theme) {
+    return Row(
+      children: [
+        // Main table view
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                right: BorderSide(
+                  color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+                ),
               ),
-            ],
+            ),
+            child: Column(
+              children: [
+                _buildTableHeader(theme),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _loadProducts,
+                    child: ListView.builder(
+                      controller: _tableScrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: _filteredProducts.length,
+                      itemBuilder: (context, index) {
+                        final product = _filteredProducts[index];
+                        final isSelected = _selectedProduct?.id == product.id;
+                        return _buildZohoTableRow(product, theme, isSelected);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
+        ),
+        // Split-pane detail view
+        if (_selectedProduct != null)
+          _buildDetailPane(theme),
+      ],
+    );
+  }
+
+  Widget _buildCardGridScrollable(ThemeData theme) {
+    return RefreshIndicator(
+      onRefresh: _loadProducts,
+      child: _buildCardGrid(theme),
+    );
+  }
+
+  Widget _buildTableHeader(ThemeData theme) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outlineVariant.withOpacity(0.8),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Checkbox column
+          SizedBox(
+            width: 48,
+            child: Checkbox(
+              value: false,
+              onChanged: (value) {
+                // TODO: Select all
+              },
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+          // Thumbnail column
+          const SizedBox(width: 60),
+          // Name column
+          Expanded(
+            flex: 3,
+            child: Text(
+              'Nombre',
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+          // SKU column
+          SizedBox(
+            width: 140,
+            child: Text(
+              'SKU',
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+          // Price column
+          SizedBox(
+            width: 140,
+            child: Text(
+              'Precio',
+              textAlign: TextAlign.right,
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+          // Stock column
+          SizedBox(
+            width: 120,
+            child: Text(
+              'Stock',
+              textAlign: TextAlign.right,
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildZohoTableRow(Product product, ThemeData theme, bool isSelected) {
+    final priceText = ChileanUtils.formatCurrency(product.price);
+    
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedProduct = isSelected ? null : product;
+        });
+      },
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+              : null,
+          border: Border(
+            bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Checkbox
+            SizedBox(
+              width: 48,
+              child: Checkbox(
+                value: isSelected,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedProduct = value! ? product : null;
+                  });
+                },
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+            // Thumbnail
+            SizedBox(
+              width: 60,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: ImageService.buildProductImage(
+                    imageUrl: product.imageUrl,
+                    size: 36,
+                    isListThumbnail: true,
+                  ),
+                ),
+              ),
+            ),
+            // Name
+            Expanded(
+              flex: 3,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      product.name,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (product.categoryName != null && product.categoryName!.isNotEmpty)
+                      Text(
+                        product.categoryName!,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            // SKU
+            SizedBox(
+              width: 140,
+              child: Text(
+                product.sku,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Price
+            SizedBox(
+              width: 140,
+              child: Text(
+                priceText,
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ),
+            // Stock
+            SizedBox(
+              width: 120,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    '${product.inventoryQty}',
+                    textAlign: TextAlign.right,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  if (product.isLowStock)
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      size: 16,
+                      color: theme.colorScheme.error,
+                    )
+                  else if (product.isOutOfStock)
+                    Icon(
+                      Icons.block,
+                      size: 16,
+                      color: theme.colorScheme.error,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildBody(ThemeData theme) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_filteredProducts.isEmpty) {
-      return _buildEmptyState(theme);
-    }
-
-    final scrollable = _viewMode == ProductViewMode.table
-        ? _buildTableView(theme)
-        : _buildCardGrid(theme);
-
-    return RefreshIndicator(
-      onRefresh: _loadProducts,
-      child: scrollable,
+  Widget _buildDetailPane(ThemeData theme) {
+    final product = _selectedProduct!;
+    // Format prices with $ at the beginning
+    final priceText = '\$ ${ChileanUtils.formatCurrency(product.price).replaceAll('\$', '').trim()}';
+    final costText = '\$ ${ChileanUtils.formatCurrency(product.cost).replaceAll('\$', '').trim()}';
+    final marginPercent = product.cost > 0
+        ? ((product.price - product.cost) / product.cost) * 100
+        : 0;
+    
+    return Container(
+      width: _detailPaneWidth,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(-2, 0),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Main content
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header with close button
+              Container(
+                height: 56,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: theme.colorScheme.outlineVariant,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                  child: Text(
+                    'Detalles del Producto',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    setState(() {
+                      _selectedProduct = null;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Product image
+                  Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: ImageService.buildProductImage(
+                        imageUrl: product.imageUrl,
+                        size: 200,
+                        isListThumbnail: false,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // Product name
+                  Text(
+                    product.name,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'SKU: ${product.sku}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (!product.isActive) ...[
+                    const SizedBox(height: 8),
+                    Chip(
+                      label: const Text('Inactivo'),
+                      backgroundColor: theme.colorScheme.errorContainer,
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  // Sections layout - two columns when wide enough
+                  if (_detailPaneWidth > 400)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left column: Pricing
+                        Expanded(
+                          child: _buildDetailSection(
+                            theme,
+                            title: 'Precios',
+                            children: [
+                              _buildDetailRow(theme, 'Precio de Venta', priceText),
+                              _buildDetailRow(theme, 'Costo', costText),
+                              _buildDetailRow(
+                                theme,
+                                'Margen',
+                                '${marginPercent.toStringAsFixed(1)}%',
+                                valueColor: marginPercent < 0
+                                    ? theme.colorScheme.error
+                                    : theme.colorScheme.tertiary,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 32),
+                        // Right column: Inventory
+                        Expanded(
+                          child: _buildDetailSection(
+                            theme,
+                            title: 'Inventario',
+                            children: [
+                              _buildDetailRowNumeric(theme, 'Stock Actual', product.inventoryQty),
+                              _buildDetailRowNumeric(theme, 'Stock Mínimo', product.minStockLevel),
+                              _buildDetailRowNumeric(theme, 'Stock Máximo', product.maxStockLevel ?? 0),
+                              if (product.warehouseLocation != null)
+                                _buildDetailRow(theme, 'Ubicación', product.warehouseLocation!),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  else ...[
+                    // Single column layout for narrow panes
+                    _buildDetailSection(
+                      theme,
+                      title: 'Precios',
+                      children: [
+                        _buildDetailRow(theme, 'Precio de Venta', priceText),
+                        _buildDetailRow(theme, 'Costo', costText),
+                        _buildDetailRow(
+                          theme,
+                          'Margen',
+                          '${marginPercent.toStringAsFixed(1)}%',
+                          valueColor: marginPercent < 0
+                              ? theme.colorScheme.error
+                              : theme.colorScheme.tertiary,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    _buildDetailSection(
+                      theme,
+                      title: 'Inventario',
+                      children: [
+                        _buildDetailRowNumeric(theme, 'Stock Actual', product.inventoryQty),
+                        _buildDetailRowNumeric(theme, 'Stock Mínimo', product.minStockLevel),
+                        _buildDetailRowNumeric(theme, 'Stock Máximo', product.maxStockLevel ?? 0),
+                        if (product.warehouseLocation != null)
+                          _buildDetailRow(theme, 'Ubicación', product.warehouseLocation!),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  // Product info section
+                  _buildDetailSection(
+                    theme,
+                    title: 'Información',
+                    children: [
+                      if (product.categoryName != null)
+                        _buildDetailRow(theme, 'Categoría', product.categoryName!),
+                      if (product.brand != null && product.brand!.isNotEmpty)
+                        _buildDetailRow(theme, 'Marca', product.brand!),
+                      if (product.model != null && product.model!.isNotEmpty)
+                        _buildDetailRow(theme, 'Modelo', product.model!),
+                      if (product.gtin != null && product.gtin!.isNotEmpty)
+                        _buildDetailRow(theme, 'GTIN', product.gtin!),
+                    ],
+                  ),
+                  if (product.description != null && product.description!.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    _buildDetailSection(
+                      theme,
+                      title: 'Descripción',
+                      children: [
+                        Text(
+                          product.description!,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          // Action buttons
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: theme.colorScheme.outlineVariant,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    text: 'Editar',
+                    icon: Icons.edit_outlined,
+                    type: ButtonType.outline,
+                    onPressed: () => _openEditor(product),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: AppButton(
+                    text: 'Ajustar Stock',
+                    icon: Icons.inventory_outlined,
+                    onPressed: () => _openStockAdjustment(product),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+          // Resize handle on the left edge
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeColumn,
+              child: GestureDetector(
+                onHorizontalDragUpdate: (details) {
+                  setState(() {
+                    _detailPaneWidth = (_detailPaneWidth - details.delta.dx).clamp(
+                      _minDetailPaneWidth,
+                      _maxDetailPaneWidth,
+                    );
+                  });
+                },
+                child: Container(
+                  width: 8,
+                  color: Colors.transparent,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildTableView(ThemeData theme) {
-    return ListView.separated(
-      controller: _tableScrollController,
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      itemCount: _filteredProducts.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final product = _filteredProducts[index];
-        return _buildTableRow(product, theme);
-      },
+  Widget _buildDetailSection(
+    ThemeData theme, {
+    required String title,
+    required List<Widget> children,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...children,
+      ],
     );
+  }
+
+  Widget _buildDetailRow(
+    ThemeData theme,
+    String label,
+    String value, {
+    Color? valueColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 100,
+            child: Text(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+                color: valueColor,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRowNumeric(
+    ThemeData theme,
+    String label,
+    int value, {
+    Color? valueColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 100,
+            child: Text(
+              value.toString(),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+                color: valueColor,
+                fontFamily: 'monospace',
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openStockAdjustment(Product product) {
+    // Navigate to stock adjustment page (you can implement a dedicated page)
+    // For now, just open the editor
+    _openEditor(product);
   }
 
   Widget _buildCardGrid(ThemeData theme) {
@@ -665,159 +1410,6 @@ class _ProductListPageState extends State<ProductListPage> {
           },
         );
       },
-    );
-  }
-
-  Widget _buildTableRow(Product product, ThemeData theme) {
-    final categoryName = _resolveCategoryName(product);
-    final priceText = ChileanUtils.formatCurrency(product.price);
-    final costText = ChileanUtils.formatCurrency(product.cost);
-    final marginPercent = product.cost > 0
-        ? ((product.price - product.cost) / product.cost) * 100
-        : 0;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () => _openEditor(product),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: theme.colorScheme.outlineVariant),
-          color: theme.colorScheme.surface,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                width: 88,
-                height: 88,
-                child: ImageService.buildProductImage(
-                  imageUrl: product.imageUrl,
-                  size: 88,
-                  isListThumbnail: true,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          product.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (!product.isActive)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: Chip(
-                            label: const Text('Inactivo'),
-                            visualDensity: VisualDensity.compact,
-                            backgroundColor: theme.colorScheme.surfaceVariant,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    children: [
-                      _buildInfoPill(
-                        theme,
-                        icon: Icons.confirmation_number_outlined,
-                        label: 'SKU ${product.sku}',
-                      ),
-                      if (categoryName != null)
-                        _buildInfoPill(
-                          theme,
-                          icon: Icons.category_outlined,
-                          label: categoryName,
-                        ),
-                      if (product.supplierName != null &&
-                          product.supplierName!.isNotEmpty)
-                        _buildInfoPill(
-                          theme,
-                          icon: Icons.business_outlined,
-                          label: product.supplierName!,
-                        ),
-                      if (product.brand?.isNotEmpty ?? false)
-                        _buildInfoPill(
-                          theme,
-                          icon: Icons.directions_bike_outlined,
-                          label: product.brand!,
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            SizedBox(
-              width: 160,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    priceText,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Costo $costText',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Margen ${marginPercent.toStringAsFixed(1)}%',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: marginPercent < 0
-                          ? theme.colorScheme.error
-                          : theme.colorScheme.tertiary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _buildStockChip(product, theme),
-                const SizedBox(height: 8),
-                Text(
-                  'Stock: ${product.inventoryQty}',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: 'Editar producto',
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _openEditor(product),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
