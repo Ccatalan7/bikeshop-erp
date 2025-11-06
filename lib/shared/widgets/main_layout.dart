@@ -522,8 +522,8 @@ class _AppSidebarState extends State<AppSidebar> {
               builder: (context, appearanceService, _) {
                 return InkWell(
                   onTap: () {
-                    // Navigate to dashboard when header is clicked
-                    _openInWorkspace(context, '/dashboard', 'Dashboard');
+                    // Navigate directly to dashboard (not workspace tab)
+                    context.go('/dashboard');
                   },
                   borderRadius: BorderRadius.circular(6),
                   child: Row(
@@ -831,7 +831,12 @@ class _AppSidebarState extends State<AppSidebar> {
           onTap: enabled
               ? () {
                   if (!isSelected) {
-                    _openInWorkspace(context, route, _getTitleFromRoute(route));
+                    // Dashboard always navigates directly (not in workspace tab)
+                    if (route == '/dashboard') {
+                      context.go(route);
+                    } else {
+                      _openInWorkspace(context, route, _getTitleFromRoute(route));
+                    }
                   }
                 }
               : null,
@@ -1238,7 +1243,12 @@ class AppDrawer extends StatelessWidget {
       onTap: enabled
           ? () {
               if (!isSelected) {
-                _openInWorkspace(context, route, title);
+                // Dashboard always navigates directly (not in workspace tab)
+                if (route == '/dashboard') {
+                  context.go(route);
+                } else {
+                  _openInWorkspace(context, route, title);
+                }
               }
               Navigator.pop(context);
             }

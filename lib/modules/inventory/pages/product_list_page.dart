@@ -354,14 +354,27 @@ class _ProductListPageState extends State<ProductListPage> {
     }
 
     if (_filteredProducts.isEmpty) {
-      return SingleChildScrollView(
-        child: Column(
+      // Maintain same layout structure as non-empty view
+      if (_viewMode == ProductViewMode.table) {
+        return Column(
           children: [
             _buildCleanHeader(theme),
-            _buildEmptyState(theme),
+            Expanded(
+              child: _buildEmptyState(theme),
+            ),
           ],
-        ),
-      );
+        );
+      } else {
+        // Card view with scrollable layout
+        return SingleChildScrollView(
+          child: Column(
+            children: [
+              _buildCleanHeader(theme),
+              _buildEmptyState(theme),
+            ],
+          ),
+        );
+      }
     }
 
     // For table view, use custom scrolling structure

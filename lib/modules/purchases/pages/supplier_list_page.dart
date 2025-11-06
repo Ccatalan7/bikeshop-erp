@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../shared/models/supplier.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -307,8 +306,8 @@ class _SupplierListPageState extends State<SupplierListPage> {
       margin: const EdgeInsets.only(bottom: 8.0),
       child: ListTile(
         onTap: () {
-          // Navigate to products filtered by this supplier
-          context.push('/inventory/products?supplier=${supplier.id}');
+          // Navigate to supplier details form
+          context.push('/purchases/suppliers/${supplier.id}/edit');
         },
         leading: CircleAvatar(
           backgroundColor: supplier.isActive ? Colors.green : Colors.grey,
@@ -390,8 +389,8 @@ class _SupplierListPageState extends State<SupplierListPage> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
-          // Navigate to products filtered by this supplier
-          context.push('/inventory/products?supplier=${supplier.id}');
+          // Navigate to supplier details form
+          context.push('/purchases/suppliers/${supplier.id}/edit');
         },
         child: Padding(
           padding: const EdgeInsets.all(16.0),
