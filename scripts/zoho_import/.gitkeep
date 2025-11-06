@@ -1,0 +1,5 @@
+# Zoho Import Scripts Folder
+
+This folder contains Python scripts for importing data from Zoho to Supabase.
+
+See: ../../.github/ZOHO_IMPORT_GUIDE.md for complete documentation.
