@@ -24,6 +24,9 @@ class POSService extends ChangeNotifier {
   final List<POSCartItem> _cartItems = [];
   Customer? _selectedCustomer;
   bool _isProcessingSale = false;
+  
+  // Invoice payment mode state (NEW)
+  sales_models.Invoice? _linkedInvoice;
 
   POSService({
     required InventoryService inventoryService,
@@ -60,6 +63,10 @@ class POSService extends ChangeNotifier {
   Customer? get selectedCustomer => _selectedCustomer;
   bool get isProcessingSale => _isProcessingSale;
   bool get hasItemsInCart => _cartItems.isNotEmpty;
+  
+  // Invoice payment mode getters (NEW)
+  bool get isInvoicePaymentMode => _linkedInvoice != null;
+  sales_models.Invoice? get linkedInvoice => _linkedInvoice;
 
   // Cart calculations
   double get cartSubtotal =>
@@ -175,6 +182,29 @@ class POSService extends ChangeNotifier {
   void setCustomer(Customer? customer) {
     _selectedCustomer = customer;
     notifyListeners();
+  }
+  
+  // Invoice payment mode methods (NEW)
+  
+  /// Enter invoice payment mode - clears cart and links invoice
+  void enterInvoicePaymentMode(sales_models.Invoice invoice) {
+    _linkedInvoice = invoice;
+    _cartItems.clear(); // Clear cart when entering invoice mode
+    notifyListeners();
+  }
+  
+  /// Exit invoice payment mode - returns to normal POS mode
+  void exitInvoicePaymentMode() {
+    _linkedInvoice = null;
+    notifyListeners();
+  }
+  
+  /// Get the display total (invoice balance or cart total)
+  double get displayTotal {
+    if (_linkedInvoice != null) {
+      return _linkedInvoice!.balance;
+    }
+    return cartTotal;
   }
 
   // Barcode/SKU scanning

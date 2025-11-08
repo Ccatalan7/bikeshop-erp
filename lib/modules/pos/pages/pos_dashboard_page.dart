@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -13,8 +15,11 @@ import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
+import '../../sales/models/sales_models.dart';
+import '../../sales/services/sales_service.dart';
 import '../services/pos_service.dart';
 import '../widgets/product_tile.dart';
+import '../../../shared/models/payment_method.dart' as pm;
 import '../models/payment_method.dart';
 import '../models/pos_transaction.dart';
 
@@ -418,17 +423,26 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Left: Product list, search, filters
+                      // Left: Product list OR invoice details (when paying invoice)
                       Expanded(
                         flex: 2,
-                        child: Padding(
-                          padding: const EdgeInsets.only(
-                              left: 16, right: 8, bottom: 16),
-                          child: Column(
-                            children: [
-                              // Search bar
-                              SearchBarWidget(
-                                controller: _searchController,
+                        child: Consumer<POSService>(
+                          builder: (context, posService, child) {
+                            // Show invoice details if in payment mode
+                            if (posService.isInvoicePaymentMode &&
+                                posService.linkedInvoice != null) {
+                              return _buildInvoiceDetailsView(
+                                  theme, posService.linkedInvoice!);
+                            }
+                            // Show normal product grid
+                            return Padding(
+                              padding: const EdgeInsets.only(
+                                  left: 16, right: 8, bottom: 16),
+                              child: Column(
+                                children: [
+                                  // Search bar
+                                  SearchBarWidget(
+                                    controller: _searchController,
                                 hintText: 'Buscar productos...',
                                 onChanged: (value) {
                                   setState(() {
@@ -636,10 +650,12 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                               ),
                             ],
                           ),
-                        ),
-                      ),
-                      // Right: Cashier/cart summary
-                      Container(
+                        );
+                      },
+                    ),
+                  ),
+                  // Right: Cashier/cart summary
+                  Container(
                         width: 380,
                         decoration: BoxDecoration(
                           color: theme.colorScheme.surfaceVariant,
@@ -883,6 +899,295 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
       ),
     );
   }
+
+  // Invoice details view - shown in LEFT panel when paying invoice
+  Widget _buildInvoiceDetailsView(ThemeData theme, Invoice invoice) {
+    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with back button
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  context.read<POSService>().exitInvoicePaymentMode();
+                  // Return to pending invoices list  
+                  final cashierPanel = context.findAncestorStateOfType<_CashierPanelState>();
+                  cashierPanel?.setState(() {
+                    cashierPanel._showPendingInvoices = true;
+                  });
+                },
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pago de Factura',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      invoice.invoiceNumber,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade100,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.orange),
+                ),
+                child: Text(
+                  invoice.status.name.toUpperCase(),
+                  style: TextStyle(
+                    color: Colors.orange.shade900,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 32),
+          
+          // Invoice info
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Fecha', style: theme.textTheme.bodySmall),
+                    const SizedBox(height: 4),
+                    Text(
+                      dateFormat.format(invoice.date),
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                  ],
+                ),
+              ),
+              if (invoice.reference != null && invoice.reference!.isNotEmpty)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Referencia', style: theme.textTheme.bodySmall),
+                      const SizedBox(height: 4),
+                      Text(
+                        invoice.reference!,
+                        style: theme.textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          
+          // Line items
+          Text(
+            'Artículos',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: theme.colorScheme.outline),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  color: theme.colorScheme.surfaceVariant,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          'Producto',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 80,
+                        child: Text(
+                          'Cant.',
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: 100,
+                        child: Text(
+                          'Precio',
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: 100,
+                        child: Text(
+                          'Total',
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Items
+                ...invoice.items.map((item) {
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: theme.colorScheme.outline),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.description ?? item.productName ?? '',
+                                style: theme.textTheme.bodyLarge,
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(
+                          width: 80,
+                          child: Text(
+                            '${item.quantity}',
+                            textAlign: TextAlign.right,
+                            style: theme.textTheme.bodyLarge,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          width: 100,
+                          child: Text(
+                            currencyFormat.format(item.unitPrice),
+                            textAlign: TextAlign.right,
+                            style: theme.textTheme.bodyLarge,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          width: 100,
+                          child: Text(
+                            currencyFormat.format(item.lineTotal),
+                            textAlign: TextAlign.right,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          
+          // Financial summary
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
+                _buildSummaryRow(theme, 'Subtotal',
+                    currencyFormat.format(invoice.subtotal)),
+                const SizedBox(height: 8),
+                _buildSummaryRow(
+                    theme, 'IVA (19%)', currencyFormat.format(invoice.ivaAmount)),
+                const Divider(height: 24),
+                _buildSummaryRow(theme, 'Total',
+                    currencyFormat.format(invoice.total),
+                    isTotal: true),
+                if (invoice.paidAmount > 0) ...[
+                  const SizedBox(height: 8),
+                  _buildSummaryRow(
+                      theme, 'Pagado', currencyFormat.format(invoice.paidAmount),
+                      valueColor: Colors.green),
+                  const Divider(height: 24),
+                  _buildSummaryRow(theme, 'Saldo',
+                      currencyFormat.format(invoice.balance),
+                      isTotal: true, valueColor: Colors.red),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(ThemeData theme, String label, String value,
+      {bool isTotal = false, Color? valueColor}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: isTotal
+              ? theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)
+              : theme.textTheme.titleMedium,
+        ),
+        Text(
+          value,
+          style: isTotal
+              ? theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: valueColor,
+                )
+              : theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: valueColor,
+                ),
+        ),
+      ],
+    );
+  }
 }
 
 class _CategoryOption {
@@ -918,6 +1223,16 @@ class _CashierPanelState extends State<_CashierPanel> {
   bool _isLoadingCustomers = true;
   final TextEditingController _customerSearchController =
       TextEditingController();
+
+  // Pending invoices state
+  List<Invoice> _pendingInvoices = [];
+  bool _showPendingInvoices = false;
+  bool _isLoadingInvoices = false;
+
+  // Invoice payment form state
+  String? _selectedPaymentMethodId;
+  final TextEditingController _paymentAmountController = TextEditingController();
+  final TextEditingController _paymentReferenceController = TextEditingController();
 
   // Payment flow state
   bool _showPaymentView = false;
@@ -1032,6 +1347,205 @@ class _CashierPanelState extends State<_CashierPanel> {
     });
   }
 
+  /// Check if customer has pending invoices and show them in right panel
+  Future<void> _checkPendingInvoices(Customer customer) async {
+    if (!mounted) return;
+    
+    setState(() {
+      _isLoadingInvoices = true;
+      _showPendingInvoices = false;
+    });
+    
+    try {
+      final salesService = Provider.of<SalesService>(context, listen: false);
+      
+      // Query pending invoices for this customer
+      final pendingInvoices = await salesService.getPendingInvoices(
+        customerId: customer.id,
+      );
+      
+      if (!mounted) return;
+      
+      setState(() {
+        _pendingInvoices = pendingInvoices;
+        _showPendingInvoices = pendingInvoices.isNotEmpty;
+        _isLoadingInvoices = false;
+      });
+    } catch (e) {
+      debugPrint('Error checking pending invoices: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingInvoices = false;
+          _showPendingInvoices = false;
+        });
+      }
+    }
+  }
+
+  void _continueWithNormalSale() {
+    setState(() {
+      _showPendingInvoices = false;
+      _pendingInvoices = [];
+    });
+  }
+
+  Future<void> _processInvoicePayment(POSService posService, Invoice invoice) async {
+    // Validate payment method selected
+    if (_selectedPaymentMethodId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor seleccione un método de pago'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    // Parse payment amount
+    final amountText = _paymentAmountController.text.trim();
+    
+    // Simple cleaning: just remove $ symbol and spaces, keep the number
+    final cleanedText = amountText
+        .replaceAll('\$', '')
+        .replaceAll(' ', '')
+        .replaceAll(',', '') // Remove thousands separator if user typed it
+        .trim();
+    
+    // Parse as double (handles both integers and decimals)
+    final amount = double.tryParse(cleanedText);
+    
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor ingrese un monto válido'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    if (amount > invoice.balance) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El monto ingresado es mayor al saldo pendiente'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    setState(() {
+      _isProcessing = true;
+    });
+    
+    try {
+      final salesService = Provider.of<SalesService>(context, listen: false);
+      final tenantService = TenantService();
+      final tenantId = await tenantService.getTenantId();
+      
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant ID');
+      }
+      
+      // CRITICAL: Check if invoice needs to be posted first
+      bool wasPosted = false;
+      List<String> processedActions = [];
+      
+      if (invoice.status == InvoiceStatus.sent || invoice.status == InvoiceStatus.draft) {
+        // Invoice hasn't been confirmed/posted yet - need to do it now
+        debugPrint('🔄 POS Payment: Invoice ${invoice.invoiceNumber} is in ${invoice.status.name} status');
+        debugPrint('📋 POS Payment: Posting invoice first to trigger accounting & inventory...');
+        
+        await salesService.updateInvoiceStatus(invoice.id!, InvoiceStatus.confirmed);
+        wasPosted = true;
+        
+        processedActions.add('Factura confirmada');
+        processedActions.add('Asiento contable creado');
+        processedActions.add('Inventario actualizado');
+        
+        debugPrint('✅ POS Payment: Invoice posted successfully');
+        
+        // Refresh invoice to get updated data
+        final refreshedInvoice = await salesService.fetchInvoice(invoice.id!, refresh: true);
+        if (refreshedInvoice != null) {
+          // Update POSService with refreshed invoice
+          posService.enterInvoicePaymentMode(refreshedInvoice);
+        }
+      }
+      
+      // Create payment object
+      final payment = Payment(
+        tenantId: tenantId,
+        invoiceId: invoice.id!,
+        invoiceReference: invoice.invoiceNumber.isNotEmpty
+            ? invoice.invoiceNumber
+            : null,
+        paymentMethodId: _selectedPaymentMethodId!,
+        amount: amount,
+        date: DateTime.now(),
+        reference: _paymentReferenceController.text.trim().isEmpty
+            ? null
+            : _paymentReferenceController.text.trim(),
+      );
+      
+      // Register payment
+      debugPrint('💰 POS Payment: Recording payment of \$${amount.toStringAsFixed(0)}');
+      await salesService.registerPayment(payment);
+      processedActions.add('Pago registrado');
+      
+      if (!mounted) return;
+      
+      // Show detailed success message
+      String successMessage = 'Pago de \$${amount.toStringAsFixed(0)} registrado exitosamente';
+      if (wasPosted) {
+        successMessage += '\n✓ ${processedActions.join('\n✓ ')}';
+        debugPrint('📊 POS Payment: All processes completed:');
+        for (var action in processedActions) {
+          debugPrint('   ✓ $action');
+        }
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(successMessage),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      
+      // Clear form
+      _paymentAmountController.clear();
+      _paymentReferenceController.clear();
+      setState(() {
+        _selectedPaymentMethodId = null;
+      });
+      
+      // Exit payment mode and return to pending invoices
+      posService.exitInvoicePaymentMode();
+      
+      // Reload pending invoices for customer
+      if (_selectedCustomer != null) {
+        await _checkPendingInvoices(_selectedCustomer!);
+      }
+      
+    } catch (e) {
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al procesar el pago: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
   void _finishTransaction() {
     setState(() {
       _showPaymentView = false;
@@ -1141,8 +1655,418 @@ class _CashierPanelState extends State<_CashierPanel> {
     );
   }
 
+  Widget _buildInvoicePaymentForm(ThemeData theme, POSService posService) {
+    final invoice = posService.linkedInvoice!;
+    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Icon(Icons.payment, color: theme.colorScheme.primary, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Procesar Pago',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      invoice.invoiceNumber,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 32),
+          
+          // Customer info
+          Text('Cliente', style: theme.textTheme.bodySmall),
+          const SizedBox(height: 4),
+          Text(
+            invoice.customerName ?? 'Sin nombre',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 24),
+          
+          // Financial summary
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
+                _buildSummaryRow(
+                  theme,
+                  'Total Factura',
+                  currencyFormat.format(invoice.total),
+                ),
+                if (invoice.paidAmount > 0) ...[
+                  const SizedBox(height: 8),
+                  _buildSummaryRow(
+                    theme,
+                    'Pagado',
+                    currencyFormat.format(invoice.paidAmount),
+                    valueColor: Colors.green,
+                  ),
+                  const Divider(height: 20),
+                ],
+                _buildSummaryRow(
+                  theme,
+                  'Saldo a Pagar',
+                  currencyFormat.format(invoice.balance),
+                  isTotal: true,
+                  valueColor: Colors.red,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          
+          // Payment method selector
+          Text(
+            'Método de Pago',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Consumer<PaymentMethodService>(
+            builder: (context, paymentMethodService, child) {
+              final paymentMethods = paymentMethodService.paymentMethods;
+              if (paymentMethods.isEmpty) {
+                return const Text('No hay métodos de pago disponibles');
+              }
+              
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: paymentMethods.map((method) {
+                  final isSelected = _selectedPaymentMethodId == method.id;
+                  return FilterChip(
+                    selected: isSelected,
+                    label: Text(method.name),
+                    onSelected: (selected) {
+                      if (selected) {
+                        setState(() {
+                          _selectedPaymentMethodId = method.id;
+                        });
+                      }
+                    },
+                  );
+                }).toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+          
+          // Amount input
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Monto a Pagar',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _paymentAmountController.text = invoice.balance.toStringAsFixed(0);
+                  });
+                },
+                child: const Text('Pagar Total'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _paymentAmountController,
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: 'Monto en pesos',
+              prefix: const Text('\$ '),
+              helperText: 'Ingrese solo números. Ej: ${invoice.balance.toStringAsFixed(0)}',
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_paymentAmountController.text.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.clear, size: 20),
+                      onPressed: () {
+                        _paymentAmountController.clear();
+                        setState(() {});
+                      },
+                    ),
+                ],
+              ),
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: false),
+            textAlign: TextAlign.right,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+            onChanged: (value) {
+              // Trigger rebuild to show/hide clear button
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 24),
+          
+          // Payment reference (optional)
+          TextField(
+            controller: _paymentReferenceController,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Referencia (opcional)',
+              hintText: 'Nº cheque, comprobante, etc.',
+            ),
+          ),
+          const SizedBox(height: 32),
+          
+          // Action buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    posService.exitInvoicePaymentMode();
+                    setState(() {
+                      _showPendingInvoices = true;
+                    });
+                  },
+                  child: const Text('Cancelar'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton.icon(
+                  onPressed: _selectedPaymentMethodId != null
+                      ? () => _processInvoicePayment(posService, invoice)
+                      : null,
+                  icon: const Icon(Icons.check),
+                  label: const Text('Procesar Pago'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method to access _buildSummaryRow from parent state
+  Widget _buildSummaryRow(ThemeData theme, String label, String value,
+      {bool isTotal = false, Color? valueColor}) {
+    // Access parent's method
+    final parentState = context.findAncestorStateOfType<_POSDashboardPageState>();
+    if (parentState != null) {
+      return parentState._buildSummaryRow(theme, label, value,
+          isTotal: isTotal, valueColor: valueColor);
+    }
+    // Fallback implementation
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: theme.textTheme.titleMedium),
+        Text(value, style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: valueColor,
+        )),
+      ],
+    );
+  }
+
+  Widget _buildPendingInvoicesView(ThemeData theme, POSService posService) {
+    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Icon(Icons.receipt_long, color: theme.colorScheme.primary, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Facturas Pendientes',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      _selectedCustomer?.name ?? '',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          
+          // List of pending invoices
+          ..._pendingInvoices.map((invoice) {
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: InkWell(
+                onTap: () {
+                  // Enter invoice payment mode
+                  posService.enterInvoicePaymentMode(invoice);
+                  setState(() {
+                    _showPendingInvoices = false;
+                    // Pre-fill the payment amount with the invoice balance (only if empty)
+                    if (_paymentAmountController.text.isEmpty) {
+                      _paymentAmountController.text = invoice.balance.toStringAsFixed(0);
+                    }
+                  });
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            invoice.invoiceNumber,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade100,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.orange),
+                            ),
+                            child: Text(
+                              invoice.status.name.toUpperCase(),
+                              style: TextStyle(
+                                color: Colors.orange.shade900,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Fecha: ${dateFormat.format(invoice.date)}',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      if (invoice.reference != null && invoice.reference!.isNotEmpty)
+                        Text(
+                          'Ref: ${invoice.reference}',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      const Divider(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Total', style: theme.textTheme.bodySmall),
+                              const SizedBox(height: 4),
+                              Text(
+                                currencyFormat.format(invoice.total),
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('Saldo', style: theme.textTheme.bodySmall),
+                              const SizedBox(height: 4),
+                              Text(
+                                currencyFormat.format(invoice.balance),
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+          
+          const SizedBox(height: 20),
+          
+          // Continue with normal sale button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _continueWithNormalSale,
+              icon: const Icon(Icons.shopping_cart),
+              label: const Text('Continuar con Venta Normal'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCartView(
       ThemeData theme, POSService posService, String currentQuery) {
+    
+    // Show pending invoices list if customer has pending invoices
+    if (_showPendingInvoices) {
+      return _buildPendingInvoicesView(theme, posService);
+    }
+    
+    // Show invoice payment form if in payment mode
+    if (posService.isInvoicePaymentMode && posService.linkedInvoice != null) {
+      return _buildInvoicePaymentForm(theme, posService);
+    }
+    
+    // Show normal cart view
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1431,11 +2355,16 @@ class _CashierPanelState extends State<_CashierPanel> {
                         '${_selectedCustomer!.name} - ${(_selectedCustomer!.rut ?? _selectedCustomer!.email ?? 'Sin RUT')}'),
                   ),
               ],
-              onChanged: (customer) {
+              onChanged: (customer) async {
                 setState(() {
                   _selectedCustomer = customer;
                 });
                 context.read<POSService>().setCustomer(customer);
+                
+                // Check for pending invoices when customer is selected
+                if (customer != null) {
+                  await _checkPendingInvoices(customer);
+                }
               },
             ),
           ],

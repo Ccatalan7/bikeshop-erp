@@ -4515,7 +4515,7 @@ with all_movements as (
     'manual_purchase' as source,
     pi.id as reference_id,
     pi.invoice_number as reference_number,
-    (item->>'quantity')::integer as quantity,
+    ((item->>'quantity')::numeric)::integer as quantity,
     pi.notes,
     pi.created_by,
     pi.created_at,
@@ -4540,7 +4540,7 @@ with all_movements as (
     coalesce(si.source, 'manual_sale') as source,
     si.id as reference_id,
     si.invoice_number as reference_number,
-    -(item->>'quantity')::integer as quantity, -- Negative for sales
+    -((item->>'quantity')::numeric)::integer as quantity, -- Negative for sales
     si.reference as notes,
     si.created_by,
     si.created_at,
