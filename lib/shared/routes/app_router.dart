@@ -61,6 +61,7 @@ import '../../modules/hr/pages/employee_list_page.dart';
 import '../../modules/hr/pages/attendances_page.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
 import '../../modules/website/pages/website_management_page.dart';
+import '../../modules/website/pages/odoo_style_editor_page.dart';
 import '../widgets/workspace_demo_page.dart';
 
 // Public Store Pages
@@ -128,6 +129,7 @@ class AppRouter {
       refreshListenable: authService,
       redirect: (context, state) {
         if (authService.isInitializing) {
+          debugPrint('🔄 [Router] Auth still initializing, allowing navigation to: ${state.uri.path}');
           return null;
         }
 
@@ -148,26 +150,33 @@ class AppRouter {
         final resettingPassword = state.matchedLocation == '/reset-password';
         final acceptingInvitation = state.matchedLocation == '/accept-invitation';
 
+        debugPrint('🔍 [Router] Redirect check: path=${state.uri.path}, isLoggedIn=$isLoggedIn, loggingIn=$loggingIn');
+
         // Allow access to public store routes without authentication
         if (isPublicRoute) {
+          debugPrint('✅ [Router] Public route, allowing access');
           return null;
         }
 
         // Allow access to password reset and invitation acceptance without authentication
         if (resettingPassword || acceptingInvitation) {
+          debugPrint('✅ [Router] Password reset/invitation route, allowing access');
           return null;
         }
 
         // Admin/ERP routes require authentication
         if (!isLoggedIn && !loggingIn) {
+          debugPrint('🔐 [Router] Not logged in and not on login page, redirecting to /login');
           return '/login';
         }
 
         // Redirect logged-in users from login to dashboard
         if (isLoggedIn && loggingIn) {
+          debugPrint('✅ [Router] Already logged in, redirecting from login to /dashboard');
           return '/dashboard';
         }
 
+        debugPrint('✅ [Router] No redirect needed for: ${state.uri.path}');
         return null;
       },
       routes: [
@@ -1047,6 +1056,17 @@ class AppRouter {
             state,
             const WebsiteManagementPage(),
           ),
+          routes: [
+            // Website Editor
+            GoRoute(
+              path: 'editor',
+              pageBuilder: (context, state) => _buildPageWithNoTransition(
+                context,
+                state,
+                const OdooStyleEditorPage(),
+              ),
+            ),
+          ],
         ),
       ],
     );

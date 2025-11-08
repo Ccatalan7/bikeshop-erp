@@ -24,14 +24,18 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
   @override
   void initState() {
     super.initState();
+    debugPrint('🏗️ [WebsiteManagementPage] initState called - initializing website service');
     _initialize();
   }
 
   Future<void> _initialize() async {
+    debugPrint('🔄 [WebsiteManagementPage] _initialize started');
     final websiteService = context.read<WebsiteService>();
     await websiteService.initialize();
+    debugPrint('✅ [WebsiteManagementPage] WebsiteService initialized');
     if (mounted) {
       setState(() => _isInitializing = false);
+      debugPrint('✅ [WebsiteManagementPage] State updated, page ready');
     }
   }
 
@@ -78,6 +82,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                   // Single Preview Button - Navigate to /tienda
                   FilledButton.icon(
                     onPressed: () {
+                      debugPrint('🎬 [WebsiteManagementPage] Vista Previa button clicked - navigating to /tienda');
                       context.go('/tienda');
                     },
                     icon: const Icon(Icons.visibility),
@@ -93,13 +98,16 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                   // Open in New Tab - Only for web platform
                   OutlinedButton.icon(
                     onPressed: () async {
+                      debugPrint('🌐 [WebsiteManagementPage] Nueva Pestaña button clicked - launching external URL');
                       final uri = Uri.parse('${Uri.base.origin}/tienda');
                       try {
                         await launchUrl(
                           uri,
                           mode: LaunchMode.externalApplication,
                         );
+                        debugPrint('✅ [WebsiteManagementPage] External URL launched successfully');
                       } catch (e) {
+                        debugPrint('❌ [WebsiteManagementPage] Failed to launch external URL: $e');
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -193,12 +201,20 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                     const SizedBox(width: 24),
                     FilledButton.icon(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const OdooStyleEditorPage(),
-                          ),
-                        );
+                        // Use workspace-aware navigation instead of Navigator.push
+                        // This prevents app freeze and respects the workspace tab system
+                        try {
+                          // Try to navigate within workspace
+                          context.go('/website/editor');
+                        } catch (e) {
+                          // Fallback to regular push if workspace not available
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const OdooStyleEditorPage(),
+                            ),
+                          );
+                        }
                       },
                       icon: const Icon(Icons.edit_rounded),
                       label: const Text('Abrir Editor'),
@@ -405,36 +421,36 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, size: 32, color: color),
+                child: Icon(icon, size: 28, color: color),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

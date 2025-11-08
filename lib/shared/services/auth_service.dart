@@ -5,16 +5,30 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService extends ChangeNotifier {
   AuthService() {
+    debugPrint('🔐 [AuthService] Constructor: Initializing...');
     _session = _client.auth.currentSession;
     _currentUser = _session?.user;
-    _isInitializing = false;
-
+    debugPrint('🔐 [AuthService] Initial session: ${_session != null ? "EXISTS" : "NULL"}');
+    debugPrint('🔐 [AuthService] Initial user: ${_currentUser?.email ?? "NULL"}');
+    
+    // DON'T set _isInitializing to false here!
+    // Wait for the auth state change listener to fire first
+    
     _subscription = _client.auth.onAuthStateChange.listen((data) {
+      debugPrint('🔐 [AuthService] Auth state changed: ${data.event}');
       _session = data.session;
       _currentUser = data.session?.user;
-      _isInitializing = false;
+      _isInitializing = false;  // ✅ Now we can set it to false
+      debugPrint('🔐 [AuthService] User after state change: ${_currentUser?.email ?? "NULL"}');
+      debugPrint('🔐 [AuthService] isAuthenticated: ${_currentUser != null}');
       notifyListeners();
     });
+    
+    // If currentSession exists on initialization, set isInitializing to false immediately
+    if (_session != null) {
+      debugPrint('✅ [AuthService] Session exists on init, setting isInitializing=false');
+      _isInitializing = false;
+    }
   }
 
   final SupabaseClient _client = Supabase.instance.client;

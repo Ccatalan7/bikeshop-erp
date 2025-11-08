@@ -187,17 +187,26 @@ const String _posSectionKey = 'pos';
 /// Helper function to open a route in a new workspace tab
 /// If workspace system is not available (e.g., not authenticated), falls back to regular navigation
 void _openInWorkspace(BuildContext context, String route, String title) {
+  debugPrint('🚀 [MainLayout] _openInWorkspace called: route=$route, title=$title');
   try {
     final workspaceManager = context.read<WorkspaceManager>();
+    debugPrint('✅ [MainLayout] WorkspaceManager found, current workspaces: ${workspaceManager.workspaces.length}');
+    
     // Try to switch to existing workspace with this route first
-    if (!workspaceManager.switchToExistingWorkspaceWithRoute(route)) {
+    final existingFound = workspaceManager.switchToExistingWorkspaceWithRoute(route);
+    if (!existingFound) {
+      debugPrint('📝 [MainLayout] Creating new workspace for $route');
       // If not found, create new workspace
       workspaceManager.addWorkspace(
         title: title,
         initialRoute: route,
       );
+      debugPrint('✅ [MainLayout] New workspace created, total: ${workspaceManager.workspaces.length}');
+    } else {
+      debugPrint('🔄 [MainLayout] Switched to existing workspace for $route');
     }
   } catch (e) {
+    debugPrint('❌ [MainLayout] WorkspaceManager error: $e, falling back to context.go()');
     // WorkspaceManager not available, fall back to regular navigation
     context.go(route);
   }
@@ -831,8 +840,10 @@ class _AppSidebarState extends State<AppSidebar> {
           onTap: enabled
               ? () {
                   if (!isSelected) {
-                    // Dashboard always navigates directly (not in workspace tab)
-                    if (route == '/dashboard') {
+                    // Dashboard and Website navigate directly within current workspace
+                    // All other modules can open in new workspace tabs if needed
+                    if (route == '/dashboard' || route == '/website') {
+                      debugPrint('🔀 [MainLayout] Navigating to $route in current workspace');
                       context.go(route);
                     } else {
                       _openInWorkspace(context, route, _getTitleFromRoute(route));

@@ -28,6 +28,10 @@ class SmartImportService extends ChangeNotifier {
       throw Exception('Tenant ID not found');
     }
 
+    // Generate import reference (batch ID with timestamp)
+    final importReference = 'import_${DateTime.now().millisecondsSinceEpoch}';
+    final importReason = 'Import: ${options.mode.label} (${records.length} records)';
+
     int inserted = 0;
     int updated = 0;
     int skipped = 0;
@@ -35,112 +39,127 @@ class SmartImportService extends ChangeNotifier {
     final conflicts = <ImportConflict>[];
     final errors = <String>[];
 
-    for (final record in records) {
-      try {
-        final matchValue = record[options.matchField];
-        if (matchValue == null) {
-          if (options.skipErrors) {
-            errors.add('Registro sin ${options.matchField}: $record');
-            failed++;
-            continue;
-          } else {
-            throw Exception('Campo de coincidencia ${options.matchField} no encontrado');
-          }
-        }
+    // Set import context for stock adjustment tracking (for products table)
+    if (tableName == 'products') {
+      await _setImportContext(
+        reference: importReference,
+        reason: importReason,
+      );
+    }
 
-        // Check if record exists
-        final existing = await _findExisting(
-          tableName: tableName,
-          matchField: options.matchField,
-          matchValue: matchValue,
-          tenantId: tenantId,
-        );
-
-        if (existing == null) {
-          // Record doesn't exist
-          if (options.mode == ImportMode.updateOnly) {
-            skipped++;
-            debugPrint('⏭️ Skipped (not found): $matchValue');
-            continue;
-          }
-
-          // Insert new record
-          await _db.insert(tableName, record);
-          inserted++;
-          debugPrint('✅ Inserted: $matchValue');
-        } else {
-          // Record exists
-          if (options.mode == ImportMode.insertOnly) {
-            skipped++;
-            debugPrint('⏭️ Skipped (already exists): $matchValue');
-            continue;
-          }
-
-          // Prepare update data
-          final updateData = _prepareUpdateData(
-            existing: existing,
-            imported: record,
-            options: options,
-          );
-
-          // updateData is ready to use as-is - no need to filter computed fields
-          // since category_name and supplier_name are now real columns kept in sync by triggers
-          final filteredUpdateData = updateData;
-
-          debugPrint('🔍 Comparing record: $matchValue');
-          debugPrint('   Existing fields: ${existing.keys.toList()}');
-          debugPrint('   Imported fields: ${record.keys.toList()}');
-          debugPrint('   Update data (before filter): $updateData');
-          debugPrint('   Update data (after filter): $filteredUpdateData');
-
-          if (filteredUpdateData.isEmpty) {
-            skipped++;
-            debugPrint('⏭️ Skipped (no valid changes after filtering): $matchValue');
-            continue;
-          }
-
-                    // Detect conflicts for preview
-          if (options.previewMode) {
-            final changedFields = filteredUpdateData.keys.toList();
-            conflicts.add(ImportConflict(
-              matchValue: matchValue.toString(),
-              existingData: existing,
-              importedData: record,
-              changedFields: changedFields,
-            ));
-            updated++; // Count as update for preview statistics
-            debugPrint('📋 Preview: Will update $matchValue');
-            continue;
-          }
-
-          // Update existing record
-          debugPrint('🔄 Attempting update for $matchValue with data: $filteredUpdateData');
-          try {
-            await _db.update(
-              tableName,
-              existing['id'],
-              filteredUpdateData,
-            );
-            updated++;
-            debugPrint('✅ Updated: $matchValue (${filteredUpdateData.length} fields)');
-          } catch (updateError) {
-            debugPrint('❌ Update failed for $matchValue: $updateError');
+    try {
+      for (final record in records) {
+        try {
+          final matchValue = record[options.matchField];
+          if (matchValue == null) {
             if (options.skipErrors) {
-              errors.add('Error actualizando ${record[options.matchField]}: $updateError');
+              errors.add('Registro sin ${options.matchField}: $record');
               failed++;
+              continue;
             } else {
-              rethrow;
+              throw Exception('Campo de coincidencia ${options.matchField} no encontrado');
             }
           }
+
+          // Check if record exists
+          final existing = await _findExisting(
+            tableName: tableName,
+            matchField: options.matchField,
+            matchValue: matchValue,
+            tenantId: tenantId,
+          );
+
+          if (existing == null) {
+            // Record doesn't exist
+            if (options.mode == ImportMode.updateOnly) {
+              skipped++;
+              debugPrint('⏭️ Skipped (not found): $matchValue');
+              continue;
+            }
+
+            // Insert new record
+            await _db.insert(tableName, record);
+            inserted++;
+            debugPrint('✅ Inserted: $matchValue');
+          } else {
+            // Record exists
+            if (options.mode == ImportMode.insertOnly) {
+              skipped++;
+              debugPrint('⏭️ Skipped (already exists): $matchValue');
+              continue;
+            }
+
+            // Prepare update data
+            final updateData = _prepareUpdateData(
+              existing: existing,
+              imported: record,
+              options: options,
+            );
+
+            // updateData is ready to use as-is - no need to filter computed fields
+            // since category_name and supplier_name are now real columns kept in sync by triggers
+            final filteredUpdateData = updateData;
+
+            debugPrint('🔍 Comparing record: $matchValue');
+            debugPrint('   Existing fields: ${existing.keys.toList()}');
+            debugPrint('   Imported fields: ${record.keys.toList()}');
+            debugPrint('   Update data (before filter): $updateData');
+            debugPrint('   Update data (after filter): $filteredUpdateData');
+
+            if (filteredUpdateData.isEmpty) {
+              skipped++;
+              debugPrint('⏭️ Skipped (no valid changes after filtering): $matchValue');
+              continue;
+            }
+
+            // Detect conflicts for preview
+            if (options.previewMode) {
+              final changedFields = filteredUpdateData.keys.toList();
+              conflicts.add(ImportConflict(
+                matchValue: matchValue.toString(),
+                existingData: existing,
+                importedData: record,
+                changedFields: changedFields,
+              ));
+              updated++; // Count as update for preview statistics
+              debugPrint('📋 Preview: Will update $matchValue');
+              continue;
+            }
+
+            // Update existing record
+            debugPrint('🔄 Attempting update for $matchValue with data: $filteredUpdateData');
+            try {
+              await _db.update(
+                tableName,
+                existing['id'],
+                filteredUpdateData,
+              );
+              updated++;
+              debugPrint('✅ Updated: $matchValue (${filteredUpdateData.length} fields)');
+            } catch (updateError) {
+              debugPrint('❌ Update failed for $matchValue: $updateError');
+              if (options.skipErrors) {
+                errors.add('Error actualizando ${record[options.matchField]}: $updateError');
+                failed++;
+              } else {
+                rethrow;
+              }
+            }
+          }
+        } catch (e) {
+          if (options.skipErrors) {
+            errors.add('Error en registro ${record[options.matchField]}: $e');
+            failed++;
+            debugPrint('❌ Failed: ${record[options.matchField]} - $e');
+          } else {
+            rethrow;
+          }
         }
-      } catch (e) {
-        if (options.skipErrors) {
-          errors.add('Error en registro ${record[options.matchField]}: $e');
-          failed++;
-          debugPrint('❌ Failed: ${record[options.matchField]} - $e');
-        } else {
-          rethrow;
-        }
+      }
+    } finally {
+      // Clear import context after import completes
+      if (tableName == 'products') {
+        await _clearImportContext();
       }
     }
 
@@ -295,5 +314,71 @@ class SmartImportService extends ChangeNotifier {
       records: records,
       options: options.copyWith(previewMode: true),
     );
+  }
+
+  /// Set import context for stock adjustment tracking
+  /// This tells the database trigger to label adjustments as 'import' instead of 'manual'
+  Future<void> _setImportContext({
+    required String reference,
+    required String reason,
+  }) async {
+    try {
+      final client = Supabase.instance.client;
+      
+      // Set session variables for the trigger to read
+      await client.rpc('set_config', params: {
+        'setting': 'app.stock_adjustment_context',
+        'value': 'import',
+        'is_local': true,
+      });
+      
+      await client.rpc('set_config', params: {
+        'setting': 'app.import_reference',
+        'value': reference,
+        'is_local': true,
+      });
+      
+      await client.rpc('set_config', params: {
+        'setting': 'app.import_reason',
+        'value': reason,
+        'is_local': true,
+      });
+      
+      debugPrint('📋 Import context set: $reference');
+    } catch (e) {
+      debugPrint('⚠️ Warning: Could not set import context: $e');
+      // Non-fatal - continue with import
+    }
+  }
+
+  /// Clear import context after import completes
+  Future<void> _clearImportContext() async {
+    try {
+      final client = Supabase.instance.client;
+      
+      // Reset session variables
+      await client.rpc('set_config', params: {
+        'setting': 'app.stock_adjustment_context',
+        'value': '',
+        'is_local': true,
+      });
+      
+      await client.rpc('set_config', params: {
+        'setting': 'app.import_reference',
+        'value': '',
+        'is_local': true,
+      });
+      
+      await client.rpc('set_config', params: {
+        'setting': 'app.import_reason',
+        'value': '',
+        'is_local': true,
+      });
+      
+      debugPrint('🧹 Import context cleared');
+    } catch (e) {
+      debugPrint('⚠️ Warning: Could not clear import context: $e');
+      // Non-fatal
+    }
   }
 }

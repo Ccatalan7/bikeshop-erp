@@ -799,16 +799,30 @@ create table if not exists stock_adjustments (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   product_id uuid references products(id) on delete cascade not null,
-  adjustment_type text not null check (adjustment_type in ('manual', 'correction', 'initial', 'damage', 'loss', 'found')),
+  adjustment_type text not null check (adjustment_type in ('manual', 'correction', 'initial', 'damage', 'loss', 'found', 'import')),
   quantity integer not null, -- Positive or negative
   stock_before integer not null,
   stock_after integer not null,
   reason text,
   notes text,
+  reference text, -- For imports: stores import batch ID or filename
   created_by uuid references auth.users(id),
   created_at timestamp with time zone not null default now(),
   unique(tenant_id, id)
 );
+
+-- Migration: Add reference column for existing tables (if created before this was added)
+alter table stock_adjustments add column if not exists reference text;
+
+-- Migration: Update constraint to include 'import' type
+do $$ 
+begin
+  alter table stock_adjustments drop constraint if exists stock_adjustments_adjustment_type_check;
+  alter table stock_adjustments add constraint stock_adjustments_adjustment_type_check 
+    check (adjustment_type in ('manual', 'correction', 'initial', 'damage', 'loss', 'found', 'import'));
+exception
+  when others then null;
+end $$;
 
 create index if not exists idx_stock_adjustments_tenant on stock_adjustments(tenant_id);
 create index if not exists idx_stock_adjustments_product on stock_adjustments(product_id);
@@ -848,16 +862,33 @@ create trigger trg_stock_adjustments_set_created_by
 -- Trigger to track manual stock changes on products table
 create or replace function track_product_stock_changes()
 returns trigger as $$
+declare
+  v_adjustment_type text;
+  v_reason text;
+  v_reference text;
 begin
   -- CRITICAL: Only track MANUAL changes, not automatic ones from invoice triggers
   -- Skip if this update is triggered by invoice consumption functions
-  -- We detect this by checking if the change comes from a trigger (TG_LEVEL != 0 means nested trigger)
   if current_setting('app.skip_stock_adjustment_trigger', true) = 'true' then
     return NEW;
   end if;
   
   -- Only track if stock_quantity actually changed
   if (TG_OP = 'UPDATE' and OLD.stock_quantity <> NEW.stock_quantity) then
+    -- Determine adjustment type based on context
+    if current_setting('app.stock_adjustment_context', true) = 'import' then
+      v_adjustment_type := 'import';
+      v_reason := coalesce(
+        current_setting('app.import_reason', true),
+        'Stock updated via import'
+      );
+      v_reference := current_setting('app.import_reference', true); -- Import filename or batch ID
+    else
+      v_adjustment_type := 'manual';
+      v_reason := 'Manual adjustment via product form';
+      v_reference := null;
+    end if;
+    
     insert into stock_adjustments (
       tenant_id,
       product_id,
@@ -866,19 +897,35 @@ begin
       stock_before,
       stock_after,
       reason,
+      reference,
       created_by
     ) values (
       NEW.tenant_id,
       NEW.id,
-      'manual', -- Could be enhanced to detect type based on context
+      v_adjustment_type,
       NEW.stock_quantity - OLD.stock_quantity,
       OLD.stock_quantity,
       NEW.stock_quantity,
-      'Manual adjustment via product form',
+      v_reason,
+      v_reference,
       auth.uid()
     );
   elsif (TG_OP = 'INSERT' and NEW.stock_quantity > 0) then
     -- Track initial stock when product is created with stock
+    -- Check if this is part of an import
+    if current_setting('app.stock_adjustment_context', true) = 'import' then
+      v_adjustment_type := 'import';
+      v_reason := coalesce(
+        current_setting('app.import_reason', true),
+        'Initial stock via import'
+      );
+      v_reference := current_setting('app.import_reference', true);
+    else
+      v_adjustment_type := 'initial';
+      v_reason := 'Initial stock on product creation';
+      v_reference := null;
+    end if;
+    
     insert into stock_adjustments (
       tenant_id,
       product_id,
@@ -887,15 +934,17 @@ begin
       stock_before,
       stock_after,
       reason,
+      reference,
       created_by
     ) values (
       NEW.tenant_id,
       NEW.id,
-      'initial',
+      v_adjustment_type,
       NEW.stock_quantity,
       0,
       NEW.stock_quantity,
-      'Initial stock on product creation',
+      v_reason,
+      v_reference,
       auth.uid()
     );
   end if;
@@ -1297,9 +1346,10 @@ declare
   v_estimated_stockout_date timestamp with time zone;
   v_current_stock integer;
 begin
-  -- Sync stock_quantity and inventory_qty
+  -- Sync inventory_qty to match stock_quantity (stock_quantity is source of truth)
+  -- This ensures both columns stay in sync for backward compatibility
   if NEW.stock_quantity != NEW.inventory_qty then
-    NEW.stock_quantity := NEW.inventory_qty;
+    NEW.inventory_qty := NEW.stock_quantity;
   end if;
   
   -- Use whichever column is set (prefer stock_quantity as source of truth)
@@ -1575,6 +1625,98 @@ $$;
 
 -- Run the backfill function for existing data (safe to run multiple times)
 select public.backfill_stock_at_receipt_for_received_items();
+
+-- ============================================================================
+-- RPC WRAPPER FOR SESSION VARIABLES (set_config)
+-- ============================================================================
+-- Expose PostgreSQL's set_config() function as Supabase RPC
+-- This allows authenticated clients to set transaction-scoped session variables
+-- Used for import tracking context (app.stock_adjustment_context, app.import_reference, etc.)
+
+create or replace function public.set_config(
+  setting_name text,
+  new_value text,
+  is_local boolean default true
+)
+returns text
+language plpgsql
+security definer
+as $$
+begin
+  -- Set the configuration parameter
+  perform pg_catalog.set_config(setting_name, new_value, is_local);
+  return new_value;
+end;
+$$;
+
+-- Grant execute to authenticated users (for import services)
+grant execute on function public.set_config(text, text, boolean) to authenticated;
+
+-- ============================================================================
+-- IMPORT PRODUCT WITH CONTEXT (Single Transaction)
+-- ============================================================================
+-- This function updates a product's stock within an import context
+-- It sets session variables and updates the product in ONE transaction
+-- so the trigger can detect it's an import operation
+
+create or replace function public.import_product_with_context(
+  p_tenant_id uuid,
+  p_sku text,
+  p_product_data jsonb,
+  p_import_reference text,
+  p_import_reason text default 'Importación desde archivo'
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_result jsonb;
+  v_updated_count integer;
+begin
+  -- Set import context for this transaction
+  perform pg_catalog.set_config('app.stock_adjustment_context', 'import', true);
+  perform pg_catalog.set_config('app.import_reference', p_import_reference, true);
+  perform pg_catalog.set_config('app.import_reason', p_import_reason, true);
+  
+  -- Update the product (trigger will see the import context)
+  update products
+  set
+    name = coalesce((p_product_data->>'name')::text, name),
+    description = coalesce((p_product_data->>'description')::text, description),
+    price = coalesce((p_product_data->>'price')::numeric, price),
+    cost = coalesce((p_product_data->>'cost')::numeric, cost),
+    stock_quantity = coalesce((p_product_data->>'stock_quantity')::integer, stock_quantity),
+    inventory_qty = coalesce((p_product_data->>'stock_quantity')::integer, inventory_qty),
+    category_id = coalesce((p_product_data->>'category_id')::uuid, category_id),
+    supplier_id = coalesce((p_product_data->>'supplier_id')::uuid, supplier_id),
+    barcode = coalesce((p_product_data->>'barcode')::text, barcode),
+    image_url = coalesce((p_product_data->>'image_url')::text, image_url),
+    is_active = coalesce((p_product_data->>'is_active')::boolean, is_active),
+    updated_at = now()
+  where tenant_id = p_tenant_id
+    and sku = p_sku;
+  
+  get diagnostics v_updated_count = row_count;
+  
+  -- Clear import context
+  perform pg_catalog.set_config('app.stock_adjustment_context', '', true);
+  perform pg_catalog.set_config('app.import_reference', '', true);
+  perform pg_catalog.set_config('app.import_reason', '', true);
+  
+  -- Return result
+  v_result = jsonb_build_object(
+    'success', v_updated_count > 0,
+    'updated_count', v_updated_count,
+    'sku', p_sku
+  );
+  
+  return v_result;
+end;
+$$;
+
+-- Grant execute to authenticated users (for import services)
+grant execute on function public.import_product_with_context(uuid, text, jsonb, text, text) to authenticated;
 
 -- ============================================================================
 -- NOTE: stock_movements_view is defined later in this file (around line 4363)

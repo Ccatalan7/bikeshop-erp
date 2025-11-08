@@ -1,8 +1,18 @@
-# 🔄 Zoho to Supabase Import System
+# 🔄 Zoho to Supabase Import System with Stock Tracking
 
 **Complete Guide for AI-Assisted Data Migration**
 
-> This guide documents the automated import system for migrating data from Zoho Inventory to Supabase. It serves as a reference for AI agents to perform autonomous imports with minimal user intervention.
+> This guide documents the automated import system for migrating data from Zoho Inventory to Supabase **with automatic stock adjustment tracking**. It serves as a reference for AI agents to perform autonomous imports with minimal user intervention.
+
+---
+
+## 🎯 Key Innovation: Transaction-Scoped Import Context
+
+**The Problem:** Supabase Python client treats each call as a separate HTTP request (separate transaction), so session variables set via RPC don't persist to subsequent UPDATE calls.
+
+**The Solution:** Use a PostgreSQL RPC function that sets context variables AND updates products in **ONE TRANSACTION**, allowing the trigger to detect import operations and create stock adjustment records.
+
+**Why This Matters:** Import stock changes are labeled as "Importación" (not "Ajuste Manual"), creating a clear audit trail of automated vs manual stock changes.
 
 ---
 
@@ -16,51 +26,273 @@ All Zoho import scripts are located in:
 **Script Structure:**
 ```
 scripts/zoho_import/
-├── zoho_to_supabase_import.py       # Main: Complete image import pipeline
+├── test_import_with_tracking.py     # NEW: Import with stock tracking (USE THIS)
+├── zoho_to_supabase_import.py       # Legacy: Image import only
 ├── step1_get_zoho_tokens.py         # OAuth: Exchange grant code for tokens
-├── step2_download_images.py         # Legacy: Download images locally
 ├── refresh_zoho_token.py            # Utility: Get fresh access token
-├── check_supabase_buckets.py        # Utility: Verify storage buckets
-└── list_products_without_images.py  # Utility: Report unmatched products
+└── test_products.csv                # Sample: Test data for imports
 ```
 
-**⚠️ Important:** Keep all import scripts in `scripts/zoho_import/` to maintain organization and prevent root folder clutter.
+**⚠️ Important:** Use `test_import_with_tracking.py` as the template for ALL future imports. It demonstrates the correct session variable + RPC pattern.
 
 ---
 
-## 🎯 What We Accomplished: Image Import Case Study
+## 🎯 What We Accomplished: Import Stock Tracking System
 
 ### Problem Statement
-Import product images from Zoho Inventory to Supabase Storage, matching products by SKU or name.
+When importing products from Zoho Inventory, stock changes were creating "ghost" adjustment records or being labeled as manual changes. Need to:
+1. **Prevent ghost records**: Only create adjustments when stock actually changes
+2. **Label imports correctly**: Show "Importación" origin (not "Ajuste Manual")
+3. **Track import batches**: Reference column links adjustments to specific import session
 
-### Solution Components
+### Solution Architecture
 
-#### 1. **OAuth Authentication** (`step1_get_zoho_tokens.py`)
-- **User provides:** Client ID, Client Secret, Grant Code (expires in 10 minutes)
-- **AI agent does:** Exchange grant code for access token + refresh token
-- **Output:** Long-lived refresh token (used for all future requests)
+#### 1. **Database Schema** (`core_schema.sql`)
 
-#### 2. **Data Matching** (Smart SKU/Name Matching)
-- Fetched 81 products from Supabase (tenant-scoped)
-- Fetched 1,440 items from Zoho Inventory (paginated API)
-- Matched 51 products: 49 by SKU, 2 by name fallback
-- Identified 30 unmatched products (services, test data, different SKUs)
+**Stock Adjustments Table** (lines 799-811):
+```sql
+create table if not exists stock_adjustments (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  product_id uuid references products(id) on delete cascade not null,
+  adjustment_type text not null check (adjustment_type in (
+    'manual', 'correction', 'initial', 'damage', 'loss', 'found', 'import'
+  )),
+  quantity integer not null,        -- Change amount (e.g., -10, +50)
+  stock_before integer not null,    -- Stock before change
+  stock_after integer not null,     -- Stock after change
+  reason text,
+  notes text,
+  reference text,                   -- NEW: Import batch ID
+  created_by uuid references auth.users(id),
+  created_at timestamp with time zone default now()
+);
+```
 
-#### 3. **Image Processing** (Special Character Handling)
-- Downloaded images from Zoho Documents API
-- Sanitized filenames: `ó→o`, `ñ→n`, `á→a`, spaces→underscores
-- Uploaded to Supabase Storage with tenant-scoped paths
-- Updated product records with public image URLs
+**Key Addition**: `reference` column stores import batch identifier (e.g., `import_1762563467750`)
 
-#### 4. **Error Handling & Reporting**
-- Automatically retried with sanitized filenames
-- Generated CSV report of unmatched products
-- 100% success rate (51/51 matched products imported)
+**Session Variables Helper** (`set_config` RPC, lines 1629-1654):
+```sql
+create or replace function public.set_config(
+  setting_name text,
+  new_value text,
+  is_local boolean default false
+)
+returns text
+security definer
+language plpgsql
+as $$
+begin
+  return pg_catalog.set_config(setting_name, new_value, is_local);
+end;
+$$;
+
+grant execute on function public.set_config(text, text, boolean) to authenticated;
+```
+
+**Purpose**: Exposes PostgreSQL's `set_config()` to authenticated users, allowing session variable setting from Python client.
+
+**Single-Transaction Import RPC** (`import_product_with_context`, lines 1656-1720):
+```sql
+create or replace function public.import_product_with_context(
+  p_tenant_id uuid,
+  p_sku text,
+  p_product_data jsonb,
+  p_import_reference text,
+  p_import_reason text default 'Zoho Import'
+)
+returns jsonb
+security definer
+language plpgsql
+as $$
+declare
+  v_updated_count integer := 0;
+begin
+  -- Set import context (transaction-scoped)
+  perform pg_catalog.set_config('app.stock_adjustment_context', 'import', true);
+  perform pg_catalog.set_config('app.import_reference', p_import_reference, true);
+  perform pg_catalog.set_config('app.import_reason', p_import_reason, true);
+  
+  -- Update product (trigger sees context)
+  update products
+  set
+    name = coalesce((p_product_data->>'name')::text, name),
+    price = coalesce((p_product_data->>'price')::numeric, price),
+    stock_quantity = coalesce((p_product_data->>'stock_quantity')::integer, stock_quantity),
+    inventory_qty = coalesce((p_product_data->>'stock_quantity')::integer, inventory_qty),
+    description = coalesce((p_product_data->>'description')::text, description),
+    updated_at = now()
+  where tenant_id = p_tenant_id and sku = p_sku;
+  
+  get diagnostics v_updated_count = row_count;
+  
+  -- Clear context
+  perform pg_catalog.set_config('app.stock_adjustment_context', '', true);
+  perform pg_catalog.set_config('app.import_reference', '', true);
+  perform pg_catalog.set_config('app.import_reason', '', true);
+  
+  return jsonb_build_object('success', true, 'updated_count', v_updated_count);
+end;
+$$;
+
+grant execute on function public.import_product_with_context(uuid, text, jsonb, text, text) to authenticated;
+```
+
+**Critical Design**: All three operations (set context, update product, clear context) happen in **ONE database transaction**, so the trigger sees the import context.
+
+**Stock Tracking Trigger** (lines 863-958):
+```sql
+create or replace function track_product_stock_changes()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  v_skip_trigger text;
+  v_import_context text;
+  v_import_reference text;
+  v_import_reason text;
+  v_adjustment_type text := 'manual';
+begin
+  -- Check if trigger should be skipped (for invoice operations)
+  v_skip_trigger := current_setting('app.skip_stock_adjustment_trigger', true);
+  if v_skip_trigger = 'true' then
+    return new;
+  end if;
+  
+  -- Only track if stock actually changed
+  if (tg_op = 'UPDATE' and old.stock_quantity = new.stock_quantity) then
+    return new;
+  end if;
+  
+  -- Detect import context
+  v_import_context := current_setting('app.stock_adjustment_context', true);
+  if v_import_context = 'import' then
+    v_adjustment_type := 'import';
+    v_import_reference := current_setting('app.import_reference', true);
+    v_import_reason := current_setting('app.import_reason', true);
+  end if;
+  
+  -- Create adjustment record
+  insert into stock_adjustments (
+    tenant_id, product_id, adjustment_type,
+    quantity, stock_before, stock_after,
+    reason, reference, created_by
+  ) values (
+    new.tenant_id, new.id, v_adjustment_type,
+    new.stock_quantity - coalesce(old.stock_quantity, 0),
+    coalesce(old.stock_quantity, 0), new.stock_quantity,
+    v_import_reason, v_import_reference, auth.uid()
+  );
+  
+  return new;
+end;
+$$;
+```
+
+**Key Logic**:
+- Checks `app.stock_adjustment_context` session variable
+- If `'import'` → creates adjustment with `type='import'` and imports the `reference`
+- If not set → creates adjustment with `type='manual'`
+
+#### 2. **Python Import Script** (`test_import_with_tracking.py`)
+
+**Authentication Flow**:
+```python
+def initialize_supabase():
+    """Initialize Supabase client with user authentication."""
+    client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    
+    # Sign in with email/password
+    auth_response = client.auth.sign_in_with_password({
+        "email": "vinabikechile@gmail.com",
+        "password": "000000"
+    })
+    
+    if not auth_response.user:
+        raise Exception("Authentication failed")
+    
+    return client, auth_response.user.id
+```
+
+**Tenant ID Detection**:
+```python
+def get_user_tenant_id(supabase, user_id):
+    """Get tenant_id from user_profiles table."""
+    response = supabase.table('user_profiles') \
+        .select('tenant_id') \
+        .eq('id', user_id) \
+        .single() \
+        .execute()
+    
+    return response.data['tenant_id']
+```
+
+**Single-Transaction Import Pattern**:
+```python
+def import_products(supabase, tenant_id):
+    """Import products using single-transaction RPC."""
+    import_ref = f"import_{int(time.time() * 1000)}"
+    
+    # Read CSV
+    df = pd.read_csv('test_products.csv')
+    
+    # Get current stock levels
+    products_response = supabase.table('products') \
+        .select('id, sku, stock_quantity') \
+        .eq('tenant_id', tenant_id) \
+        .execute()
+    current_stock = {p['sku']: p['stock_quantity'] for p in products_response.data}
+    
+    # Import each product
+    for _, row in df.iterrows():
+        sku = str(row['sku']).strip()
+        new_stock = int(row['stock_quantity'])
+        old_stock = current_stock.get(sku, 0)
+        
+        # Build product data
+        product_data = {
+            'name': row['name'],
+            'price': float(row['price']),
+            'stock_quantity': new_stock,
+            'description': row.get('description', '')
+        }
+        
+        # Call RPC function (sets context + updates in ONE transaction)
+        result = supabase.rpc(
+            'import_product_with_context',
+            {
+                'p_tenant_id': tenant_id,
+                'p_sku': sku,
+                'p_product_data': product_data,
+                'p_import_reference': import_ref,
+                'p_import_reason': f'CSV Import: {sku}'
+            }
+        ).execute()
+        
+        if result.data.get('updated_count', 0) > 0:
+            print(f"✅ Imported {sku}: {old_stock} → {new_stock}")
+```
+
+**Why This Works**:
+1. All logic in ONE RPC call = ONE database transaction
+2. Session variables set inside function are visible to trigger
+3. Trigger detects `app.stock_adjustment_context='import'`
+4. Creates adjustment with `type='import'` and proper `reference`
+
+#### 3. **Production Verification**
+
+Screenshot shows Stock Movements UI with:
+- ✅ Adjustment type: "Ajuste"
+- ✅ Origin: **"Importación"** (not "Ajuste Manual")
+- ✅ Reference: `ADJ-L20251108-XXXXXX` (display format of `import_TIMESTAMP`)
+- ✅ Stock tracking: 456→123 (Δ -333), 123→456 (Δ +333)
+- ✅ No ghost records: Only actual stock changes logged
 
 ### Key Files
-- **Main Script:** `zoho_to_supabase_import.py` (16KB, 358 lines)
-- **Token Setup:** `step1_get_zoho_tokens.py` + `refresh_zoho_token.py`
-- **Output:** `unmatched_products.csv` (products not found in Zoho)
+- **Database Schema:** `supabase/sql/core_schema.sql` (lines 799-811, 1629-1720, 863-958)
+- **Import Script:** `scripts/zoho_import/test_import_with_tracking.py` (469 lines)
+- **Test Data:** `scripts/zoho_import/test_products.csv` (15 products)
 
 ---
 
@@ -72,7 +304,25 @@ The AI agent should automate everything possible and only ask the user for infor
 
 ### What AI Agent MUST Do Automatically
 
-#### 1. **Fetch Application Configuration**
+#### 1. **Use Single-Transaction RPC Pattern**
+```python
+# ✅ CORRECT: All context + update in ONE transaction
+result = supabase.rpc('import_product_with_context', {
+    'p_tenant_id': tenant_id,
+    'p_sku': sku,
+    'p_product_data': product_data,
+    'p_import_reference': import_ref,
+    'p_import_reason': f'Import from {source}'
+}).execute()
+
+# ❌ WRONG: Separate calls = separate transactions
+supabase.rpc('set_config', {...}).execute()  # Transaction 1
+supabase.table('products').update({...}).execute()  # Transaction 2 (context lost!)
+```
+
+**Critical Rule**: Session variables ONLY persist within a single database transaction. Supabase Python client creates separate transactions for each HTTP request, so you MUST use RPC functions that bundle context + update together.
+
+#### 2. **Fetch Application Configuration**
 ```python
 # ✅ DO: Read from existing app files
 from lib/shared/config/supabase_config.dart:
@@ -87,7 +337,7 @@ from user's Flutter/Dart code:
 
 **Never ask user for:** Supabase URL, database structure, table names, column types
 
-#### 2. **Detect Data Structures**
+#### 3. **Detect Data Structures**
 ```python
 # ✅ DO: Query database to understand schema
 supabase.table("products").select("*").limit(1).execute()
@@ -96,7 +346,7 @@ supabase.table("products").select("*").limit(1).execute()
 
 **Never ask user for:** What columns exist, data types, relationships
 
-#### 3. **Handle Authentication Automatically**
+#### 4. **Handle Authentication Automatically**
 ```python
 # ✅ DO: Use refresh tokens to get access tokens
 def get_access_token():
@@ -107,7 +357,7 @@ def get_access_token():
 
 **Never ask user for:** New access tokens (use refresh token instead)
 
-#### 4. **Discover API Endpoints**
+#### 5. **Discover API Endpoints**
 ```python
 # ✅ DO: Try common patterns, iterate on failures
 endpoints = [
@@ -120,7 +370,7 @@ endpoints = [
 
 **Never ask user for:** Exact API endpoint URLs (try standard patterns)
 
-#### 5. **Determine Matching Strategy**
+#### 6. **Determine Matching Strategy**
 ```python
 # ✅ DO: Try multiple matching strategies
 def match_records(source, target):
@@ -133,7 +383,7 @@ def match_records(source, target):
 
 **Never ask user for:** How to match records (try smart heuristics)
 
-#### 6. **Handle Multi-Tenant Architecture**
+#### 7. **Handle Multi-Tenant Architecture**
 ```python
 # ✅ DO: Auto-detect tenant ID from auth context
 tenant_id = supabase.table("user_profiles") \
@@ -185,9 +435,156 @@ tenant_id = supabase.table("user_profiles") \
 
 ---
 
-## 🔧 Generic Import Template
+## 🔧 Generic Import Template (With Stock Tracking)
 
-Use this pattern for **ANY** Zoho to Supabase import (products, customers, invoices, etc.)
+Use this pattern for **ANY** Zoho to Supabase import that needs stock adjustment tracking.
+
+### Phase 1: Setup & Configuration
+```python
+# 1. Initialize Supabase with authentication
+from supabase import create_client
+
+SUPABASE_URL = "https://xzdvtzdqjeyqxnkqprtf.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGc..."  # Read from config
+
+client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+# 2. Authenticate user
+auth_response = client.auth.sign_in_with_password({
+    "email": "user@example.com",
+    "password": "password"
+})
+
+user_id = auth_response.user.id
+
+# 3. Get tenant_id from user_profiles
+tenant_response = client.table('user_profiles') \
+    .select('tenant_id') \
+    .eq('id', user_id) \
+    .single() \
+    .execute()
+
+tenant_id = tenant_response.data['tenant_id']
+
+# 4. Generate import reference (batch ID)
+import time
+import_ref = f"import_{int(time.time() * 1000)}"
+```
+
+### Phase 2: Data Extraction
+```python
+# 5. Fetch from Zoho (if needed)
+def fetch_zoho_inventory():
+    # Use Zoho API with OAuth token
+    # Return list of items
+    pass
+
+# 6. Read from CSV (for testing or manual imports)
+import pandas as pd
+df = pd.read_csv('import_data.csv')
+
+# 7. Get current state from Supabase (for comparison)
+products_response = client.table('products') \
+    .select('id, sku, stock_quantity') \
+    .eq('tenant_id', tenant_id) \
+    .execute()
+
+current_stock = {p['sku']: p['stock_quantity'] for p in products_response.data}
+```
+
+### Phase 3: Import with Context (Single-Transaction Pattern)
+```python
+# 8. Import each record using RPC function
+for _, row in df.iterrows():
+    sku = str(row['sku']).strip()
+    new_stock = int(row['stock_quantity'])
+    old_stock = current_stock.get(sku, 0)
+    
+    # Build product data (jsonb)
+    product_data = {
+        'name': row['name'],
+        'price': float(row['price']),
+        'stock_quantity': new_stock,
+        'description': row.get('description', '')
+    }
+    
+    # Call single-transaction RPC
+    try:
+        result = client.rpc(
+            'import_product_with_context',
+            {
+                'p_tenant_id': tenant_id,
+                'p_sku': sku,
+                'p_product_data': product_data,
+                'p_import_reference': import_ref,
+                'p_import_reason': f'Import from {source}: {sku}'
+            }
+        ).execute()
+        
+        if result.data.get('updated_count', 0) > 0:
+            print(f"✅ Imported {sku}: {old_stock} → {new_stock}")
+        else:
+            print(f"⚠️  Product not found: {sku}")
+            
+    except Exception as e:
+        print(f"❌ Error importing {sku}: {str(e)}")
+```
+
+### Phase 4: Verification & Reporting
+```python
+# 9. Verify stock adjustments were created
+adjustments = client.table('stock_adjustments') \
+    .select('*') \
+    .eq('tenant_id', tenant_id) \
+    .eq('reference', import_ref) \
+    .eq('adjustment_type', 'import') \
+    .execute()
+
+print(f"\n📊 IMPORT SUMMARY")
+print(f"==============================")
+print(f"Import Reference: {import_ref}")
+print(f"Stock Adjustments Created: {len(adjustments.data)}")
+print(f"Total Products Processed: {len(df)}")
+```
+
+### Key Differences from Old Approach
+
+**❌ OLD (DOESN'T WORK):**
+```python
+# Set context via RPC
+client.rpc('set_config', {
+    'setting_name': 'app.stock_adjustment_context',
+    'new_value': 'import',
+    'is_local': True
+}).execute()  # Transaction 1
+
+# Update product
+client.table('products').update({
+    'stock_quantity': new_stock
+}).eq('sku', sku).execute()  # Transaction 2 (context lost!)
+```
+
+**Problem**: Separate HTTP requests = separate transactions. Session variables don't persist.
+
+**✅ NEW (WORKS):**
+```python
+# Single RPC bundles context + update
+client.rpc('import_product_with_context', {
+    'p_tenant_id': tenant_id,
+    'p_sku': sku,
+    'p_product_data': product_data,
+    'p_import_reference': import_ref,
+    'p_import_reason': reason
+}).execute()  # ONE transaction, trigger sees context
+```
+
+**Solution**: RPC function handles everything in one database transaction.
+
+---
+
+## 📋 Import Checklist for AI Agents
+
+Before starting ANY import, verify:
 
 ### Phase 1: Setup & Configuration
 ```python
@@ -302,7 +699,17 @@ export_unmatched_to_csv(unmatched_records)
 
 Before starting ANY import, verify:
 
-- [ ] **1. Credentials Available**
+- [ ] **1. Database RPC Function Exists**
+  - [ ] Check if `import_{table}_with_context()` RPC function exists in `core_schema.sql`
+  - [ ] If not, create following the `import_product_with_context()` pattern (lines 1656-1720)
+  - [ ] Function must: set context vars → update record → clear context vars (all in ONE transaction)
+  - [ ] Grant execute permission to `authenticated` role
+  
+- [ ] **2. Stock Tracking Trigger Exists**
+  - [ ] For products: `track_product_stock_changes()` trigger (lines 863-958) already exists
+  - [ ] For other entities with stock: create similar trigger that checks `app.stock_adjustment_context`
+  
+- [ ] **3. Credentials Available**
   - [ ] Zoho refresh token exists (or ask for Client ID/Secret/Grant Code)
   - [ ] Supabase service role key exists (or ask user to provide)
   

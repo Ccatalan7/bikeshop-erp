@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pdf/pdf.dart';
@@ -9,7 +10,6 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
-import 'invoice_form_page.dart';
 
 class InvoiceListPage extends StatefulWidget {
   const InvoiceListPage({super.key});
@@ -190,11 +190,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 const Spacer(),
                 ElevatedButton.icon(
                   onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const InvoiceFormPage(),
-                      ),
-                    );
+                    context.go('/sales/invoices/new');
                   },
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Nuevo'),
@@ -885,16 +881,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 ],
                 onSelected: (value) {
                   if (value == 'edit') {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => InvoiceFormPage(
-                          invoiceId: invoice.id,
-                        ),
-                      ),
-                    ).then((_) {
-                      context.read<SalesService>().loadInvoices();
-                    });
+                    context.go('/sales/invoices/${invoice.id}');
                   } else if (value == 'delete') {
                     _confirmDeleteInvoice(invoice);
                   }
@@ -1155,17 +1142,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 // Editar button
                 TextButton.icon(
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => InvoiceFormPage(
-                          invoiceId: invoice.id,
-                        ),
-                      ),
-                    ).then((_) {
-                      // Refresh the list when returning from edit
-                      context.read<SalesService>().loadInvoices();
-                    });
+                    context.go('/sales/invoices/${invoice.id}');
                   },
                   icon: const Icon(Icons.edit_outlined, size: 16),
                   label: const Text('Editar'),

@@ -1,16 +1,24 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product.dart';
 import 'database_service.dart';
+import 'tenant_service.dart';
 
 class InventoryService extends ChangeNotifier {
   final DatabaseService? _db;
+  final TenantService _tenantService = TenantService();
   final List<Product> _products = [];
 
   bool _isLoading = false;
   bool _hasLoaded = false;
+  
+  RealtimeChannel? _stockMovementsChannel;
 
-  InventoryService({DatabaseService? db}) : _db = db;
+  InventoryService({DatabaseService? db}) : _db = db {
+    // Don't await - fire and forget to avoid blocking constructor
+    _setupStockMovementsRealtime();
+  }
 
   List<Product> get products => List.unmodifiable(_products);
   bool get isLoading => _isLoading;
@@ -401,4 +409,45 @@ DateTime _parseDate(dynamic value) {
     // Ignore conversion errors and fallback below.
   }
   return DateTime.now();
+}
+
+// Extension for _setupStockMovementsRealtime
+extension _InventoryServiceRealtime on InventoryService {
+  Future<void> _setupStockMovementsRealtime() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        debugPrint('⚠️ [InventoryService] Cannot setup realtime: no tenant_id');
+        return;
+      }
+
+      await _stockMovementsChannel?.unsubscribe();
+
+      _stockMovementsChannel = Supabase.instance.client
+          .channel('stock_movements_changes')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'stock_movements',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: (payload) {
+              debugPrint('🔔 [InventoryService] Stock movement changed: ${payload.eventType}');
+              refresh(); // Reload products to reflect stock changes
+            },
+          )
+          .subscribe();
+
+      debugPrint('✅ [InventoryService] Realtime subscription active');
+    } catch (e) {
+      debugPrint('❌ [InventoryService] Failed to setup realtime: $e');
+    }
+  }
+
+  void disposeRealtime() {
+    _stockMovementsChannel?.unsubscribe();
+  }
 }

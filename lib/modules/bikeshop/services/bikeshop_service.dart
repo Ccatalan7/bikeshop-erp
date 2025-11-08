@@ -1,12 +1,19 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../models/bikeshop_models.dart';
 
 class BikeshopService extends ChangeNotifier {
   final DatabaseService _db;
+  final TenantService _tenantService = TenantService();
+  
+  RealtimeChannel? _mechanicJobsChannel;
 
-  BikeshopService(this._db);
+  BikeshopService(this._db) {
+    // Don't await - fire and forget to avoid blocking constructor
+    _setupMechanicJobsRealtime();
+  }
 
   // ============================================================
   // BIKE OPERATIONS
@@ -608,5 +615,46 @@ class BikeshopService extends ChangeNotifier {
       if (kDebugMode) print('❌ Error syncing job to invoice: $e');
       rethrow;
     }
+  }
+
+  // Realtime subscription for mechanic jobs
+  Future<void> _setupMechanicJobsRealtime() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        debugPrint('⚠️ [BikeshopService] Cannot setup realtime: no tenant_id');
+        return;
+      }
+
+      await _mechanicJobsChannel?.unsubscribe();
+
+      _mechanicJobsChannel = Supabase.instance.client
+          .channel('mechanic_jobs_changes')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'mechanic_jobs',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: (payload) {
+              debugPrint('🔔 [BikeshopService] Mechanic job changed: ${payload.eventType}');
+              notifyListeners(); // Notify listeners to reload data
+            },
+          )
+          .subscribe();
+
+      debugPrint('✅ [BikeshopService] Realtime subscription active');
+    } catch (e) {
+      debugPrint('❌ [BikeshopService] Failed to setup realtime: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _mechanicJobsChannel?.unsubscribe();
+    super.dispose();
   }
 }

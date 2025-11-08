@@ -281,10 +281,29 @@ class VinabikeApp extends StatelessWidget {
             });
           }
 
-          final authService = context.read<AuthService>();
+          // CRITICAL: Use context.watch() to rebuild when auth state changes
+          final authService = context.watch<AuthService>();
+          
+          debugPrint('🔐 [Main] Auth check: isAuthenticated=${authService.isAuthenticated}, isInitializing=${authService.isInitializing}');
+          debugPrint('📍 [Main] isPublicStoreHost=$isPublicStoreHost');
+
+          // Show loading screen while auth is initializing
+          if (authService.isInitializing) {
+            debugPrint('⏳ [Main] Auth still initializing, showing loading screen...');
+            return MaterialApp(
+              home: const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            );
+          }
 
           // Public store or not authenticated = single router
           if (isPublicStoreHost || !authService.isAuthenticated) {
+            debugPrint('⚠️ [Main] Using SINGLE ROUTER (no workspace system)');
+            debugPrint('   Reason: ${isPublicStoreHost ? "Public store host" : "Not authenticated"}');
+            
             return MaterialApp.router(
               title: 'Vinabike',
               theme: AppTheme.lightTheme,
@@ -311,6 +330,8 @@ class VinabikeApp extends StatelessWidget {
           }
 
           // Authenticated = workspace system with OUTER Material context
+          debugPrint('✅ [Main] User is AUTHENTICATED - using WORKSPACE SYSTEM');
+          
           return MaterialApp(
             title: 'Vinabike',
             theme: AppTheme.lightTheme,
@@ -328,17 +349,27 @@ class VinabikeApp extends StatelessWidget {
               Locale('en', ''),
             ],
             locale: const Locale('es', ''),
-            home: Scaffold(
-              body: Column(
-                children: [
-                  Container(
-                    color: Colors.white,
-                    child: const WorkspaceTabBar(),
-                  ),
-                  Expanded(
-                    child: Consumer<WorkspaceManager>(
-                      builder: (context, workspaceManager, _) {
-                        return IndexedStack(
+            home: Consumer<WorkspaceManager>(
+              builder: (context, workspaceManager, _) {
+                // Ensure workspaces are initialized before rendering
+                if (workspaceManager.workspaces.isEmpty) {
+                  debugPrint('⚠️ [Main] WorkspaceManager has no workspaces yet, showing loading...');
+                  return const Scaffold(
+                    body: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+                
+                return Scaffold(
+                  body: Column(
+                    children: [
+                      Container(
+                        color: Colors.white,
+                        child: const WorkspaceTabBar(),
+                      ),
+                      Expanded(
+                        child: IndexedStack(
                           index: workspaceManager.activeIndex,
                           sizing: StackFit.expand,
                           children: workspaceManager.workspaces.map((workspace) {
@@ -348,12 +379,12 @@ class VinabikeApp extends StatelessWidget {
                               authService: authService,
                             );
                           }).toList(),
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
           );
         },
@@ -386,10 +417,22 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
   @override
   void initState() {
     super.initState();
-    _router = AppRouter.createRouter(
-      widget.authService,
-      initialLocationOverride: widget.workspace.initialRoute,
-    );
+    
+    debugPrint('🎯 [WorkspaceRouterView] Creating router for workspace: ${widget.workspace.title} with route: ${widget.workspace.initialRoute}');
+    
+    // Create router WITHOUT initialLocation to avoid navigation conflicts
+    // The MainLayout will handle navigation to the correct route
+    _router = AppRouter.createRouter(widget.authService);
+    
+    // Navigate to the workspace's initial route after the router is created
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        debugPrint('🚀 [WorkspaceRouterView] Navigating to: ${widget.workspace.initialRoute}');
+        _router.go(widget.workspace.initialRoute);
+      } catch (e) {
+        debugPrint('❌ [WorkspaceRouterView] Navigation error: $e');
+      }
+    });
   }
 
   @override
@@ -401,7 +444,34 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Router.withConfig(config: _router);
+    
+    try {
+      return Router.withConfig(config: _router);
+    } catch (e) {
+      debugPrint('🔴 [WorkspaceRouterView] Router build error: $e');
+      return Material(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error, color: Colors.red, size: 48),
+              const SizedBox(height: 16),
+              Text('Navigation Error: $e'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  // Try to recreate router
+                  setState(() {
+                    _router = AppRouter.createRouter(widget.authService);
+                  });
+                },
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 }
 

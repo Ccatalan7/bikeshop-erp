@@ -12,6 +12,13 @@ class WorkspaceTabBar extends StatelessWidget {
     final workspaceManager = context.watch<WorkspaceManager>();
     final theme = Theme.of(context);
     
+    // Debug: Log workspace state
+    if (!workspaceManager.isInitialized) {
+      debugPrint('⚠️ [WorkspaceTabBar] WorkspaceManager not yet initialized');
+    } else {
+      debugPrint('✅ [WorkspaceTabBar] Rendering ${workspaceManager.workspaces.length} workspace(s)');
+    }
+    
     return Container(
       height: 40,
       decoration: BoxDecoration(

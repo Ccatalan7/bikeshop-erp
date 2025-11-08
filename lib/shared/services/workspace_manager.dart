@@ -31,17 +31,24 @@ class WorkspaceManager extends ChangeNotifier {
   
   final List<Workspace> _workspaces = [];
   int _activeIndex = 0;
+  bool _isInitialized = false;
   
   List<Workspace> get workspaces => List.unmodifiable(_workspaces);
   int get activeIndex => _activeIndex;
   Workspace? get activeWorkspace => _workspaces.isEmpty ? null : _workspaces[_activeIndex];
-  
+  bool get isInitialized => _isInitialized;
+
   WorkspaceManager() {
-    // Create initial workspace (dashboard)
-    addWorkspace(
-      title: 'Dashboard',
-      initialRoute: '/dashboard',
-    );
+    debugPrint('🏗️ [WorkspaceManager] Constructor called, creating initial Dashboard workspace');
+    // Create initial Dashboard workspace
+    addWorkspace(title: 'Dashboard', initialRoute: '/dashboard');
+    _isInitialized = true;
+    debugPrint('✅ [WorkspaceManager] Initialized with ${_workspaces.length} workspace(s)');
+    // Force a notification after initialization to ensure UI rebuilds
+    Future.microtask(() {
+      debugPrint('🔔 [WorkspaceManager] Calling notifyListeners() after microtask');
+      notifyListeners();
+    });
   }
   
   /// Add a new workspace tab
@@ -49,6 +56,8 @@ class WorkspaceManager extends ChangeNotifier {
     required String title,
     required String initialRoute,
   }) {
+    debugPrint('➕ [WorkspaceManager] addWorkspace: title=$title, route=$initialRoute');
+    
     if (_workspaces.length >= maxWorkspaces) {
       throw Exception('Maximum number of workspaces ($maxWorkspaces) reached');
     }
@@ -62,6 +71,7 @@ class WorkspaceManager extends ChangeNotifier {
     
     _workspaces.add(workspace);
     _activeIndex = _workspaces.length - 1;
+    debugPrint('✅ [WorkspaceManager] Workspace added. Total: ${_workspaces.length}, Active: $_activeIndex');
     notifyListeners();
     
     return id;
@@ -129,11 +139,14 @@ class WorkspaceManager extends ChangeNotifier {
   /// Check if a workspace with the given route already exists
   /// If it does, switch to it instead of creating a new one
   bool switchToExistingWorkspaceWithRoute(String route) {
+    debugPrint('🔍 [WorkspaceManager] Looking for existing workspace with route: $route');
     final index = _workspaces.indexWhere((w) => w.initialRoute == route);
     if (index != -1) {
+      debugPrint('✅ [WorkspaceManager] Found existing workspace at index $index, switching...');
       switchToWorkspace(index);
       return true;
     }
+    debugPrint('❌ [WorkspaceManager] No existing workspace found for $route');
     return false;
   }
   

@@ -99,6 +99,22 @@ class SalesService extends ChangeNotifier {
         ..remove('balance');
       final isNew = invoice.id == null;
 
+      // Check for duplicate invoice number
+      if (invoice.invoiceNumber.isNotEmpty) {
+        final existingInvoices = await _databaseService.select(
+          _invoicesCollection,
+          where: 'invoice_number=${invoice.invoiceNumber}',
+        );
+        
+        // If we found an invoice with the same number that's NOT this invoice, throw error
+        if (existingInvoices.isNotEmpty) {
+          final existingId = existingInvoices.first['id'] as String?;
+          if (isNew || existingId != invoice.id) {
+            throw Exception('Ya existe una factura con el número ${invoice.invoiceNumber}');
+          }
+        }
+      }
+
       Map<String, dynamic> result;
       if (isNew) {
         // Add tenant_id for new invoices
@@ -119,7 +135,11 @@ class SalesService extends ChangeNotifier {
       return savedInvoice;
     } catch (e) {
       debugPrint('SalesService.saveInvoice error: $e');
-      throw Exception('No se pudo guardar la factura.');
+      // Re-throw the exception with the original message if it's already formatted
+      if (e.toString().contains('Ya existe una factura')) {
+        rethrow;
+      }
+      throw Exception('No se pudo guardar la factura: $e');
     }
   }
 
@@ -253,24 +273,54 @@ class SalesService extends ChangeNotifier {
     }
   }
 
-  void _ensureRealtimeSubscriptions() {
-    final client = Supabase.instance.client;
+  void _ensureRealtimeSubscriptions() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        debugPrint('⚠️ [SalesService] Cannot setup realtime: no tenant_id');
+        return;
+      }
 
-    _invoiceChannel ??=
-        client.channel('sales_invoices_stream').onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: _invoicesCollection,
-              callback: _handleInvoiceChange,
-            )..subscribe();
+      final client = Supabase.instance.client;
 
-    _paymentChannel ??=
-        client.channel('sales_payments_stream').onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: _paymentsCollection,
-              callback: _handlePaymentChange,
-            )..subscribe();
+      // Unsubscribe existing channels first
+      await _invoiceChannel?.unsubscribe();
+      await _paymentChannel?.unsubscribe();
+
+      _invoiceChannel = client
+          .channel('sales_invoices_stream')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: _invoicesCollection,
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: _handleInvoiceChange,
+          )
+          .subscribe();
+
+      _paymentChannel = client
+          .channel('sales_payments_stream')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: _paymentsCollection,
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: _handlePaymentChange,
+          )
+          .subscribe();
+
+      debugPrint('✅ [SalesService] Realtime subscriptions active with tenant_id filter');
+    } catch (e) {
+      debugPrint('❌ [SalesService] Failed to setup realtime: $e');
+    }
   }
 
   void _handleInvoiceChange(PostgresChangePayload payload) {

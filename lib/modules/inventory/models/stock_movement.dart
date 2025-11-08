@@ -98,6 +98,14 @@ class StockMovement {
       case 'stock_adjustment': return 'Ajuste de Stock';
       case 'ecommerce': return 'Tienda Online';
       case 'mechanic_job': return 'Taller';
+      // Adjustment types (when movement_type = 'adjustment')
+      case 'manual': return 'Ajuste Manual';
+      case 'import': return 'Importación';
+      case 'correction': return 'Corrección';
+      case 'initial': return 'Stock Inicial';
+      case 'damage': return 'Daño';
+      case 'loss': return 'Pérdida';
+      case 'found': return 'Hallazgo';
       default: return source;
     }
   }

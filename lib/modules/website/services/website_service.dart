@@ -22,6 +22,9 @@ class WebsiteService extends ChangeNotifier {
   bool _isLoading = false;
   bool _isInitializing = false;
   String? _error;
+  
+  // Realtime subscriptions
+  RealtimeChannel? _ordersChannel;
 
   List<WebsiteBanner> get banners => _banners;
   List<FeaturedProduct> get featuredProducts => _featuredProducts;
@@ -835,9 +838,53 @@ class WebsiteService extends ChangeNotifier {
         loadOrders(),
         loadBlocks(), // Load Odoo-style blocks
       ]);
+      _setupOrdersRealtime(); // Subscribe to real-time order updates
     } finally {
       _isInitializing = false;
       notifyListeners();
     }
+  }
+
+  /// Set up realtime subscription for online orders
+  void _setupOrdersRealtime() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        debugPrint('⚠️ [WebsiteService] Cannot setup realtime: no tenant_id');
+        return;
+      }
+
+      // Unsubscribe from existing channel if any
+      await _ordersChannel?.unsubscribe();
+
+      _ordersChannel = _supabase
+          .channel('online_orders_changes')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'online_orders',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: (payload) {
+              debugPrint(
+                  '🔔 [WebsiteService] Online order changed: ${payload.eventType}');
+              loadOrders(); // Reload orders list
+            },
+          )
+          .subscribe();
+
+      debugPrint('✅ [WebsiteService] Realtime subscription active for online_orders');
+    } catch (e) {
+      debugPrint('❌ [WebsiteService] Failed to setup realtime: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _ordersChannel?.unsubscribe();
+    super.dispose();
   }
 }

@@ -3,18 +3,83 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/stock_movement.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/tenant_service.dart';
 
 class StockMovementService extends ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService();
+  final TenantService _tenantService = TenantService();
   final String _tableName = 'stock_movements';
 
   List<StockMovement> _movements = [];
   bool _isLoading = false;
   String? _error;
+  
+  // Realtime channels
+  RealtimeChannel? _movementsChannel;
+  RealtimeChannel? _adjustmentsChannel;
 
   List<StockMovement> get movements => List.unmodifiable(_movements);
   bool get isLoading => _isLoading;
   String? get error => _error;
+  
+  StockMovementService() {
+    _setupRealtime();
+  }
+  
+  /// Setup realtime subscriptions for multi-user collaboration
+  Future<void> _setupRealtime() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        debugPrint('⚠️ [StockMovementService] Cannot setup realtime: no tenant_id');
+        return;
+      }
+      
+      debugPrint('🔔 [StockMovementService] Setting up realtime for tenant: $tenantId');
+      
+      // Subscribe to stock_movements table changes
+      _movementsChannel = Supabase.instance.client
+          .channel('stock_movements_list_changes')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'stock_movements',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: (payload) {
+              debugPrint('🔔 [StockMovementService] Movement changed: ${payload.eventType}');
+              loadMovements(forceRefresh: true);
+            },
+          )
+          .subscribe();
+      
+      // Subscribe to stock_adjustments table changes
+      _adjustmentsChannel = Supabase.instance.client
+          .channel('stock_adjustments_list_changes')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'stock_adjustments',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: (payload) {
+              debugPrint('🔔 [StockMovementService] Adjustment changed: ${payload.eventType}');
+              loadMovements(forceRefresh: true);
+            },
+          )
+          .subscribe();
+      
+      debugPrint('✅ [StockMovementService] Realtime subscriptions active');
+    } catch (e) {
+      debugPrint('❌ [StockMovementService] Realtime setup error: $e');
+    }
+  }
 
   /// Load all stock movements with optional filters
   Future<void> loadMovements({
@@ -33,7 +98,15 @@ class StockMovementService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      var query = Supabase.instance.client.from(_tableName).select();
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+      
+      var query = Supabase.instance.client
+          .from(_tableName)
+          .select()
+          .eq('tenant_id', tenantId);  // ⚠️ CRITICAL: Filter by tenant
 
       if (productId != null) {
         query = query.eq('product_id', productId);
@@ -72,9 +145,10 @@ class StockMovementService extends ChangeNotifier {
       }
 
       _error = null;
+      debugPrint('✅ [StockMovementService] Loaded ${_movements.length} movements');
     } catch (e) {
       _error = 'Error al cargar movimientos: $e';
-      debugPrint('StockMovementService.loadMovements error: $e');
+      debugPrint('❌ [StockMovementService] loadMovements error: $e');
       _movements = [];
     } finally {
       _isLoading = false;
@@ -133,9 +207,15 @@ class StockMovementService extends ChangeNotifier {
   /// Get movements for a specific product
   Future<List<StockMovement>> getProductMovements(String productId) async {
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+      
       final response = await Supabase.instance.client
           .from(_tableName)
           .select()
+          .eq('tenant_id', tenantId)  // ⚠️ Filter by tenant
           .eq('product_id', productId)
           .order('date', ascending: false)
           .order('created_at', ascending: false);
@@ -143,7 +223,7 @@ class StockMovementService extends ChangeNotifier {
       final List<dynamic> data = response as List<dynamic>;
       return await _enrichMovements(data);
     } catch (e) {
-      debugPrint('Error getting product movements: $e');
+      debugPrint('❌ [StockMovementService] Error getting product movements: $e');
       return [];
     }
   }
@@ -157,17 +237,23 @@ class StockMovementService extends ChangeNotifier {
     String? warehouseId,
   }) async {
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+      
       // Get current inventory
       final product = await Supabase.instance.client
           .from('products')
-          .select('inventory_qty, name, sku')
+          .select('inventory_qty, stock_quantity, name, sku')
+          .eq('tenant_id', tenantId)  // ⚠️ Filter by tenant
           .eq('id', productId)
           .single();
 
       final currentQty = (product['inventory_qty'] as num?)?.toDouble() ?? 0;
       final adjustedQty = type == 'IN' ? quantity : -quantity;
 
-      // Create movement
+      // Create movement using DatabaseService (auto-injects tenant_id)
       final movementData = {
         'product_id': productId,
         'warehouse_id': warehouseId,
@@ -179,17 +265,14 @@ class StockMovementService extends ChangeNotifier {
         'date': DateTime.now().toIso8601String(),
       };
 
-      final response = await Supabase.instance.client
-          .from(_tableName)
-          .insert(movementData)
-          .select()
-          .single();
+      final response = await _databaseService.insert(_tableName, movementData);
 
-      // Update product inventory
+      // Update product inventory (BOTH columns!)
       await Supabase.instance.client.from('products').update({
         'inventory_qty': currentQty + adjustedQty,
+        'stock_quantity': currentQty + adjustedQty,  // Update both columns
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', productId);
+      }).eq('tenant_id', tenantId).eq('id', productId);
 
       // Reload movements
       await loadMovements(forceRefresh: true);
@@ -209,7 +292,7 @@ class StockMovementService extends ChangeNotifier {
         createdAt: DateTime.now(),
       );
     } catch (e) {
-      debugPrint('Error creating adjustment: $e');
+      debugPrint('❌ [StockMovementService] Error creating adjustment: $e');
       _error = 'Error al crear ajuste: $e';
       notifyListeners();
       return null;
@@ -222,7 +305,15 @@ class StockMovementService extends ChangeNotifier {
     DateTime? endDate,
   }) async {
     try {
-      var query = Supabase.instance.client.from(_tableName).select();
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+      
+      var query = Supabase.instance.client
+          .from(_tableName)
+          .select()
+          .eq('tenant_id', tenantId);  // ⚠️ Filter by tenant
 
       if (startDate != null) {
         query = query.gte('date', startDate.toIso8601String());
@@ -267,7 +358,7 @@ class StockMovementService extends ChangeNotifier {
         'by_type': byType,
       };
     } catch (e) {
-      debugPrint('Error getting statistics: $e');
+      debugPrint('❌ [StockMovementService] Error getting statistics: $e');
       return {
         'total_movements': 0,
         'total_in': 0,
@@ -281,5 +372,12 @@ class StockMovementService extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+  
+  @override
+  void dispose() {
+    _movementsChannel?.unsubscribe();
+    _adjustmentsChannel?.unsubscribe();
+    super.dispose();
   }
 }

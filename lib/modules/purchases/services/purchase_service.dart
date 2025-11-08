@@ -27,6 +27,10 @@ class PurchaseService extends ChangeNotifier {
   bool _invoicesLoaded = false;
   bool _paymentsLoaded = false;
   
+  // Realtime channels
+  RealtimeChannel? _purchaseInvoicesChannel;
+  RealtimeChannel? _purchasePaymentsChannel;
+  
   // Public getters for reactive UI
   UnmodifiableListView<PurchaseInvoice> get purchaseInvoices => UnmodifiableListView(_invoiceCache);
 
@@ -147,6 +151,7 @@ class PurchaseService extends ChangeNotifier {
       _invoiceCache = data.map((row) => PurchaseInvoice.fromJson(row)).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
       _invoicesLoaded = true;
+      _setupPurchaseRealtime(); // Setup realtime after first load
       notifyListeners(); // Notify UI to rebuild after loading invoices
       return _invoiceCache;
     } catch (e) {
@@ -657,5 +662,66 @@ class PurchaseService extends ChangeNotifier {
     } catch (e) {
       throw Exception('No se pudo deshacer el pago: $e');
     }
+  }
+
+  // Realtime subscriptions for purchase invoices and payments
+  void _setupPurchaseRealtime() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        debugPrint('⚠️ [PurchaseService] Cannot setup realtime: no tenant_id');
+        return;
+      }
+
+      await _purchaseInvoicesChannel?.unsubscribe();
+      await _purchasePaymentsChannel?.unsubscribe();
+
+      _purchaseInvoicesChannel = _supabase
+          .channel('purchase_invoices_changes')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'purchase_invoices',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: (payload) {
+              debugPrint('🔔 [PurchaseService] Purchase invoice changed: ${payload.eventType}');
+              getPurchaseInvoices(forceRefresh: true);
+            },
+          )
+          .subscribe();
+
+      _purchasePaymentsChannel = _supabase
+          .channel('purchase_payments_changes')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'purchase_payments',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: (payload) {
+              debugPrint('🔔 [PurchaseService] Purchase payment changed: ${payload.eventType}');
+              getPurchasePayments(forceRefresh: true);
+            },
+          )
+          .subscribe();
+
+      debugPrint('✅ [PurchaseService] Realtime subscriptions active');
+    } catch (e) {
+      debugPrint('❌ [PurchaseService] Failed to setup realtime: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _purchaseInvoicesChannel?.unsubscribe();
+    _purchasePaymentsChannel?.unsubscribe();
+    super.dispose();
   }
 }

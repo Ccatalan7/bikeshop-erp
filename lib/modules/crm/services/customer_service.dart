@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -7,8 +8,13 @@ import '../models/crm_models.dart';
 class CustomerService extends ChangeNotifier {
   final DatabaseService _db;
   final TenantService _tenantService;
+  
+  RealtimeChannel? _customersChannel;
 
-  CustomerService(this._db, this._tenantService);
+  CustomerService(this._db, this._tenantService) {
+    // Don't await - fire and forget to avoid blocking constructor
+    _setupCustomersRealtime();
+  }
 
   // Customer operations
   Future<List<Customer>> getCustomers({String? searchTerm}) async {
@@ -336,7 +342,48 @@ class CustomerService extends ChangeNotifier {
       };
     } catch (e) {
       if (kDebugMode) print('Error getting customer analytics: $e');
-      return {};
+      rethrow;
     }
+  }
+
+  // Realtime subscription for customers
+  Future<void> _setupCustomersRealtime() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        debugPrint('⚠️ [CustomerService] Cannot setup realtime: no tenant_id');
+        return;
+      }
+
+      await _customersChannel?.unsubscribe();
+
+      _customersChannel = Supabase.instance.client
+          .channel('customers_changes')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'customers',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: (payload) {
+              debugPrint('🔔 [CustomerService] Customer changed: ${payload.eventType}');
+              notifyListeners(); // Notify listeners to reload data
+            },
+          )
+          .subscribe();
+
+      debugPrint('✅ [CustomerService] Realtime subscription active');
+    } catch (e) {
+      debugPrint('❌ [CustomerService] Failed to setup realtime: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _customersChannel?.unsubscribe();
+    super.dispose();
   }
 }

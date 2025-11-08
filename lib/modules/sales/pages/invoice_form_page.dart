@@ -242,8 +242,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     _inventoryService = context.read<shared_inventory.InventoryService>();
 
     try {
+      // Don't force refresh - use cached data if available for faster loading
       final customersFuture = _customerService.getCustomers();
-      final productsFuture = _inventoryService.getProducts(forceRefresh: true);
+      final productsFuture = _inventoryService.getProducts(forceRefresh: false);
       final results = await Future.wait([customersFuture, productsFuture]);
 
       _cachedCustomers
@@ -829,9 +830,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       );
 
       if (widget.invoiceId == null && saved.id != null) {
-        // Use pop and push instead of go to maintain navigation stack
-        context.pop(); // Remove the form page from stack
-        context.push('/sales/invoices/${saved.id}'); // Show the detail page
+        // Navigate to the saved invoice detail page
+        context.go('/sales/invoices/${saved.id}');
         return;
       }
 
@@ -1028,7 +1028,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => context.pop(),
+            onPressed: () {
+              // Navigate back to invoice list
+              context.go('/sales/invoices');
+            },
             icon: const Icon(Icons.arrow_back),
             tooltip: 'Volver',
           ),
