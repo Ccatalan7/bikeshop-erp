@@ -833,7 +833,54 @@ Support:
 
 ---
 
-# 🖼️ SPACE MANAGEMENT & RESPONSIVE UI PATTERNS
+# � CRITICAL: REALTIME SERVICE INITIALIZATION
+
+**⚠️ NEVER use `async void` in constructor-called methods - causes UI freezing!**
+
+## The Problem
+
+Service constructors calling `async void` methods block UI thread during Supabase realtime subscription setup.
+
+**❌ WRONG - Blocks UI:**
+```dart
+class CustomerService extends ChangeNotifier {
+  CustomerService() {
+    _setupCustomersRealtime(); // Freezes app until complete
+  }
+  
+  async void _setupCustomersRealtime() { // ❌ Blocks!
+    await Supabase.instance.client.from('customers').stream(...).listen(...);
+  }
+}
+```
+
+**✅ CORRECT - Non-blocking:**
+```dart
+class CustomerService extends ChangeNotifier {
+  CustomerService() {
+    _setupCustomersRealtime(); // Returns immediately
+  }
+  
+  Future<void> _setupCustomersRealtime() async { // ✅ Non-blocking!
+    await Supabase.instance.client.from('customers').stream(...).listen(...);
+  }
+}
+```
+
+## The Rule
+
+**When creating ANY service with realtime subscriptions:**
+- ✅ Use `Future<void>` for setup methods (NOT `async void`)
+- ✅ Constructor calls setup method as fire-and-forget
+- ✅ Test navigation - should be instant, no freeze
+
+**Why:** `async void` = synchronous blocking call | `Future<void>` = async non-blocking
+
+**See:** `.github/REALTIME_SERVICE_BLOCKING_FIX.md` for detailed documentation
+
+---
+
+# �🖼️ SPACE MANAGEMENT & RESPONSIVE UI PATTERNS
 
 **CRITICAL LESSONS LEARNED FROM PRODUCTION TESTING (Oct 31, 2025)**
 
@@ -1458,7 +1505,155 @@ Copilot must:
 
 ---
 
-# � Import Services (CSV/Excel) - Multi-Tenant Rules
+# 📦 Import Services (CSV/Excel/Zoho) - Stock Tracking Pattern
+
+**ALL import services that modify stock MUST use single-transaction RPC pattern.**
+
+## ✅ Automatic Protection (Oct 28, 2025 → Enhanced Nov 8, 2025)
+
+### Background: Why Transaction Scope Matters
+
+**The Problem (Discovered Nov 8, 2025):**
+- Supabase Python client treats each RPC call as a separate HTTP request
+- Each HTTP request = separate database transaction
+- Session variables only persist WITHIN a transaction
+- Setting context in one call, then updating in another call = context lost!
+
+**The Solution:**
+- Create RPC functions that bundle context-setting AND data-update in ONE function
+- ONE function call = ONE HTTP request = ONE database transaction
+- Trigger fires within same transaction → sees session variables → labels import correctly
+
+### Pattern: Single-Transaction RPC Functions
+
+**Database RPC Template** (add to `core_schema.sql`):
+```sql
+create or replace function public.import_{table}_with_context(
+  p_tenant_id uuid,
+  p_unique_id text,              -- SKU, email, invoice_number, etc.
+  p_{table}_data jsonb,
+  p_import_reference text,
+  p_import_reason text default 'Import'
+)
+returns jsonb
+security definer
+language plpgsql
+as $$
+declare
+  v_updated_count integer := 0;
+begin
+  -- Set import context (transaction-scoped)
+  perform pg_catalog.set_config('app.stock_adjustment_context', 'import', true);
+  perform pg_catalog.set_config('app.import_reference', p_import_reference, true);
+  perform pg_catalog.set_config('app.import_reason', p_import_reason, true);
+  
+  -- Update record (trigger sees context in same transaction)
+  update {table}
+  set
+    column1 = coalesce((p_{table}_data->>'column1')::type, column1),
+    column2 = coalesce((p_{table}_data->>'column2')::type, column2),
+    updated_at = now()
+  where tenant_id = p_tenant_id and unique_column = p_unique_id;
+  
+  get diagnostics v_updated_count = row_count;
+  
+  -- Clear context
+  perform pg_catalog.set_config('app.stock_adjustment_context', '', true);
+  perform pg_catalog.set_config('app.import_reference', '', true);
+  perform pg_catalog.set_config('app.import_reason', '', true);
+  
+  return jsonb_build_object('success', true, 'updated_count', v_updated_count);
+end;
+$$;
+
+grant execute on function public.import_{table}_with_context(uuid, text, jsonb, text, text) to authenticated;
+```
+
+**Python Import Script Pattern**:
+```python
+# ✅ CORRECT: Single RPC = single transaction
+import_ref = f"import_{int(time.time() * 1000)}"
+
+result = client.rpc('import_product_with_context', {
+    'p_tenant_id': tenant_id,
+    'p_sku': sku,
+    'p_product_data': {
+        'name': product_name,
+        'price': price,
+        'stock_quantity': new_stock
+    },
+    'p_import_reference': import_ref,
+    'p_import_reason': f'Import: {sku}'
+}).execute()
+
+# ❌ WRONG: Separate calls = separate transactions (context lost)
+client.rpc('set_config', {...}).execute()  # Transaction 1
+client.table('products').update({...}).execute()  # Transaction 2 (no context!)
+```
+
+## 🚨 Import Service Checklist
+
+When creating ANY import service (products, categories, customers, suppliers, etc.):
+
+1. ✅ **Check if RPC function exists** in `core_schema.sql`
+   - Search for: `import_{table}_with_context`
+   - If missing, create using template above
+   
+2. ✅ **Use single-transaction RPC pattern** in Python/Dart
+   - ONE `client.rpc()` call bundles context + update
+   - Generate `import_reference` once per import batch
+   
+3. ✅ **Authenticate and get tenant_id**
+   - Sign in with email/password
+   - Fetch tenant_id from `user_profiles` table
+   
+4. ✅ **Handle errors gracefully**
+   - Show which rows failed
+   - Don't stop entire import on single error
+   
+5. ✅ **Support both CSV and Excel formats**
+   - Use pandas for parsing
+   - Validate data before inserting
+   
+6. ✅ **Show progress indicator during bulk imports**
+   - Print/log each item processed
+   - Display summary at end
+   
+7. ✅ **Test with multiple tenants to verify isolation**
+   - Import same SKU for different tenants
+   - Verify data doesn't leak between tenants
+
+## 📋 Existing Import Infrastructure
+
+**Database Functions** (in `core_schema.sql`):
+- `set_config(text, text, boolean)` - Exposes PostgreSQL session variables (lines 1629-1654)
+- `import_product_with_context(uuid, text, jsonb, text, text)` - Products import (lines 1656-1720)
+- `track_product_stock_changes()` - Trigger that detects import context (lines 863-958)
+
+**Stock Adjustments Table**:
+- `adjustment_type` includes `'import'` value (line 802)
+- `reference` column stores import batch ID (line 815)
+
+**Test Scripts**:
+- `scripts/zoho_import/test_import_with_tracking.py` - Working example (469 lines)
+- `scripts/zoho_import/test_products.csv` - Sample test data
+
+**Documentation**:
+- `.github/IMPORT_STOCK_TRACKING_GUIDE.md` - Complete implementation guide
+- `.github/ZOHO_IMPORT_QUICKREF.md` - One-page cheat sheet for AI agents
+
+## 🎯 Production Verification
+
+✅ **Verified working Nov 8, 2025:**
+- Stock adjustments created with `type='import'`
+- Reference column populated with `import_TIMESTAMP`
+- UI displays "Importación" origin label (not "Ajuste Manual")
+- No ghost records (only actual stock changes logged)
+- Multi-tenant isolation working correctly
+
+---
+
+# � Import Services (CSV/Excel) - Multi-Tenant Rules (LEGACY - SUPERSEDED BY ABOVE)
 
 **ALL import services MUST follow these rules:**
 
