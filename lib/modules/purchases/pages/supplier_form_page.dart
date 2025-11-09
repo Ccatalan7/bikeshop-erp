@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/models/supplier.dart';
+import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -33,6 +34,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
 
   SupplierType _type = SupplierType.local;
   PaymentTerms _paymentTerms = PaymentTerms.net30;
+  TaxTreatment _defaultTaxTreatment = TaxTreatment.taxIncluded; // Most suppliers charge IVA
   bool _isActive = true;
 
   bool _isSaving = false;
@@ -100,6 +102,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
         _notesController.text = supplier.notes ?? '';
         _type = supplier.type;
         _paymentTerms = supplier.paymentTerms;
+        _defaultTaxTreatment = supplier.defaultTaxTreatment;
         _isActive = supplier.isActive;
       }
     } catch (e) {
@@ -157,6 +160,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
           : _websiteController.text.trim(),
       bankDetails: _existing?.bankDetails ?? const {},
       paymentTerms: _paymentTerms,
+      defaultTaxTreatment: _defaultTaxTreatment,
       notes: _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
@@ -425,6 +429,33 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  
+                  // Tax Treatment Dropdown
+                  DropdownButtonFormField<TaxTreatment>(
+                    value: _defaultTaxTreatment,
+                    decoration: const InputDecoration(
+                      labelText: 'Tratamiento de IVA por Defecto',
+                      helperText: 'Se usará como sugerencia al crear facturas de compra',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: TaxTreatment.taxIncluded,
+                        child: Text('✓ IVA Incluido (19%) - Proveedor cobra IVA'),
+                      ),
+                      DropdownMenuItem(
+                        value: TaxTreatment.noTax,
+                        child: Text('✗ Sin IVA - Proveedor exento'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _defaultTaxTreatment = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Proveedor activo'),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -118,8 +119,58 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   }
 
   Future<void> _markAsConfirmed() async {
+    final salesService = context.read<SalesService>();
+    final invoice = _findInvoice(salesService);
+    if (invoice == null) return;
+    
+    // ⚠️ WARN when confirming invoice without tax - allow quick fix
+    if (invoice.taxTreatment == TaxTreatment.noTax) {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber, color: Colors.orange, size: 28),
+              SizedBox(width: 12),
+              Text('Factura sin IVA'),
+            ],
+          ),
+          content: const Text(
+            '⚠️ Esta factura NO tiene IVA incluido.\n\n'
+            '¿Cómo proceder?\n\n'
+            '• Si pagó con tarjeta → DEBE llevar IVA\n'
+            '• Si pagó efectivo/transferencia → Sin IVA está OK',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'cancel'),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, 'edit'),
+              style: FilledButton.styleFrom(backgroundColor: Colors.blue),
+              child: const Text('Ir a editar factura'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, 'no_tax'),
+              style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+              child: const Text('Confirmar sin IVA'),
+            ),
+          ],
+        ),
+      );
+      
+      if (result == 'cancel' || result == null) return; // User cancelled
+      
+      if (result == 'edit') {
+        // Navigate to edit page
+        await _openEditInvoice(invoice);
+        return; // Don't confirm yet, let user edit first
+      }
+      // If 'no_tax' - continue with confirmation
+    }
+    
     try {
-      final salesService = context.read<SalesService>();
       await salesService.updateInvoiceStatus(
           widget.invoiceId, InvoiceStatus.confirmed);
       await _loadInvoice();

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/payment_method.dart';
+import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -78,6 +80,160 @@ class _PaymentFormState extends State<PaymentForm> {
     }
   }
 
+  /// Check if there's a mismatch between invoice tax treatment and payment method
+  String? _checkTaxMismatch() {
+    if (_selectedPaymentMethod == null) return null;
+    
+    final invoiceHasTax = widget.invoice.taxTreatment == TaxTreatment.taxIncluded;
+    final paymentMethodExpectsTax = _selectedPaymentMethod!.defaultTaxTreatment == TaxTreatment.taxIncluded;
+    
+    if (!invoiceHasTax && paymentMethodExpectsTax) {
+      return 'no_tax_with_card';
+    } else if (invoiceHasTax && !paymentMethodExpectsTax) {
+      return 'has_tax_without_card';
+    }
+    
+    return null;
+  }
+
+  /// Show warning dialog with option to fix IVA
+  Future<bool> _showTaxMismatchWarning(String mismatchType) async {
+    final isNoTaxWithCard = mismatchType == 'no_tax_with_card';
+    
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(
+          Icons.warning_amber_rounded,
+          color: Colors.orange[700],
+          size: 48,
+        ),
+        title: const Text('⚠️ Advertencia: IVA'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isNoTaxWithCard
+                  ? 'Esta factura NO tiene IVA incluido, pero estás pagando con ${_selectedPaymentMethod!.name}.'
+                  : 'Esta factura tiene IVA incluido, pero estás pagando con ${_selectedPaymentMethod!.name}.',
+              style: const TextStyle(fontSize: 15),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isNoTaxWithCard
+                  ? 'Los pagos con tarjeta normalmente requieren factura con IVA.'
+                  : 'Los pagos en efectivo/transferencia normalmente NO llevan IVA.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[700],
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'cancel'),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'proceed'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.orange[700],
+            ),
+            child: const Text('Pagar de Todas Formas'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, 'fix'),
+            icon: const Icon(Icons.edit, size: 18),
+            label: const Text('Corregir IVA y Volver'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == 'fix') {
+      await _fixInvoiceTaxAndNavigate(isNoTaxWithCard);
+      return false; // Don't proceed with payment
+    }
+
+    return result == 'proceed'; // True if user chose to proceed anyway
+  }
+
+  /// Revert invoice to 'sent' status, update IVA, and navigate to form
+  Future<void> _fixInvoiceTaxAndNavigate(bool shouldAddTax) async {
+    final salesService = context.read<SalesService>();
+    
+    try {
+      // Step 1: Change status back to 'sent' (triggers journal entry deletion)
+      await salesService.updateInvoiceStatus(
+        widget.invoice.id!,
+        InvoiceStatus.sent,
+      );
+
+      // Step 2: Update the tax treatment AND recalculate amounts
+      final newTaxTreatment = shouldAddTax ? TaxTreatment.taxIncluded : TaxTreatment.noTax;
+      
+      // Get current invoice total
+      final currentTotal = widget.invoice.total;
+      
+      // Calculate new amounts based on tax treatment
+      final double newNetAmount;
+      final double newIvaAmount;
+      
+      if (shouldAddTax) {
+        // Adding tax: divide total by 1.19 to get net
+        newNetAmount = currentTotal / 1.19;
+        newIvaAmount = currentTotal - newNetAmount;
+      } else {
+        // Removing tax: total = net (no IVA)
+        newNetAmount = currentTotal;
+        newIvaAmount = 0;
+      }
+      
+      await Supabase.instance.client
+          .from('sales_invoices')
+          .update({
+            'tax_treatment': newTaxTreatment.value,
+            'net_amount': newNetAmount,
+            'iva_amount': newIvaAmount,
+          })
+          .eq('id', widget.invoice.id!);
+
+      // Step 3: Wait a moment for database write to complete
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      // Step 4: Reload the invoice from database to get fresh data
+      await salesService.loadInvoices();
+
+      if (!mounted) return;
+
+      // Step 4: Close payment form and show success message
+      Navigator.of(context).pop(true); // Return true to signal refresh needed
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            shouldAddTax
+                ? 'Factura revertida a "Enviada". Agrega IVA y confirma nuevamente.'
+                : 'Factura revertida a "Enviada". Quita IVA y confirma nuevamente.',
+          ),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al corregir factura: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -88,6 +244,15 @@ class _PaymentFormState extends State<PaymentForm> {
         const SnackBar(content: Text('Selecciona un método de pago.')),
       );
       return;
+    }
+
+    // Check for tax treatment mismatch
+    final taxMismatch = _checkTaxMismatch();
+    if (taxMismatch != null) {
+      final shouldProceed = await _showTaxMismatchWarning(taxMismatch);
+      if (!shouldProceed) {
+        return; // User cancelled or went to fix IVA
+      }
     }
 
     final rawAmount =
@@ -198,10 +363,49 @@ class _PaymentFormState extends State<PaymentForm> {
               invoice.customerName ?? 'Cliente',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 8),
-            Text(
-                'Saldo actual: ${ChileanUtils.formatCurrency(invoice.balance)}'),
-            const Divider(height: 32),
+            const SizedBox(height: 16),
+            
+            // Invoice breakdown card
+            Card(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildBreakdownRow(
+                      'Subtotal:',
+                      ChileanUtils.formatCurrency(invoice.netAmount),
+                      context,
+                    ),
+                    if (invoice.taxTreatment == TaxTreatment.taxIncluded) ...[
+                      const SizedBox(height: 4),
+                      _buildBreakdownRow(
+                        'IVA (19%):',
+                        ChileanUtils.formatCurrency(invoice.ivaAmount),
+                        context,
+                      ),
+                    ],
+                    const Divider(height: 16),
+                    _buildBreakdownRow(
+                      'Total factura:',
+                      ChileanUtils.formatCurrency(invoice.total),
+                      context,
+                      isBold: true,
+                    ),
+                    const SizedBox(height: 4),
+                    _buildBreakdownRow(
+                      'Saldo pendiente:',
+                      ChileanUtils.formatCurrency(invoice.balance),
+                      context,
+                      isBold: true,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _amountController,
               decoration: const InputDecoration(
@@ -354,5 +558,28 @@ class _PaymentFormState extends State<PaymentForm> {
       default:
         return Icons.payment;
     }
+  }
+
+  Widget _buildBreakdownRow(
+    String label,
+    String value,
+    BuildContext context, {
+    bool isBold = false,
+    Color? color,
+  }) {
+    final textStyle = isBold
+        ? Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: color,
+            )
+        : Theme.of(context).textTheme.bodyLarge?.copyWith(color: color);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: textStyle),
+        Text(value, style: textStyle),
+      ],
+    );
   }
 }

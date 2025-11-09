@@ -1,3 +1,5 @@
+import '../../../shared/models/tax_treatment.dart';
+
 Map<String, dynamic> _ensureMap(dynamic value) {
   if (value is Map<String, dynamic>) {
     return value;
@@ -39,6 +41,8 @@ class Invoice {
   final double total;
   final double paidAmount;
   final double balance;
+  final TaxTreatment taxTreatment; // actual tax choice for this invoice
+  final double netAmount; // net amount before IVA (total÷1.19 when tax_included)
   final List<InvoiceItem> items;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -59,6 +63,8 @@ class Invoice {
     this.total = 0,
     this.paidAmount = 0,
     this.balance = 0,
+    this.taxTreatment = TaxTreatment.noTax,
+    this.netAmount = 0,
     this.items = const [],
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -81,6 +87,8 @@ class Invoice {
     double? total,
     double? paidAmount,
     double? balance,
+    TaxTreatment? taxTreatment,
+    double? netAmount,
     List<InvoiceItem>? items,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -101,6 +109,8 @@ class Invoice {
       total: total ?? this.total,
       paidAmount: paidAmount ?? this.paidAmount,
       balance: balance ?? this.balance,
+      taxTreatment: taxTreatment ?? this.taxTreatment,
+      netAmount: netAmount ?? this.netAmount,
       items: items ?? this.items,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -127,6 +137,8 @@ class Invoice {
       balance: (json['balance'] as num?)?.toDouble() ??
           ((json['total'] as num?)?.toDouble() ?? 0) -
               ((json['paid_amount'] as num?)?.toDouble() ?? 0),
+      taxTreatment: TaxTreatment.fromString(json['tax_treatment']?.toString()),
+      netAmount: (json['net_amount'] as num?)?.toDouble() ?? 0,
       items: rawItems
           .map((item) => InvoiceItem.fromJson(_ensureMap(item)))
           .toList(),
@@ -152,6 +164,8 @@ class Invoice {
       'total': total,
       'paid_amount': paidAmount,
       'balance': balance,
+      'tax_treatment': taxTreatment.toValue(),
+      'net_amount': netAmount,
       'items': items.map((item) => item.toFirestoreMap()).toList(),
     };
   }

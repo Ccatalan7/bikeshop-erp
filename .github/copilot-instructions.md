@@ -813,9 +813,33 @@ Use Supabase Auth with OAuth2 (Google, GitHub, etc.) for secure login. Supports:
 - **Tables:** Subtle borders, compact spacing (48px rows), right-align numbers
 - **Buttons:** 1 primary (filled), 2-3 secondary (outlined/text), strategic icons only
 - **Forms:** Two-column layout (desktop), grouped fields, 12-16px spacing
-- **Split-Pane:** Use ONLY for list+detail modules (invoices, customers, products), NOT for dashboards/reports/settings
+
+**⚠️ CRITICAL: Split-Pane Layout - When to Use**
+
+**Use split-pane ONLY for these specific scenarios:**
+- ✅ **List+Detail modules** where user frequently switches between items (invoices, customers, products, accounts)
+- ✅ **High-frequency editing** where keeping context visible speeds up workflow
+- ✅ **Desktop-focused** modules with complex detail panels
+
+**DO NOT use split-pane for:**
+- ❌ **CRUD forms** with create/edit dialogs (medical leaves, contracts, employees, attendance)
+- ❌ **Dashboards** or analytics pages
+- ❌ **Reports** or read-only views (F29, financial reports)
+- ❌ **Settings** or configuration pages
+- ❌ **Simple list pages** where detail view doesn't need persistent visibility
+- ❌ **Wizards** or multi-step forms
+
+**Reference Implementations:**
+- **With split-pane:** `lib/modules/sales/pages/invoice_list_page.dart` (list+detail pattern)
+- **Without split-pane:** `lib/modules/hr/pages/medical_leaves_page.dart` (CRUD with dialogs)
+
+**Reference Implementations:**
+- **With split-pane:** `lib/modules/sales/pages/invoice_list_page.dart` (list+detail pattern)
+- **Without split-pane:** `lib/modules/hr/pages/medical_leaves_page.dart` (CRUD with dialogs)
 
 **Reference Implementation:** `lib/modules/sales/pages/invoice_list_page.dart`
+
+**⚠️ MANDATORY: All pages MUST use `MainLayout` to preserve navigation pane!**
 
 Use a unified widget set across all screens:
 
@@ -1847,6 +1871,139 @@ The app supports **3 types of barcode scanners**:
 - Prevents orphaned records
 
 ---
+
+# 💰 Tax Treatment (IVA 19%) - CRITICAL DIFFERENCES
+
+## Sales Invoices: Tax is INCLUDED in Price
+
+**Concept:** Customer sees final price on shelf/website. Tax is embedded.
+
+**Example:** Selling a bicycle for $119,000 CLP
+- Display price: $119,000 (what customer pays)
+- When "IVA Incluido" selected:
+  - Neto (Net): $100,000 (calculated: $119,000 ÷ 1.19)
+  - IVA (19%): $19,000 (calculated: $119,000 - $100,000)
+  - Total: $119,000 (unchanged - customer pays this amount)
+
+**Calculation Logic:**
+```dart
+// Sales Invoice (lib/modules/sales/pages/invoice_form_page.dart)
+double get _netAmount {
+  if (_taxTreatment == TaxTreatment.taxIncluded) {
+    return _subtotal / 1.19;  // Extract net by dividing
+  } else {
+    return _subtotal;
+  }
+}
+
+double get _iva {
+  if (_taxTreatment == TaxTreatment.taxIncluded) {
+    return _subtotal - _netAmount;  // Tax is difference
+  } else {
+    return 0;
+  }
+}
+
+double get _total => _subtotal;  // Total stays the same (what customer sees)
+```
+
+**Use Cases:**
+- POS sales (retail)
+- Service invoices (Pegas Module)
+- Customer-facing transactions
+- E-commerce product prices
+
+---
+
+## Purchase Invoices: Tax is ADDED on Top
+
+**Concept:** Supplier quotes net price. We add tax on top to calculate total.
+
+**Example:** Buying inventory for $100,000 CLP net
+- Supplier quotes: $100,000 net
+- When "IVA Incluido" selected:
+  - Subtotal (Neto): $100,000 (supplier's quoted price)
+  - IVA (19%): $19,000 (calculated: $100,000 × 0.19)
+  - Total: $119,000 (calculated: $100,000 + $19,000)
+
+**Calculation Logic:**
+```dart
+// Purchase Invoice (lib/modules/purchases/pages/purchase_invoice_form_page.dart)
+double get _netAmount {
+  return _subtotal;  // Net is always the subtotal for purchases
+}
+
+double get _iva {
+  if (_taxTreatment == TaxTreatment.taxIncluded) {
+    return _subtotal * 0.19;  // Add 19% tax
+  } else {
+    return 0;
+  }
+}
+
+double get _total {
+  if (_taxTreatment == TaxTreatment.taxIncluded) {
+    return _subtotal + _iva;  // Add tax to get total
+  } else {
+    return _subtotal;
+  }
+}
+```
+
+**Use Cases:**
+- Purchasing inventory from suppliers
+- Buying parts/components
+- Import costs
+- Service provider invoices
+
+---
+
+## Why the Difference?
+
+**Sales (Tax Included):**
+- Retail customers see **final prices** (tax already embedded)
+- We **extract** the tax component for accounting: `net = total ÷ 1.19`
+- Customer pays the displayed amount (no surprise at checkout)
+
+**Purchases (Tax Added):**
+- Suppliers quote **net prices** (before tax)
+- We **add** tax on top to get total: `total = net + (net × 0.19)`
+- Common in B2B transactions where tax is itemized separately
+
+## Accounting Impact
+
+**Sales IVA (Débito Fiscal):**
+- Credit account (liability)
+- We owe this to SII (Chilean tax authority)
+- Account code: 2110
+
+**Purchase IVA (Crédito Fiscal):**
+- Debit account (asset)
+- We can claim this back from SII
+- Account code: 2120
+
+**Net IVA Payable:**
+```
+Sales IVA - Purchase IVA = Amount owed to tax authority
+```
+
+**Example:**
+- Sold $1,190,000 with IVA → Sales IVA = $190,000 (liability)
+- Bought $595,000 with IVA → Purchase IVA = $95,000 (asset)
+- Net IVA Payable = $190,000 - $95,000 = $95,000 owed to SII
+
+---
+
+**⚠️ CRITICAL FOR COPILOT:**
+- **NEVER** use the same calculation for sales and purchases
+- **ALWAYS** check if you're in sales or purchases module
+- Sales: Divide by 1.19 to extract tax
+- Purchases: Multiply by 0.19 to add tax
+- This is Chilean tax law compliance - incorrect calculations = legal issues
+
+---
+
+**Bidirectional Cascade Delete:**
 
 # 🎨 UI/UX Standards
 

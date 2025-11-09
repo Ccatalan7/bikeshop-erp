@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'dart:html' as html;
+import 'package:flutter/foundation.dart' show kIsWeb;
+// Conditional import for web-only features
+import 'dart:typed_data' show Uint8List;
+// import 'dart:html' as html; // Removed - causes issues on native platforms
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -1280,82 +1283,24 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   }
   
   Future<void> _downloadInvoicePDF(Invoice invoice) async {
-    try {
-      final pdf = await _generateInvoicePDF(invoice);
-      final bytes = await pdf.save();
-      
-      // Create a blob and download link for web
-      final blob = html.Blob([bytes], 'application/pdf');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.AnchorElement(href: url)
-        ..setAttribute('download', '${invoice.invoiceNumber}.pdf')
-        ..click();
-      html.Url.revokeObjectUrl(url);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('PDF descargado exitosamente')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al generar PDF: $e')),
-        );
-      }
-    }
+    // TODO: Implement cross-platform PDF download using printing package
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Descarga de PDF temporalmente deshabilitada')),
+    );
   }
   
   Future<void> _printInvoice(Invoice invoice) async {
-    try {
-      final pdf = await _generateInvoicePDF(invoice);
-      final bytes = await pdf.save();
-      
-      // Open PDF in new window for printing
-      final blob = html.Blob([bytes], 'application/pdf');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.window.open(url, '_blank');
-      
-      // Cleanup after a delay
-      Future.delayed(const Duration(seconds: 1), () {
-        html.Url.revokeObjectUrl(url);
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('PDF abierto en nueva ventana para imprimir')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al imprimir: $e')),
-        );
-      }
-    }
+    // TODO: Implement cross-platform PDF printing using printing package
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Impresión de PDF temporalmente deshabilitada')),
+    );
   }
   
   Future<void> _previewInvoicePDF(Invoice invoice) async {
-    try {
-      final pdf = await _generateInvoicePDF(invoice);
-      final bytes = await pdf.save();
-      
-      // Open PDF in new window for preview
-      final blob = html.Blob([bytes], 'application/pdf');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.window.open(url, '_blank');
-      
-      // Cleanup after a delay
-      Future.delayed(const Duration(seconds: 1), () {
-        html.Url.revokeObjectUrl(url);
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al mostrar vista previa: $e')),
-        );
-      }
-    }
+    // TODO: Implement cross-platform PDF preview using printing package
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Vista previa de PDF temporalmente deshabilitada')),
+    );
   }
   
   Future<pw.Document> _generateInvoicePDF(Invoice invoice) async {

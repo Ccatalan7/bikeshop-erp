@@ -74,11 +74,11 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     parentCode: '1130',
   ),
   AccountDefinition(
-    code: '1140',
-    name: 'Otras Cuentas por Cobrar',
+    code: '1105',
+    name: 'Inventarios',
     type: AccountType.asset,
     category: AccountCategory.currentAsset,
-    description: 'Créditos diversos, anticipos y reembolsos pendientes.',
+    description: 'Valor del inventario de productos y repuestos.',
   ),
   AccountDefinition(
     code: '1150',
@@ -201,19 +201,18 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     description: 'Obligaciones comerciales pendientes con proveedores.',
   ),
   AccountDefinition(
-    code: '2110',
-    name: 'Documentos por Pagar',
-    type: AccountType.liability,
-    category: AccountCategory.currentLiability,
-    description:
-        'Letras, pagarés y otros documentos por pagar en el corto plazo.',
+    code: '2150',
+    name: 'IVA Débito Fiscal',
+    type: AccountType.tax,
+    category: AccountCategory.taxPayable,
+    description: 'IVA recaudado en ventas (19%).',
   ),
   AccountDefinition(
     code: '2120',
-    name: 'Otras Cuentas por Pagar',
-    type: AccountType.liability,
-    category: AccountCategory.currentLiability,
-    description: 'Obligaciones diversas con terceros.',
+    name: 'IVA Crédito Fiscal',
+    type: AccountType.tax,
+    category: AccountCategory.taxReceivable,
+    description: 'IVA pagado en compras (19%).',
   ),
   AccountDefinition(
     code: '2130',
@@ -340,20 +339,18 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     description: 'Ingresos provenientes de la venta de bienes.',
   ),
   AccountDefinition(
-    code: '4101',
+    code: '4100',
     name: 'Ingresos por Ventas de Productos',
     type: AccountType.income,
     category: AccountCategory.operatingIncome,
-    description: 'Ventas de mercaderías y productos terminados.',
-    parentCode: '4100',
+    description: 'Ventas de bicicletas, repuestos y accesorios.',
   ),
   AccountDefinition(
     code: '4102',
     name: 'Ingresos por Ventas de Servicios',
     type: AccountType.income,
     category: AccountCategory.operatingIncome,
-    description:
-        'Ingresos por prestación de servicios profesionales o técnicos.',
+    description: 'Ingresos por servicios de mantención y reparación.',
     parentCode: '4100',
   ),
   AccountDefinition(
@@ -395,12 +392,11 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     description: 'Costo de adquisición o producción de los bienes vendidos.',
   ),
   AccountDefinition(
-    code: '5101',
-    name: 'Costo de Mercaderías Vendidas',
+    code: '5100',
+    name: 'Costo de Ventas',
     type: AccountType.expense,
     category: AccountCategory.costOfGoodsSold,
-    description: 'Costos directos asociados a las ventas de mercaderías.',
-    parentCode: '5100',
+    description: 'Costo directo de productos vendidos.',
   ),
   AccountDefinition(
     code: '5102',
@@ -408,7 +404,6 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     type: AccountType.expense,
     category: AccountCategory.costOfGoodsSold,
     description: 'Costos directos asociados a la prestación de servicios.',
-    parentCode: '5100',
   ),
   AccountDefinition(
     code: '5200',

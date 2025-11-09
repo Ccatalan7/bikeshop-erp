@@ -1222,7 +1222,11 @@ alter table public.suppliers
   add column if not exists notes text,
   add column if not exists is_active boolean not null default true,
   add column if not exists created_at timestamp with time zone not null default now(),
-  add column if not exists updated_at timestamp with time zone not null default now();
+  add column if not exists updated_at timestamp with time zone not null default now(),
+  add column if not exists default_tax_treatment text not null default 'no_tax' check (default_tax_treatment in ('no_tax', 'tax_included'));
+
+comment on column suppliers.default_tax_treatment is
+  'Suggested tax treatment for purchases from this supplier. tax_included = invoice with IVA, no_tax = receipt or international purchase. User can override per transaction.';
 
 do $$
 begin
@@ -2083,53 +2087,7 @@ begin
 end $$;
 
 -- Note: Default accounts are now seeded per-tenant via trigger (see handle_new_tenant function)
--- This legacy INSERT is skipped if the accounts table has multi-tenant structure
-do $$
-begin
-  -- Check if accounts table has the old structure (no tenant_id unique constraint)
-  if not exists (
-    select 1 from information_schema.table_constraints 
-    where table_name = 'accounts' 
-      and constraint_type = 'UNIQUE'
-      and constraint_name like '%tenant%'
-  ) then
-    -- Old single-tenant structure: insert default accounts
-    insert into public.accounts (code, name, type, category, description)
-    values
-      ('1101', 'Caja General', 'asset', 'currentAsset', 'Efectivo disponible en caja y fondos inmediatos.'),
-      ('1110', 'Bancos - Cuenta Corriente', 'asset', 'currentAsset', 'Saldos disponibles en cuentas corrientes bancarias.'),
-      ('1190', 'Otros Activos Corrientes', 'asset', 'currentAsset', 'Activos circulantes no clasificados en otra cuenta específica.'),
-      ('1130', 'Cuentas por Cobrar Comerciales', 'asset', 'currentAsset', 'Saldos pendientes de cobro a clientes por ventas a crédito.'),
-      ('510000', 'Costo de Ventas', 'expense', 'costOfGoodsSold', 'Costos directos asociados a la venta de productos y servicios.'),
-      ('610100', 'Sueldos y Salarios', 'expense', 'operatingExpense', 'Remuneraciones del personal y pagos de nómina.'),
-      ('610200', 'Cotizaciones Previsionales y Salud', 'expense', 'operatingExpense', 'Aportes previsionales, salud y seguros obligatorios del personal.'),
-      ('610300', 'Honorarios Profesionales', 'expense', 'operatingExpense', 'Servicios profesionales externos y consultorías.'),
-      ('620100', 'Arriendo de Locales', 'expense', 'operatingExpense', 'Pagos de arriendo de oficinas, locales y bodegas.'),
-      ('620200', 'Servicios Básicos', 'expense', 'operatingExpense', 'Consumo de electricidad, agua, gas y otros servicios básicos.'),
-      ('620300', 'Telefonía e Internet', 'expense', 'operatingExpense', 'Planes de telefonía fija, móvil y servicios de internet.'),
-      ('620400', 'Mantención y Reparaciones', 'expense', 'operatingExpense', 'Gastos de mantenimiento preventivo y correctivo de infraestructura y equipos.'),
-      ('620500', 'Suministros de Oficina', 'expense', 'operatingExpense', 'Materiales de oficina, papelería e insumos administrativos.'),
-      ('630100', 'Marketing y Publicidad', 'expense', 'operatingExpense', 'Campañas de marketing, publicidad y promoción de la marca.'),
-      ('630200', 'Comisiones y Servicios de Venta', 'expense', 'operatingExpense', 'Comisiones pagadas a vendedores y servicios relacionados con ventas.'),
-      ('640100', 'Gastos de Viaje y Viáticos', 'expense', 'operatingExpense', 'Traslados, alojamiento y viáticos del personal.'),
-      ('640200', 'Capacitación y Desarrollo', 'expense', 'operatingExpense', 'Programas de formación, cursos y certificaciones del personal.'),
-      ('650100', 'Seguros Generales', 'expense', 'operatingExpense', 'Primas de seguros patrimoniales, de responsabilidad y otros.'),
-      ('650200', 'Impuestos y Contribuciones Municipales', 'expense', 'taxExpense', 'Patentes, contribuciones y otros impuestos municipales.'),
-      ('660100', 'Intereses y Gastos Financieros', 'expense', 'financialExpense', 'Intereses de créditos, comisiones bancarias y costos financieros.'),
-      ('670100', 'Depreciación y Amortización', 'expense', 'operatingExpense', 'Gastos por depreciación de activos fijos y amortización de intangibles.'),
-      ('680100', 'Gastos Varios', 'expense', 'operatingExpense', 'Gastos generales menores no clasificados en otras cuentas específicas.')
-    on conflict (code) do update
-    set
-      name = excluded.name,
-      type = excluded.type,
-      category = excluded.category,
-      description = coalesce(excluded.description, accounts.description),
-      is_active = true,
-      updated_at = now();
-  else
-    raise notice 'Skipping default accounts INSERT - multi-tenant structure detected. Accounts will be seeded per-tenant.';
-  end if;
-end $$;
+-- Legacy INSERT removed - all tenants use seed_chart_of_accounts() with 4-digit codes
 
 create or replace function public.ensure_account(
   p_code text,
@@ -2175,32 +2133,21 @@ begin
        limit 1;
     end if;
     if v_tenant_id is null then
-      -- For backward compatibility: try old single-tenant structure
-      insert into public.accounts (code, name, type, category, description, parent_id)
-      values (p_code, p_name, p_type, p_category, p_description, v_parent_id)
-      on conflict (code) do update
-        set name = excluded.name,
-            type = excluded.type,
-            category = excluded.category,
-            description = coalesce(excluded.description, accounts.description),
-            parent_id = coalesce(excluded.parent_id, accounts.parent_id),
-            is_active = true,
-            updated_at = now()
-      returning id into v_account_id;
-    else
-      -- Multi-tenant structure: use (tenant_id, code) unique constraint
-      insert into public.accounts (tenant_id, code, name, type, category, description, parent_id)
-      values (v_tenant_id, p_code, p_name, p_type, p_category, p_description, v_parent_id)
-      on conflict (tenant_id, code) do update
-        set name = excluded.name,
-            type = excluded.type,
-            category = excluded.category,
-            description = coalesce(excluded.description, accounts.description),
-            parent_id = coalesce(excluded.parent_id, accounts.parent_id),
-            is_active = true,
-            updated_at = now()
-      returning id into v_account_id;
+      raise exception 'Cannot create account without tenant_id. User must be authenticated.';
     end if;
+    
+    -- Multi-tenant structure: use (tenant_id, code) unique constraint
+    insert into public.accounts (tenant_id, code, name, type, category, description, parent_id)
+    values (v_tenant_id, p_code, p_name, p_type, p_category, p_description, v_parent_id)
+    on conflict (tenant_id, code) do update
+      set name = excluded.name,
+          type = excluded.type,
+          category = excluded.category,
+          description = coalesce(excluded.description, accounts.description),
+          parent_id = coalesce(excluded.parent_id, accounts.parent_id),
+          is_active = true,
+          updated_at = now()
+    returning id into v_account_id;
   end;
 
   return v_account_id;
@@ -2250,32 +2197,21 @@ begin
   end if;
 
   if p_tenant_id is null then
-    -- For backward compatibility: try old single-tenant structure
-    insert into public.accounts (code, name, type, category, description, parent_id)
-    values (p_code, p_name, p_type, p_category, p_description, v_parent_id)
-    on conflict (code) do update
-      set name = excluded.name,
-          type = excluded.type,
-          category = excluded.category,
-          description = coalesce(excluded.description, accounts.description),
-          parent_id = coalesce(excluded.parent_id, accounts.parent_id),
-          is_active = true,
-          updated_at = now()
-    returning id into v_account_id;
-  else
-    -- Multi-tenant structure: use (tenant_id, code) unique constraint
-    insert into public.accounts (tenant_id, code, name, type, category, description, parent_id)
-    values (p_tenant_id, p_code, p_name, p_type, p_category, p_description, v_parent_id)
-    on conflict (tenant_id, code) do update
-      set name = excluded.name,
-          type = excluded.type,
-          category = excluded.category,
-          description = coalesce(excluded.description, accounts.description),
-          parent_id = coalesce(excluded.parent_id, accounts.parent_id),
-          is_active = true,
-          updated_at = now()
-    returning id into v_account_id;
+    raise exception 'Cannot create account without tenant_id. Tenant ID is required for multi-tenant system.';
   end if;
+
+  -- Multi-tenant structure: use (tenant_id, code) unique constraint
+  insert into public.accounts (tenant_id, code, name, type, category, description, parent_id)
+  values (p_tenant_id, p_code, p_name, p_type, p_category, p_description, v_parent_id)
+  on conflict (tenant_id, code) do update
+    set name = excluded.name,
+        type = excluded.type,
+        category = excluded.category,
+        description = coalesce(excluded.description, accounts.description),
+        parent_id = coalesce(excluded.parent_id, accounts.parent_id),
+        is_active = true,
+        updated_at = now()
+  returning id into v_account_id;
 
   return v_account_id;
 end;
@@ -2309,6 +2245,58 @@ create table if not exists sales_invoices (
   updated_at timestamp with time zone not null default now(),
   unique(tenant_id, invoice_number) -- Each tenant can have same invoice numbers
 );
+
+-- Add flexible tax columns to sales_invoices
+alter table sales_invoices 
+  add column if not exists tax_treatment text not null default 'no_tax' check (tax_treatment in ('no_tax', 'tax_included')),
+  add column if not exists net_amount numeric(12,2) not null default 0;
+
+comment on column sales_invoices.tax_treatment is
+  'Actual tax treatment for THIS invoice. no_tax = full amount is revenue, tax_included = amount includes 19% IVA (divide by 1.19)';
+
+comment on column sales_invoices.net_amount is
+  'Net amount excluding IVA. If tax_included: total ÷ 1.19, if no_tax: equals total';
+
+-- Migrate existing invoices: calculate net_amount and tax_treatment based on iva_amount
+do $$
+begin
+  -- CRITICAL: Disable triggers during migration to avoid journal entry creation without user context
+  alter table sales_invoices disable trigger trg_sales_invoices_change;
+  
+  -- Set net_amount based on existing iva_amount
+  update sales_invoices
+  set net_amount = total - iva_amount
+  where net_amount = 0 and total > 0;
+  
+  -- Set tax_treatment based on whether IVA was applied
+  update sales_invoices
+  set tax_treatment = case 
+    when iva_amount > 0 then 'tax_included'
+    else 'no_tax'
+  end
+  where tax_treatment = 'no_tax' and total > 0;
+  
+  -- Re-enable trigger
+  alter table sales_invoices enable trigger trg_sales_invoices_change;
+  
+  raise notice 'Migrated % sales invoices with tax data', (select count(*) from sales_invoices where total > 0);
+exception
+  when undefined_table then
+    raise notice 'sales_invoices table does not exist yet, skipping migration';
+  when undefined_object then
+    raise notice 'trg_sales_invoices_change trigger does not exist yet, running migration without disabling triggers';
+    -- Try migration anyway (table exists but trigger doesn't)
+    update sales_invoices
+    set net_amount = total - iva_amount
+    where net_amount = 0 and total > 0;
+    
+    update sales_invoices
+    set tax_treatment = case 
+      when iva_amount > 0 then 'tax_included'
+      else 'no_tax'
+    end
+    where tax_treatment = 'no_tax' and total > 0;
+end $$;
 
 do $$
 begin
@@ -2402,6 +2390,7 @@ create table if not exists payment_methods (
   name text not null,
   account_id uuid not null references accounts(id),
   requires_reference boolean not null default false,
+  default_tax_treatment text not null default 'no_tax' check (default_tax_treatment in ('no_tax', 'tax_included')),
   icon text,
   sort_order integer not null default 0,
   is_active boolean not null default true,
@@ -2513,29 +2502,29 @@ begin
   v_count := 0;
   
   if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'cash') then
-    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
-    values (p_tenant_id, 'cash', 'Efectivo', v_cash_account_id, false, 'cash', 1, true);
+    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, default_tax_treatment, icon, sort_order, is_active)
+    values (p_tenant_id, 'cash', 'Efectivo', v_cash_account_id, false, 'no_tax', 'cash', 1, true);
     v_count := v_count + 1;
     raise notice 'Created payment method: Efectivo';
   end if;
 
   if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'transfer') then
-    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
-    values (p_tenant_id, 'transfer', 'Transferencia', v_bank_account_id, true, 'bank', 2, true);
+    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, default_tax_treatment, icon, sort_order, is_active)
+    values (p_tenant_id, 'transfer', 'Transferencia', v_bank_account_id, true, 'no_tax', 'bank', 2, true);
     v_count := v_count + 1;
     raise notice 'Created payment method: Transferencia';
   end if;
 
   if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'check') then
-    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
-    values (p_tenant_id, 'check', 'Cheque', v_bank_account_id, true, 'receipt', 3, true);
+    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, default_tax_treatment, icon, sort_order, is_active)
+    values (p_tenant_id, 'check', 'Cheque', v_bank_account_id, true, 'no_tax', 'receipt', 3, true);
     v_count := v_count + 1;
     raise notice 'Created payment method: Cheque';
   end if;
 
   if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'card') then
-    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, icon, sort_order, is_active)
-    values (p_tenant_id, 'card', 'Tarjeta de Crédito/Débito', v_bank_account_id, false, 'credit_card', 4, true);
+    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, default_tax_treatment, icon, sort_order, is_active)
+    values (p_tenant_id, 'card', 'Tarjeta de Crédito/Débito', v_bank_account_id, false, 'tax_included', 'credit_card', 4, true);
     v_count := v_count + 1;
     raise notice 'Created payment method: Tarjeta';
   end if;
@@ -2587,9 +2576,9 @@ begin
   v_count := v_count + (case when found then 1 else 0 end);
   
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
-  select p_tenant_id, '1140', 'Inventario de Productos', 'asset', 'currentAsset',
+  select p_tenant_id, '1105', 'Inventario de Productos', 'asset', 'currentAsset',
     'Valor de productos y repuestos en stock', true
-  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1140');
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1105');
   v_count := v_count + (case when found then 1 else 0 end);
   
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
@@ -2607,15 +2596,21 @@ begin
   
   -- TAX ACCOUNTS (Critical for Chilean IVA)
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
-  select p_tenant_id, '2110', 'IVA Débito Fiscal', 'tax', 'taxPayable',
+  select p_tenant_id, '2150', 'IVA Débito Fiscal', 'tax', 'taxPayable',
     'IVA recaudado en ventas (19%)', true
-  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2110');
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2150');
   v_count := v_count + (case when found then 1 else 0 end);
   
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '2120', 'IVA Crédito Fiscal', 'tax', 'taxReceivable',
     'IVA pagado en compras (19%)', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2120');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '2105', 'Cuentas por Pagar - Gastos', 'liability', 'currentLiability',
+    'Obligaciones por gastos operacionales', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2105');
   v_count := v_count + (case when found then 1 else 0 end);
   
   -- EQUITY
@@ -2633,9 +2628,9 @@ begin
   
   -- INCOME
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
-  select p_tenant_id, '4101', 'Ventas de Productos', 'income', 'operatingIncome',
+  select p_tenant_id, '4100', 'Ventas de Productos', 'income', 'operatingIncome',
     'Ingresos por venta de bicicletas, repuestos y accesorios', true
-  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '4101');
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '4100');
   v_count := v_count + (case when found then 1 else 0 end);
   
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
@@ -2652,9 +2647,9 @@ begin
   
   -- EXPENSES - Cost of Goods Sold
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
-  select p_tenant_id, '5101', 'Costo de Ventas', 'expense', 'costOfGoodsSold',
+  select p_tenant_id, '5100', 'Costo de Ventas', 'expense', 'costOfGoodsSold',
     'Costo directo de productos vendidos', true
-  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '5101');
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '5100');
   v_count := v_count + (case when found then 1 else 0 end);
   
   -- EXPENSES - Personnel
@@ -3961,7 +3956,11 @@ begin
     return;
   end if;
 
-  v_subtotal := coalesce(p_invoice.subtotal, 0);
+  -- ✅ CRITICAL: Use net_amount (tax-adjusted) if available, fallback to subtotal
+  -- For tax_included invoices: net_amount = total ÷ 1.19, iva_amount = total - net_amount
+  -- For no_tax invoices: net_amount = total, iva_amount = 0
+  -- POS invoices may only have subtotal field populated, so fallback to it
+  v_subtotal := coalesce(p_invoice.net_amount, p_invoice.subtotal, 0);
   v_iva := coalesce(p_invoice.iva_amount, 0);
   v_total := coalesce(p_invoice.total, v_subtotal + v_iva);
 
@@ -4436,6 +4435,8 @@ alter table public.purchase_invoices
   add column if not exists updated_at timestamp with time zone not null default now(),
   add column if not exists tax numeric(12,2) not null default 0,
   add column if not exists paid_amount numeric(12,2) not null default 0,
+  add column if not exists tax_treatment text not null default 'no_tax' check (tax_treatment in ('no_tax', 'tax_included')),
+  add column if not exists net_amount numeric(12,2) not null default 0,
   add column if not exists balance numeric(12,2) not null default 0,
   add column if not exists prepayment_model boolean not null default false,
   add column if not exists sent_date timestamp with time zone,
@@ -4488,6 +4489,52 @@ end $$;
 
 create index if not exists idx_purchase_invoices_supplier_id
   on purchase_invoices(supplier_id);
+
+-- Add comments for tax fields
+comment on column purchase_invoices.tax_treatment is 'Indicates whether this purchase invoice includes IVA. tax_included = invoice with IVA (divide by 1.19 for net), no_tax = receipt or international purchase (full amount is cost). User controls per transaction.';
+comment on column purchase_invoices.net_amount is 'Net amount before IVA. When tax_treatment=tax_included, this is total÷1.19. When tax_treatment=no_tax, this equals total.';
+
+-- Migration: Calculate net_amount and set tax_treatment for existing records
+do $$
+begin
+  -- CRITICAL: Disable triggers during migration to avoid journal entry creation without user context
+  alter table purchase_invoices disable trigger trg_purchase_invoices_change;
+  
+  -- Calculate net_amount from existing tax column
+  update purchase_invoices 
+  set net_amount = total - tax 
+  where net_amount = 0 and total > 0;
+  
+  -- Set tax_treatment based on existing tax column
+  -- If tax > 0, assume it was a purchase with IVA included
+  update purchase_invoices 
+  set tax_treatment = case 
+    when tax > 0 then 'tax_included' 
+    else 'no_tax' 
+  end 
+  where tax_treatment = 'no_tax' and total > 0;
+  
+  -- Re-enable trigger
+  alter table purchase_invoices enable trigger trg_purchase_invoices_change;
+  
+  raise notice 'Migrated % purchase invoices with tax data', (select count(*) from purchase_invoices where total > 0);
+exception
+  when undefined_table then
+    raise notice 'purchase_invoices table does not exist yet, skipping migration';
+  when undefined_object then
+    raise notice 'trg_purchase_invoices_change trigger does not exist yet, running migration without disabling triggers';
+    -- Try migration anyway (table exists but trigger doesn't)
+    update purchase_invoices 
+    set net_amount = total - tax 
+    where net_amount = 0 and total > 0;
+    
+    update purchase_invoices 
+    set tax_treatment = case 
+      when tax > 0 then 'tax_included' 
+      else 'no_tax' 
+    end 
+    where tax_treatment = 'no_tax' and total > 0;
+end $$;
 
 create index if not exists idx_purchase_invoices_date
   on purchase_invoices(date);
@@ -5440,7 +5487,7 @@ declare
   v_liability_account_code text := '2105';
   v_liability_account_name text := 'Cuentas por Pagar - Gastos';
   v_tax_account_id uuid;
-  v_tax_account_code text := '1140';
+  v_tax_account_code text := '2120';
   v_tax_account_name text := 'IVA Crédito Fiscal';
   v_cash_account record;
   v_total numeric(14,2);
@@ -6757,7 +6804,7 @@ begin
 
   v_iva_account_id := public.ensure_account(
     p_invoice.tenant_id,
-    '1107',
+    '2120',
     'IVA Crédito Fiscal',
     'asset',
     'currentAsset',
@@ -6860,7 +6907,7 @@ begin
     v_entry_id,
     v_iva_account_id,
     p_invoice.tenant_id,
-    '1107',
+    '2120',
     'IVA Crédito Fiscal',
     v_description,
     p_invoice.tax,
@@ -13539,4 +13586,701 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
+
+-- ==============================================================================
+-- F29 TAX DECLARATIONS & HR ENHANCEMENTS
+-- ==============================================================================
+-- Chilean Monthly Tax Declaration (Formulario 29) + Enhanced HR Module
+-- Includes: Medical leaves (licencias médicas), payroll integration, contracts
+-- Date: December 2024
+-- ==============================================================================
+
+-- ============================================================================
+-- F29 TAX DECLARATIONS MODULE
+-- ============================================================================
+
+-- F29 monthly tax declarations
+create table if not exists f29_declarations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  period_month integer not null check (period_month between 1 and 12),
+  period_year integer not null check (period_year between 2000 and 2100),
+  status text not null check (status in ('draft', 'submitted', 'paid')) default 'draft',
+  
+  -- IVA Section (Lines 1-43)
+  iva_debito_ventas numeric(15,2) default 0, -- Line 3: Domestic sales IVA
+  iva_debito_exportaciones numeric(15,2) default 0, -- Line 5: Exports (usually 0)
+  iva_debito_activos_fijos numeric(15,2) default 0, -- Line 7: Fixed asset sales IVA
+  iva_debito_total numeric(15,2) default 0, -- Line 15: Total IVA débito
+  
+  iva_credito_compras numeric(15,2) default 0, -- Line 30: Purchases IVA
+  iva_credito_importaciones numeric(15,2) default 0, -- Line 31: Import IVA
+  iva_credito_activos_fijos numeric(15,2) default 0, -- Line 32: Fixed asset purchases IVA
+  iva_credito_total numeric(15,2) default 0, -- Line 40: Total IVA crédito
+  
+  iva_remanente_mes_anterior numeric(15,2) default 0, -- Line 35: Previous month credit carryover
+  iva_remanente_mes_siguiente numeric(15,2) default 0, -- Line 42: Credit to carry forward
+  iva_neto numeric(15,2) default 0, -- Line 43: Net IVA (débito - crédito)
+  
+  -- PPM Section (Lines 50-60)
+  ppm_ventas_netas numeric(15,2) default 0, -- Line 50: Net sales base
+  ppm_tasa_porcentaje numeric(5,2) default 1.0, -- Line 52: PPM rate (%)
+  ppm_monto numeric(15,2) default 0, -- Line 54: PPM amount to pay
+  ppm_remanente numeric(15,2) default 0, -- Line 56: PPM credit carryover
+  
+  -- Retenciones - Tax Withholdings (Lines 70-100)
+  retencion_segunda_categoria numeric(15,2) default 0, -- Line 72: Employee income tax
+  retencion_honorarios numeric(15,2) default 0, -- Line 74: Professional fees (10%)
+  retencion_arrendamiento numeric(15,2) default 0, -- Line 76: Rental income
+  
+  -- Otros Impuestos - Other Taxes (Lines 110-150)
+  impuesto_adicional numeric(15,2) default 0, -- Line 115: Additional tax
+  impuesto_especifico numeric(15,2) default 0, -- Line 117: Specific tax
+  
+  -- Totals
+  total_a_pagar numeric(15,2) default 0, -- Total amount to pay
+  total_a_favor numeric(15,2) default 0, -- Total credit in favor
+  
+  -- Filing tracking
+  folio_number text, -- SII confirmation folio
+  filed_at timestamp with time zone,
+  paid_at timestamp with time zone,
+  payment_reference text,
+  due_date date,
+  
+  -- Metadata
+  notes text,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  
+  unique(tenant_id, period_year, period_month)
+);
+
+create index if not exists idx_f29_declarations_tenant on f29_declarations(tenant_id);
+create index if not exists idx_f29_declarations_period on f29_declarations(tenant_id, period_year, period_month);
+create index if not exists idx_f29_declarations_status on f29_declarations(tenant_id, status);
+
+-- Enable RLS
+alter table f29_declarations enable row level security;
+
+-- RLS Policies
+drop policy if exists "f29_select" on f29_declarations;
+drop policy if exists "f29_insert" on f29_declarations;
+drop policy if exists "f29_update" on f29_declarations;
+drop policy if exists "f29_delete" on f29_declarations;
+
+create policy "f29_select" on f29_declarations for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "f29_insert" on f29_declarations for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "f29_update" on f29_declarations for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "f29_delete" on f29_declarations for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- ============================================================================
+-- F29 AUTO-GENERATION RPC FUNCTION
+-- ============================================================================
+
+create or replace function public.generate_f29_from_accounting(
+  p_tenant_id uuid,
+  p_year integer,
+  p_month integer
+)
+returns jsonb
+security definer
+language plpgsql
+as $$
+declare
+  v_start_date date;
+  v_end_date date;
+  v_iva_debito numeric(15,2);
+  v_iva_credito numeric(15,2);
+  v_ventas_netas numeric(15,2);
+  v_ppm_monto numeric(15,2);
+  v_retencion_honorarios numeric(15,2);
+  v_retencion_segunda numeric(15,2);
+  v_iva_neto numeric(15,2);
+  v_total_pagar numeric(15,2);
+  v_due_date date;
+  v_f29_id uuid;
+begin
+  -- Calculate period dates
+  v_start_date := make_date(p_year, p_month, 1);
+  v_end_date := (v_start_date + interval '1 month' - interval '1 day')::date;
+  
+  -- Due date: 12th of following month
+  v_due_date := make_date(p_year, p_month, 1) + interval '1 month 12 days' - interval '1 day';
+  
+  -- Calculate IVA Débito (Sales tax collected) - Account 2150
+  -- Sum CREDIT movements (IVA débito is a liability, increases with CREDIT)
+  select coalesce(sum(jl.credit_amount - jl.debit_amount), 0)
+  into v_iva_debito
+  from journal_lines jl
+  join journal_entries je on jl.entry_id = je.id
+  join accounts a on jl.account_id = a.id
+  where je.tenant_id = p_tenant_id
+    and a.code = '2150'
+    and je.entry_date >= v_start_date
+    and je.entry_date <= v_end_date
+    and je.status = 'posted';
+  
+  -- Calculate IVA Crédito (Purchase tax paid) - Account 2120
+  -- Sum DEBIT movements (IVA crédito is an asset, increases with DEBIT)
+  select coalesce(sum(jl.debit_amount - jl.credit_amount), 0)
+  into v_iva_credito
+  from journal_lines jl
+  join journal_entries je on jl.entry_id = je.id
+  join accounts a on jl.account_id = a.id
+  where je.tenant_id = p_tenant_id
+    and a.code = '2120'
+    and je.entry_date >= v_start_date
+    and je.entry_date <= v_end_date
+    and je.status = 'posted';
+  
+  -- Calculate Net Sales (Revenue) - Account 4100
+  -- Sum CREDIT movements (revenue is CREDIT)
+  select coalesce(sum(jl.credit_amount - jl.debit_amount), 0)
+  into v_ventas_netas
+  from journal_lines jl
+  join journal_entries je on jl.entry_id = je.id
+  join accounts a on jl.account_id = a.id
+  where je.tenant_id = p_tenant_id
+    and a.code = '4100'
+    and je.entry_date >= v_start_date
+    and je.entry_date <= v_end_date
+    and je.status = 'posted';
+  
+  -- Calculate PPM (1% of net sales by default)
+  -- TODO: Get tenant-specific PPM rate from settings
+  v_ppm_monto := v_ventas_netas * 0.01;
+  
+  -- Calculate withholdings (if HR module tracks this)
+  -- TODO: Query payroll/honorarios tables when implemented
+  v_retencion_honorarios := 0;
+  v_retencion_segunda := 0;
+  
+  -- Calculate net IVA (positive = owe to SII, negative = SII owes us)
+  v_iva_neto := v_iva_debito - v_iva_credito;
+  
+  -- Calculate total to pay
+  v_total_pagar := greatest(v_iva_neto, 0) + v_ppm_monto + v_retencion_honorarios + v_retencion_segunda;
+  
+  -- Insert or update F29 declaration
+  insert into f29_declarations (
+    tenant_id,
+    period_month,
+    period_year,
+    status,
+    iva_debito_ventas,
+    iva_debito_total,
+    iva_credito_compras,
+    iva_credito_total,
+    iva_neto,
+    ppm_ventas_netas,
+    ppm_monto,
+    retencion_honorarios,
+    retencion_segunda_categoria,
+    total_a_pagar,
+    total_a_favor,
+    due_date,
+    updated_at
+  ) values (
+    p_tenant_id,
+    p_month,
+    p_year,
+    'draft',
+    v_iva_debito,
+    v_iva_debito,
+    v_iva_credito,
+    v_iva_credito,
+    v_iva_neto,
+    v_ventas_netas,
+    v_ppm_monto,
+    v_retencion_honorarios,
+    v_retencion_segunda,
+    case when v_iva_neto >= 0 then v_total_pagar else 0 end,
+    case when v_iva_neto < 0 then abs(v_iva_neto) else 0 end,
+    v_due_date,
+    now()
+  )
+  on conflict (tenant_id, period_year, period_month)
+  do update set
+    iva_debito_ventas = excluded.iva_debito_ventas,
+    iva_debito_total = excluded.iva_debito_total,
+    iva_credito_compras = excluded.iva_credito_compras,
+    iva_credito_total = excluded.iva_credito_total,
+    iva_neto = excluded.iva_neto,
+    ppm_ventas_netas = excluded.ppm_ventas_netas,
+    ppm_monto = excluded.ppm_monto,
+    retencion_honorarios = excluded.retencion_honorarios,
+    retencion_segunda_categoria = excluded.retencion_segunda_categoria,
+    total_a_pagar = excluded.total_a_pagar,
+    total_a_favor = excluded.total_a_favor,
+    due_date = excluded.due_date,
+    updated_at = now()
+  returning id into v_f29_id;
+  
+  return jsonb_build_object(
+    'success', true,
+    'f29_id', v_f29_id,
+    'period', format('%s/%s', p_month, p_year),
+    'iva_debito', v_iva_debito,
+    'iva_credito', v_iva_credito,
+    'iva_neto', v_iva_neto,
+    'ventas_netas', v_ventas_netas,
+    'ppm_monto', v_ppm_monto,
+    'total_a_pagar', v_total_pagar
+  );
+end;
+$$;
+
+grant execute on function public.generate_f29_from_accounting(uuid, integer, integer) to authenticated;
+
+-- ============================================================================
+-- ENHANCED HR MODULE - MEDICAL LEAVES (LICENCIAS MÉDICAS)
+-- ============================================================================
+
+-- Medical leaves (doctor notes / licencias médicas)
+create table if not exists medical_leaves (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  employee_id uuid references employees(id) on delete cascade not null,
+  
+  -- Leave details
+  leave_type text not null check (leave_type in (
+    'enfermedad_comun', -- Common illness
+    'accidente_trabajo', -- Work accident
+    'enfermedad_profesional', -- Occupational disease
+    'maternal', -- Maternity leave
+    'paternal', -- Paternity leave
+    'pre_post_natal' -- Pre/post natal
+  )),
+  
+  -- Dates
+  start_date date not null,
+  end_date date not null,
+  days_count integer generated always as (end_date - start_date + 1) stored,
+  
+  -- Medical certificate
+  certificate_number text, -- Folio de licencia médica
+  doctor_name text,
+  doctor_rut text,
+  issuing_institution text, -- COMPIN, IST, Mutual, etc.
+  
+  -- Status
+  status text not null check (status in (
+    'pending', -- Waiting approval
+    'approved', -- Approved by COMPIN/IST
+    'rejected', -- Rejected
+    'paid' -- Subsidy paid
+  )) default 'pending',
+  
+  -- Financial
+  daily_subsidy_amount numeric(10,2), -- Subsidio diario
+  total_subsidy_amount numeric(10,2), -- Total subsidy
+  paid_by text check (paid_by in ('employer', 'mutual', 'isapre', 'fonasa')),
+  paid_at timestamp with time zone,
+  
+  -- Attachments
+  certificate_url text, -- Scanned medical certificate
+  approval_url text, -- COMPIN/IST approval
+  
+  -- Notes
+  diagnosis text,
+  notes text,
+  
+  -- Metadata
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+create index if not exists idx_medical_leaves_tenant on medical_leaves(tenant_id);
+create index if not exists idx_medical_leaves_employee on medical_leaves(employee_id);
+create index if not exists idx_medical_leaves_dates on medical_leaves(start_date, end_date);
+create index if not exists idx_medical_leaves_status on medical_leaves(tenant_id, status);
+
+alter table medical_leaves enable row level security;
+
+drop policy if exists "medical_leaves_select" on medical_leaves;
+drop policy if exists "medical_leaves_insert" on medical_leaves;
+drop policy if exists "medical_leaves_update" on medical_leaves;
+drop policy if exists "medical_leaves_delete" on medical_leaves;
+
+create policy "medical_leaves_select" on medical_leaves for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "medical_leaves_insert" on medical_leaves for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "medical_leaves_update" on medical_leaves for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "medical_leaves_delete" on medical_leaves for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- ============================================================================
+-- ENHANCED EMPLOYEES TABLE (add missing Chilean labor fields)
+-- ============================================================================
+
+-- Add columns to existing employees table if not exist
+alter table employees add column if not exists rut text unique;
+alter table employees add column if not exists prevision text check (prevision in ('AFP Capital', 'AFP Cuprum', 'AFP Habitat', 'AFP Modelo', 'AFP PlanVital', 'AFP Provida', 'AFP Uno', 'IPS (ex INP)'));
+alter table employees add column if not exists salud text check (salud in ('Fonasa A', 'Fonasa B', 'Fonasa C', 'Fonasa D', 'Isapre Banmédica', 'Isapre Consalud', 'Isapre Cruz Blanca', 'Isapre Colmena', 'Isapre Nueva Masvida', 'Isapre Vida Tres'));
+alter table employees add column if not exists afp_commission numeric(5,2) default 1.16; -- Comisión AFP (%)
+alter table employees add column if not exists health_plan_pesos numeric(10,2); -- Plan de salud en pesos
+alter table employees add column if not exists health_plan_uf numeric(5,2); -- Plan de salud en UF
+alter table employees add column if not exists seguro_cesantia boolean default true; -- Unemployment insurance
+alter table employees add column if not exists salary_type text check (salary_type in ('monthly', 'hourly', 'daily')) default 'monthly';
+alter table employees add column if not exists base_salary numeric(12,2) not null default 0;
+alter table employees add column if not exists mobility_allowance numeric(10,2) default 0; -- Asignación de movilización
+alter table employees add column if not exists lunch_allowance numeric(10,2) default 0; -- Asignación de colación
+alter table employees add column if not exists housing_allowance numeric(10,2) default 0; -- Asignación de casa
+alter table employees add column if not exists bonus_amount numeric(10,2) default 0; -- Bonos
+alter table employees add column if not exists bank_name text;
+alter table employees add column if not exists bank_account_type text check (bank_account_type in ('Cuenta Corriente', 'Cuenta Vista', 'Cuenta de Ahorro'));
+alter table employees add column if not exists bank_account_number text;
+alter table employees add column if not exists emergency_contact_name text;
+alter table employees add column if not exists emergency_contact_phone text;
+alter table employees add column if not exists nationality text default 'Chilena';
+alter table employees add column if not exists marital_status text check (marital_status in ('Soltero/a', 'Casado/a', 'Divorciado/a', 'Viudo/a', 'Conviviente Civil'));
+alter table employees add column if not exists dependents_count integer default 0; -- Cargas familiares
+alter table employees add column if not exists education_level text;
+alter table employees add column if not exists blood_type text;
+
+-- ============================================================================
+-- CONTRACTS TABLE (if not exists, create it)
+-- ============================================================================
+
+create table if not exists employment_contracts (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  employee_id uuid references employees(id) on delete cascade not null,
+  
+  -- Contract type
+  contract_type text not null check (contract_type in (
+    'indefinido', -- Indefinite term
+    'plazo_fijo', -- Fixed term
+    'obra_faena', -- Specific work/project
+    'part_time', -- Part-time
+    'honorarios' -- Contractor (not employee)
+  )),
+  
+  -- Contract period
+  start_date date not null,
+  end_date date, -- NULL for indefinite contracts
+  
+  -- Position
+  position_title text not null,
+  department text,
+  job_description text,
+  
+  -- Schedule
+  weekly_hours integer default 45, -- Hours per week
+  work_schedule text, -- e.g., "Lunes a Viernes 9:00-18:00"
+  
+  -- Compensation
+  base_salary numeric(12,2) not null,
+  payment_frequency text check (payment_frequency in ('monthly', 'biweekly', 'weekly')) default 'monthly',
+  payment_method text check (payment_method in ('bank_transfer', 'check', 'cash')) default 'bank_transfer',
+  
+  -- Benefits
+  includes_transportation boolean default false,
+  includes_lunch boolean default false,
+  includes_housing boolean default false,
+  includes_health_insurance boolean default false,
+  includes_life_insurance boolean default false,
+  vacation_days integer default 15, -- Días de vacaciones al año
+  
+  -- Status
+  status text not null check (status in ('active', 'terminated', 'suspended')) default 'active',
+  termination_date date,
+  termination_reason text,
+  
+  -- Documents
+  contract_url text, -- Signed contract PDF
+  addendum_urls jsonb, -- Array of addendum URLs
+  
+  -- Metadata
+  notes text,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+create index if not exists idx_employment_contracts_tenant on employment_contracts(tenant_id);
+create index if not exists idx_employment_contracts_employee on employment_contracts(employee_id);
+create index if not exists idx_employment_contracts_status on employment_contracts(tenant_id, status);
+
+alter table employment_contracts enable row level security;
+
+drop policy if exists "employment_contracts_select" on employment_contracts;
+drop policy if exists "employment_contracts_insert" on employment_contracts;
+drop policy if exists "employment_contracts_update" on employment_contracts;
+drop policy if exists "employment_contracts_delete" on employment_contracts;
+
+create policy "employment_contracts_select" on employment_contracts for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "employment_contracts_insert" on employment_contracts for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "employment_contracts_update" on employment_contracts for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "employment_contracts_delete" on employment_contracts for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- ============================================================================
+-- PAYROLL RECORDS (LIQUIDACIONES DE SUELDO)
+-- ============================================================================
+
+create table if not exists payroll_records (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  employee_id uuid references employees(id) on delete cascade not null,
+  
+  -- Period
+  period_month integer not null check (period_month between 1 and 12),
+  period_year integer not null check (period_year between 2000 and 2100),
+  payment_date date not null,
+  
+  -- Haberes (Income)
+  base_salary numeric(12,2) default 0,
+  overtime_hours numeric(5,2) default 0,
+  overtime_amount numeric(10,2) default 0,
+  bonus_amount numeric(10,2) default 0,
+  commission_amount numeric(10,2) default 0,
+  mobility_allowance numeric(10,2) default 0,
+  lunch_allowance numeric(10,2) default 0,
+  housing_allowance numeric(10,2) default 0,
+  other_allowances numeric(10,2) default 0,
+  total_haberes numeric(12,2) default 0,
+  
+  -- Descuentos Legales (Legal Deductions)
+  afp_deduction numeric(10,2) default 0, -- 10% or 11.44% with commission
+  health_deduction numeric(10,2) default 0, -- 7% minimum
+  unemployment_deduction numeric(10,2) default 0, -- Seguro cesantía 0.6%
+  income_tax numeric(10,2) default 0, -- Impuesto único segunda categoría
+  total_legal_deductions numeric(12,2) default 0,
+  
+  -- Otros Descuentos (Other Deductions)
+  loan_deduction numeric(10,2) default 0, -- Préstamos
+  advance_deduction numeric(10,2) default 0, -- Anticipos
+  other_deductions numeric(10,2) default 0,
+  total_other_deductions numeric(12,2) default 0,
+  
+  -- Totals
+  total_deductions numeric(12,2) default 0,
+  net_salary numeric(12,2) default 0, -- Líquido a pagar
+  
+  -- Employer contributions (NOT deducted from employee)
+  employer_prevision numeric(10,2) default 0, -- ~3%
+  employer_health numeric(10,2) default 0,
+  employer_unemployment numeric(10,2) default 0, -- 2.4%
+  employer_mutual numeric(10,2) default 0, -- Accident insurance ~0.9%
+  employer_total_cost numeric(12,2) default 0,
+  
+  -- Status
+  status text not null check (status in ('draft', 'approved', 'paid')) default 'draft',
+  paid_at timestamp with time zone,
+  payment_reference text,
+  
+  -- Documents
+  payslip_url text, -- PDF de liquidación
+  
+  -- Metadata
+  notes text,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  
+  unique(tenant_id, employee_id, period_year, period_month)
+);
+
+create index if not exists idx_payroll_records_tenant on payroll_records(tenant_id);
+create index if not exists idx_payroll_records_employee on payroll_records(employee_id);
+create index if not exists idx_payroll_records_period on payroll_records(tenant_id, period_year, period_month);
+
+alter table payroll_records enable row level security;
+
+drop policy if exists "payroll_records_select" on payroll_records;
+drop policy if exists "payroll_records_insert" on payroll_records;
+drop policy if exists "payroll_records_update" on payroll_records;
+drop policy if exists "payroll_records_delete" on payroll_records;
+
+create policy "payroll_records_select" on payroll_records for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "payroll_records_insert" on payroll_records for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "payroll_records_update" on payroll_records for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "payroll_records_delete" on payroll_records for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- ============================================================================
+-- RPC: Calculate Payroll for Employee
+-- ============================================================================
+
+create or replace function public.calculate_payroll(
+  p_tenant_id uuid,
+  p_employee_id uuid,
+  p_year integer,
+  p_month integer
+)
+returns jsonb
+security definer
+language plpgsql
+as $$
+declare
+  v_employee record;
+  v_base_salary numeric(12,2);
+  v_total_haberes numeric(12,2);
+  v_afp_deduction numeric(10,2);
+  v_health_deduction numeric(10,2);
+  v_unemployment_deduction numeric(10,2);
+  v_income_tax numeric(10,2);
+  v_total_deductions numeric(12,2);
+  v_net_salary numeric(12,2);
+  v_payroll_id uuid;
+begin
+  -- Get employee details
+  select * into v_employee
+  from employees
+  where id = p_employee_id and tenant_id = p_tenant_id;
+  
+  if not found then
+    return jsonb_build_object('success', false, 'error', 'Employee not found');
+  end if;
+  
+  -- Get base salary
+  v_base_salary := coalesce(v_employee.base_salary, 0);
+  
+  -- Calculate total haberes (income)
+  v_total_haberes := v_base_salary +
+                     coalesce(v_employee.mobility_allowance, 0) +
+                     coalesce(v_employee.lunch_allowance, 0) +
+                     coalesce(v_employee.housing_allowance, 0) +
+                     coalesce(v_employee.bonus_amount, 0);
+  
+  -- Calculate AFP deduction (10% + commission, typically ~11.44%)
+  v_afp_deduction := v_base_salary * (10.0 + coalesce(v_employee.afp_commission, 1.16)) / 100.0;
+  
+  -- Calculate health deduction (7% minimum or plan value)
+  v_health_deduction := greatest(
+    v_base_salary * 0.07, -- 7% minimum
+    coalesce(v_employee.health_plan_pesos, 0)
+  );
+  
+  -- Calculate unemployment insurance deduction (0.6%)
+  v_unemployment_deduction := case 
+    when v_employee.seguro_cesantia then v_base_salary * 0.006 
+    else 0 
+  end;
+  
+  -- TODO: Calculate income tax (Segunda Categoría)
+  -- Requires tax brackets and tramos implementation
+  v_income_tax := 0;
+  
+  -- Calculate total deductions
+  v_total_deductions := v_afp_deduction + v_health_deduction + v_unemployment_deduction + v_income_tax;
+  
+  -- Calculate net salary
+  v_net_salary := v_total_haberes - v_total_deductions;
+  
+  -- Insert or update payroll record
+  insert into payroll_records (
+    tenant_id,
+    employee_id,
+    period_month,
+    period_year,
+    payment_date,
+    base_salary,
+    mobility_allowance,
+    lunch_allowance,
+    housing_allowance,
+    bonus_amount,
+    total_haberes,
+    afp_deduction,
+    health_deduction,
+    unemployment_deduction,
+    income_tax,
+    total_legal_deductions,
+    total_deductions,
+    net_salary,
+    employer_prevision,
+    employer_unemployment,
+    employer_total_cost,
+    status,
+    updated_at
+  ) values (
+    p_tenant_id,
+    p_employee_id,
+    p_month,
+    p_year,
+    make_date(p_year, p_month, 1) + interval '1 month' - interval '1 day', -- Last day of month
+    v_base_salary,
+    coalesce(v_employee.mobility_allowance, 0),
+    coalesce(v_employee.lunch_allowance, 0),
+    coalesce(v_employee.housing_allowance, 0),
+    coalesce(v_employee.bonus_amount, 0),
+    v_total_haberes,
+    v_afp_deduction,
+    v_health_deduction,
+    v_unemployment_deduction,
+    v_income_tax,
+    v_afp_deduction + v_health_deduction + v_unemployment_deduction + v_income_tax,
+    v_total_deductions,
+    v_net_salary,
+    v_base_salary * 0.03, -- 3% employer prevision
+    v_base_salary * 0.024, -- 2.4% employer unemployment
+    v_base_salary * 0.0564, -- Total employer cost ~5.64%
+    'draft',
+    now()
+  )
+  on conflict (tenant_id, employee_id, period_year, period_month)
+  do update set
+    base_salary = excluded.base_salary,
+    mobility_allowance = excluded.mobility_allowance,
+    lunch_allowance = excluded.lunch_allowance,
+    housing_allowance = excluded.housing_allowance,
+    bonus_amount = excluded.bonus_amount,
+    total_haberes = excluded.total_haberes,
+    afp_deduction = excluded.afp_deduction,
+    health_deduction = excluded.health_deduction,
+    unemployment_deduction = excluded.unemployment_deduction,
+    income_tax = excluded.income_tax,
+    total_legal_deductions = excluded.total_legal_deductions,
+    total_deductions = excluded.total_deductions,
+    net_salary = excluded.net_salary,
+    employer_prevision = excluded.employer_prevision,
+    employer_unemployment = excluded.employer_unemployment,
+    employer_total_cost = excluded.employer_total_cost,
+    updated_at = now()
+  returning id into v_payroll_id;
+  
+  return jsonb_build_object(
+    'success', true,
+    'payroll_id', v_payroll_id,
+    'employee_name', v_employee.name,
+    'period', format('%s/%s', p_month, p_year),
+    'base_salary', v_base_salary,
+    'total_haberes', v_total_haberes,
+    'total_deductions', v_total_deductions,
+    'net_salary', v_net_salary
+  );
+end;
+$$;
+
+grant execute on function public.calculate_payroll(uuid, uuid, integer, integer) to authenticated;
+
+comment on function public.generate_f29_from_accounting is 
+'Auto-generates F29 declaration from accounting data. Future enhancement: integrate with payroll_records for employee withholdings (línea 72).';
+
+comment on table f29_declarations is 
+'Chilean monthly tax declaration (Formulario 29). Integrates with accounting (IVA), HR (withholdings), and revenue data.';
 

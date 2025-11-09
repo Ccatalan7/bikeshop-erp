@@ -922,4 +922,296 @@ class HRService extends ChangeNotifier {
       rethrow;
     }
   }
+
+  // ============================================================================
+  // MEDICAL LEAVES (LICENCIAS MÉDICAS)
+  // ============================================================================
+
+  List<MedicalLeave> _medicalLeaves = [];
+  List<MedicalLeave> get medicalLeaves => _medicalLeaves;
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+
+  Future<void> loadMedicalLeaves() async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final response = await _client
+          .from('medical_leaves')
+          .select()
+          .order('start_date', ascending: false);
+
+      _medicalLeaves = (response as List)
+          .map((json) => MedicalLeave.fromMap(json))
+          .toList();
+
+      debugPrint('✅ Loaded ${_medicalLeaves.length} medical leaves');
+    } catch (e) {
+      debugPrint('❌ Error loading medical leaves: $e');
+      _medicalLeaves = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<MedicalLeave> createMedicalLeave(MedicalLeave leave) async {
+    try {
+      final response = await _client
+          .from('medical_leaves')
+          .insert(leave.toMap())
+          .select()
+          .single();
+
+      final newLeave = MedicalLeave.fromMap(response);
+      _medicalLeaves.insert(0, newLeave);
+      notifyListeners();
+
+      debugPrint('✅ Created medical leave: ${newLeave.id}');
+      return newLeave;
+    } catch (e) {
+      debugPrint('❌ Error creating medical leave: $e');
+      rethrow;
+    }
+  }
+
+  Future<MedicalLeave> updateMedicalLeave(MedicalLeave leave) async {
+    try {
+      final response = await _client
+          .from('medical_leaves')
+          .update(leave.toMap())
+          .eq('id', leave.id!)
+          .select()
+          .single();
+
+      final updatedLeave = MedicalLeave.fromMap(response);
+      final index = _medicalLeaves.indexWhere((l) => l.id == leave.id);
+      if (index != -1) {
+        _medicalLeaves[index] = updatedLeave;
+      }
+      notifyListeners();
+
+      debugPrint('✅ Updated medical leave: ${updatedLeave.id}');
+      return updatedLeave;
+    } catch (e) {
+      debugPrint('❌ Error updating medical leave: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteMedicalLeave(String id) async {
+    try {
+      await _client.from('medical_leaves').delete().eq('id', id);
+
+      _medicalLeaves.removeWhere((l) => l.id == id);
+      notifyListeners();
+
+      debugPrint('✅ Deleted medical leave: $id');
+    } catch (e) {
+      debugPrint('❌ Error deleting medical leave: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================================
+  // EMPLOYMENT CONTRACTS
+  // ============================================================================
+
+  List<EmploymentContract> _contracts = [];
+  List<EmploymentContract> get contracts => _contracts;
+
+  Future<void> loadContracts() async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final response = await _client
+          .from('employment_contracts')
+          .select()
+          .order('start_date', ascending: false);
+
+      _contracts = (response as List)
+          .map((json) => EmploymentContract.fromMap(json))
+          .toList();
+
+      debugPrint('✅ Loaded ${_contracts.length} employment contracts');
+    } catch (e) {
+      debugPrint('❌ Error loading contracts: $e');
+      _contracts = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<EmploymentContract> createEmploymentContract(EmploymentContract contract) async {
+    try {
+      final response = await _client
+          .from('employment_contracts')
+          .insert(contract.toMap())
+          .select()
+          .single();
+
+      final newContract = EmploymentContract.fromMap(response);
+      _contracts.insert(0, newContract);
+      notifyListeners();
+
+      debugPrint('✅ Created contract: ${newContract.id}');
+      return newContract;
+    } catch (e) {
+      debugPrint('❌ Error creating contract: $e');
+      rethrow;
+    }
+  }
+
+  Future<EmploymentContract> updateEmploymentContract(EmploymentContract contract) async {
+    try {
+      final response = await _client
+          .from('employment_contracts')
+          .update(contract.toMap())
+          .eq('id', contract.id!)
+          .select()
+          .single();
+
+      final updatedContract = EmploymentContract.fromMap(response);
+      final index = _contracts.indexWhere((c) => c.id == contract.id);
+      if (index != -1) {
+        _contracts[index] = updatedContract;
+      }
+      notifyListeners();
+
+      debugPrint('✅ Updated contract: ${updatedContract.id}');
+      return updatedContract;
+    } catch (e) {
+      debugPrint('❌ Error updating contract: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteEmploymentContract(String id) async {
+    try {
+      await _client.from('employment_contracts').delete().eq('id', id);
+
+      _contracts.removeWhere((c) => c.id == id);
+      notifyListeners();
+
+      debugPrint('✅ Deleted contract: $id');
+    } catch (e) {
+      debugPrint('❌ Error deleting contract: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================================
+  // PAYROLL RECORDS (LIQUIDACIONES)
+  // ============================================================================
+
+  List<PayrollRecord> _payrollRecords = [];
+  List<PayrollRecord> get payrollRecords => _payrollRecords;
+
+  Future<void> loadPayrollRecords({int? month, int? year}) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      var query = _client.from('payroll_records').select();
+
+      if (month != null) {
+        query = query.eq('period_month', month);
+      }
+      if (year != null) {
+        query = query.eq('period_year', year);
+      }
+
+      final response = await query.order('period_year', ascending: false).order('period_month', ascending: false);
+
+      _payrollRecords = (response as List)
+          .map((json) => PayrollRecord.fromMap(json))
+          .toList();
+
+      debugPrint('✅ Loaded ${_payrollRecords.length} payroll records');
+    } catch (e) {
+      debugPrint('❌ Error loading payroll records: $e');
+      _payrollRecords = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<PayrollRecord> createPayrollRecord(PayrollRecord record) async {
+    try {
+      final response = await _client
+          .from('payroll_records')
+          .insert(record.toMap())
+          .select()
+          .single();
+
+      final newRecord = PayrollRecord.fromMap(response);
+      _payrollRecords.insert(0, newRecord);
+      notifyListeners();
+
+      debugPrint('✅ Created payroll record: ${newRecord.id}');
+      return newRecord;
+    } catch (e) {
+      debugPrint('❌ Error creating payroll record: $e');
+      rethrow;
+    }
+  }
+
+  Future<PayrollRecord> updatePayrollRecord(PayrollRecord record) async {
+    try {
+      final response = await _client
+          .from('payroll_records')
+          .update(record.toMap())
+          .eq('id', record.id!)
+          .select()
+          .single();
+
+      final updatedRecord = PayrollRecord.fromMap(response);
+      final index = _payrollRecords.indexWhere((r) => r.id == record.id);
+      if (index != -1) {
+        _payrollRecords[index] = updatedRecord;
+      }
+      notifyListeners();
+
+      debugPrint('✅ Updated payroll record: ${updatedRecord.id}');
+      return updatedRecord;
+    } catch (e) {
+      debugPrint('❌ Error updating payroll record: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deletePayrollRecord(String id) async {
+    try {
+      await _client.from('payroll_records').delete().eq('id', id);
+
+      _payrollRecords.removeWhere((r) => r.id == id);
+      notifyListeners();
+
+      debugPrint('✅ Deleted payroll record: $id');
+    } catch (e) {
+      debugPrint('❌ Error deleting payroll record: $e');
+      rethrow;
+    }
+  }
+
+  // Get tenant ID
+  Future<String> get tenantId async {
+    final id = await _tenantService.getTenantId();
+    return id ?? '';
+  }
+
+  // Get list of employees (simplified accessor)
+  Future<List<Employee>> get employees async {
+    try {
+      return await getEmployees();
+    } catch (e) {
+      debugPrint('❌ Error getting employees: $e');
+      return [];
+    }
+  }
 }
+

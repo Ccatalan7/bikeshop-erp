@@ -61,7 +61,7 @@ class PaymentMethod {
     id: 'card',
     type: PaymentType.card,
     name: 'Tarjeta',
-    accountCode: '1102', // Banco
+    accountCode: '1110', // Fixed: 1102→1110 (Bancos - Cuenta Corriente)
     requiresChange: false,
   );
 
@@ -69,7 +69,7 @@ class PaymentMethod {
     id: 'voucher',
     type: PaymentType.voucher,
     name: 'Vale/Voucher',
-    accountCode: '1105', // Documentos por Cobrar
+    accountCode: '1105', // Documentos por Cobrar (keep 1105)
     requiresChange: false,
   );
 
@@ -77,7 +77,7 @@ class PaymentMethod {
     id: 'transfer',
     type: PaymentType.transfer,
     name: 'Transferencia',
-    accountCode: '1102', // Banco
+    accountCode: '1110', // Fixed: 1102→1110 (Bancos - Cuenta Corriente)
     requiresChange: false,
   );
 

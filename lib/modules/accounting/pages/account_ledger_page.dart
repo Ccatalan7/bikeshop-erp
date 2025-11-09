@@ -2,16 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/account.dart';
 
 class AccountLedgerPage extends StatefulWidget {
   final Account account;
+  final bool isEmbedded;
 
   const AccountLedgerPage({
     super.key,
     required this.account,
+    this.isEmbedded = false,
   });
 
   @override
@@ -35,15 +36,23 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
   }
 
   Future<void> _loadTransactions() async {
+    if (!mounted) return;
+    
     setState(() => _isLoading = true);
+    
     try {
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
         throw Exception('No tenant ID found');
       }
 
-      // Build query - use explicit relationship name to avoid ambiguity
-      var query = _supabase
+      // Validate account ID
+      if (widget.account.id == null || widget.account.id!.isEmpty) {
+        throw Exception('Invalid account ID');
+      }
+
+      // Build query - simplified with timeout
+      final response = await _supabase
           .from('journal_lines')
           .select('''
             id,
@@ -52,21 +61,14 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
             description,
             debit_amount,
             credit_amount,
-            created_at,
-            tenant_id,
-            journal_entries!journal_lines_entry_id_fkey(
-              entry_number,
-              entry_date,
-              notes,
-              source_reference,
-              status
-            )
+            created_at
           ''')
           .eq('account_id', widget.account.id!)
           .eq('tenant_id', tenantId)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .limit(100);
 
-      final response = await query;
+      if (!mounted) return;
 
       final transactions = (response as List)
           .map((json) => json as Map<String, dynamic>)
@@ -80,6 +82,8 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
         creditTotal += (transaction['credit_amount'] as num?)?.toDouble() ?? 0.0;
       }
 
+      if (!mounted) return;
+
       setState(() {
         _transactions = transactions;
         _debitTotal = debitTotal;
@@ -88,15 +92,16 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
+      
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error cargando transacciones: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error cargando transacciones: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -131,73 +136,60 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
 
-    return MainLayout(
-      child: Column(
-        children: [
-          // Header
+    final body = Column(
+      children: [
+        // Header section (when embedded, simpler header)
+        if (widget.isEmbedded)
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.account.name,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'Código: ${widget.account.code} • ${widget.account.category.displayName}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                Text(
+                  widget.account.name,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const SizedBox(height: 16),
-                // Date filter
-                Row(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _selectDateRange,
-                      icon: const Icon(Icons.date_range),
-                      label: Text(
-                        _startDate != null && _endDate != null
-                            ? '${DateFormat('dd/MM/yy').format(_startDate!)} - ${DateFormat('dd/MM/yy').format(_endDate!)}'
-                            : 'Filtrar por fecha',
-                      ),
-                    ),
-                    if (_startDate != null || _endDate != null) ...[
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: _clearDateFilter,
-                        tooltip: 'Limpiar filtro',
-                      ),
-                    ],
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  'Código: ${widget.account.code} • ${widget.account.category.displayName}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
                 ),
               ],
             ),
           ),
+        // Date filter section
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: _selectDateRange,
+                icon: const Icon(Icons.date_range),
+                label: Text(
+                  _startDate != null && _endDate != null
+                      ? '${DateFormat('dd/MM/yy').format(_startDate!)} - ${DateFormat('dd/MM/yy').format(_endDate!)}'
+                      : 'Filtrar por fecha',
+                ),
+              ),
+              if (_startDate != null || _endDate != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: _clearDateFilter,
+                  tooltip: 'Limpiar filtro',
+                ),
+              ],
+            ],
+          ),
+        ),
 
-          // Summary cards
+        // Summary cards
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Row(
@@ -401,7 +393,28 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
 
           const SizedBox(height: 16),
         ],
-      ),
-    );
+      );
+
+    // Return with or without Scaffold wrapper
+    if (widget.isEmbedded) {
+      return body;
+    } else {
+      return Scaffold(
+        appBar: AppBar(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(widget.account.name),
+              Text(
+                'Código: ${widget.account.code}',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        body: body,
+      );
+    }
   }
 }

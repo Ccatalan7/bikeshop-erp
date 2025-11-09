@@ -309,15 +309,6 @@ class TenantSignupService {
       },
       {
         'tenant_id': tenantId,
-        'code': '1107',
-        'name': 'IVA Crédito Fiscal',
-        'type': 'asset',
-        'category': 'currentAsset',
-        'description': 'IVA pagado en compras, recuperable',
-        'is_active': true,
-      },
-      {
-        'tenant_id': tenantId,
         'code': '1190',
         'name': 'Otros Activos Corrientes',
         'type': 'asset',

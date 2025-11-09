@@ -1,3 +1,5 @@
+import 'tax_treatment.dart';
+
 /// Payment method model matching payment_methods table in core_schema.sql
 class PaymentMethod {
   final String id; // uuid
@@ -6,6 +8,7 @@ class PaymentMethod {
   final String name; // 'Efectivo', 'Transferencia Bancaria', etc.
   final String accountId; // uuid - references accounts(id)
   final bool requiresReference; // true if reference field is mandatory
+  final TaxTreatment defaultTaxTreatment; // Tax treatment for this payment method
   final String? icon; // optional icon name
   final int sortOrder; // display order
   final bool isActive; // whether this method is currently available
@@ -19,6 +22,7 @@ class PaymentMethod {
     required this.name,
     required this.accountId,
     this.requiresReference = false,
+    this.defaultTaxTreatment = TaxTreatment.noTax,
     this.icon,
     this.sortOrder = 0,
     this.isActive = true,
@@ -35,6 +39,9 @@ class PaymentMethod {
       name: json['name']?.toString() ?? '',
       accountId: json['account_id']?.toString() ?? '',
       requiresReference: json['requires_reference'] == true,
+      defaultTaxTreatment: TaxTreatment.fromString(
+        json['default_tax_treatment']?.toString(),
+      ),
       icon: json['icon']?.toString(),
       sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
       isActive: json['is_active'] ?? true,
@@ -51,6 +58,7 @@ class PaymentMethod {
       'name': name,
       'account_id': accountId,
       'requires_reference': requiresReference,
+      'default_tax_treatment': defaultTaxTreatment.name,
       'icon': icon,
       'sort_order': sortOrder,
       'is_active': isActive,
@@ -66,6 +74,7 @@ class PaymentMethod {
     String? name,
     String? accountId,
     bool? requiresReference,
+    TaxTreatment? defaultTaxTreatment,
     String? icon,
     int? sortOrder,
     bool? isActive,
@@ -79,6 +88,7 @@ class PaymentMethod {
       name: name ?? this.name,
       accountId: accountId ?? this.accountId,
       requiresReference: requiresReference ?? this.requiresReference,
+      defaultTaxTreatment: defaultTaxTreatment ?? this.defaultTaxTreatment,
       icon: icon ?? this.icon,
       sortOrder: sortOrder ?? this.sortOrder,
       isActive: isActive ?? this.isActive,

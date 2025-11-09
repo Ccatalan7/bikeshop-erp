@@ -21,6 +21,7 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
   Map<AccountType, List<Account>> _chartOfAccounts = {};
   bool _isLoading = true;
   String _searchTerm = '';
+  Account? _selectedAccount;
 
   @override
   void initState() {
@@ -82,44 +83,85 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
-      child: Column(
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
+      child: _selectedAccount != null
+          ? Row(
               children: [
-                const Expanded(
-                  child: Text(
-                    'Plan de Cuentas',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                // Left side: Chart of accounts list (collapsed)
+                SizedBox(
+                  width: 360,
+                  child: Column(
+                    children: [
+                      _buildHeader(),
+                      SearchWidget(
+                        hintText: 'Buscar por código o nombre de cuenta...',
+                        onSearchChanged: _onSearchChanged,
+                      ),
+                      Expanded(
+                        child: _isLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : _buildChartOfAccounts(),
+                      ),
+                    ],
                   ),
                 ),
-                AppButton(
-                  text: 'Nueva Cuenta',
-                  icon: Icons.add,
-                  onPressed: () {
-                    // TODO: Navigate to account form
-                  },
+                // Divider
+                Container(
+                  width: 1,
+                  color: Theme.of(context).dividerColor,
+                ),
+                // Right side: Account ledger
+                Expanded(
+                  child: _buildAccountLedger(),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                _buildHeader(),
+                SearchWidget(
+                  hintText: 'Buscar por código o nombre de cuenta...',
+                  onSearchChanged: _onSearchChanged,
+                ),
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _buildChartOfAccounts(),
                 ),
               ],
             ),
-          ),
+    );
+  }
 
-          // Search
-          SearchWidget(
-            hintText: 'Buscar por código o nombre de cuenta...',
-            onSearchChanged: _onSearchChanged,
-          ),
-
-          // Content
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Row(
+        children: [
+          if (_selectedAccount != null) ...[
+            IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => setState(() => _selectedAccount = null),
+              tooltip: 'Volver a plan de cuentas',
+            ),
+            const SizedBox(width: 8),
+          ],
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _buildChartOfAccounts(),
+            child: Text(
+              _selectedAccount != null
+                  ? 'Plan de Cuentas'
+                  : 'Plan de Cuentas',
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          AppButton(
+            text: 'Nueva Cuenta',
+            icon: Icons.add,
+            onPressed: () {
+              // TODO: Navigate to account form
+            },
           ),
         ],
       ),
@@ -220,14 +262,19 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
         ],
       ),
       onTap: () {
-        // Navigate to account ledger
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AccountLedgerPage(account: account),
-          ),
-        );
+        setState(() => _selectedAccount = account);
       },
+    );
+  }
+
+  Widget _buildAccountLedger() {
+    if (_selectedAccount == null) {
+      return const Center(child: Text('Selecciona una cuenta'));
+    }
+
+    return AccountLedgerPage(
+      account: _selectedAccount!,
+      isEmbedded: true,
     );
   }
 

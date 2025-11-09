@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/models/customer.dart';
 import '../../../shared/models/payment_method.dart' as pm;
+import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -24,6 +25,8 @@ class POSService extends ChangeNotifier {
   final List<POSCartItem> _cartItems = [];
   Customer? _selectedCustomer;
   bool _isProcessingSale = false;
+  TaxTreatment _taxTreatment = TaxTreatment.noTax; // Default: no tax for POS
+  pm.PaymentMethod? _selectedPaymentMethod; // Primary payment method for tax detection
   
   // Invoice payment mode state (NEW)
   sales_models.Invoice? _linkedInvoice;
@@ -63,19 +66,37 @@ class POSService extends ChangeNotifier {
   Customer? get selectedCustomer => _selectedCustomer;
   bool get isProcessingSale => _isProcessingSale;
   bool get hasItemsInCart => _cartItems.isNotEmpty;
+  TaxTreatment get taxTreatment => _taxTreatment;
+  pm.PaymentMethod? get selectedPaymentMethod => _selectedPaymentMethod;
   
   // Invoice payment mode getters (NEW)
   bool get isInvoicePaymentMode => _linkedInvoice != null;
   sales_models.Invoice? get linkedInvoice => _linkedInvoice;
 
-  // Cart calculations
+  // Cart calculations (POS uses INCLUDED tax like sales invoices)
   double get cartSubtotal =>
       _cartItems.fold(0.0, (sum, item) => sum + item.subtotal);
   double get cartDiscountAmount =>
       _cartItems.fold(0.0, (sum, item) => sum + item.discountAmount);
+  
+  // Net amount after discounts
   double get cartNetAmount => cartSubtotal - cartDiscountAmount;
-  double get cartTaxAmount => cartNetAmount * 0.19; // 19% IVA
-  double get cartTotal => cartNetAmount + cartTaxAmount;
+  
+  // Tax calculation: When tax_included, extract tax by dividing
+  double get cartTaxAmount {
+    if (_taxTreatment == TaxTreatment.taxIncluded) {
+      // Tax is included in price - extract it
+      final totalWithTax = cartNetAmount;
+      final netBeforeTax = totalWithTax / 1.19;
+      return totalWithTax - netBeforeTax;
+    } else {
+      return 0; // No tax
+    }
+  }
+  
+  // Total is always the net amount (price customer sees)
+  double get cartTotal => cartNetAmount;
+  
   double get cartTotalCost =>
       _cartItems.fold(0.0, (sum, item) => sum + item.totalCost);
   int get cartTotalItems =>
@@ -176,11 +197,29 @@ class POSService extends ChangeNotifier {
   void clearCart() {
     _cartItems.clear();
     _selectedCustomer = null;
+    _taxTreatment = TaxTreatment.noTax; // Reset to default
     notifyListeners();
   }
 
   void setCustomer(Customer? customer) {
     _selectedCustomer = customer;
+    notifyListeners();
+  }
+  
+  void setTaxTreatment(TaxTreatment treatment) {
+    _taxTreatment = treatment;
+    notifyListeners();
+  }
+  
+  /// Set primary payment method and auto-detect tax treatment
+  void setPaymentMethod(pm.PaymentMethod? method) {
+    _selectedPaymentMethod = method;
+    
+    // Auto-detect tax treatment based on payment method's default
+    if (method != null) {
+      _taxTreatment = method.defaultTaxTreatment;
+    }
+    
     notifyListeners();
   }
   
@@ -291,9 +330,11 @@ class POSService extends ChangeNotifier {
         status: payments.isNotEmpty
             ? sales_models.InvoiceStatus.confirmed
             : sales_models.InvoiceStatus.draft,
-        subtotal: cartNetAmount,
+        subtotal: cartNetAmount, // Total before tax (for line items display)
+        netAmount: cartNetAmount - cartTaxAmount, // ✅ CRITICAL: Net revenue (total - IVA)
         ivaAmount: cartTaxAmount,
         total: cartTotal,
+        taxTreatment: _taxTreatment, // ✅ Include tax treatment
         items: invoiceItems,
       );
 

@@ -831,3 +831,698 @@ class AttendanceSummary {
     );
   }
 }
+
+// ============================================================================
+// MEDICAL LEAVE MODEL (LICENCIA MÉDICA)
+// ============================================================================
+enum LeaveType {
+  enfermedadComun,
+  accidenteTrabajo,
+  enfermedadProfesional,
+  maternal,
+  paternal,
+  prePostNatal
+}
+
+enum LeaveStatus { pending, approved, rejected, paid }
+
+class MedicalLeave {
+  final String? id;
+  final String tenantId;
+  final String employeeId;
+  final LeaveType leaveType;
+  final DateTime startDate;
+  final DateTime endDate;
+  final int daysCount;
+  final String? certificateNumber;
+  final String? doctorName;
+  final String? doctorRut;
+  final String? issuingInstitution;
+  final LeaveStatus status;
+  final double? dailySubsidyAmount;
+  final double? totalSubsidyAmount;
+  final String? paidBy;
+  final DateTime? paidAt;
+  final String? certificateUrl;
+  final String? approvalUrl;
+  final String? diagnosis;
+  final String? notes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  MedicalLeave({
+    this.id,
+    required this.tenantId,
+    required this.employeeId,
+    required this.leaveType,
+    required this.startDate,
+    required this.endDate,
+    int? daysCount,
+    this.certificateNumber,
+    this.doctorName,
+    this.doctorRut,
+    this.issuingInstitution,
+    this.status = LeaveStatus.pending,
+    this.dailySubsidyAmount,
+    this.totalSubsidyAmount,
+    this.paidBy,
+    this.paidAt,
+    this.certificateUrl,
+    this.approvalUrl,
+    this.diagnosis,
+    this.notes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : daysCount = daysCount ?? endDate.difference(startDate).inDays + 1,
+        createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory MedicalLeave.fromMap(Map<String, dynamic> map) {
+    return MedicalLeave(
+      id: map['id'],
+      tenantId: map['tenant_id']?.toString() ?? '',
+      employeeId: map['employee_id']?.toString() ?? '',
+      leaveType: _leaveTypeFromString(map['leave_type']),
+      startDate: DateTime.parse(map['start_date']),
+      endDate: DateTime.parse(map['end_date']),
+      daysCount: map['days_count'],
+      certificateNumber: map['certificate_number'],
+      doctorName: map['doctor_name'],
+      doctorRut: map['doctor_rut'],
+      issuingInstitution: map['issuing_institution'],
+      status: _leaveStatusFromString(map['status']),
+      dailySubsidyAmount: map['daily_subsidy_amount']?.toDouble(),
+      totalSubsidyAmount: map['total_subsidy_amount']?.toDouble(),
+      paidBy: map['paid_by'],
+      paidAt: map['paid_at'] != null ? DateTime.parse(map['paid_at']) : null,
+      certificateUrl: map['certificate_url'],
+      approvalUrl: map['approval_url'],
+      diagnosis: map['diagnosis'],
+      notes: map['notes'],
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'])
+          : DateTime.now(),
+      updatedAt: map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'])
+          : DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'employee_id': employeeId,
+      'leave_type': _leaveTypeToString(leaveType),
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+      if (certificateNumber != null) 'certificate_number': certificateNumber,
+      if (doctorName != null) 'doctor_name': doctorName,
+      if (doctorRut != null) 'doctor_rut': doctorRut,
+      if (issuingInstitution != null) 'issuing_institution': issuingInstitution,
+      'status': _leaveStatusToString(status),
+      if (dailySubsidyAmount != null) 'daily_subsidy_amount': dailySubsidyAmount,
+      if (totalSubsidyAmount != null) 'total_subsidy_amount': totalSubsidyAmount,
+      if (paidBy != null) 'paid_by': paidBy,
+      if (paidAt != null) 'paid_at': paidAt!.toIso8601String(),
+      if (certificateUrl != null) 'certificate_url': certificateUrl,
+      if (approvalUrl != null) 'approval_url': approvalUrl,
+      if (diagnosis != null) 'diagnosis': diagnosis,
+      if (notes != null) 'notes': notes,
+    };
+  }
+
+  static LeaveType _leaveTypeFromString(String? value) {
+    switch (value) {
+      case 'enfermedad_comun':
+        return LeaveType.enfermedadComun;
+      case 'accidente_trabajo':
+        return LeaveType.accidenteTrabajo;
+      case 'enfermedad_profesional':
+        return LeaveType.enfermedadProfesional;
+      case 'maternal':
+        return LeaveType.maternal;
+      case 'paternal':
+        return LeaveType.paternal;
+      case 'pre_post_natal':
+        return LeaveType.prePostNatal;
+      default:
+        return LeaveType.enfermedadComun;
+    }
+  }
+
+  static String _leaveTypeToString(LeaveType type) {
+    switch (type) {
+      case LeaveType.enfermedadComun:
+        return 'enfermedad_comun';
+      case LeaveType.accidenteTrabajo:
+        return 'accidente_trabajo';
+      case LeaveType.enfermedadProfesional:
+        return 'enfermedad_profesional';
+      case LeaveType.maternal:
+        return 'maternal';
+      case LeaveType.paternal:
+        return 'paternal';
+      case LeaveType.prePostNatal:
+        return 'pre_post_natal';
+    }
+  }
+
+  static LeaveStatus _leaveStatusFromString(String? value) {
+    switch (value) {
+      case 'pending':
+        return LeaveStatus.pending;
+      case 'approved':
+        return LeaveStatus.approved;
+      case 'rejected':
+        return LeaveStatus.rejected;
+      case 'paid':
+        return LeaveStatus.paid;
+      default:
+        return LeaveStatus.pending;
+    }
+  }
+
+  static String _leaveStatusToString(LeaveStatus status) {
+    switch (status) {
+      case LeaveStatus.pending:
+        return 'pending';
+      case LeaveStatus.approved:
+        return 'approved';
+      case LeaveStatus.rejected:
+        return 'rejected';
+      case LeaveStatus.paid:
+        return 'paid';
+    }
+  }
+
+  String get leaveTypeLabel {
+    switch (leaveType) {
+      case LeaveType.enfermedadComun:
+        return 'Enfermedad Común';
+      case LeaveType.accidenteTrabajo:
+        return 'Accidente de Trabajo';
+      case LeaveType.enfermedadProfesional:
+        return 'Enfermedad Profesional';
+      case LeaveType.maternal:
+        return 'Maternal';
+      case LeaveType.paternal:
+        return 'Paternal';
+      case LeaveType.prePostNatal:
+        return 'Pre/Post Natal';
+    }
+  }
+
+  String get statusLabel {
+    switch (status) {
+      case LeaveStatus.pending:
+        return 'Pendiente';
+      case LeaveStatus.approved:
+        return 'Aprobada';
+      case LeaveStatus.rejected:
+        return 'Rechazada';
+      case LeaveStatus.paid:
+        return 'Pagada';
+    }
+  }
+
+  Color get statusColor {
+    switch (status) {
+      case LeaveStatus.pending:
+        return Colors.orange;
+      case LeaveStatus.approved:
+        return Colors.green;
+      case LeaveStatus.rejected:
+        return Colors.red;
+      case LeaveStatus.paid:
+        return Colors.blue;
+    }
+  }
+}
+
+// ============================================================================
+// EMPLOYMENT CONTRACT MODEL (CHILEAN LABOR LAW)
+// ============================================================================
+enum ChileanContractType { indefinido, plazoFijo, obraFaena, partTime, honorarios }
+
+enum ChileanContractStatus { active, terminated, suspended }
+
+enum ChileanPaymentFrequency { monthly, biweekly, weekly }
+
+class EmploymentContract {
+  final String? id;
+  final String tenantId;
+  final String employeeId;
+  final ChileanContractType contractType;
+  final DateTime startDate;
+  final DateTime? endDate;
+  final String positionTitle;
+  final String? department;
+  final String? jobDescription;
+  final int weeklyHours;
+  final String? workSchedule;
+  final double baseSalary;
+  final ChileanPaymentFrequency paymentFrequency;
+  final String paymentMethod;
+  final bool includesTransportation;
+  final bool includesLunch;
+  final bool includesHousing;
+  final bool includesHealthInsurance;
+  final bool includesLifeInsurance;
+  final int vacationDays;
+  final ChileanContractStatus status;
+  final DateTime? terminationDate;
+  final String? terminationReason;
+  final String? contractUrl;
+  final List<String>? addendumUrls;
+  final String? notes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  EmploymentContract({
+    this.id,
+    required this.tenantId,
+    required this.employeeId,
+    required this.contractType,
+    required this.startDate,
+    this.endDate,
+    required this.positionTitle,
+    this.department,
+    this.jobDescription,
+    this.weeklyHours = 45,
+    this.workSchedule,
+    required this.baseSalary,
+    this.paymentFrequency = ChileanPaymentFrequency.monthly,
+    this.paymentMethod = 'bank_transfer',
+    this.includesTransportation = false,
+    this.includesLunch = false,
+    this.includesHousing = false,
+    this.includesHealthInsurance = false,
+    this.includesLifeInsurance = false,
+    this.vacationDays = 15,
+    this.status = ChileanContractStatus.active,
+    this.terminationDate,
+    this.terminationReason,
+    this.contractUrl,
+    this.addendumUrls,
+    this.notes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory EmploymentContract.fromMap(Map<String, dynamic> map) {
+    return EmploymentContract(
+      id: map['id'],
+      tenantId: map['tenant_id']?.toString() ?? '',
+      employeeId: map['employee_id']?.toString() ?? '',
+      contractType: _contractTypeFromString(map['contract_type']),
+      startDate: DateTime.parse(map['start_date']),
+      endDate: map['end_date'] != null ? DateTime.parse(map['end_date']) : null,
+      positionTitle: map['position_title'] ?? '',
+      department: map['department'],
+      jobDescription: map['job_description'],
+      weeklyHours: map['weekly_hours'] ?? 45,
+      workSchedule: map['work_schedule'],
+      baseSalary: (map['base_salary'] ?? 0).toDouble(),
+      paymentFrequency: _paymentFrequencyFromString(map['payment_frequency']),
+      paymentMethod: map['payment_method'] ?? 'bank_transfer',
+      includesTransportation: map['includes_transportation'] ?? false,
+      includesLunch: map['includes_lunch'] ?? false,
+      includesHousing: map['includes_housing'] ?? false,
+      includesHealthInsurance: map['includes_health_insurance'] ?? false,
+      includesLifeInsurance: map['includes_life_insurance'] ?? false,
+      vacationDays: map['vacation_days'] ?? 15,
+      status: _contractStatusFromString(map['status']),
+      terminationDate: map['termination_date'] != null
+          ? DateTime.parse(map['termination_date'])
+          : null,
+      terminationReason: map['termination_reason'],
+      contractUrl: map['contract_url'],
+      addendumUrls: map['addendum_urls'] != null
+          ? List<String>.from(map['addendum_urls'])
+          : null,
+      notes: map['notes'],
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'])
+          : DateTime.now(),
+      updatedAt: map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'])
+          : DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'employee_id': employeeId,
+      'contract_type': _contractTypeToString(contractType),
+      'start_date': startDate.toIso8601String().split('T')[0],
+      if (endDate != null) 'end_date': endDate!.toIso8601String().split('T')[0],
+      'position_title': positionTitle,
+      if (department != null) 'department': department,
+      if (jobDescription != null) 'job_description': jobDescription,
+      'weekly_hours': weeklyHours,
+      if (workSchedule != null) 'work_schedule': workSchedule,
+      'base_salary': baseSalary,
+      'payment_frequency': _paymentFrequencyToString(paymentFrequency),
+      'payment_method': paymentMethod,
+      'includes_transportation': includesTransportation,
+      'includes_lunch': includesLunch,
+      'includes_housing': includesHousing,
+      'includes_health_insurance': includesHealthInsurance,
+      'includes_life_insurance': includesLifeInsurance,
+      'vacation_days': vacationDays,
+      'status': _contractStatusToString(status),
+      if (terminationDate != null)
+        'termination_date': terminationDate!.toIso8601String().split('T')[0],
+      if (terminationReason != null) 'termination_reason': terminationReason,
+      if (contractUrl != null) 'contract_url': contractUrl,
+      if (addendumUrls != null) 'addendum_urls': addendumUrls,
+      if (notes != null) 'notes': notes,
+    };
+  }
+
+  static ChileanContractType _contractTypeFromString(String? value) {
+    switch (value) {
+      case 'indefinido':
+        return ChileanContractType.indefinido;
+      case 'plazo_fijo':
+        return ChileanContractType.plazoFijo;
+      case 'obra_faena':
+        return ChileanContractType.obraFaena;
+      case 'part_time':
+        return ChileanContractType.partTime;
+      case 'honorarios':
+        return ChileanContractType.honorarios;
+      default:
+        return ChileanContractType.indefinido;
+    }
+  }
+
+  static String _contractTypeToString(ChileanContractType type) {
+    switch (type) {
+      case ChileanContractType.indefinido:
+        return 'indefinido';
+      case ChileanContractType.plazoFijo:
+        return 'plazo_fijo';
+      case ChileanContractType.obraFaena:
+        return 'obra_faena';
+      case ChileanContractType.partTime:
+        return 'part_time';
+      case ChileanContractType.honorarios:
+        return 'honorarios';
+    }
+  }
+
+  static ChileanContractStatus _contractStatusFromString(String? value) {
+    switch (value) {
+      case 'active':
+        return ChileanContractStatus.active;
+      case 'terminated':
+        return ChileanContractStatus.terminated;
+      case 'suspended':
+        return ChileanContractStatus.suspended;
+      default:
+        return ChileanContractStatus.active;
+    }
+  }
+
+  static String _contractStatusToString(ChileanContractStatus status) {
+    switch (status) {
+      case ChileanContractStatus.active:
+        return 'active';
+      case ChileanContractStatus.terminated:
+        return 'terminated';
+      case ChileanContractStatus.suspended:
+        return 'suspended';
+    }
+  }
+
+  static ChileanPaymentFrequency _paymentFrequencyFromString(String? value) {
+    switch (value) {
+      case 'monthly':
+        return ChileanPaymentFrequency.monthly;
+      case 'biweekly':
+        return ChileanPaymentFrequency.biweekly;
+      case 'weekly':
+        return ChileanPaymentFrequency.weekly;
+      default:
+        return ChileanPaymentFrequency.monthly;
+    }
+  }
+
+  static String _paymentFrequencyToString(ChileanPaymentFrequency freq) {
+    switch (freq) {
+      case ChileanPaymentFrequency.monthly:
+        return 'monthly';
+      case ChileanPaymentFrequency.biweekly:
+        return 'biweekly';
+      case ChileanPaymentFrequency.weekly:
+        return 'weekly';
+    }
+  }
+
+  String get contractTypeLabel {
+    switch (contractType) {
+      case ChileanContractType.indefinido:
+        return 'Indefinido';
+      case ChileanContractType.plazoFijo:
+        return 'Plazo Fijo';
+      case ChileanContractType.obraFaena:
+        return 'Obra o Faena';
+      case ChileanContractType.partTime:
+        return 'Part-Time';
+      case ChileanContractType.honorarios:
+        return 'Honorarios';
+    }
+  }
+
+  String get statusLabel {
+    switch (status) {
+      case ChileanContractStatus.active:
+        return 'Activo';
+      case ChileanContractStatus.terminated:
+        return 'Terminado';
+      case ChileanContractStatus.suspended:
+        return 'Suspendido';
+    }
+  }
+
+  Color get statusColor {
+    switch (status) {
+      case ChileanContractStatus.active:
+        return Colors.green;
+      case ChileanContractStatus.terminated:
+        return Colors.red;
+      case ChileanContractStatus.suspended:
+        return Colors.orange;
+    }
+  }
+}
+
+// ============================================================================
+// PAYROLL RECORD MODEL (LIQUIDACIÓN DE SUELDO)
+// ============================================================================
+class PayrollRecord {
+  final String? id;
+  final String tenantId;
+  final String employeeId;
+  final int periodMonth;
+  final int periodYear;
+  final DateTime paymentDate;
+  
+  // Haberes (Income)
+  final double baseSalary;
+  final double overtimePay;
+  final double bonuses;
+  final double commissions;
+  final double mobilityAllowance;
+  final double lunchAllowance;
+  final double housingAllowance;
+  final double otherIncome;
+  final double totalHaberes;
+  
+  // Descuentos (Deductions)
+  final double afpContribution;
+  final double healthContribution;
+  final double unemploymentInsurance;
+  final double incomeTax;
+  final double otherDeductions;
+  final double totalDescuentos;
+  
+  // Líquido
+  final double netPay;
+  
+  // Status
+  final String status;
+  final DateTime? paidAt;
+  final String? paymentReference;
+  final String? payslipUrl;
+  final String? notes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  PayrollRecord({
+    this.id,
+    required this.tenantId,
+    required this.employeeId,
+    required this.periodMonth,
+    required this.periodYear,
+    required this.paymentDate,
+    required this.baseSalary,
+    this.overtimePay = 0,
+    this.bonuses = 0,
+    this.commissions = 0,
+    this.mobilityAllowance = 0,
+    this.lunchAllowance = 0,
+    this.housingAllowance = 0,
+    this.otherIncome = 0,
+    double? totalHaberes,
+    required this.afpContribution,
+    required this.healthContribution,
+    this.unemploymentInsurance = 0,
+    this.incomeTax = 0,
+    this.otherDeductions = 0,
+    double? totalDescuentos,
+    double? netPay,
+    this.status = 'draft',
+    this.paidAt,
+    this.paymentReference,
+    this.payslipUrl,
+    this.notes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : totalHaberes = totalHaberes ??
+            (baseSalary +
+                overtimePay +
+                bonuses +
+                commissions +
+                mobilityAllowance +
+                lunchAllowance +
+                housingAllowance +
+                otherIncome),
+        totalDescuentos = totalDescuentos ??
+            (afpContribution +
+                healthContribution +
+                unemploymentInsurance +
+                incomeTax +
+                otherDeductions),
+        netPay = netPay ??
+            ((totalHaberes ??
+                    (baseSalary +
+                        overtimePay +
+                        bonuses +
+                        commissions +
+                        mobilityAllowance +
+                        lunchAllowance +
+                        housingAllowance +
+                        otherIncome)) -
+                (totalDescuentos ??
+                    (afpContribution +
+                        healthContribution +
+                        unemploymentInsurance +
+                        incomeTax +
+                        otherDeductions))),
+        createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory PayrollRecord.fromMap(Map<String, dynamic> map) {
+    return PayrollRecord(
+      id: map['id'],
+      tenantId: map['tenant_id']?.toString() ?? '',
+      employeeId: map['employee_id']?.toString() ?? '',
+      periodMonth: map['period_month'] ?? 1,
+      periodYear: map['period_year'] ?? DateTime.now().year,
+      paymentDate: DateTime.parse(map['payment_date']),
+      baseSalary: (map['base_salary'] ?? 0).toDouble(),
+      overtimePay: (map['overtime_pay'] ?? 0).toDouble(),
+      bonuses: (map['bonuses'] ?? 0).toDouble(),
+      commissions: (map['commissions'] ?? 0).toDouble(),
+      mobilityAllowance: (map['mobility_allowance'] ?? 0).toDouble(),
+      lunchAllowance: (map['lunch_allowance'] ?? 0).toDouble(),
+      housingAllowance: (map['housing_allowance'] ?? 0).toDouble(),
+      otherIncome: (map['other_income'] ?? 0).toDouble(),
+      totalHaberes: (map['total_haberes'] ?? 0).toDouble(),
+      afpContribution: (map['afp_contribution'] ?? 0).toDouble(),
+      healthContribution: (map['health_contribution'] ?? 0).toDouble(),
+      unemploymentInsurance: (map['unemployment_insurance'] ?? 0).toDouble(),
+      incomeTax: (map['income_tax'] ?? 0).toDouble(),
+      otherDeductions: (map['other_deductions'] ?? 0).toDouble(),
+      totalDescuentos: (map['total_descuentos'] ?? 0).toDouble(),
+      netPay: (map['net_pay'] ?? 0).toDouble(),
+      status: map['status'] ?? 'draft',
+      paidAt: map['paid_at'] != null ? DateTime.parse(map['paid_at']) : null,
+      paymentReference: map['payment_reference'],
+      payslipUrl: map['payslip_url'],
+      notes: map['notes'],
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'])
+          : DateTime.now(),
+      updatedAt: map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'])
+          : DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'employee_id': employeeId,
+      'period_month': periodMonth,
+      'period_year': periodYear,
+      'payment_date': paymentDate.toIso8601String().split('T')[0],
+      'base_salary': baseSalary,
+      'overtime_pay': overtimePay,
+      'bonuses': bonuses,
+      'commissions': commissions,
+      'mobility_allowance': mobilityAllowance,
+      'lunch_allowance': lunchAllowance,
+      'housing_allowance': housingAllowance,
+      'other_income': otherIncome,
+      'total_haberes': totalHaberes,
+      'afp_contribution': afpContribution,
+      'health_contribution': healthContribution,
+      'unemployment_insurance': unemploymentInsurance,
+      'income_tax': incomeTax,
+      'other_deductions': otherDeductions,
+      'total_descuentos': totalDescuentos,
+      'net_pay': netPay,
+      'status': status,
+      if (paidAt != null) 'paid_at': paidAt!.toIso8601String(),
+      if (paymentReference != null) 'payment_reference': paymentReference,
+      if (payslipUrl != null) 'payslip_url': payslipUrl,
+      if (notes != null) 'notes': notes,
+    };
+  }
+
+  String get periodLabel => '$periodMonth/$periodYear';
+
+  Color get statusColor {
+    switch (status) {
+      case 'draft':
+        return Colors.grey;
+      case 'approved':
+        return Colors.blue;
+      case 'paid':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String get statusLabel {
+    switch (status) {
+      case 'draft':
+        return 'Borrador';
+      case 'approved':
+        return 'Aprobada';
+      case 'paid':
+        return 'Pagada';
+      default:
+        return 'Desconocido';
+    }
+  }
+}

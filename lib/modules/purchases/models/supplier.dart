@@ -1,3 +1,5 @@
+import '../../../shared/models/tax_treatment.dart';
+
 class Supplier {
   final int? id;
   final String tenantId;
@@ -9,6 +11,7 @@ class Supplier {
   final String? contactPerson;
   final bool isActive;
   final String? notes;
+  final TaxTreatment defaultTaxTreatment; // suggested tax treatment for purchases
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -23,6 +26,7 @@ class Supplier {
     this.contactPerson,
     this.isActive = true,
     this.notes,
+    this.defaultTaxTreatment = TaxTreatment.noTax,
     this.createdAt,
     this.updatedAt,
   });
@@ -39,6 +43,7 @@ class Supplier {
       contactPerson: json['contact_person'] as String?,
       isActive: json['is_active'] as bool? ?? true,
       notes: json['notes'] as String?,
+      defaultTaxTreatment: TaxTreatment.fromString(json['default_tax_treatment']?.toString()),
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : null,
@@ -60,6 +65,7 @@ class Supplier {
       'contact_person': contactPerson,
       'is_active': isActive,
       'notes': notes,
+      'default_tax_treatment': defaultTaxTreatment.toValue(),
       'created_at': createdAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
     };
@@ -76,6 +82,7 @@ class Supplier {
     String? contactPerson,
     bool? isActive,
     String? notes,
+    TaxTreatment? defaultTaxTreatment,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -90,6 +97,7 @@ class Supplier {
       contactPerson: contactPerson ?? this.contactPerson,
       isActive: isActive ?? this.isActive,
       notes: notes ?? this.notes,
+      defaultTaxTreatment: defaultTaxTreatment ?? this.defaultTaxTreatment,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

@@ -141,6 +141,80 @@
 - Client name requested to link payment to invoice
 - Payment manually recorded in **Accounting Module**
 
+---
+
+## 💰 Tax Treatment (IVA 19%)
+
+### **Sales Invoices (Customer Facing)**
+**Tax is INCLUDED in the displayed price**
+
+**Example: Selling a bicycle for $119,000 CLP**
+- Display price: $119,000 (what customer sees on tag)
+- When "IVA Incluido" selected:
+  - Neto (Net): $100,000 (calculated: $119,000 ÷ 1.19)
+  - IVA (19%): $19,000 (calculated: $119,000 - $100,000)
+  - Total: $119,000 (unchanged)
+
+**Calculation Logic**:
+```
+If tax_included:
+  net = total ÷ 1.19
+  iva = total - net
+  total = UNCHANGED (price customer sees)
+Else (no_tax):
+  net = total
+  iva = 0
+  total = UNCHANGED
+```
+
+**Use Cases**:
+- Retail sales (POS)
+- Service invoices (Pegas Module)
+- Customer-facing transactions
+
+---
+
+### **Purchase Invoices (Supplier Facing)**
+**Tax is ADDED on top of the net cost**
+
+**Example: Buying inventory for $100,000 CLP net**
+- Supplier quotes: $100,000 net
+- When "IVA Incluido" selected:
+  - Subtotal (Neto): $100,000 (supplier's net price)
+  - IVA (19%): $19,000 (calculated: $100,000 × 0.19)
+  - Total: $119,000 (calculated: $100,000 + $19,000)
+
+**Calculation Logic**:
+```
+If tax_included:
+  net = subtotal (supplier's quoted price)
+  iva = subtotal × 0.19
+  total = subtotal + iva
+Else (no_tax):
+  net = subtotal
+  iva = 0
+  total = subtotal
+```
+
+**Use Cases**:
+- Purchasing inventory from suppliers
+- Buying parts/components
+- Import costs
+- Service provider invoices
+
+---
+
+**Why the Difference?**
+- **Sales**: Customers see final prices (tax already included) → we extract the tax
+- **Purchases**: Suppliers quote net prices → we add the tax on top
+
+**Accounting Impact**:
+- **Sales IVA**: Credit account (liability) → we owe this to SII
+- **Purchase IVA**: Debit account (asset) → we can claim this back from SII
+- **Net IVA Payable**: Sales IVA - Purchase IVA = Amount owed to tax authority
+
+---
+
 #### **Phase 5: Job Execution**
 - After payment confirmed → Work begins
 - Check spare parts availability → Order if needed (links to **Inventory Module**)

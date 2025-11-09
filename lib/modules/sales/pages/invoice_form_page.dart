@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/models/product.dart';
+import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
@@ -36,8 +37,6 @@ class InvoiceFormPage extends StatefulWidget {
 }
 
 class _InvoiceFormPageState extends State<InvoiceFormPage> {
-  static const double _ivaRate = 0.19;
-  
   // Column widths for table alignment
   static const double _colIndexWidth = 40.0;
   static const double _colQuantityWidth = 120.0;
@@ -72,6 +71,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   DateTime _issueDate = DateTime.now();
   DateTime? _dueDate;
   InvoiceStatus _status = InvoiceStatus.draft;
+  TaxTreatment _taxTreatment = TaxTreatment.noTax; // Default: no tax (cash/transfer common)
+  String? _paymentMethodHint; // 'card' or 'other' - for smart tax validation
 
   String? get _currentInvoiceId => _loadedInvoice?.id ?? widget.invoiceId;
   bool get _canEditFields => _status == InvoiceStatus.draft && _isEditing;
@@ -351,6 +352,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       _issueDate = invoice.date;
       _dueDate = invoice.dueDate ?? invoice.date.add(const Duration(days: 30));
       _status = invoice.status;
+      _taxTreatment = invoice.taxTreatment;
       _isEditing = false;
       _lineEntries
         ..clear()
@@ -439,6 +441,17 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         );
       }
       return;
+    }
+
+    // ⚠️ Smart validation: If paying with card but no tax → auto-fix
+    if (newStatus == InvoiceStatus.confirmed && 
+        _paymentMethodHint == 'card' && 
+        _taxTreatment == TaxTreatment.noTax) {
+      // Auto-add tax for card payments
+      setState(() => _taxTreatment = TaxTreatment.taxIncluded);
+      await _saveInvoice();
+      if (!mounted) return;
+      await Future.delayed(const Duration(milliseconds: 300));
     }
 
     setState(() => _isUpdatingStatus = true);
@@ -594,9 +607,28 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     return value < 0 ? 0 : value;
   }
 
-  double get _iva => _subtotal * _ivaRate;
+  // Calculate net, IVA, and total based on tax treatment
+  double get _netAmount {
+    if (_taxTreatment == TaxTreatment.taxIncluded) {
+      // Tax included: net = subtotal ÷ 1.19
+      return _subtotal / 1.19;
+    } else {
+      // No tax: net = full subtotal
+      return _subtotal;
+    }
+  }
 
-  double get _total => _subtotal + _iva;
+  double get _iva {
+    if (_taxTreatment == TaxTreatment.taxIncluded) {
+      // Tax included: IVA = subtotal - net
+      return _subtotal - _netAmount;
+    } else {
+      // No tax: IVA = 0
+      return 0;
+    }
+  }
+
+  double get _total => _subtotal;
 
   Future<void> _openCustomerSelector() async {
     if (_cachedCustomers.isEmpty) {
@@ -814,6 +846,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       subtotal: _subtotal,
       ivaAmount: _iva,
       total: _total,
+      taxTreatment: _taxTreatment,
+      netAmount: _netAmount,
       items: items,
     );
 
@@ -1948,6 +1982,69 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 )
               : null,
         ),
+        const Divider(),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.receipt_long_outlined),
+          title: const Text('Tratamiento de IVA'),
+          subtitle: DropdownButtonFormField<TaxTreatment>(
+            value: _taxTreatment,
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: TaxTreatment.noTax,
+                child: Text('Sin IVA'),
+              ),
+              DropdownMenuItem(
+                value: TaxTreatment.taxIncluded,
+                child: Text('IVA Incluido (19%)'),
+              ),
+            ],
+            onChanged: _canEditFields
+                ? (value) {
+                    if (value != null) {
+                      setState(() => _taxTreatment = value);
+                    }
+                  }
+                : null,
+          ),
+        ),
+        // 💳 Payment method hint (only show when ready to confirm)
+        if (_status == InvoiceStatus.sent)
+          ListTile(
+            leading: const Icon(Icons.payment),
+            title: const Text('Método de pago esperado'),
+            subtitle: DropdownButtonFormField<String>(
+              value: _paymentMethodHint,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                hintText: 'Selecciona para validación automática',
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: 'card',
+                  child: Text('💳 Tarjeta (se agregará IVA si falta)'),
+                ),
+                DropdownMenuItem(
+                  value: 'other',
+                  child: Text('💵 Efectivo/Transferencia'),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _paymentMethodHint = value;
+                  // Auto-add tax if selecting card
+                  if (value == 'card' && _taxTreatment == TaxTreatment.noTax) {
+                    _taxTreatment = TaxTreatment.taxIncluded;
+                  }
+                });
+              },
+            ),
+          ),
       ],
     );
   }
@@ -1959,9 +2056,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       children: [
         _buildSummaryRow('Subtotal', ChileanUtils.formatCurrency(_subtotal),
             textStyle, theme),
-        const SizedBox(height: 8),
-        _buildSummaryRow(
-            'IVA (19%)', ChileanUtils.formatCurrency(_iva), textStyle, theme),
+        if (_taxTreatment == TaxTreatment.taxIncluded) ...[
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+              'Neto', ChileanUtils.formatCurrency(_netAmount), textStyle, theme),
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+              'IVA (19%)', ChileanUtils.formatCurrency(_iva), textStyle, theme),
+        ],
         const Divider(height: 24),
         _buildSummaryRow(
           'Total',

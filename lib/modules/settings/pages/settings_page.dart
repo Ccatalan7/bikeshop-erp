@@ -160,6 +160,14 @@ class SettingsPage extends StatelessWidget {
             children: [
               _buildSettingTile(
                 context,
+                icon: Icons.payment,
+                title: 'Métodos de Pago',
+                subtitle: 'Configurar efectivo, transferencia, tarjetas',
+                iconColor: Colors.green,
+                onTap: () => context.push('/settings/payment-methods'),
+              ),
+              _buildSettingTile(
+                context,
                 icon: Icons.receipt,
                 title: 'Impuestos',
                 subtitle: 'Configurar IVA y otros impuestos',

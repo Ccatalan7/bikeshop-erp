@@ -1,4 +1,5 @@
 import '../utils/chilean_utils.dart';
+import 'tax_treatment.dart';
 
 class Supplier {
   final String id;
@@ -16,6 +17,7 @@ class Supplier {
   final String? website;
   final Map<String, String> bankDetails;
   final PaymentTerms paymentTerms;
+  final TaxTreatment defaultTaxTreatment; // suggested tax treatment for purchases
   final String? notes;
   final bool isActive;
   final DateTime createdAt;
@@ -37,6 +39,7 @@ class Supplier {
     this.website,
     this.bankDetails = const {},
     this.paymentTerms = PaymentTerms.net30,
+    this.defaultTaxTreatment = TaxTreatment.noTax,
     this.notes,
     this.isActive = true,
     required this.createdAt,
@@ -66,6 +69,10 @@ class Supplier {
         (t) => t.name == json['payment_terms'],
         orElse: () => PaymentTerms.net30,
       ),
+      defaultTaxTreatment: TaxTreatment.values.firstWhere(
+        (t) => t.name == json['default_tax_treatment'],
+        orElse: () => TaxTreatment.noTax,
+      ),
       notes: json['notes'] as String?,
       isActive: json['is_active'] as bool? ?? true,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -90,6 +97,7 @@ class Supplier {
       'website': website,
       'bank_details': bankDetails,
       'payment_terms': paymentTerms.name,
+      'default_tax_treatment': defaultTaxTreatment.name,
       'notes': notes,
       'is_active': isActive,
       'created_at': createdAt.toIso8601String(),
@@ -113,6 +121,7 @@ class Supplier {
     String? website,
     Map<String, String>? bankDetails,
     PaymentTerms? paymentTerms,
+    TaxTreatment? defaultTaxTreatment,
     String? notes,
     bool? isActive,
     DateTime? createdAt,
@@ -134,6 +143,7 @@ class Supplier {
       website: website ?? this.website,
       bankDetails: bankDetails ?? this.bankDetails,
       paymentTerms: paymentTerms ?? this.paymentTerms,
+      defaultTaxTreatment: defaultTaxTreatment ?? this.defaultTaxTreatment,
       notes: notes ?? this.notes,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,

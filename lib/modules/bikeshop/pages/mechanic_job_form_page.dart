@@ -10,6 +10,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/whatsapp_service.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
@@ -522,6 +523,102 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
   }
 
+  Future<void> _sendWhatsAppUpdate() async {
+    if (_selectedCustomer == null || _selectedBike == null || _existingJob == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay datos suficientes para enviar mensaje')),
+      );
+      return;
+    }
+
+    // Check if customer has phone number
+    if (_selectedCustomer!.phone == null || _selectedCustomer!.phone!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El cliente no tiene número de teléfono registrado')),
+      );
+      return;
+    }
+
+    try {
+      final whatsappService = WhatsAppService();
+      final success = await whatsappService.sendJobStatusUpdate(
+        context: context,
+        customerPhone: _selectedCustomer!.phone!,
+        customerName: _selectedCustomer!.name,
+        job: _existingJob!,
+        bikeBrand: _selectedBike!.brand ?? 'Bicicleta',
+        bikeModel: _selectedBike!.model,
+      );
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('WhatsApp abierto con mensaje pre-llenado'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir WhatsApp')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendReadyForPickupMessage() async {
+    if (_selectedCustomer == null || _selectedBike == null || _existingJob == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay datos suficientes para enviar mensaje')),
+      );
+      return;
+    }
+
+    // Check if customer has phone number
+    if (_selectedCustomer!.phone == null || _selectedCustomer!.phone!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El cliente no tiene número de teléfono registrado')),
+      );
+      return;
+    }
+
+    try {
+      final whatsappService = WhatsAppService();
+      final success = await whatsappService.sendReadyForPickup(
+        context: context,
+        customerPhone: _selectedCustomer!.phone!,
+        customerName: _selectedCustomer!.name,
+        job: _existingJob!,
+        bikeBrand: _selectedBike!.brand ?? 'Bicicleta',
+        bikeModel: _selectedBike!.model,
+      );
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('WhatsApp abierto - Notifica al cliente que su bici está lista'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir WhatsApp')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _confirmDeleteBike(Bike bike) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -706,6 +803,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ),
           ),
           const Spacer(),
+          // WhatsApp button (only when editing and customer selected)
+          if (isEditing && _selectedCustomer != null && _selectedBike != null) ...[
+            // Show "Ready for Pickup" button if job is finished
+            if (_selectedStatus == JobStatus.finalizado || _selectedStatus == JobStatus.entregado)
+              OutlinedButton.icon(
+                onPressed: () => _sendReadyForPickupMessage(),
+                icon: const Icon(Icons.check_circle, color: Colors.green),
+                label: const Text('Avisar Cliente'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.green,
+                ),
+              )
+            else
+              // Otherwise show status update button
+              OutlinedButton.icon(
+                onPressed: () => _sendWhatsAppUpdate(),
+                icon: const Icon(Icons.message, color: Colors.green),
+                label: const Text('WhatsApp'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.green,
+                ),
+              ),
+            const SizedBox(width: 12),
+          ],
           OutlinedButton.icon(
             onPressed: _isSaving ? null : () => context.pop(),
             icon: const Icon(Icons.close),

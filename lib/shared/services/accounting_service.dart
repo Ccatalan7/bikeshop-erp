@@ -74,15 +74,15 @@ class AccountingService extends ChangeNotifier {
       ),
       // Credit: Sales Revenue (excluding tax)
       JournalLine(
-        accountCode: '4101',
-        accountName: 'Ventas Mercaderías',
+        accountCode: '4100', // Fixed: 4101→4100 (Ingresos Operacionales)
+        accountName: 'Ingresos Operacionales',
         debit: 0,
         credit: subtotal,
         description: 'Venta POS',
       ),
       // Credit: IVA Débito Fiscal
       JournalLine(
-        accountCode: '2103',
+        accountCode: '2150', // Fixed: 2103→2150 (IVA Débito Fiscal)
         accountName: 'IVA Débito Fiscal',
         debit: 0,
         credit: taxAmount,
@@ -90,7 +90,7 @@ class AccountingService extends ChangeNotifier {
       ),
       // Debit: Cost of Goods Sold
       JournalLine(
-        accountCode: '5101',
+        accountCode: '5100', // Fixed: 5101→5100 (Costo de Ventas)
         accountName: 'Costo de Ventas',
         debit: totalCost,
         credit: 0,
@@ -98,8 +98,8 @@ class AccountingService extends ChangeNotifier {
       ),
       // Credit: Inventory
       JournalLine(
-        accountCode: '1201',
-        accountName: 'Inventario Mercaderías',
+        accountCode: '1105', // Fixed: 1201→1105 (Inventarios)
+        accountName: 'Inventarios',
         debit: 0,
         credit: totalCost,
         description: 'Salida Inventario POS',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../shared/services/payment_method_service.dart';
 import '../services/pos_service.dart';
 import '../widgets/cart_item_card.dart';
 
@@ -13,6 +14,15 @@ class POSCartPage extends StatefulWidget {
 }
 
 class _POSCartPageState extends State<POSCartPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Load payment methods when cart page opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<PaymentMethodService>().loadPaymentMethods();
+    });
+  }
+
   void _proceedToPayment() {
     final posService = Provider.of<POSService>(context, listen: false);
 
@@ -157,6 +167,60 @@ class _POSCartPageState extends State<POSCartPage> {
                     ),
                     child: Column(
                       children: [
+                        // Payment Method Selector
+                        Consumer<PaymentMethodService>(
+                          builder: (context, paymentMethodService, _) {
+                            final methods = paymentMethodService.paymentMethods
+                                .where((m) => m.isActive)
+                                .toList();
+                            
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Método de pago:',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                DropdownButtonFormField<String>(
+                                  value: posService.selectedPaymentMethod?.id,
+                                  decoration: InputDecoration(
+                                    prefixIcon: const Icon(Icons.payment),
+                                    hintText: 'Seleccionar método',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  items: methods.map((method) {
+                                    return DropdownMenuItem(
+                                      value: method.id,
+                                      child: Row(
+                                        children: [
+                                          Icon(_getPaymentIcon(method.code), size: 20),
+                                          const SizedBox(width: 8),
+                                          Text(method.name),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (methodId) {
+                                    if (methodId != null) {
+                                      final method = methods.firstWhere(
+                                        (m) => m.id == methodId,
+                                      );
+                                      posService.setPaymentMethod(method);
+                                    }
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                const Divider(),
+                              ],
+                            );
+                          },
+                        ),
+                        
                         // Subtotal
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -251,5 +315,20 @@ class _POSCartPageState extends State<POSCartPage> {
         ),
       ],
     );
+  }
+
+  IconData _getPaymentIcon(String code) {
+    switch (code.toLowerCase()) {
+      case 'cash':
+        return Icons.attach_money;
+      case 'card':
+        return Icons.credit_card;
+      case 'transfer':
+        return Icons.account_balance;
+      case 'check':
+        return Icons.receipt;
+      default:
+        return Icons.payment;
+    }
   }
 }

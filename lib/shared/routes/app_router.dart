@@ -17,6 +17,7 @@ import '../../modules/accounting/pages/balance_sheet_page.dart';
 import '../../modules/accounting/pages/expense_list_page.dart';
 import '../../modules/accounting/pages/expense_detail_page.dart';
 import '../../modules/accounting/pages/expense_form_page.dart';
+import '../../modules/tax_reports/pages/f29_dashboard_page.dart';
 import '../../modules/crm/pages/customer_list_page.dart';
 import '../../modules/crm/pages/customer_form_page.dart';
 import '../../modules/crm/pages/customer_bike_directory_page.dart';
@@ -36,7 +37,6 @@ import '../../modules/inventory/pages/stock_movements_page.dart';
 import '../../modules/sales/pages/invoice_list_page.dart';
 import '../../modules/sales/pages/invoice_form_page.dart';
 import '../../modules/sales/pages/invoice_payment_page.dart';
-import '../../modules/sales/pages/invoice_detail_page.dart';
 import '../../modules/sales/pages/payment_form_page.dart';
 import '../../modules/purchases/pages/supplier_list_page.dart';
 import '../../modules/purchases/pages/supplier_form_page.dart';
@@ -54,15 +54,20 @@ import '../../modules/settings/pages/settings_page.dart';
 import '../../modules/settings/pages/factory_reset_page.dart';
 import '../../modules/settings/pages/appearance_settings_page.dart';
 import '../../modules/settings/pages/user_management_page.dart';
+import '../../modules/settings/pages/payment_methods_settings_page.dart';
 import '../../modules/settings/pages/bluetooth_scanner_page.dart';
 import '../../modules/settings/pages/keyboard_scanner_page.dart';
 import '../../modules/settings/pages/remote_scanner_page.dart';
 import '../../modules/hr/pages/employee_list_page.dart';
 import '../../modules/hr/pages/attendances_page.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
+import '../../modules/hr/pages/medical_leaves_page.dart';
 import '../../modules/website/pages/website_management_page.dart';
 import '../../modules/website/pages/odoo_style_editor_page.dart';
 import '../widgets/workspace_demo_page.dart';
+
+// WebView Modules (embedded websites)
+import '../../modules/webview_modules/webview_modules.dart';
 
 // Public Store Pages
 import '../../public_store/pages/public_home_page.dart';
@@ -494,6 +499,16 @@ class AppRouter {
           ),
         ),
 
+        // Tax Reports (F29)
+        GoRoute(
+          path: '/tax-reports/f29',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const F29DashboardPage(),
+          ),
+        ),
+
         // Clientes Hub
         GoRoute(
           path: '/clientes',
@@ -753,12 +768,10 @@ class AppRouter {
           path: '/sales/invoices/:id',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
-            final extra = state.extra;
-            final openPayment = extra is Map && extra['openPayment'] == true;
             return _buildPageWithNoTransition(
               context,
               state,
-              InvoiceDetailPage(invoiceId: id, openPaymentOnLoad: openPayment),
+              InvoiceFormPage(invoiceId: id),
             );
           },
         ),
@@ -998,6 +1011,16 @@ class AppRouter {
           ),
         ),
         GoRoute(
+          path: '/settings/payment-methods',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              child: PaymentMethodsSettingsPage(),
+            ),
+          ),
+        ),
+        GoRoute(
           path: '/settings/bluetooth-scanner',
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
@@ -1047,6 +1070,36 @@ class AppRouter {
             const KioskModePage(), // Full screen, no MainLayout
           ),
         ),
+        GoRoute(
+          path: '/hr/medical-leaves',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MedicalLeavesPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/hr/contracts',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              title: 'Contratos',
+              child: Center(child: Text('Próximamente')),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/hr/payroll',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(
+              title: 'Liquidaciones',
+              child: Center(child: Text('Próximamente')),
+            ),
+          ),
+        ),
 
         // Website Module
         GoRoute(
@@ -1067,6 +1120,73 @@ class AppRouter {
               ),
             ),
           ],
+        ),
+
+        // ========================================
+        // TOOLS MODULE (WebView Embedded Websites)
+        // ========================================
+
+        // WhatsApp Web
+        GoRoute(
+          path: '/tools/whatsapp-web',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const WhatsAppWebModulePage(),
+          ),
+        ),
+
+        // Google Sheets
+        GoRoute(
+          path: '/tools/sheets',
+          pageBuilder: (context, state) {
+            final url = state.uri.queryParameters['url'];
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              GoogleSheetsModulePage(sheetUrl: url),
+            );
+          },
+        ),
+
+        // Notion Workspace
+        GoRoute(
+          path: '/tools/notion',
+          pageBuilder: (context, state) {
+            final url = state.uri.queryParameters['url'];
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              NotionModulePage(workspaceUrl: url),
+            );
+          },
+        ),
+
+        // Analytics Dashboard
+        GoRoute(
+          path: '/tools/analytics',
+          pageBuilder: (context, state) {
+            final url = state.uri.queryParameters['url'] ?? 'https://analytics.google.com';
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              AnalyticsDashboardPage(dashboardUrl: url),
+            );
+          },
+        ),
+
+        // Generic Web Tool
+        GoRoute(
+          path: '/tools/web',
+          pageBuilder: (context, state) {
+            final url = state.uri.queryParameters['url'] ?? 'https://www.google.com';
+            final name = state.uri.queryParameters['name'] ?? 'Web Tool';
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              GenericWebToolPage(url: url, name: name),
+            );
+          },
         ),
       ],
     );

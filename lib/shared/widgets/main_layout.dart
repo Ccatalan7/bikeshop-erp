@@ -49,6 +49,16 @@ const List<MenuSubItem> _accountingMenuItems = [
 
 const String _accountingSectionKey = 'accounting';
 
+const List<MenuSubItem> _taxReportsMenuItems = [
+  MenuSubItem(
+    icon: Icons.description_outlined,
+    title: 'Declaraciones F29',
+    route: '/tax-reports/f29',
+  ),
+];
+
+const String _taxReportsSectionKey = 'tax_reports';
+
 const List<MenuSubItem> _customersMenuItems = [
   MenuSubItem(
     icon: Icons.people_outline,
@@ -219,6 +229,7 @@ String _getTitleFromRoute(String route) {
     '/accounting/accounts': 'Contabilidad',
     '/accounting/expenses': 'Gastos',
     '/accounting/journal-entries': 'Asientos',
+    '/tax-reports/f29': 'Declaraciones F29',
     '/clientes': 'Clientes',
     '/taller/pegas': 'Pegas',
     '/taller/bicicletas': 'Bicicletas',
@@ -258,9 +269,50 @@ const List<MenuSubItem> _hrMenuItems = [
     title: 'Modo Kiosko',
     route: '/hr/kiosk',
   ),
+  MenuSubItem(
+    icon: Icons.local_hospital_outlined,
+    title: 'Licencias Médicas',
+    route: '/hr/medical-leaves',
+  ),
+  MenuSubItem(
+    icon: Icons.description_outlined,
+    title: 'Contratos',
+    route: '/hr/contracts',
+  ),
+  MenuSubItem(
+    icon: Icons.attach_money_outlined,
+    title: 'Liquidaciones',
+    route: '/hr/payroll',
+  ),
 ];
 
 const String _hrSectionKey = 'hr';
+
+// Tools (WebView embedded websites)
+const List<MenuSubItem> _toolsMenuItems = [
+  MenuSubItem(
+    icon: Icons.message,
+    title: 'WhatsApp Web',
+    route: '/tools/whatsapp-web',
+  ),
+  MenuSubItem(
+    icon: Icons.table_chart,
+    title: 'Google Sheets',
+    route: '/tools/sheets',
+  ),
+  MenuSubItem(
+    icon: Icons.note,
+    title: 'Notion',
+    route: '/tools/notion',
+  ),
+  MenuSubItem(
+    icon: Icons.analytics,
+    title: 'Analytics',
+    route: '/tools/analytics',
+  ),
+];
+
+const String _toolsSectionKey = 'tools';
 
 class MainLayout extends StatelessWidget {
   final Widget? child;
@@ -607,6 +659,17 @@ class _AppSidebarState extends State<AppSidebar> {
                 ),
 
                 ExpandableMenuItem(
+                  icon: Icons.receipt_long_outlined,
+                  activeIcon: Icons.receipt_long,
+                  title: 'Impuestos',
+                  currentLocation: currentLocation,
+                  subItems: _taxReportsMenuItems,
+                  isExpanded: _expandedSection == _taxReportsSectionKey,
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_taxReportsSectionKey, expand),
+                ),
+
+                ExpandableMenuItem(
                   icon: Icons.people_outline,
                   activeIcon: Icons.people,
                   title: 'Clientes',
@@ -681,6 +744,22 @@ class _AppSidebarState extends State<AppSidebar> {
                   isExpanded: _expandedSection == _hrSectionKey,
                   onExpansionChanged: (expand) =>
                       _handleExpansionChange(_hrSectionKey, expand),
+                ),
+
+                const SizedBox(height: 8),
+                _buildSectionDivider(context),
+                const SizedBox(height: 8),
+
+                // Tools (WebView Modules)
+                ExpandableMenuItem(
+                  icon: Icons.build_circle_outlined,
+                  activeIcon: Icons.build_circle,
+                  title: 'Herramientas',
+                  currentLocation: currentLocation,
+                  subItems: _toolsMenuItems,
+                  isExpanded: _expandedSection == _toolsSectionKey,
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_toolsSectionKey, expand),
                 ),
 
                 const SizedBox(height: 8),
@@ -1089,6 +1168,19 @@ class AppDrawer extends StatelessWidget {
             icon: Icons.badge,
             title: 'RR.HH.',
             subItems: _hrMenuItems,
+            currentLocation: currentLocation,
+          ),
+
+          const Divider(),
+
+          // Tools (WebView Modules)
+          _buildSectionHeader(context, 'HERRAMIENTAS'),
+
+          _buildDrawerExpandableItem(
+            context,
+            icon: Icons.build_circle,
+            title: 'Herramientas Web',
+            subItems: _toolsMenuItems,
             currentLocation: currentLocation,
           ),
 

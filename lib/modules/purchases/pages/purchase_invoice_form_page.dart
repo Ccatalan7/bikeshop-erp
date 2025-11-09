@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/models/supplier.dart' as shared_supplier;
+import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -66,6 +67,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   DateTime _issueDate = DateTime.now();
   DateTime? _dueDate;
   PurchaseInvoiceStatus _status = PurchaseInvoiceStatus.draft;
+  TaxTreatment _taxTreatment = TaxTreatment.noTax;
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -322,6 +324,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     _issueDate = invoice.date;
     _dueDate = invoice.dueDate ?? invoice.date.add(const Duration(days: 30));
     _status = invoice.status;
+    _taxTreatment = invoice.taxTreatment;
 
     _selectedSupplier = _supplierCache.firstWhere(
       (supplier) => supplier.id == invoice.supplierId,
@@ -388,9 +391,27 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   double get _subtotal => _lineEntries.fold<double>(
       0, (sum, entry) => sum + entry.line.netAmountClamped);
 
-  double get _iva => _subtotal * _ivaRate;
+  // Tax calculations for PURCHASES (tax is ADDED, not included)
+  // Opposite to sales where tax is included in price
+  double get _netAmount {
+    return _subtotal; // Net is always the subtotal for purchases
+  }
 
-  double get _total => _subtotal + _iva;
+  double get _iva {
+    if (_taxTreatment == TaxTreatment.taxIncluded) {
+      return _subtotal * 0.19; // Add 19% tax
+    } else {
+      return 0; // No tax
+    }
+  }
+
+  double get _total {
+    if (_taxTreatment == TaxTreatment.taxIncluded) {
+      return _subtotal + _iva; // Subtotal + 19% tax
+    } else {
+      return _subtotal; // No tax added
+    }
+  }
 
   void _recalculateTotals() {
     if (mounted) setState(() {});
@@ -426,7 +447,27 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     );
 
     if (selected != null && mounted) {
-      setState(() => _selectedSupplier = selected);
+      setState(() {
+        _selectedSupplier = selected;
+        
+        // 💡 Smart default: Auto-update tax treatment based on supplier
+        // Only update if still in initial state (noTax), don't override user's manual selection
+        if (_taxTreatment == TaxTreatment.noTax && _lineEntries.isEmpty) {
+          _taxTreatment = selected.defaultTaxTreatment;
+          
+          // Show hint to user
+          final taxLabel = _taxTreatment == TaxTreatment.taxIncluded
+              ? 'IVA Incluido (19%)'
+              : 'Sin IVA';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('💡 Tratamiento tributario sugerido: $taxLabel'),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      });
     }
   }
 
@@ -543,6 +584,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       subtotal: _subtotal,
       ivaAmount: _iva,
       total: _total,
+      taxTreatment: _taxTreatment,
+      netAmount: _netAmount,
       items: items,
       // Set prepayment model when creating new invoice
       prepaymentModel: _loadedInvoice != null
@@ -1386,6 +1429,49 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                 )
               : null,
         ),
+        const Divider(),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(
+            Icons.receipt_long_outlined,
+            color: _taxTreatment == TaxTreatment.taxIncluded
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+          title: const Text('Tratamiento de IVA'),
+          subtitle: DropdownButtonFormField<TaxTreatment>(
+            value: _taxTreatment,
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              filled: true,
+              fillColor: _canEditFields
+                  ? null
+                  : theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: TaxTreatment.noTax,
+                child: Text('Sin IVA (exento o no afecto)'),
+              ),
+              DropdownMenuItem(
+                value: TaxTreatment.taxIncluded,
+                child: Text('IVA Incluido en precio (19%)'),
+              ),
+            ],
+            onChanged: _canEditFields
+                ? (value) {
+                    if (value != null) {
+                      setState(() => _taxTreatment = value);
+                    }
+                  }
+                : null,
+          ),
+        ),
       ],
     );
   }
@@ -1708,11 +1794,18 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
     return Column(
       children: [
-        _buildSummaryRow('Subtotal', ChileanUtils.formatCurrency(_subtotal),
+        // For purchases: Always show subtotal (net amount)
+        _buildSummaryRow('Subtotal (Neto)', ChileanUtils.formatCurrency(_subtotal),
             textStyle, theme),
-        const SizedBox(height: 8),
-        _buildSummaryRow(
-            'IVA (19%)', ChileanUtils.formatCurrency(_iva), textStyle, theme),
+        // Show IVA row when tax is included
+        if (_taxTreatment == TaxTreatment.taxIncluded) ...[
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+              'IVA (19%)',
+              ChileanUtils.formatCurrency(_iva),
+              textStyle?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              theme),
+        ],
         const Divider(height: 24),
         _buildSummaryRow(
           'Total',

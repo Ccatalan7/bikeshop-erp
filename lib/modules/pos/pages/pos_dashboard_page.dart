@@ -7,6 +7,8 @@ import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/models/customer.dart';
+import '../../../shared/models/tax_treatment.dart';
+import '../../../shared/models/payment_method.dart' as pm;
 import '../../crm/services/customer_service.dart';
 import '../../inventory/models/category_models.dart' as inventory_models;
 import '../../inventory/services/category_service.dart';
@@ -19,8 +21,7 @@ import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
 import '../services/pos_service.dart';
 import '../widgets/product_tile.dart';
-import '../../../shared/models/payment_method.dart' as pm;
-import '../models/payment_method.dart';
+import '../models/payment_method.dart' as old_pm; // Old enum-based model
 import '../models/pos_transaction.dart';
 
 class POSDashboardPage extends StatefulWidget {
@@ -1238,7 +1239,7 @@ class _CashierPanelState extends State<_CashierPanel> {
   bool _showPaymentView = false;
   bool _showReceiptView = false;
   POSTransaction? _completedTransaction;
-  PaymentMethod? _selectedPaymentMethod;
+  pm.PaymentMethod? _selectedPaymentMethod; // ✅ Use shared payment method model
   final TextEditingController _amountController = TextEditingController();
   double _amountReceived = 0.0;
   bool _isProcessing = false;
@@ -1249,12 +1250,14 @@ class _CashierPanelState extends State<_CashierPanel> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final posService = context.read<POSService>();
+      final paymentMethodService = context.read<PaymentMethodService>();
+      paymentMethodService.loadPaymentMethods();
       setState(() {
         _selectedCustomer = posService.selectedCustomer;
       });
     });
     _customerSearchController.addListener(_onSearchChanged);
-    _selectedPaymentMethod = PaymentMethod.cash;
+    // ❌ DON'T initialize to hardcoded value - will be set from cart selection
     _loadCustomers();
   }
 
@@ -1332,6 +1335,8 @@ class _CashierPanelState extends State<_CashierPanel> {
         _showPaymentView = true;
         _amountReceived = posService.cartTotal;
         _amountController.text = posService.cartTotal.toStringAsFixed(0);
+        // ✅ CRITICAL: Copy selected payment method from cart to payment view
+        _selectedPaymentMethod = posService.selectedPaymentMethod;
       });
     }
   }
@@ -1341,7 +1346,7 @@ class _CashierPanelState extends State<_CashierPanel> {
       _showPaymentView = false;
       _showReceiptView = false;
       _completedTransaction = null;
-      _selectedPaymentMethod = PaymentMethod.cash;
+      _selectedPaymentMethod = null; // ✅ Reset to null instead of hardcoded enum
       _amountReceived = 0.0;
       _amountController.clear();
     });
@@ -1551,7 +1556,7 @@ class _CashierPanelState extends State<_CashierPanel> {
       _showPaymentView = false;
       _showReceiptView = false;
       _completedTransaction = null;
-      _selectedPaymentMethod = PaymentMethod.cash;
+      _selectedPaymentMethod = null; // ✅ Reset to null
       _amountReceived = 0.0;
       _amountController.clear();
     });
@@ -1575,6 +1580,54 @@ class _CashierPanelState extends State<_CashierPanel> {
       return;
     }
 
+    // ⚠️ WARN when paying with card but no tax included
+    if (_selectedPaymentMethod?.code == 'card' && 
+        posService.taxTreatment == TaxTreatment.noTax) {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber, color: Colors.orange, size: 28),
+              SizedBox(width: 12),
+              Text('Venta sin IVA - Pago con Tarjeta'),
+            ],
+          ),
+          content: const Text(
+            '⚠️ Estás cobrando con TARJETA pero la venta NO tiene IVA.\n\n'
+            '¿Cómo proceder?\n\n'
+            '• Pagos con tarjeta DEBEN llevar IVA (19%)\n'
+            '• Efectivo/transferencia pueden ser sin IVA',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'cancel'),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, 'add_tax'),
+              style: FilledButton.styleFrom(backgroundColor: Colors.green),
+              child: const Text('✓ Agregar IVA (19%)'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, 'no_tax'),
+              style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+              child: const Text('Continuar sin IVA'),
+            ),
+          ],
+        ),
+      );
+      
+      if (result == 'cancel' || result == null) return; // User cancelled
+      
+      if (result == 'add_tax') {
+        // User chose to add tax - update and continue
+        posService.setTaxTreatment(TaxTreatment.taxIncluded);
+        // UI will update automatically via Consumer
+      }
+      // If 'no_tax' - just continue
+    }
+
     setState(() {
       _isProcessing = true;
     });
@@ -1586,10 +1639,13 @@ class _CashierPanelState extends State<_CashierPanel> {
         throw Exception('No se pudo obtener el tenant ID');
       }
 
+      // ✅ Convert new PaymentMethod to old enum-based format for transaction
+      final oldMethod = _convertToOldPaymentMethod(_selectedPaymentMethod!);
+
       final payment = POSPayment(
         id: _uuid.v4(),
         tenantId: tenantId,
-        method: _selectedPaymentMethod!,
+        method: oldMethod,
         amount: _amountReceived,
         createdAt: DateTime.now(),
       );
@@ -2243,12 +2299,63 @@ class _CashierPanelState extends State<_CashierPanel> {
               ),
             ),
           if (posService.cartItems.isNotEmpty) const SizedBox(height: 16),
+          
+          // Payment method selector (auto-sets tax treatment)
+          if (posService.cartItems.isNotEmpty) ...[
+            Text(
+              'Método de Pago',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Consumer<PaymentMethodService>(
+              builder: (context, paymentMethodService, _) {
+                final methods = paymentMethodService.paymentMethods
+                    .where((m) => m.isActive)
+                    .toList();
+                
+                return DropdownButtonFormField<String>(
+                  value: posService.selectedPaymentMethod?.id,
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.payment),
+                    helperText: 'El IVA se aplica automáticamente según el método',
+                  ),
+                  hint: const Text('Seleccionar método'),
+                  items: methods.map((method) {
+                    return DropdownMenuItem(
+                      value: method.id,
+                      child: Row(
+                        children: [
+                          Icon(_getPaymentMethodIcon(method.code), size: 20),
+                          const SizedBox(width: 8),
+                          Text(method.name),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (methodId) {
+                    if (methodId != null) {
+                      final method = methods.firstWhere(
+                        (m) => m.id == methodId,
+                      );
+                      posService.setPaymentMethod(method);
+                    }
+                  },
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+          
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Show subtotal and discount (before tax)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -2256,7 +2363,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                       Text('\$${posService.cartNetAmount.toStringAsFixed(0)}'),
                     ],
                   ),
-                  if (posService.cartDiscountAmount > 0)
+                  if (posService.cartDiscountAmount > 0) ...[
+                    const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -2267,13 +2375,30 @@ class _CashierPanelState extends State<_CashierPanel> {
                         ),
                       ],
                     ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('IVA (19%):', style: theme.textTheme.bodyLarge),
-                      Text('\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
-                    ],
-                  ),
+                  ],
+                  
+                  // Show tax breakdown if tax is included
+                  if (posService.taxTreatment == TaxTreatment.taxIncluded) ...[
+                    const SizedBox(height: 8),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Neto:', style: theme.textTheme.bodyLarge),
+                        Text('\$${(posService.cartTotal / 1.19).toStringAsFixed(0)}'),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('IVA (19%):', style: theme.textTheme.bodyLarge),
+                        Text('\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
+                      ],
+                    ),
+                  ],
+                  
                   const Divider(),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2464,34 +2589,43 @@ class _CashierPanelState extends State<_CashierPanel> {
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: PaymentMethod.defaultMethods.map((method) {
-              final isSelected = _selectedPaymentMethod?.id == method.id;
-              return FilterChip(
-                label: Text(method.name),
-                selected: isSelected,
-                onSelected: (selected) {
-                  setState(() {
-                    _selectedPaymentMethod = method;
-                    if (method != PaymentMethod.cash) {
-                      _amountReceived = posService.cartTotal;
-                      _amountController.text =
-                          posService.cartTotal.toStringAsFixed(0);
-                    }
-                  });
-                },
-                avatar: Icon(
-                  _getPaymentIcon(method.type),
-                  size: 18,
-                ),
+          Consumer<PaymentMethodService>(
+            builder: (context, paymentMethodService, _) {
+              final methods = paymentMethodService.paymentMethods
+                  .where((m) => m.isActive)
+                  .toList();
+              
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: methods.map((method) {
+                  final isSelected = _selectedPaymentMethod?.id == method.id;
+                  return FilterChip(
+                    label: Text(method.name),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedPaymentMethod = method;
+                        // Auto-set amount for non-cash payments
+                        if (method.code != 'cash') {
+                          _amountReceived = posService.cartTotal;
+                          _amountController.text =
+                              posService.cartTotal.toStringAsFixed(0);
+                        }
+                      });
+                    },
+                    avatar: Icon(
+                      _getPaymentMethodIcon(method.code),
+                      size: 18,
+                    ),
+                  );
+                }).toList(),
               );
-            }).toList(),
+            },
           ),
           const SizedBox(height: 16),
           // Amount Received (only for cash)
-          if (_selectedPaymentMethod == PaymentMethod.cash) ...[
+          if (_selectedPaymentMethod?.code == 'cash') ...[
             Text(
               'Monto Recibido',
               style: theme.textTheme.titleMedium
@@ -2565,16 +2699,35 @@ class _CashierPanelState extends State<_CashierPanel> {
     );
   }
 
-  IconData _getPaymentIcon(PaymentType type) {
-    switch (type) {
-      case PaymentType.cash:
+  /// Convert new PaymentMethod model to old enum-based PaymentMethod for transactions
+  old_pm.PaymentMethod _convertToOldPaymentMethod(pm.PaymentMethod newMethod) {
+    switch (newMethod.code.toLowerCase()) {
+      case 'cash':
+        return old_pm.PaymentMethod.cash;
+      case 'card':
+        return old_pm.PaymentMethod.card;
+      case 'transfer':
+        return old_pm.PaymentMethod.transfer;
+      case 'check':
+      case 'voucher':
+        return old_pm.PaymentMethod.voucher;
+      default:
+        return old_pm.PaymentMethod.cash; // Default fallback
+    }
+  }
+
+  IconData _getPaymentMethodIcon(String code) {
+    switch (code.toLowerCase()) {
+      case 'cash':
         return Icons.attach_money;
-      case PaymentType.card:
+      case 'card':
         return Icons.credit_card;
-      case PaymentType.voucher:
-        return Icons.receipt;
-      case PaymentType.transfer:
+      case 'transfer':
         return Icons.account_balance;
+      case 'check':
+        return Icons.receipt;
+      default:
+        return Icons.payment;
     }
   }
 

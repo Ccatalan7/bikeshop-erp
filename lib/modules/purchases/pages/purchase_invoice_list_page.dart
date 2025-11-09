@@ -215,14 +215,14 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
   
   Future<void> _createNewInvoice() async {
-    final result = await showDialog<String>(
+    final result = await showDialog<bool>(
       context: context,
       builder: (context) => const PurchaseModelSelectionDialog(),
     );
 
     if (result == null || !mounted) return;
 
-    final isPrepayment = result == 'prepayment';
+    final isPrepayment = result; // result is already a boolean
     context.push('/purchases/new?prepayment=$isPrepayment');
   }
   

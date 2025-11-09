@@ -23,6 +23,7 @@ class _AccountListPageState extends State<AccountListPage> {
   bool _isLoading = true;
   String _searchTerm = '';
   AccountType? _selectedType;
+  Account? _selectedAccount;  // Added for split-pane view
 
   @override
   void initState() {
@@ -89,128 +90,206 @@ class _AccountListPageState extends State<AccountListPage> {
 
   @override
   Widget build(BuildContext context) {
+    // When an account is selected, show split-pane layout
+    if (_selectedAccount != null) {
+      return MainLayout(
+        title: 'Plan de Cuentas',
+        body: Row(
+          children: [
+            // Left: Accounts list (narrower)
+            SizedBox(
+              width: 360,
+              child: Column(
+                children: [
+                  // Back button
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      border: Border(
+                        bottom: BorderSide(color: Theme.of(context).dividerColor),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () => setState(() => _selectedAccount = null),
+                          tooltip: 'Volver al listado',
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Volver al listado',
+                            style: TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Original content (compact)
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _buildSearchAndFilterBar(),
+                        Expanded(child: _buildAccountsList()),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Divider
+            VerticalDivider(width: 1, thickness: 1, color: Theme.of(context).dividerColor),
+            // Right: Account ledger
+            Expanded(
+              child: AccountLedgerPage(
+                key: ValueKey(_selectedAccount!.id), // Force rebuild when account changes
+                account: _selectedAccount!,
+                isEmbedded: true,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Normal full-width layout
     return MainLayout(
       title: 'Plan de Cuentas',
       body: Column(
         children: [
-          // Search and Filter Bar
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              border: Border(
-                bottom: BorderSide(color: Theme.of(context).dividerColor),
-              ),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: SearchWidget(
-                        hintText: 'Buscar por código, nombre o descripción...',
-                        onSearchChanged: _onSearchChanged,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 2,
-                      child: DropdownButtonFormField<AccountType?>(
-                        decoration: const InputDecoration(
-                          labelText: 'Tipo',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                        ),
-                        value: _selectedType,
-                        items: [
-                          const DropdownMenuItem<AccountType?>(
-                            value: null,
-                            child: Text('Todos'),
-                          ),
-                          ...AccountType.values.map(
-                            (type) => DropdownMenuItem<AccountType?>(
-                              value: type,
-                              child: Text(type.displayName),
-                            ),
-                          ),
-                        ],
-                        onChanged: _onTypeFilterChanged,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    AppButton(
-                      text: 'Nueva Cuenta',
-                      onPressed: () => context.push('/accounting/accounts/new'),
-                      icon: Icons.add,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      'Total: ${_filteredAccounts.length} cuentas',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const Spacer(),
-                    if (_isLoading)
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          _buildSearchAndFilterBar(),
+          Expanded(child: _buildAccountsList()),
+        ],
+      ),
+    );
+  }
 
-          // Accounts List
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredAccounts.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.account_balance,
-                              size: 64,
-                              color: Theme.of(context).disabledColor,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _searchTerm.isEmpty && _selectedType == null
-                                  ? 'No hay cuentas registradas'
-                                  : 'No se encontraron cuentas que coincidan con los filtros',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    color: Theme.of(context).disabledColor,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _filteredAccounts.length,
-                        itemBuilder: (context, index) {
-                          final account = _filteredAccounts[index];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              leading: Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: _getTypeColor(account.type)
+  Widget _buildSearchAndFilterBar() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).dividerColor),
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: SearchWidget(
+                  hintText: 'Buscar por código, nombre o descripción...',
+                  onSearchChanged: _onSearchChanged,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: DropdownButtonFormField<AccountType?>(
+                  decoration: const InputDecoration(
+                    labelText: 'Tipo',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                  ),
+                  value: _selectedType,
+                  items: [
+                    const DropdownMenuItem<AccountType?>(
+                      value: null,
+                      child: Text('Todos'),
+                    ),
+                    ...AccountType.values.map(
+                      (type) => DropdownMenuItem<AccountType?>(
+                        value: type,
+                        child: Text(type.displayName),
+                      ),
+                    ),
+                  ],
+                  onChanged: _onTypeFilterChanged,
+                ),
+              ),
+              const SizedBox(width: 16),
+              AppButton(
+                text: 'Nueva Cuenta',
+                onPressed: () => context.push('/accounting/accounts/new'),
+                icon: Icons.add,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                'Total: ${_filteredAccounts.length} cuentas',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const Spacer(),
+              if (_isLoading)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountsList() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_filteredAccounts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.account_balance,
+              size: 64,
+              color: Theme.of(context).disabledColor,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _searchTerm.isEmpty && _selectedType == null
+                  ? 'No hay cuentas registradas'
+                  : 'No se encontraron cuentas que coincidan con los filtros',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).disabledColor,
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _filteredAccounts.length,
+      itemBuilder: (context, index) {
+        final account = _filteredAccounts[index];
+        final isSelected = _selectedAccount?.id == account.id;
+        
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          color: isSelected
+              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+              : null,
+          child: ListTile(
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: _getTypeColor(account.type)
                                       .withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
@@ -352,11 +431,7 @@ class _AccountListPageState extends State<AccountListPage> {
                             ),
                           );
                         },
-                      ),
-          ),
-        ],
-      ),
-    );
+                      );
   }
 
   Color _getTypeColor(AccountType type) {
@@ -377,13 +452,10 @@ class _AccountListPageState extends State<AccountListPage> {
   }
 
   void _showAccountDetails(Account account) {
-    // Navigate to account ledger page instead of showing dialog
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AccountLedgerPage(account: account),
-      ),
-    );
+    // Show ledger in split-pane instead of navigating away
+    setState(() {
+      _selectedAccount = account;
+    });
   }
 
   void _confirmDeleteAccount(Account account) {

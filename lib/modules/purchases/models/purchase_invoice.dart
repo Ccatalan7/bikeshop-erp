@@ -1,3 +1,5 @@
+import '../../../shared/models/tax_treatment.dart';
+
 Map<String, dynamic> _ensureMap(dynamic value) {
   if (value is Map<String, dynamic>) return value;
   if (value is Map) {
@@ -36,6 +38,8 @@ class PurchaseInvoice {
   final double subtotal;
   final double ivaAmount;
   final double total;
+  final TaxTreatment taxTreatment; // actual tax choice for this purchase
+  final double netAmount; // net amount before IVA (total÷1.19 when tax_included)
   final List<PurchaseInvoiceItem> items;
   final List<PurchaseAdditionalCost> additionalCosts;
   final DateTime createdAt;
@@ -67,6 +71,8 @@ class PurchaseInvoice {
     this.subtotal = 0,
     this.ivaAmount = 0,
     this.total = 0,
+    this.taxTreatment = TaxTreatment.noTax,
+    this.netAmount = 0,
     this.items = const [],
     this.additionalCosts = const [],
     DateTime? createdAt,
@@ -99,6 +105,8 @@ class PurchaseInvoice {
     double? subtotal,
     double? ivaAmount,
     double? total,
+    TaxTreatment? taxTreatment,
+    double? netAmount,
     List<PurchaseInvoiceItem>? items,
     List<PurchaseAdditionalCost>? additionalCosts,
     DateTime? createdAt,
@@ -128,6 +136,8 @@ class PurchaseInvoice {
       subtotal: subtotal ?? this.subtotal,
       ivaAmount: ivaAmount ?? this.ivaAmount,
       total: total ?? this.total,
+      taxTreatment: taxTreatment ?? this.taxTreatment,
+      netAmount: netAmount ?? this.netAmount,
       items: items ?? this.items,
       additionalCosts: additionalCosts ?? this.additionalCosts,
       createdAt: createdAt ?? this.createdAt,
@@ -165,6 +175,8 @@ class PurchaseInvoice {
       ivaAmount:
           (json['tax'] as num?)?.toDouble() ?? 0, // Database column is 'tax'
       total: (json['total'] as num?)?.toDouble() ?? 0,
+      taxTreatment: TaxTreatment.fromString(json['tax_treatment']?.toString()),
+      netAmount: (json['net_amount'] as num?)?.toDouble() ?? 0,
       items: items
           .map((item) => PurchaseInvoiceItem.fromJson(_ensureMap(item)))
           .toList(),
@@ -209,6 +221,8 @@ class PurchaseInvoice {
       'subtotal': subtotal,
       'tax': ivaAmount, // Database column is 'tax', not 'iva_amount'
       'total': total,
+      'tax_treatment': taxTreatment.toValue(),
+      'net_amount': netAmount,
       'items': items.map((item) => item.toJson()).toList(),
       'additional_costs': additionalCosts.map((cost) => cost.toJson()).toList(),
       'prepayment_model': prepaymentModel,

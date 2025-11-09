@@ -28,6 +28,7 @@ import 'modules/crm/services/customer_service.dart';
 import 'modules/accounting/services/accounting_service.dart';
 import 'modules/accounting/services/financial_reports_service.dart';
 import 'modules/accounting/services/expense_service.dart';
+import 'modules/tax_reports/services/f29_service.dart';
 import 'modules/pos/services/pos_service.dart';
 import 'modules/purchases/services/purchase_service.dart';
 import 'modules/purchases/services/smart_purchase_list_service.dart';
@@ -181,6 +182,7 @@ class VinabikeApp extends StatelessWidget {
             create: (context) => ExpenseService(
                   Provider.of<DatabaseService>(context, listen: false),
                 )),
+        ChangeNotifierProvider(create: (_) => F29Service()),
         ChangeNotifierProvider(
             create: (context) => PurchaseService(
                   Provider.of<DatabaseService>(context, listen: false),
