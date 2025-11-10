@@ -636,6 +636,426 @@ begin
   end if;
 end $$;
 
+-- ============================================================================
+-- WHEEL BUILDING SYSTEM - Professional Spoke Calculator & Parts Compatibility
+-- ============================================================================
+-- This system enables mechanics to:
+-- 1. Calculate exact spoke lengths (implements prowheelbuilder.com algorithm)
+-- 2. Find compatible hubs, rims, spokes for wheel rebuilds
+-- 3. Store wheel build specifications for future reference
+-- 4. Generate parts lists automatically
+
+-- Table: wheel_hubs
+-- Technical specifications for bicycle hubs
+create table if not exists wheel_hubs (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  product_id uuid references products(id) on delete cascade,
+  
+  -- Basic Info
+  name text not null,
+  manufacturer text,
+  model text,
+  hub_type text check (hub_type in ('front', 'rear')) not null,
+  
+  -- Critical Measurements (in mm)
+  old_mm numeric(5,1) not null, -- Over Locknut Dimension (130, 135, 142, 148, etc.)
+  spoke_holes integer not null check (spoke_holes in (24, 28, 32, 36, 40)),
+  
+  -- Flange Measurements (for spoke length calculation)
+  left_flange_diameter_mm numeric(5,2) not null,
+  right_flange_diameter_mm numeric(5,2) not null,
+  center_to_left_flange_mm numeric(5,2) not null,
+  center_to_right_flange_mm numeric(5,2) not null,
+  
+  -- Compatibility
+  brake_type text check (brake_type in ('rim', 'disc_6bolt', 'disc_centerlock')) not null,
+  driver_type text check (driver_type in ('freewheel', 'cassette', 'fixed', 'none')) not null,
+  axle_type text check (axle_type in ('quick_release', 'thru_axle_12mm', 'thru_axle_15mm', 'thru_axle_20mm', 'bolt_on')) not null,
+  
+  -- Additional Specs
+  weight_grams integer,
+  material text, -- 'aluminum', 'steel', 'carbon'
+  bearing_type text, -- 'loose_ball', 'sealed_cartridge'
+  
+  -- Metadata
+  notes text,
+  image_url text,
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_wheel_hubs_tenant on wheel_hubs(tenant_id);
+create index if not exists idx_wheel_hubs_product on wheel_hubs(product_id);
+create index if not exists idx_wheel_hubs_old on wheel_hubs(old_mm);
+create index if not exists idx_wheel_hubs_spoke_holes on wheel_hubs(spoke_holes);
+create index if not exists idx_wheel_hubs_hub_type on wheel_hubs(hub_type);
+
+alter table wheel_hubs enable row level security;
+
+create policy "wheel_hubs_select" on wheel_hubs for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+create policy "wheel_hubs_insert" on wheel_hubs for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+create policy "wheel_hubs_update" on wheel_hubs for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+create policy "wheel_hubs_delete" on wheel_hubs for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Table: wheel_rims
+-- Technical specifications for bicycle rims
+create table if not exists wheel_rims (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  product_id uuid references products(id) on delete cascade,
+  
+  -- Basic Info
+  name text not null,
+  manufacturer text,
+  model text,
+  
+  -- Critical Measurements (in mm)
+  erd_mm numeric(5,2) not null, -- Effective Rim Diameter (critical for spoke calc)
+  spoke_holes integer not null check (spoke_holes in (24, 28, 32, 36, 40)),
+  internal_width_mm numeric(4,1) not null,
+  external_width_mm numeric(4,1),
+  rim_depth_mm numeric(4,1),
+  
+  -- Specifications
+  wheel_size text not null, -- '26"', '27.5"', '29"', '700c', '650b'
+  brake_type text check (brake_type in ('rim', 'disc')) not null,
+  rim_type text check (rim_type in ('clincher', 'tubular', 'tubeless_ready', 'hookless')) not null,
+  material text, -- 'aluminum', 'carbon', 'steel'
+  
+  -- Technical Details
+  max_pressure_psi integer,
+  weight_grams integer,
+  spoke_hole_drilling text, -- 'straight_pull', 'j_bend'
+  
+  -- Metadata
+  notes text,
+  image_url text,
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_wheel_rims_tenant on wheel_rims(tenant_id);
+create index if not exists idx_wheel_rims_product on wheel_rims(product_id);
+create index if not exists idx_wheel_rims_erd on wheel_rims(erd_mm);
+create index if not exists idx_wheel_rims_spoke_holes on wheel_rims(spoke_holes);
+create index if not exists idx_wheel_rims_wheel_size on wheel_rims(wheel_size);
+
+alter table wheel_rims enable row level security;
+
+create policy "wheel_rims_select" on wheel_rims for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+create policy "wheel_rims_insert" on wheel_rims for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+create policy "wheel_rims_update" on wheel_rims for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+create policy "wheel_rims_delete" on wheel_rims for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Table: wheel_spokes
+-- Technical specifications for bicycle spokes
+create table if not exists wheel_spokes (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  product_id uuid references products(id) on delete cascade,
+  
+  -- Basic Info
+  name text not null,
+  manufacturer text,
+  model text,
+  
+  -- Critical Specs
+  length_mm integer not null, -- Spoke length (290, 292, 294, etc.)
+  gauge numeric(3,2) not null, -- Wire thickness (2.0, 1.8, 2.0-1.8 for butted)
+  is_butted boolean not null default false,
+  
+  -- Specifications
+  material text not null default 'stainless_steel', -- 'stainless_steel', 'brass', 'titanium'
+  finish text, -- 'silver', 'black', 'brass'
+  head_type text check (head_type in ('j_bend', 'straight_pull')) not null default 'j_bend',
+  thread_type text, -- 'standard', 'lock'
+  
+  -- Technical Details
+  tensile_strength_n integer, -- Newtons
+  weight_grams numeric(4,2),
+  
+  -- Metadata
+  notes text,
+  image_url text,
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_wheel_spokes_tenant on wheel_spokes(tenant_id);
+create index if not exists idx_wheel_spokes_product on wheel_spokes(product_id);
+create index if not exists idx_wheel_spokes_length on wheel_spokes(length_mm);
+create index if not exists idx_wheel_spokes_gauge on wheel_spokes(gauge);
+
+alter table wheel_spokes enable row level security;
+
+create policy "wheel_spokes_select" on wheel_spokes for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+create policy "wheel_spokes_insert" on wheel_spokes for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+create policy "wheel_spokes_update" on wheel_spokes for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+create policy "wheel_spokes_delete" on wheel_spokes for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Table: wheel_builds
+-- Saved wheel build specifications and calculations
+create table if not exists wheel_builds (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  
+  -- References
+  bike_id uuid references bikes(id) on delete set null,
+  mechanic_job_id uuid references mechanic_jobs(id) on delete set null,
+  
+  -- Build Info
+  build_name text not null,
+  wheel_position text check (wheel_position in ('front', 'rear')) not null,
+  build_date date default current_date,
+  
+  -- Components
+  hub_id uuid references wheel_hubs(id) on delete set null,
+  rim_id uuid references wheel_rims(id) on delete set null,
+  spoke_id uuid references wheel_spokes(id) on delete set null,
+  
+  -- Build Specifications
+  spoke_count integer not null,
+  lacing_pattern text not null, -- 'radial', '1-cross', '2-cross', '3-cross', '4-cross'
+  
+  -- Calculated Spoke Lengths (in mm)
+  left_spoke_length_mm numeric(5,2),
+  right_spoke_length_mm numeric(5,2),
+  
+  -- Actual Spoke Products Used (for inventory)
+  left_spoke_product_id uuid references products(id) on delete set null,
+  right_spoke_product_id uuid references products(id) on delete set null,
+  
+  -- Additional Components
+  nipple_type text, -- 'brass', 'aluminum', 'brass_lock'
+  rim_tape_width_mm integer,
+  
+  -- Metadata
+  notes text,
+  mechanic_notes text,
+  is_template boolean not null default false, -- Reusable templates
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_wheel_builds_tenant on wheel_builds(tenant_id);
+create index if not exists idx_wheel_builds_bike on wheel_builds(bike_id);
+create index if not exists idx_wheel_builds_job on wheel_builds(mechanic_job_id);
+create index if not exists idx_wheel_builds_hub on wheel_builds(hub_id);
+create index if not exists idx_wheel_builds_rim on wheel_builds(rim_id);
+
+alter table wheel_builds enable row level security;
+
+create policy "wheel_builds_select" on wheel_builds for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+create policy "wheel_builds_insert" on wheel_builds for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+create policy "wheel_builds_update" on wheel_builds for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+create policy "wheel_builds_delete" on wheel_builds for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- ============================================================================
+-- SPOKE LENGTH CALCULATOR - Implements ProWheelBuilder Algorithm
+-- ============================================================================
+-- Formula: Spoke Length = √(R² + H² + D² - 2*R*H*cos(α))
+-- Where:
+--   R = Effective Rim Radius (ERD/2)
+--   H = Flange Radius (Flange Diameter/2)
+--   D = Distance from wheel center to flange
+--   α = Spoke angle based on lacing pattern and spoke holes
+
+create or replace function public.calculate_spoke_length(
+  p_erd_mm numeric,                      -- Rim ERD
+  p_flange_diameter_mm numeric,          -- Hub flange diameter
+  p_center_to_flange_mm numeric,         -- Hub center to flange distance
+  p_spoke_holes integer,                 -- Number of spoke holes (24, 28, 32, 36)
+  p_cross_pattern integer default 3      -- Lacing pattern (0=radial, 1-4=cross)
+) returns numeric
+language plpgsql
+as $$
+declare
+  v_rim_radius numeric;
+  v_flange_radius numeric;
+  v_spoke_angle_rad numeric;
+  v_spoke_length numeric;
+  v_pi numeric := 3.14159265359;
+begin
+  -- Input validation
+  if p_erd_mm is null or p_erd_mm <= 0 then
+    raise exception 'Invalid ERD: %', p_erd_mm;
+  end if;
+  
+  if p_spoke_holes not in (24, 28, 32, 36, 40) then
+    raise exception 'Invalid spoke hole count: %. Must be 24, 28, 32, 36, or 40', p_spoke_holes;
+  end if;
+  
+  if p_cross_pattern < 0 or p_cross_pattern > 4 then
+    raise exception 'Invalid cross pattern: %. Must be 0-4', p_cross_pattern;
+  end if;
+  
+  -- Calculate radii
+  v_rim_radius := p_erd_mm / 2.0;
+  v_flange_radius := p_flange_diameter_mm / 2.0;
+  
+  -- Calculate spoke angle based on lacing pattern
+  -- Radial (0-cross): angle = 0
+  -- Cross patterns: angle depends on number of crossings
+  if p_cross_pattern = 0 then
+    v_spoke_angle_rad := 0;
+  else
+    -- Angle between spoke holes in radians
+    v_spoke_angle_rad := (2 * v_pi * p_cross_pattern) / p_spoke_holes;
+  end if;
+  
+  -- ProWheelBuilder Formula:
+  -- L = √(R² + H² + D² - 2*R*H*cos(α))
+  v_spoke_length := sqrt(
+    power(v_rim_radius, 2) +
+    power(v_flange_radius, 2) +
+    power(p_center_to_flange_mm, 2) -
+    (2 * v_rim_radius * v_flange_radius * cos(v_spoke_angle_rad))
+  );
+  
+  -- Return length rounded to 0.1mm precision
+  return round(v_spoke_length, 1);
+end;
+$$;
+
+-- Function: Find compatible hubs for a given rim and bike OLD
+create or replace function public.find_compatible_hubs(
+  p_tenant_id uuid,
+  p_rim_id uuid,
+  p_bike_old_mm numeric default null,
+  p_hub_type text default 'rear'
+) returns table (
+  hub_id uuid,
+  hub_name text,
+  manufacturer text,
+  old_mm numeric,
+  spoke_holes integer,
+  compatibility_score integer,
+  notes text
+)
+language plpgsql
+as $$
+declare
+  v_rim_spoke_holes integer;
+  v_rim_brake_type text;
+begin
+  -- Get rim specs
+  select r.spoke_holes, r.brake_type
+  into v_rim_spoke_holes, v_rim_brake_type
+  from wheel_rims r
+  where r.id = p_rim_id and r.tenant_id = p_tenant_id;
+  
+  if not found then
+    raise exception 'Rim not found: %', p_rim_id;
+  end if;
+  
+  -- Find matching hubs
+  return query
+  select
+    h.id as hub_id,
+    h.name as hub_name,
+    h.manufacturer,
+    h.old_mm,
+    h.spoke_holes,
+    -- Compatibility scoring
+    case
+      when h.spoke_holes = v_rim_spoke_holes then 100 -- Perfect match
+      when h.brake_type = v_rim_brake_type then 80    -- Brake match
+      when p_bike_old_mm is not null and h.old_mm = p_bike_old_mm then 90 -- OLD match
+      else 50 -- Partial match
+    end as compatibility_score,
+    case
+      when h.spoke_holes <> v_rim_spoke_holes then '⚠️ Spoke hole mismatch'
+      when h.brake_type <> v_rim_brake_type then '⚠️ Brake type mismatch'
+      else '✅ Compatible'
+    end as notes
+  from wheel_hubs h
+  where h.tenant_id = p_tenant_id
+    and h.is_active = true
+    and h.hub_type = p_hub_type
+    and h.spoke_holes = v_rim_spoke_holes -- Strict: spoke holes must match
+  order by compatibility_score desc, h.name;
+end;
+$$;
+
+-- Function: Find compatible spokes for a wheel build
+create or replace function public.find_compatible_spokes(
+  p_tenant_id uuid,
+  p_required_length_mm numeric,
+  p_tolerance_mm numeric default 2.0 -- ±2mm tolerance
+) returns table (
+  spoke_id uuid,
+  spoke_name text,
+  length_mm integer,
+  gauge numeric,
+  manufacturer text,
+  stock_quantity integer,
+  length_difference_mm numeric
+)
+language plpgsql
+as $$
+begin
+  return query
+  select
+    ws.id as spoke_id,
+    ws.name as spoke_name,
+    ws.length_mm,
+    ws.gauge,
+    ws.manufacturer,
+    coalesce(p.inventory_qty, 0) as stock_quantity,
+    abs(ws.length_mm - p_required_length_mm) as length_difference_mm
+  from wheel_spokes ws
+  left join products p on p.id = ws.product_id
+  where ws.tenant_id = p_tenant_id
+    and ws.is_active = true
+    and ws.length_mm between (p_required_length_mm - p_tolerance_mm) and (p_required_length_mm + p_tolerance_mm)
+  order by length_difference_mm, stock_quantity desc, ws.manufacturer;
+end;
+$$;
+
+-- Triggers for updated_at
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'trg_wheel_hubs_updated_at') then
+    create trigger trg_wheel_hubs_updated_at before update on wheel_hubs
+      for each row execute procedure public.set_updated_at();
+  end if;
+  
+  if not exists (select 1 from pg_trigger where tgname = 'trg_wheel_rims_updated_at') then
+    create trigger trg_wheel_rims_updated_at before update on wheel_rims
+      for each row execute procedure public.set_updated_at();
+  end if;
+  
+  if not exists (select 1 from pg_trigger where tgname = 'trg_wheel_spokes_updated_at') then
+    create trigger trg_wheel_spokes_updated_at before update on wheel_spokes
+      for each row execute procedure public.set_updated_at();
+  end if;
+  
+  if not exists (select 1 from pg_trigger where tgname = 'trg_wheel_builds_updated_at') then
+    create trigger trg_wheel_builds_updated_at before update on wheel_builds
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
+
 create table if not exists products (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
@@ -8097,6 +8517,10 @@ create table if not exists bikes (
   frame_size text,
   wheel_size text,
   bike_type text check (bike_type in ('road','mountain','hybrid','electric','bmx','folding','cruiser','gravel','other')),
+  front_hub_spacing_mm numeric(5,1), -- Front OLD: 100mm (road), 110mm (MTB Boost), etc.
+  rear_hub_spacing_mm numeric(5,1), -- Rear OLD: 130mm, 135mm, 142mm, 148mm (Boost), etc.
+  spoke_count integer check (spoke_count in (24, 28, 32, 36, 40)), -- Number of spokes per wheel
+  factory_rim_id uuid references wheel_rims(id) on delete set null, -- Original rim that came with the bike
   purchase_date date,
   purchase_price numeric(12,2),
   warranty_until date,
@@ -8180,6 +8604,18 @@ begin
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'updated_at') then
     alter table bikes add column updated_at timestamp with time zone not null default now();
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'front_hub_spacing_mm') then
+    alter table bikes add column front_hub_spacing_mm numeric(5,1);
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'rear_hub_spacing_mm') then
+    alter table bikes add column rear_hub_spacing_mm numeric(5,1);
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'spoke_count') then
+    alter table bikes add column spoke_count integer check (spoke_count in (24, 28, 32, 36, 40));
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'factory_rim_id') then
+    alter table bikes add column factory_rim_id uuid references wheel_rims(id) on delete set null;
   end if;
 end $$;
 

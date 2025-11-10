@@ -82,6 +82,10 @@ class Bike {
   final String? frameSize;
   final String? wheelSize;
   final BikeType? bikeType;
+  final double? frontHubSpacingMm; // 100mm (standard), 110mm (Boost)
+  final double? rearHubSpacingMm; // 130mm (rim), 135mm (QR), 142mm (disc), 148mm (Boost)
+  final int? spokeCount; // 24, 28, 32, 36, 40
+  final String? factoryRimId; // Original rim that came with the bike
   final DateTime? purchaseDate;
   final double? purchasePrice;
   final DateTime? warrantyUntil;
@@ -107,6 +111,10 @@ class Bike {
     this.frameSize,
     this.wheelSize,
     this.bikeType,
+    this.frontHubSpacingMm,
+    this.rearHubSpacingMm,
+    this.spokeCount,
+    this.factoryRimId,
     this.purchaseDate,
     this.purchasePrice,
     this.warrantyUntil,
@@ -140,6 +148,14 @@ class Bike {
               orElse: () => BikeType.other,
             )
           : null,
+      frontHubSpacingMm: json['front_hub_spacing_mm'] != null
+          ? double.tryParse(json['front_hub_spacing_mm'].toString())
+          : null,
+      rearHubSpacingMm: json['rear_hub_spacing_mm'] != null
+          ? double.tryParse(json['rear_hub_spacing_mm'].toString())
+          : null,
+      spokeCount: json['spoke_count'] as int?,
+      factoryRimId: json['factory_rim_id']?.toString(),
       purchaseDate: _parseDateNullable(json['purchase_date']),
       purchasePrice: json['purchase_price'] != null
           ? double.tryParse(json['purchase_price'].toString())
@@ -172,6 +188,10 @@ class Bike {
       'frame_size': frameSize,
       'wheel_size': wheelSize,
       'bike_type': bikeType?.toString().split('.').last,
+      'front_hub_spacing_mm': frontHubSpacingMm,
+      'rear_hub_spacing_mm': rearHubSpacingMm,
+      'spoke_count': spokeCount,
+      'factory_rim_id': factoryRimId,
       'purchase_date': purchaseDate?.toIso8601String(),
       'purchase_price': purchasePrice,
       'warranty_until': warrantyUntil?.toIso8601String(),
@@ -199,6 +219,10 @@ class Bike {
     String? frameSize,
     String? wheelSize,
     BikeType? bikeType,
+    double? frontHubSpacingMm,
+    double? rearHubSpacingMm,
+    int? spokeCount,
+    String? factoryRimId,
     DateTime? purchaseDate,
     double? purchasePrice,
     DateTime? warrantyUntil,
@@ -224,6 +248,9 @@ class Bike {
       frameSize: frameSize ?? this.frameSize,
       wheelSize: wheelSize ?? this.wheelSize,
       bikeType: bikeType ?? this.bikeType,
+      frontHubSpacingMm: frontHubSpacingMm ?? this.frontHubSpacingMm,
+      rearHubSpacingMm: rearHubSpacingMm ?? this.rearHubSpacingMm,
+      spokeCount: spokeCount ?? this.spokeCount,
       purchaseDate: purchaseDate ?? this.purchaseDate,
       purchasePrice: purchasePrice ?? this.purchasePrice,
       warrantyUntil: warrantyUntil ?? this.warrantyUntil,

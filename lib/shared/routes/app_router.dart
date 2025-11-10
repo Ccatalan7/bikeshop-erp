@@ -26,6 +26,11 @@ import '../../modules/bikeshop/pages/pegas_table_page.dart';
 import '../../modules/bikeshop/pages/mechanic_job_form_page.dart';
 import '../../modules/bikeshop/pages/workshop_calendar_page.dart';
 import '../../modules/bikeshop/pages/bike_brands_page.dart';
+import '../../modules/bikeshop/pages/wheel_hubs_page.dart';
+import '../../modules/bikeshop/pages/wheel_rims_page.dart';
+import '../../modules/bikeshop/pages/wheel_spokes_page.dart';
+import '../../modules/bikeshop/pages/wheel_builder_wizard_page.dart';
+import '../../modules/bikeshop/pages/spoke_length_calculator_page.dart';
 import '../../modules/inventory/pages/product_list_page.dart';
 import '../../modules/inventory/pages/product_form_page.dart';
 import '../../modules/inventory/pages/product_import_page.dart';
@@ -607,6 +612,48 @@ class AppRouter {
             context,
             state,
             const BikeBrandsPage(),
+          ),
+        ),
+        
+        // Wheel Building System
+        GoRoute(
+          path: '/taller/wheel-builder',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const WheelBuilderWizardPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/taller/spoke-calculator',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const SpokeLengthCalculatorPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/taller/wheel-hubs',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const WheelHubsPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/taller/wheel-rims',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const WheelRimsPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/taller/wheel-spokes',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const WheelSpokesPage(),
           ),
         ),
 

@@ -96,6 +96,31 @@ const List<MenuSubItem> _workshopMenuItems = [
     route: '/taller/marcas-modelos',
   ),
   MenuSubItem(
+    icon: Icons.settings_outlined,
+    title: '🔧 Wheel Builder',
+    route: '/taller/wheel-builder',
+  ),
+  MenuSubItem(
+    icon: Icons.calculate_outlined,
+    title: '📐 Spoke Calculator',
+    route: '/taller/spoke-calculator',
+  ),
+  MenuSubItem(
+    icon: Icons.hub_outlined,
+    title: 'Hubs',
+    route: '/taller/wheel-hubs',
+  ),
+  MenuSubItem(
+    icon: Icons.album_outlined,
+    title: 'Rims',
+    route: '/taller/wheel-rims',
+  ),
+  MenuSubItem(
+    icon: Icons.linear_scale_outlined,
+    title: 'Spokes',
+    route: '/taller/wheel-spokes',
+  ),
+  MenuSubItem(
     icon: Icons.calendar_today_outlined,
     title: 'Calendario',
     route: '/taller/calendario',
@@ -239,6 +264,10 @@ String _getTitleFromRoute(String route) {
     '/taller/pegas': 'Pegas',
     '/taller/bicicletas': 'Bicicletas',
     '/taller/marcas-modelos': 'Marcas y Modelos',
+    '/taller/wheel-builder': 'Wheel Builder',
+    '/taller/wheel-hubs': 'Hubs',
+    '/taller/wheel-rims': 'Rims',
+    '/taller/wheel-spokes': 'Spokes',
     '/inventory/products': 'Productos',
     '/inventory/categories': 'Categorías',
     '/sales/invoices': 'Ventas',
