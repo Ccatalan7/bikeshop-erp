@@ -25,6 +25,7 @@ import '../../modules/bikeshop/pages/client_logbook_page.dart';
 import '../../modules/bikeshop/pages/pegas_table_page.dart';
 import '../../modules/bikeshop/pages/mechanic_job_form_page.dart';
 import '../../modules/bikeshop/pages/workshop_calendar_page.dart';
+import '../../modules/bikeshop/pages/bike_brands_page.dart';
 import '../../modules/inventory/pages/product_list_page.dart';
 import '../../modules/inventory/pages/product_form_page.dart';
 import '../../modules/inventory/pages/product_import_page.dart';
@@ -598,6 +599,14 @@ class AppRouter {
             context,
             state,
             const WorkshopCalendarPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/taller/marcas-modelos',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const BikeBrandsPage(),
           ),
         ),
 

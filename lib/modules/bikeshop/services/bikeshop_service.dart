@@ -102,6 +102,143 @@ class BikeshopService extends ChangeNotifier {
   }
 
   // ============================================================
+  // BIKE BRAND OPERATIONS
+  // ============================================================
+
+  Future<List<BikeBrand>> getBikeBrands({bool activeOnly = true}) async {
+    try {
+      final query = activeOnly ? 'is_active=true' : null;
+      final data = await _db.select('bike_brands', where: query);
+      return data.map((json) => BikeBrand.fromJson(json)).toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike brands: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeBrand?> getBikeBrandById(String id) async {
+    try {
+      if (id.isEmpty) return null;
+      final data = await _db.selectById('bike_brands', id);
+      return data != null ? BikeBrand.fromJson(data) : null;
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike brand: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeBrand> createBikeBrand(BikeBrand brand) async {
+    try {
+      final data = await _db.insert('bike_brands', brand.toJson());
+      notifyListeners();
+      return BikeBrand.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error creating bike brand: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeBrand> updateBikeBrand(BikeBrand brand) async {
+    try {
+      if (brand.id == null || brand.id!.isEmpty) {
+        throw Exception('ID de marca inválido');
+      }
+      final data = await _db.update('bike_brands', brand.id!, brand.toJson());
+      notifyListeners();
+      return BikeBrand.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error updating bike brand: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteBikeBrand(String id) async {
+    try {
+      if (id.isEmpty) throw Exception('ID de marca inválido');
+      await _db.delete('bike_brands', id);
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) print('Error deleting bike brand: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================
+  // BIKE MODEL OPERATIONS
+  // ============================================================
+
+  Future<List<BikeModel>> getBikeModels({
+    String? brandId,
+    bool activeOnly = true,
+  }) async {
+    try {
+      String? query;
+      if (brandId != null && brandId.isNotEmpty) {
+        query = activeOnly
+            ? 'brand_id=$brandId,is_active=true'
+            : 'brand_id=$brandId';
+      } else {
+        query = activeOnly ? 'is_active=true' : null;
+      }
+
+      final data = await _db.select('bike_models', where: query);
+      return data.map((json) => BikeModel.fromJson(json)).toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike models: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeModel?> getBikeModelById(String id) async {
+    try {
+      if (id.isEmpty) return null;
+      final data = await _db.selectById('bike_models', id);
+      return data != null ? BikeModel.fromJson(data) : null;
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike model: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeModel> createBikeModel(BikeModel model) async {
+    try {
+      final data = await _db.insert('bike_models', model.toJson());
+      notifyListeners();
+      return BikeModel.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error creating bike model: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeModel> updateBikeModel(BikeModel model) async {
+    try {
+      if (model.id == null || model.id!.isEmpty) {
+        throw Exception('ID de modelo inválido');
+      }
+      final data = await _db.update('bike_models', model.id!, model.toJson());
+      notifyListeners();
+      return BikeModel.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error updating bike model: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteBikeModel(String id) async {
+    try {
+      if (id.isEmpty) throw Exception('ID de modelo inválido');
+      await _db.delete('bike_models', id);
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) print('Error deleting bike model: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================
   // MECHANIC JOB OPERATIONS
   // ============================================================
 

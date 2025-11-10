@@ -514,6 +514,128 @@ begin
   end if;
 end $$;
 
+-- ============================================================================
+-- BIKE BRANDS & MODELS - For Taller/Workshop Module
+-- ============================================================================
+create table if not exists bike_brands (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  name text not null,
+  logo_url text,
+  country text,
+  website text,
+  description text,
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, name) -- Each tenant can have their own bike brands
+);
+
+create index if not exists idx_bike_brands_tenant on bike_brands(tenant_id);
+create index if not exists idx_bike_brands_name on bike_brands(lower(name));
+create index if not exists idx_bike_brands_is_active on bike_brands(is_active);
+
+-- Enable RLS for bike_brands
+alter table bike_brands enable row level security;
+
+drop policy if exists "bike_brands_select" on bike_brands;
+drop policy if exists "bike_brands_insert" on bike_brands;
+drop policy if exists "bike_brands_update" on bike_brands;
+drop policy if exists "bike_brands_delete" on bike_brands;
+
+create policy "bike_brands_select" on bike_brands
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "bike_brands_insert" on bike_brands
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "bike_brands_update" on bike_brands
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "bike_brands_delete" on bike_brands
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Trigger for updated_at
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and c.relname = 'bike_brands'
+     and t.tgname = 'trg_bike_brands_updated_at'
+  ) then
+    create trigger trg_bike_brands_updated_at
+      before update on bike_brands
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
+
+create table if not exists bike_models (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  brand_id uuid not null references bike_brands(id) on delete cascade,
+  name text not null,
+  year integer,
+  description text,
+  image_url text,
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, brand_id, name) -- Each brand can have one model with same name
+);
+
+create index if not exists idx_bike_models_tenant on bike_models(tenant_id);
+create index if not exists idx_bike_models_brand on bike_models(brand_id);
+create index if not exists idx_bike_models_name on bike_models(lower(name));
+create index if not exists idx_bike_models_is_active on bike_models(is_active);
+
+-- Enable RLS for bike_models
+alter table bike_models enable row level security;
+
+drop policy if exists "bike_models_select" on bike_models;
+drop policy if exists "bike_models_insert" on bike_models;
+drop policy if exists "bike_models_update" on bike_models;
+drop policy if exists "bike_models_delete" on bike_models;
+
+create policy "bike_models_select" on bike_models
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "bike_models_insert" on bike_models
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "bike_models_update" on bike_models
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "bike_models_delete" on bike_models
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Trigger for updated_at
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and c.relname = 'bike_models'
+     and t.tgname = 'trg_bike_models_updated_at'
+  ) then
+    create trigger trg_bike_models_updated_at
+      before update on bike_models
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
+
 create table if not exists products (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
@@ -7965,8 +8087,10 @@ create table if not exists bikes (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   customer_id uuid not null references customers(id) on delete cascade,
-  brand text,
-  model text,
+  brand_id uuid references bike_brands(id) on delete set null,
+  model_id uuid references bike_models(id) on delete set null,
+  brand text, -- Legacy field, kept for backwards compatibility
+  model text, -- Legacy field, kept for backwards compatibility
   year integer,
   serial_number text,
   color text,
@@ -7990,6 +8114,16 @@ create table if not exists bikes (
 -- Migration: Add missing columns to bikes table
 do $$
 begin
+  -- Add brand_id foreign key
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'brand_id') then
+    alter table bikes add column brand_id uuid references bike_brands(id) on delete set null;
+  end if;
+  
+  -- Add model_id foreign key
+  if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'model_id') then
+    alter table bikes add column model_id uuid references bike_models(id) on delete set null;
+  end if;
+  
   if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'customer_id') then
     alter table bikes add column customer_id uuid not null references customers(id) on delete cascade;
   end if;
@@ -8049,7 +8183,10 @@ begin
   end if;
 end $$;
 
+create index if not exists idx_bikes_tenant on bikes(tenant_id);
 create index if not exists idx_bikes_customer_id on bikes(customer_id);
+create index if not exists idx_bikes_brand_id on bikes(brand_id);
+create index if not exists idx_bikes_model_id on bikes(model_id);
 create index if not exists idx_bikes_serial_number on bikes(serial_number) where serial_number is not null;
 create index if not exists idx_bikes_qr_code on bikes(qr_code) where qr_code is not null;
 create index if not exists idx_bikes_brand_model on bikes using gin (to_tsvector('spanish', coalesce(brand || ' ' || model, '')));

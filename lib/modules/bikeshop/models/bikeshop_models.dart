@@ -72,8 +72,10 @@ class Bike {
   final String? id;
   final String tenantId;
   final String customerId;
-  final String? brand;
-  final String? model;
+  final String? brandId; // Foreign key to bike_brands
+  final String? modelId; // Foreign key to bike_models
+  final String? brand; // Legacy field for backwards compatibility
+  final String? model; // Legacy field for backwards compatibility
   final int? year;
   final String? serialNumber;
   final String? color;
@@ -95,6 +97,8 @@ class Bike {
     this.id,
     required this.tenantId,
     required this.customerId,
+    this.brandId,
+    this.modelId,
     this.brand,
     this.model,
     this.year,
@@ -121,6 +125,8 @@ class Bike {
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
       customerId: json['customer_id']?.toString() ?? '',
+      brandId: json['brand_id']?.toString(),
+      modelId: json['model_id']?.toString(),
       brand: json['brand'] as String?,
       model: json['model'] as String?,
       year: json['year'] as int?,
@@ -156,6 +162,8 @@ class Bike {
       if (id != null) 'id': id,
       'tenant_id': tenantId,
       'customer_id': customerId,
+      if (brandId != null) 'brand_id': brandId,
+      if (modelId != null) 'model_id': modelId,
       'brand': brand,
       'model': model,
       'year': year,
@@ -181,6 +189,8 @@ class Bike {
     String? id,
     String? tenantId,
     String? customerId,
+    String? brandId,
+    String? modelId,
     String? brand,
     String? model,
     int? year,
@@ -204,6 +214,8 @@ class Bike {
       id: id ?? this.id,
       tenantId: tenantId ?? this.tenantId,
       customerId: customerId ?? this.customerId,
+      brandId: brandId ?? this.brandId,
+      modelId: modelId ?? this.modelId,
       brand: brand ?? this.brand,
       model: model ?? this.model,
       year: year ?? this.year,
@@ -237,6 +249,187 @@ class Bike {
   bool get isUnderWarranty {
     if (warrantyUntil == null) return false;
     return DateTime.now().isBefore(warrantyUntil!);
+  }
+}
+
+// ============================================================
+// BIKE BRAND MODEL
+// ============================================================
+
+class BikeBrand {
+  final String? id;
+  final String tenantId;
+  final String name;
+  final String? logoUrl;
+  final String? country;
+  final String? website;
+  final String? description;
+  final bool isActive;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  BikeBrand({
+    this.id,
+    required this.tenantId,
+    required this.name,
+    this.logoUrl,
+    this.country,
+    this.website,
+    this.description,
+    this.isActive = true,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory BikeBrand.fromJson(Map<String, dynamic> json) {
+    return BikeBrand(
+      id: json['id'] as String?,
+      tenantId: json['tenant_id'] as String,
+      name: json['name'] as String,
+      logoUrl: json['logo_url'] as String?,
+      country: json['country'] as String?,
+      website: json['website'] as String?,
+      description: json['description'] as String?,
+      isActive: json['is_active'] as bool? ?? true,
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'name': name,
+      if (logoUrl != null) 'logo_url': logoUrl,
+      if (country != null) 'country': country,
+      if (website != null) 'website': website,
+      if (description != null) 'description': description,
+      'is_active': isActive,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
+
+  BikeBrand copyWith({
+    String? id,
+    String? tenantId,
+    String? name,
+    String? logoUrl,
+    String? country,
+    String? website,
+    String? description,
+    bool? isActive,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return BikeBrand(
+      id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
+      name: name ?? this.name,
+      logoUrl: logoUrl ?? this.logoUrl,
+      country: country ?? this.country,
+      website: website ?? this.website,
+      description: description ?? this.description,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+}
+
+// ============================================================
+// BIKE MODEL (specific models for each brand)
+// ============================================================
+
+class BikeModel {
+  final String? id;
+  final String tenantId;
+  final String brandId;
+  final String name;
+  final int? year;
+  final String? description;
+  final String? imageUrl;
+  final bool isActive;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  BikeModel({
+    this.id,
+    required this.tenantId,
+    required this.brandId,
+    required this.name,
+    this.year,
+    this.description,
+    this.imageUrl,
+    this.isActive = true,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory BikeModel.fromJson(Map<String, dynamic> json) {
+    return BikeModel(
+      id: json['id'] as String?,
+      tenantId: json['tenant_id'] as String,
+      brandId: json['brand_id'] as String,
+      name: json['name'] as String,
+      year: json['year'] as int?,
+      description: json['description'] as String?,
+      imageUrl: json['image_url'] as String?,
+      isActive: json['is_active'] as bool? ?? true,
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'brand_id': brandId,
+      'name': name,
+      if (year != null) 'year': year,
+      if (description != null) 'description': description,
+      if (imageUrl != null) 'image_url': imageUrl,
+      'is_active': isActive,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
+
+  BikeModel copyWith({
+    String? id,
+    String? tenantId,
+    String? brandId,
+    String? name,
+    int? year,
+    String? description,
+    String? imageUrl,
+    bool? isActive,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return BikeModel(
+      id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
+      brandId: brandId ?? this.brandId,
+      name: name ?? this.name,
+      year: year ?? this.year,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  String get displayName {
+    if (year != null) {
+      return '$name ($year)';
+    }
+    return name;
   }
 }
 

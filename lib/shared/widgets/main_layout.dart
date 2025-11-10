@@ -91,6 +91,11 @@ const List<MenuSubItem> _workshopMenuItems = [
     route: '/taller/bicicletas',
   ),
   MenuSubItem(
+    icon: Icons.branding_watermark_outlined,
+    title: 'Marcas y modelos',
+    route: '/taller/marcas-modelos',
+  ),
+  MenuSubItem(
     icon: Icons.calendar_today_outlined,
     title: 'Calendario',
     route: '/taller/calendario',
@@ -233,6 +238,7 @@ String _getTitleFromRoute(String route) {
     '/clientes': 'Clientes',
     '/taller/pegas': 'Pegas',
     '/taller/bicicletas': 'Bicicletas',
+    '/taller/marcas-modelos': 'Marcas y Modelos',
     '/inventory/products': 'Productos',
     '/inventory/categories': 'Categorías',
     '/sales/invoices': 'Ventas',
