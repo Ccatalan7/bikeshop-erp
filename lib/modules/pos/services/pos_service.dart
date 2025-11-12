@@ -114,7 +114,7 @@ class POSService extends ChangeNotifier {
 
     // Check if product already in cart
     final existingIndex =
-        _cartItems.indexWhere((item) => item.product.id == product.id);
+        _cartItems.indexWhere((item) => item.product?.id == product.id);
 
     if (existingIndex != -1) {
       // Update quantity if product exists
@@ -146,6 +146,32 @@ class POSService extends ChangeNotifier {
     return true;
   }
 
+  /// Add ad-hoc item (custom description) to cart
+  Future<bool> addAdHocItem({
+    required String description,
+    required double price,
+    int quantity = 1,
+  }) async {
+    if (quantity <= 0 || price < 0) return false;
+    if (description.trim().isEmpty) return false;
+
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) return false;
+
+    final cartItem = POSCartItem(
+      id: _uuid.v4(),
+      tenantId: tenantId,
+      product: null,
+      adHocDescription: description.trim(),
+      quantity: quantity,
+      unitPrice: price,
+    );
+    
+    _cartItems.add(cartItem);
+    notifyListeners();
+    return true;
+  }
+
   bool removeFromCart(String itemId) {
     final initialLength = _cartItems.length;
     _cartItems.removeWhere((item) => item.id == itemId);
@@ -165,13 +191,15 @@ class POSService extends ChangeNotifier {
     if (itemIndex != -1) {
       final item = _cartItems[itemIndex];
 
-      // Check stock availability
-      final requiresStock = item.product.productType == ProductType.product &&
-          item.product.trackStock;
-      if (requiresStock && item.product.stockQuantity < newQuantity) {
-        if (kDebugMode)
-          print('POSService: Insufficient stock for quantity $newQuantity');
-        return false;
+      // Check stock availability (only for real products, not ad-hoc)
+      if (item.product != null) {
+        final requiresStock = item.product!.productType == ProductType.product &&
+            item.product!.trackStock;
+        if (requiresStock && item.product!.stockQuantity < newQuantity) {
+          if (kDebugMode)
+            print('POSService: Insufficient stock for quantity $newQuantity');
+          return false;
+        }
       }
 
       _cartItems[itemIndex] = item.copyWith(quantity: newQuantity);
@@ -304,9 +332,9 @@ class POSService extends ChangeNotifier {
       final invoiceItems = _cartItems.map((item) {
         final discountAmount = item.discountAmount;
         return sales_models.InvoiceItem(
-          productId: item.product.id,
-          productName: item.product.name,
-          productSku: item.product.sku,
+          productId: item.product?.id,
+          productName: item.displayName,
+          productSku: item.product?.sku,
           quantity: item.quantity.toDouble(),
           unitPrice: item.unitPrice,
           discount: discountAmount,

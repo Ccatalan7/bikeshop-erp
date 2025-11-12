@@ -118,6 +118,22 @@ class ExpandableMenuItem extends StatelessWidget {
           Column(
             children: subItems.map((subItem) {
               final isSelected = selectedSubItem?.route == subItem.route;
+              
+              // Render as header (non-clickable)
+              if (subItem.isHeader) {
+                return Container(
+                  margin: const EdgeInsets.only(left: 48, top: 12, bottom: 4),
+                  child: Text(
+                    subItem.title,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                );
+              }
+              
               return Container(
                 margin: const EdgeInsets.only(left: 36, right: 8, bottom: 2),
                 child: Material(
@@ -184,10 +200,12 @@ class MenuSubItem {
   final IconData icon;
   final String title;
   final String route;
+  final bool isHeader; // For visual grouping
 
   const MenuSubItem({
     required this.icon,
     required this.title,
     required this.route,
+    this.isHeader = false,
   });
 }

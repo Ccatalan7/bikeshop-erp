@@ -37,9 +37,9 @@ class CartItemCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 color: theme.colorScheme.surfaceVariant,
               ),
-              child: item.product.imageUrl != null
+              child: item.product?.imageUrl != null
                   ? CachedNetworkImage(
-                      imageUrl: item.product.imageUrl!,
+                      imageUrl: item.product!.imageUrl!,
                       fit: BoxFit.cover,
                       placeholder: (context, url) => const Center(
                         child: CircularProgressIndicator(strokeWidth: 2),
@@ -49,8 +49,8 @@ class CartItemCard extends StatelessWidget {
                         size: 24,
                       ),
                     )
-                  : const Icon(
-                      Icons.pedal_bike,
+                  : Icon(
+                      item.isAdHoc ? Icons.edit_note : Icons.pedal_bike,
                       size: 24,
                     ),
             ),
@@ -64,7 +64,7 @@ class CartItemCard extends StatelessWidget {
                 children: [
                   // Product name
                   Text(
-                    item.product.name,
+                    item.displayName,
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -72,13 +72,14 @@ class CartItemCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
 
-                  // SKU
-                  Text(
-                    item.product.sku,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  // SKU (only for regular products)
+                  if (item.product != null)
+                    Text(
+                      item.product!.sku,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
 
                   const SizedBox(height: 4),
 
@@ -129,7 +130,7 @@ class CartItemCard extends StatelessWidget {
                         ),
                       ),
                       IconButton(
-                        onPressed: item.product.stockQuantity > item.quantity
+                        onPressed: (item.product?.stockQuantity ?? 999) > item.quantity
                             ? () => onQuantityChanged?.call(item.quantity + 1)
                             : null,
                         icon: const Icon(Icons.add, size: 20),

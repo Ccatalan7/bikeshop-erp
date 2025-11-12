@@ -96,10 +96,15 @@ const List<MenuSubItem> _workshopMenuItems = [
     route: '/taller/marcas-modelos',
   ),
   MenuSubItem(
-    icon: Icons.menu_book,
-    title: '📚 Bike Encyclopedia',
-    route: '/taller/bike-encyclopedia',
+    icon: Icons.calendar_today_outlined,
+    title: 'Calendario',
+    route: '/taller/calendario',
   ),
+];
+
+const String _workshopSectionKey = 'workshop';
+
+const List<MenuSubItem> _smartFeaturesMenuItems = [
   MenuSubItem(
     icon: Icons.settings_outlined,
     title: '🔧 Wheel Builder',
@@ -109,6 +114,11 @@ const List<MenuSubItem> _workshopMenuItems = [
     icon: Icons.calculate_outlined,
     title: '📐 Spoke Calculator',
     route: '/taller/spoke-calculator',
+  ),
+  MenuSubItem(
+    icon: Icons.menu_book,
+    title: '📚 Bike Encyclopedia',
+    route: '/taller/bike-encyclopedia',
   ),
   MenuSubItem(
     icon: Icons.hub_outlined,
@@ -125,14 +135,9 @@ const List<MenuSubItem> _workshopMenuItems = [
     title: 'Spokes',
     route: '/taller/wheel-spokes',
   ),
-  MenuSubItem(
-    icon: Icons.calendar_today_outlined,
-    title: 'Calendario',
-    route: '/taller/calendario',
-  ),
 ];
 
-const String _workshopSectionKey = 'workshop';
+const String _smartFeaturesSectionKey = 'smart_features';
 
 const List<MenuSubItem> _inventoryMenuItems = [
   MenuSubItem(
@@ -564,6 +569,9 @@ class _AppSidebarState extends State<AppSidebar> {
     if (_matchesLocation(location, _workshopMenuItems)) {
       return _workshopSectionKey;
     }
+    if (_matchesLocation(location, _smartFeaturesMenuItems)) {
+      return _smartFeaturesSectionKey;
+    }
     if (_matchesLocation(location, _inventoryMenuItems)) {
       return _inventorySectionKey;
     }
@@ -729,6 +737,17 @@ class _AppSidebarState extends State<AppSidebar> {
                   isExpanded: _expandedSection == _workshopSectionKey,
                   onExpansionChanged: (expand) =>
                       _handleExpansionChange(_workshopSectionKey, expand),
+                ),
+
+                ExpandableMenuItem(
+                  icon: Icons.lightbulb_outlined,
+                  activeIcon: Icons.lightbulb,
+                  title: 'Smart Features',
+                  currentLocation: currentLocation,
+                  subItems: _smartFeaturesMenuItems,
+                  isExpanded: _expandedSection == _smartFeaturesSectionKey,
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_smartFeaturesSectionKey, expand),
                 ),
 
                 ExpandableMenuItem(
@@ -959,9 +978,9 @@ class _AppSidebarState extends State<AppSidebar> {
           onTap: enabled
               ? () {
                   if (!isSelected) {
-                    // Dashboard and Website navigate directly within current workspace
+                    // Dashboard, Website, and Settings navigate directly within current workspace
                     // All other modules can open in new workspace tabs if needed
-                    if (route == '/dashboard' || route == '/website') {
+                    if (route == '/dashboard' || route == '/website' || route == '/settings') {
                       debugPrint('🔀 [MainLayout] Navigating to $route in current workspace');
                       context.go(route);
                     } else {
@@ -1168,6 +1187,14 @@ class AppDrawer extends StatelessWidget {
             icon: Icons.two_wheeler,
             title: 'Taller',
             subItems: _workshopMenuItems,
+            currentLocation: currentLocation,
+          ),
+
+          _buildDrawerExpandableItem(
+            context,
+            icon: Icons.lightbulb,
+            title: 'Smart Features',
+            subItems: _smartFeaturesMenuItems,
             currentLocation: currentLocation,
           ),
 

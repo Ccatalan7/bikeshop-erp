@@ -475,6 +475,124 @@ end $$;
 
 -- Note: Default settings will be seeded via trigger when tenant is created
 
+--------------------------------------------------------------------------------
+-- BACKUP & RESTORE SYSTEM
+--------------------------------------------------------------------------------
+-- Stores metadata about database backups for disaster recovery and data rollback
+-- Each backup captures a snapshot of all tenant data with summary statistics
+--------------------------------------------------------------------------------
+
+create table if not exists database_backups (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  backup_name text not null, -- e.g., "Before Year-End Closing", "Auto Backup"
+  backup_type text not null check (backup_type in ('manual', 'automatic', 'scheduled')),
+  status text not null default 'in_progress' check (status in ('in_progress', 'completed', 'failed', 'restored')),
+  
+  -- Backup metadata
+  backup_data jsonb not null, -- Stores the actual data snapshot
+  
+  -- Summary statistics (for preview before restore)
+  summary jsonb, -- { "products": 1440, "customers": 350, "invoices": 1200, ... }
+  
+  -- Metadata
+  created_by uuid references auth.users(id),
+  created_at timestamp with time zone not null default now(),
+  restored_at timestamp with time zone, -- When this backup was restored
+  restored_by uuid references auth.users(id), -- Who restored it
+  
+  -- Size tracking
+  backup_size_bytes bigint, -- Size of backup data in bytes
+  
+  -- Notes
+  notes text, -- User-provided description
+  
+  -- Error tracking
+  error_message text -- If backup failed
+);
+
+create index if not exists idx_database_backups_tenant on database_backups(tenant_id);
+create index if not exists idx_database_backups_created_at on database_backups(created_at desc);
+create index if not exists idx_database_backups_type on database_backups(backup_type);
+create index if not exists idx_database_backups_status on database_backups(status);
+
+-- RLS policies for backups
+alter table database_backups enable row level security;
+
+drop policy if exists "backups_select" on database_backups;
+drop policy if exists "backups_insert" on database_backups;
+drop policy if exists "backups_update" on database_backups;
+drop policy if exists "backups_delete" on database_backups;
+
+create policy "backups_select" on database_backups
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "backups_insert" on database_backups
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "backups_update" on database_backups
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "backups_delete" on database_backups
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Backup schedule configuration (per tenant)
+create table if not exists backup_schedules (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null unique,
+  
+  -- Schedule settings
+  enabled boolean not null default false,
+  frequency text not null default 'daily' check (frequency in ('hourly', 'daily', 'weekly', 'monthly')),
+  time_of_day time, -- When to run daily/weekly backups (e.g., 02:00:00)
+  day_of_week int, -- 0-6 for weekly backups (0 = Sunday)
+  day_of_month int, -- 1-31 for monthly backups
+  
+  -- Retention policy
+  keep_last_n_backups int not null default 7, -- Keep last 7 backups
+  auto_delete_old boolean not null default true,
+  
+  -- Last run tracking
+  last_run_at timestamp with time zone,
+  next_run_at timestamp with time zone,
+  
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_backup_schedules_tenant on backup_schedules(tenant_id);
+create index if not exists idx_backup_schedules_next_run on backup_schedules(next_run_at) where enabled = true;
+
+-- RLS policies for backup schedules
+alter table backup_schedules enable row level security;
+
+drop policy if exists "backup_schedules_select" on backup_schedules;
+drop policy if exists "backup_schedules_insert" on backup_schedules;
+drop policy if exists "backup_schedules_update" on backup_schedules;
+drop policy if exists "backup_schedules_delete" on backup_schedules;
+
+create policy "backup_schedules_select" on backup_schedules
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "backup_schedules_insert" on backup_schedules
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "backup_schedules_update" on backup_schedules
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "backup_schedules_delete" on backup_schedules
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+--------------------------------------------------------------------------------
+
 create table if not exists product_brands (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
@@ -15102,4 +15220,514 @@ comment on function public.generate_f29_from_accounting is
 
 comment on table f29_declarations is 
 'Chilean monthly tax declaration (Formulario 29). Integrates with accounting (IVA), HR (withholdings), and revenue data.';
+
+--------------------------------------------------------------------------------
+-- BACKUP & RESTORE FUNCTIONS
+--------------------------------------------------------------------------------
+
+-- Function: Create a full database backup for tenant
+create or replace function public.create_backup(
+  p_tenant_id uuid,
+  p_backup_name text,
+  p_backup_type text default 'manual',
+  p_notes text default null
+)
+returns jsonb
+security definer
+language plpgsql
+as $$
+declare
+  v_backup_id uuid;
+  v_backup_data jsonb;
+  v_summary jsonb;
+  v_product_count int;
+  v_product_category_count int;
+  v_customer_count int;
+  v_supplier_count int;
+  v_sales_invoice_count int;
+  v_purchase_invoice_count int;
+  v_employee_count int;
+  v_journal_entry_count int;
+  v_mechanic_job_count int;
+  v_bike_count int;
+  v_product_brand_count int;
+  v_bike_brand_count int;
+  v_bike_model_count int;
+  v_online_order_count int;
+  v_website_banner_count int;
+  v_backup_size bigint;
+begin
+  -- Collect summary statistics
+  select count(*) into v_product_count from products where tenant_id = p_tenant_id;
+  select count(*) into v_product_category_count from product_categories where tenant_id = p_tenant_id;
+  select count(*) into v_customer_count from customers where tenant_id = p_tenant_id;
+  select count(*) into v_supplier_count from suppliers where tenant_id = p_tenant_id;
+  select count(*) into v_sales_invoice_count from sales_invoices where tenant_id = p_tenant_id;
+  select count(*) into v_purchase_invoice_count from purchase_invoices where tenant_id = p_tenant_id;
+  select count(*) into v_employee_count from employees where tenant_id = p_tenant_id;
+  select count(*) into v_journal_entry_count from journal_entries where tenant_id = p_tenant_id;
+  select count(*) into v_mechanic_job_count from mechanic_jobs where tenant_id = p_tenant_id;
+  select count(*) into v_bike_count from bikes where tenant_id = p_tenant_id;
+  select count(*) into v_product_brand_count from product_brands where tenant_id = p_tenant_id;
+  select count(*) into v_bike_brand_count from bike_brands where tenant_id = p_tenant_id;
+  select count(*) into v_bike_model_count from bike_models where tenant_id = p_tenant_id;
+  select count(*) into v_online_order_count from online_orders where tenant_id = p_tenant_id;
+  select count(*) into v_website_banner_count from website_banners where tenant_id = p_tenant_id;
+  
+  -- Build summary object
+  v_summary := jsonb_build_object(
+    'products', v_product_count,
+    'product_categories', v_product_category_count,
+    'customers', v_customer_count,
+    'suppliers', v_supplier_count,
+    'sales_invoices', v_sales_invoice_count,
+    'purchase_invoices', v_purchase_invoice_count,
+    'employees', v_employee_count,
+    'journal_entries', v_journal_entry_count,
+    'mechanic_jobs', v_mechanic_job_count,
+    'bikes', v_bike_count,
+    'product_brands', v_product_brand_count,
+    'bike_brands', v_bike_brand_count,
+    'bike_models', v_bike_model_count,
+    'online_orders', v_online_order_count,
+    'website_banners', v_website_banner_count,
+    'captured_at', now()
+  );
+  
+  -- Collect backup data (all tenant tables)
+  v_backup_data := jsonb_build_object(
+    'products', (select jsonb_agg(to_jsonb(t.*)) from products t where tenant_id = p_tenant_id),
+    'product_categories', (select jsonb_agg(to_jsonb(t.*)) from product_categories t where tenant_id = p_tenant_id),
+    'customers', (select jsonb_agg(to_jsonb(t.*)) from customers t where tenant_id = p_tenant_id),
+    'suppliers', (select jsonb_agg(to_jsonb(t.*)) from suppliers t where tenant_id = p_tenant_id),
+    'sales_invoices', (select jsonb_agg(to_jsonb(t.*)) from sales_invoices t where tenant_id = p_tenant_id),
+    'sales_payments', (select jsonb_agg(to_jsonb(t.*)) from sales_payments t where tenant_id = p_tenant_id),
+    'purchase_invoices', (select jsonb_agg(to_jsonb(t.*)) from purchase_invoices t where tenant_id = p_tenant_id),
+    'purchase_payments', (select jsonb_agg(to_jsonb(t.*)) from purchase_payments t where tenant_id = p_tenant_id),
+    'employees', (select jsonb_agg(to_jsonb(t.*)) from employees t where tenant_id = p_tenant_id),
+    'employee_contracts', (select jsonb_agg(to_jsonb(t.*)) from employee_contracts t where tenant_id = p_tenant_id),
+    'attendance_records', (select jsonb_agg(to_jsonb(t.*)) from attendance_records t where tenant_id = p_tenant_id),
+    'accounts', (select jsonb_agg(to_jsonb(t.*)) from accounts t where tenant_id = p_tenant_id),
+    'journal_entries', (select jsonb_agg(to_jsonb(t.*)) from journal_entries t where tenant_id = p_tenant_id),
+    'journal_lines', (select jsonb_agg(to_jsonb(t.*)) from journal_lines t where entry_id in (select id from journal_entries where tenant_id = p_tenant_id)),
+    'stock_movements', (select jsonb_agg(to_jsonb(t.*)) from stock_movements t where tenant_id = p_tenant_id),
+    'company_settings', (select jsonb_agg(to_jsonb(t.*)) from company_settings t where tenant_id = p_tenant_id),
+    'payment_methods', (select jsonb_agg(to_jsonb(t.*)) from payment_methods t where tenant_id = p_tenant_id),
+    'bikes', (select jsonb_agg(to_jsonb(t.*)) from bikes t where tenant_id = p_tenant_id),
+    'mechanic_jobs', (select jsonb_agg(to_jsonb(t.*)) from mechanic_jobs t where tenant_id = p_tenant_id),
+    'mechanic_job_items', (select jsonb_agg(to_jsonb(t.*)) from mechanic_job_items t where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id)),
+    'mechanic_job_labor', (select jsonb_agg(to_jsonb(t.*)) from mechanic_job_labor t where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id)),
+    'mechanic_job_timeline', (select jsonb_agg(to_jsonb(t.*)) from mechanic_job_timeline t where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id)),
+    'product_brands', (select jsonb_agg(to_jsonb(t.*)) from product_brands t where tenant_id = p_tenant_id),
+    'bike_brands', (select jsonb_agg(to_jsonb(t.*)) from bike_brands t where tenant_id = p_tenant_id),
+    'bike_models', (select jsonb_agg(to_jsonb(t.*)) from bike_models t where tenant_id = p_tenant_id),
+    'website_settings', (select jsonb_agg(to_jsonb(t.*)) from website_settings t where tenant_id = p_tenant_id),
+    'website_banners', (select jsonb_agg(to_jsonb(t.*)) from website_banners t where tenant_id = p_tenant_id),
+    'website_content', (select jsonb_agg(to_jsonb(t.*)) from website_content t where tenant_id = p_tenant_id),
+    'website_blocks', (select jsonb_agg(to_jsonb(t.*)) from website_blocks t where tenant_id = p_tenant_id),
+    'featured_products', (select jsonb_agg(to_jsonb(t.*)) from featured_products t where tenant_id = p_tenant_id),
+    'online_orders', (select jsonb_agg(to_jsonb(t.*)) from online_orders t where tenant_id = p_tenant_id),
+    'online_order_items', (select jsonb_agg(to_jsonb(t.*)) from online_order_items t where order_id in (select id from online_orders where tenant_id = p_tenant_id))
+  );
+  
+  -- Calculate backup size
+  v_backup_size := length(v_backup_data::text);
+  
+  -- Insert backup record
+  insert into database_backups (
+    tenant_id,
+    backup_name,
+    backup_type,
+    status,
+    backup_data,
+    summary,
+    backup_size_bytes,
+    notes,
+    created_by
+  ) values (
+    p_tenant_id,
+    p_backup_name,
+    p_backup_type,
+    'completed',
+    v_backup_data,
+    v_summary,
+    v_backup_size,
+    p_notes,
+    auth.uid()
+  ) returning id into v_backup_id;
+  
+  return jsonb_build_object(
+    'success', true,
+    'backup_id', v_backup_id,
+    'summary', v_summary,
+    'size_mb', round((v_backup_size / 1024.0 / 1024.0)::numeric, 2)
+  );
+exception
+  when others then
+    -- Log failed backup
+    insert into database_backups (
+      tenant_id,
+      backup_name,
+      backup_type,
+      status,
+      backup_data,
+      error_message,
+      created_by
+    ) values (
+      p_tenant_id,
+      p_backup_name,
+      p_backup_type,
+      'failed',
+      '{}'::jsonb,
+      SQLERRM,
+      auth.uid()
+    );
+    
+    return jsonb_build_object(
+      'success', false,
+      'error', SQLERRM
+    );
+end;
+$$;
+
+grant execute on function public.create_backup(uuid, text, text, text) to authenticated;
+
+-- Function: Restore database from backup
+create or replace function public.restore_backup(
+  p_backup_id uuid,
+  p_tenant_id uuid
+)
+returns jsonb
+security definer
+language plpgsql
+as $$
+declare
+  v_backup_data jsonb;
+  v_summary jsonb;
+  v_tables_restored int := 0;
+  v_records_restored int := 0;
+begin
+  -- Get backup data
+  select backup_data, summary into v_backup_data, v_summary
+  from database_backups
+  where id = p_backup_id and tenant_id = p_tenant_id and status = 'completed';
+  
+  if not found then
+    return jsonb_build_object('success', false, 'error', 'Backup not found or invalid');
+  end if;
+  
+  -- START TRANSACTION: Delete existing data and restore backup
+  -- WARNING: This will delete ALL tenant data and restore from backup
+  
+  -- Delete existing data (in reverse dependency order)
+  delete from journal_lines where entry_id in (select id from journal_entries where tenant_id = p_tenant_id);
+  delete from journal_entries where tenant_id = p_tenant_id;
+  delete from sales_payments where tenant_id = p_tenant_id;
+  delete from sales_invoices where tenant_id = p_tenant_id;
+  delete from purchase_payments where tenant_id = p_tenant_id;
+  delete from purchase_invoices where tenant_id = p_tenant_id;
+  delete from mechanic_job_items where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id);
+  delete from mechanic_job_labor where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id);
+  delete from mechanic_job_timeline where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id);
+  delete from mechanic_jobs where tenant_id = p_tenant_id;
+  delete from bikes where tenant_id = p_tenant_id;
+  delete from bike_models where tenant_id = p_tenant_id;
+  delete from bike_brands where tenant_id = p_tenant_id;
+  delete from online_order_items where order_id in (select id from online_orders where tenant_id = p_tenant_id);
+  delete from online_orders where tenant_id = p_tenant_id;
+  delete from featured_products where tenant_id = p_tenant_id;
+  delete from website_blocks where tenant_id = p_tenant_id;
+  delete from website_content where tenant_id = p_tenant_id;
+  delete from website_banners where tenant_id = p_tenant_id;
+  delete from website_settings where tenant_id = p_tenant_id;
+  delete from stock_movements where tenant_id = p_tenant_id;
+  delete from attendance_records where tenant_id = p_tenant_id;
+  delete from employee_contracts where tenant_id = p_tenant_id;
+  delete from employees where tenant_id = p_tenant_id;
+  delete from products where tenant_id = p_tenant_id;
+  delete from product_categories where tenant_id = p_tenant_id;
+  delete from product_brands where tenant_id = p_tenant_id;
+  delete from customers where tenant_id = p_tenant_id;
+  delete from suppliers where tenant_id = p_tenant_id;
+  
+  -- Restore data from backup
+  -- Product Brands (restore before products)
+  if v_backup_data ? 'product_brands' and v_backup_data->'product_brands' is not null then
+    insert into product_brands select * from jsonb_populate_recordset(null::product_brands, v_backup_data->'product_brands');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Products
+  if v_backup_data ? 'products' and v_backup_data->'products' is not null then
+    insert into products select * from jsonb_populate_recordset(null::products, v_backup_data->'products');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Product Categories
+  if v_backup_data ? 'product_categories' and v_backup_data->'product_categories' is not null then
+    insert into product_categories select * from jsonb_populate_recordset(null::product_categories, v_backup_data->'product_categories');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Customers
+  if v_backup_data ? 'customers' and v_backup_data->'customers' is not null then
+    insert into customers select * from jsonb_populate_recordset(null::customers, v_backup_data->'customers');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Suppliers
+  if v_backup_data ? 'suppliers' and v_backup_data->'suppliers' is not null then
+    insert into suppliers select * from jsonb_populate_recordset(null::suppliers, v_backup_data->'suppliers');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Sales Invoices
+  if v_backup_data ? 'sales_invoices' and v_backup_data->'sales_invoices' is not null then
+    insert into sales_invoices select * from jsonb_populate_recordset(null::sales_invoices, v_backup_data->'sales_invoices');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Sales Payments
+  if v_backup_data ? 'sales_payments' and v_backup_data->'sales_payments' is not null then
+    insert into sales_payments select * from jsonb_populate_recordset(null::sales_payments, v_backup_data->'sales_payments');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Purchase Invoices
+  if v_backup_data ? 'purchase_invoices' and v_backup_data->'purchase_invoices' is not null then
+    insert into purchase_invoices select * from jsonb_populate_recordset(null::purchase_invoices, v_backup_data->'purchase_invoices');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Purchase Payments
+  if v_backup_data ? 'purchase_payments' and v_backup_data->'purchase_payments' is not null then
+    insert into purchase_payments select * from jsonb_populate_recordset(null::purchase_payments, v_backup_data->'purchase_payments');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Employees & Contracts
+  if v_backup_data ? 'employees' and v_backup_data->'employees' is not null then
+    insert into employees select * from jsonb_populate_recordset(null::employees, v_backup_data->'employees');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  if v_backup_data ? 'employee_contracts' and v_backup_data->'employee_contracts' is not null then
+    insert into employee_contracts select * from jsonb_populate_recordset(null::employee_contracts, v_backup_data->'employee_contracts');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Attendance
+  if v_backup_data ? 'attendance_records' and v_backup_data->'attendance_records' is not null then
+    insert into attendance_records select * from jsonb_populate_recordset(null::attendance_records, v_backup_data->'attendance_records');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Accounting
+  if v_backup_data ? 'accounts' and v_backup_data->'accounts' is not null then
+    insert into accounts select * from jsonb_populate_recordset(null::accounts, v_backup_data->'accounts');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  if v_backup_data ? 'journal_entries' and v_backup_data->'journal_entries' is not null then
+    insert into journal_entries select * from jsonb_populate_recordset(null::journal_entries, v_backup_data->'journal_entries');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  if v_backup_data ? 'journal_lines' and v_backup_data->'journal_lines' is not null then
+    insert into journal_lines select * from jsonb_populate_recordset(null::journal_lines, v_backup_data->'journal_lines');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Stock Movements
+  if v_backup_data ? 'stock_movements' and v_backup_data->'stock_movements' is not null then
+    insert into stock_movements select * from jsonb_populate_recordset(null::stock_movements, v_backup_data->'stock_movements');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Bike Brands (restore before bike_models and bikes)
+  if v_backup_data ? 'bike_brands' and v_backup_data->'bike_brands' is not null then
+    insert into bike_brands select * from jsonb_populate_recordset(null::bike_brands, v_backup_data->'bike_brands');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Bike Models (restore before bikes)
+  if v_backup_data ? 'bike_models' and v_backup_data->'bike_models' is not null then
+    insert into bike_models select * from jsonb_populate_recordset(null::bike_models, v_backup_data->'bike_models');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Bikes
+  if v_backup_data ? 'bikes' and v_backup_data->'bikes' is not null then
+    insert into bikes select * from jsonb_populate_recordset(null::bikes, v_backup_data->'bikes');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Mechanic Jobs (Pegas)
+  if v_backup_data ? 'mechanic_jobs' and v_backup_data->'mechanic_jobs' is not null then
+    insert into mechanic_jobs select * from jsonb_populate_recordset(null::mechanic_jobs, v_backup_data->'mechanic_jobs');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Mechanic Job Items
+  if v_backup_data ? 'mechanic_job_items' and v_backup_data->'mechanic_job_items' is not null then
+    insert into mechanic_job_items select * from jsonb_populate_recordset(null::mechanic_job_items, v_backup_data->'mechanic_job_items');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Mechanic Job Labor
+  if v_backup_data ? 'mechanic_job_labor' and v_backup_data->'mechanic_job_labor' is not null then
+    insert into mechanic_job_labor select * from jsonb_populate_recordset(null::mechanic_job_labor, v_backup_data->'mechanic_job_labor');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Mechanic Job Timeline
+  if v_backup_data ? 'mechanic_job_timeline' and v_backup_data->'mechanic_job_timeline' is not null then
+    insert into mechanic_job_timeline select * from jsonb_populate_recordset(null::mechanic_job_timeline, v_backup_data->'mechanic_job_timeline');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Website Settings
+  if v_backup_data ? 'website_settings' and v_backup_data->'website_settings' is not null then
+    insert into website_settings select * from jsonb_populate_recordset(null::website_settings, v_backup_data->'website_settings');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Website Banners
+  if v_backup_data ? 'website_banners' and v_backup_data->'website_banners' is not null then
+    insert into website_banners select * from jsonb_populate_recordset(null::website_banners, v_backup_data->'website_banners');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Website Content
+  if v_backup_data ? 'website_content' and v_backup_data->'website_content' is not null then
+    insert into website_content select * from jsonb_populate_recordset(null::website_content, v_backup_data->'website_content');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Website Blocks
+  if v_backup_data ? 'website_blocks' and v_backup_data->'website_blocks' is not null then
+    insert into website_blocks select * from jsonb_populate_recordset(null::website_blocks, v_backup_data->'website_blocks');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Featured Products
+  if v_backup_data ? 'featured_products' and v_backup_data->'featured_products' is not null then
+    insert into featured_products select * from jsonb_populate_recordset(null::featured_products, v_backup_data->'featured_products');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Online Orders
+  if v_backup_data ? 'online_orders' and v_backup_data->'online_orders' is not null then
+    insert into online_orders select * from jsonb_populate_recordset(null::online_orders, v_backup_data->'online_orders');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Online Order Items
+  if v_backup_data ? 'online_order_items' and v_backup_data->'online_order_items' is not null then
+    insert into online_order_items select * from jsonb_populate_recordset(null::online_order_items, v_backup_data->'online_order_items');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  -- Update backup record
+  update database_backups
+  set status = 'restored',
+      restored_at = now(),
+      restored_by = auth.uid()
+  where id = p_backup_id;
+  
+  return jsonb_build_object(
+    'success', true,
+    'backup_id', p_backup_id,
+    'tables_restored', v_tables_restored,
+    'summary', v_summary
+  );
+exception
+  when others then
+    return jsonb_build_object(
+      'success', false,
+      'error', SQLERRM
+    );
+end;
+$$;
+
+grant execute on function public.restore_backup(uuid, uuid) to authenticated;
+
+-- Function: Get backup summary without loading full data
+create or replace function public.get_backup_summary(p_backup_id uuid)
+returns jsonb
+security definer
+language plpgsql
+as $$
+declare
+  v_result jsonb;
+begin
+  select jsonb_build_object(
+    'id', id,
+    'backup_name', backup_name,
+    'backup_type', backup_type,
+    'status', status,
+    'summary', summary,
+    'size_mb', round((backup_size_bytes / 1024.0 / 1024.0)::numeric, 2),
+    'created_at', created_at,
+    'created_by', created_by,
+    'notes', notes
+  ) into v_result
+  from database_backups
+  where id = p_backup_id;
+  
+  return v_result;
+end;
+$$;
+
+grant execute on function public.get_backup_summary(uuid) to authenticated;
+
+-- Function: Delete old backups based on retention policy
+create or replace function public.cleanup_old_backups(p_tenant_id uuid)
+returns jsonb
+security definer
+language plpgsql
+as $$
+declare
+  v_keep_count int;
+  v_auto_delete boolean;
+  v_deleted_count int := 0;
+  v_backup_ids uuid[];
+begin
+  -- Get retention settings
+  select keep_last_n_backups, auto_delete_old 
+  into v_keep_count, v_auto_delete
+  from backup_schedules
+  where tenant_id = p_tenant_id;
+  
+  if not found or not v_auto_delete then
+    return jsonb_build_object('success', true, 'deleted_count', 0, 'message', 'Auto-delete disabled');
+  end if;
+  
+  -- Get IDs of backups to delete (keep newest N, delete older)
+  select array_agg(id) into v_backup_ids
+  from (
+    select id
+    from database_backups
+    where tenant_id = p_tenant_id
+      and status = 'completed'
+    order by created_at desc
+    offset v_keep_count
+  ) old_backups;
+  
+  if v_backup_ids is not null then
+    delete from database_backups
+    where id = any(v_backup_ids);
+    
+    get diagnostics v_deleted_count = row_count;
+  end if;
+  
+  return jsonb_build_object(
+    'success', true,
+    'deleted_count', v_deleted_count,
+    'kept_count', v_keep_count
+  );
+end;
+$$;
+
+grant execute on function public.cleanup_old_backups(uuid) to authenticated;
 

@@ -48,6 +48,7 @@ import 'public_store/services/public_inventory_service.dart';
 import 'shared/routes/app_router.dart';
 import 'shared/services/error_reporting_service.dart';
 import 'shared/services/tenant_detection_service.dart';
+import 'shared/services/backup_service.dart';
 
 // Custom scroll behavior to prevent browser navigation gestures on trackpad
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -205,6 +206,7 @@ class VinabikeApp extends StatelessWidget {
                 )),
         ChangeNotifierProvider(create: (_) => WebsiteService()),
         ChangeNotifierProvider(create: (_) => MercadoPagoService()..initialize()),
+        ChangeNotifierProvider(create: (_) => BackupService()),
         
         // Public store services
         ChangeNotifierProvider(create: (_) => CartProvider()),

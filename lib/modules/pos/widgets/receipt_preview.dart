@@ -103,7 +103,7 @@ class ReceiptPreview extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              item.product.name,
+                              item.displayName,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w500,
                               ),

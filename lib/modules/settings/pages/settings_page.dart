@@ -19,24 +19,19 @@ class SettingsPage extends StatelessWidget {
             children: [
               _buildSettingTile(
                 context,
+                icon: Icons.backup,
+                title: 'Respaldo y Restauración',
+                subtitle: 'Crear respaldos automáticos y restaurar datos',
+                iconColor: Colors.blue,
+                onTap: () => context.push('/settings/backup'),
+              ),
+              _buildSettingTile(
+                context,
                 icon: Icons.delete_forever,
                 title: 'Reiniciar Sistema',
                 subtitle: 'Eliminar todos los datos y comenzar de nuevo',
                 iconColor: Colors.red,
                 onTap: () => context.push('/settings/factory-reset'),
-              ),
-              _buildSettingTile(
-                context,
-                icon: Icons.backup,
-                title: 'Respaldo de Datos',
-                subtitle: 'Exportar todos los datos del sistema',
-                iconColor: Colors.blue,
-                onTap: () {
-                  // TODO: Implement backup
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Próximamente...')),
-                  );
-                },
               ),
             ],
           ),

@@ -659,6 +659,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         return _CustomerSelector(
           initialCustomers: List<Customer>.from(_cachedCustomers),
           customerService: _customerService,
+          onCreateCustomer: _createQuickCustomer,
         );
       },
     );
@@ -670,6 +671,35 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       if (!exists) {
         _cachedCustomers.add(selected);
       }
+    }
+  }
+
+  Future<Customer?> _createQuickCustomer(String name) async {
+    if (name.trim().isEmpty) return null;
+    try {
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant_id del usuario');
+      }
+
+      final customer = Customer(
+        tenantId: tenantId,
+        name: name.trim(),
+        rut: '',
+      );
+
+      final created = await _customerService.createCustomer(customer);
+      _cachedCustomers.add(created);
+      return created;
+    } catch (e) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al crear cliente: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return null;
     }
   }
 
@@ -2273,10 +2303,12 @@ class _InvoiceLineEntry {
 class _CustomerSelector extends StatefulWidget {
   final List<Customer> initialCustomers;
   final CustomerService customerService;
+  final Future<Customer?> Function(String name) onCreateCustomer;
 
   const _CustomerSelector({
     required this.initialCustomers,
     required this.customerService,
+    required this.onCreateCustomer,
   });
 
   @override
@@ -2285,12 +2317,16 @@ class _CustomerSelector extends StatefulWidget {
 
 class _CustomerSelectorState extends State<_CustomerSelector> {
   late List<Customer> _customers = widget.initialCustomers;
+  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _newCustomerController = TextEditingController();
   Timer? _debounce;
   bool _isSearching = false;
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _searchController.dispose();
+    _newCustomerController.dispose();
     super.dispose();
   }
 
@@ -2317,11 +2353,28 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
     });
   }
 
+  Future<void> _handleCreateCustomer() async {
+    final name = _newCustomerController.text.trim();
+    if (name.isEmpty) return;
+    final customer = await widget.onCreateCustomer(name);
+    if (customer != null && mounted) {
+      Navigator.of(context).pop(customer);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 16,
+          right: 16,
+          top: 16,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2335,11 +2388,47 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
               ),
             ),
             TextField(
+              controller: _searchController,
               decoration: const InputDecoration(
                 labelText: 'Buscar cliente',
                 prefixIcon: Icon(Icons.search),
               ),
               onChanged: _onSearchChanged,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _newCustomerController,
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black,
+              ),
+              decoration: InputDecoration(
+                labelText: 'Crear cliente rápido',
+                hintText: 'Nombre del cliente',
+                labelStyle: TextStyle(
+                  color: isDark ? Colors.grey[400] : Colors.grey[700],
+                ),
+                hintStyle: TextStyle(
+                  color: isDark ? Colors.grey[500] : Colors.grey[500],
+                ),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    Icons.check,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                  onPressed: _handleCreateCustomer,
+                ),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(
+                    color: isDark ? Colors.grey[700]! : Colors.grey[400]!,
+                  ),
+                ),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+              onSubmitted: (_) => _handleCreateCustomer(),
             ),
             const SizedBox(height: 16),
             if (_isSearching) const LinearProgressIndicator(minHeight: 2),

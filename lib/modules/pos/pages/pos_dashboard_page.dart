@@ -1245,6 +1245,12 @@ class _CashierPanelState extends State<_CashierPanel> {
   bool _isProcessing = false;
   final Uuid _uuid = const Uuid();
 
+  // Ad-hoc item inline form state
+  bool _showAdHocForm = false;
+  final TextEditingController _adHocDescriptionController = TextEditingController();
+  final TextEditingController _adHocPriceController = TextEditingController();
+  final TextEditingController _adHocQuantityController = TextEditingController(text: '1');
+
   @override
   void initState() {
     super.initState();
@@ -1266,6 +1272,9 @@ class _CashierPanelState extends State<_CashierPanel> {
     _customerSearchController.removeListener(_onSearchChanged);
     _customerSearchController.dispose();
     _amountController.dispose();
+    _adHocDescriptionController.dispose();
+    _adHocPriceController.dispose();
+    _adHocQuantityController.dispose();
     super.dispose();
   }
 
@@ -1325,6 +1334,59 @@ class _CashierPanelState extends State<_CashierPanel> {
         }).toList();
       }
     });
+  }
+
+  void _toggleAdHocForm() {
+    setState(() {
+      _showAdHocForm = !_showAdHocForm;
+      if (!_showAdHocForm) {
+        // Clear form when hiding
+        _adHocDescriptionController.clear();
+        _adHocPriceController.clear();
+        _adHocQuantityController.text = '1';
+      }
+    });
+  }
+
+  void _addAdHocItem() {
+    final description = _adHocDescriptionController.text.trim();
+    final price = double.tryParse(_adHocPriceController.text) ?? 0.0;
+    final quantity = int.tryParse(_adHocQuantityController.text) ?? 1;
+
+    if (description.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('La descripción es obligatoria'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (price <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El precio debe ser mayor a 0'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final posService = Provider.of<POSService>(context, listen: false);
+    posService.addAdHocItem(
+      description: description,
+      price: price,
+      quantity: quantity,
+    );
+
+    // Clear form and hide
+    _adHocDescriptionController.clear();
+    _adHocPriceController.clear();
+    _adHocQuantityController.text = '1';
+    setState(() => _showAdHocForm = false);
   }
 
   void _proceedToPayment() {
@@ -2134,6 +2196,102 @@ class _CashierPanelState extends State<_CashierPanel> {
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
+          
+          // Inline ad-hoc item form (shows always)
+          if (_showAdHocForm) ...[
+            Card(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: theme.colorScheme.primary.withOpacity(0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.edit_note, 
+                          size: 20, 
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Nuevo Item Personalizado',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: _toggleAdHocForm,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _adHocDescriptionController,
+                      decoration: const InputDecoration(
+                        labelText: 'Descripción',
+                        hintText: 'Ej: Servicio de ajuste',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      autofocus: true,
+                      textCapitalization: TextCapitalization.sentences,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: _adHocPriceController,
+                            decoration: const InputDecoration(
+                              labelText: 'Precio',
+                              prefixText: '\$',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _adHocQuantityController,
+                            decoration: const InputDecoration(
+                              labelText: 'Cant.',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _addAdHocItem,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Agregar al Carrito'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          
           if (posService.cartItems.isNotEmpty)
             Card(
               child: Padding(
@@ -2141,12 +2299,31 @@ class _CashierPanelState extends State<_CashierPanel> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Productos (${posService.cartTotalItems})',
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Productos (${posService.cartTotalItems})',
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            _showAdHocForm ? Icons.remove_circle_outline : Icons.add_circle_outline,
+                            size: 20,
+                          ),
+                          tooltip: _showAdHocForm ? 'Cancelar' : 'Agregar item personalizado',
+                          onPressed: () => _toggleAdHocForm(),
+                          style: IconButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(32, 32),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
+                    
                     ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -2166,16 +2343,18 @@ class _CashierPanelState extends State<_CashierPanel> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        item.product.name,
+                                        item.displayName,
                                         style: theme.textTheme.titleSmall
                                             ?.copyWith(
                                                 fontWeight: FontWeight.w600),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'SKU: ${item.product.sku}',
-                                        style: theme.textTheme.bodySmall,
-                                      ),
+                                      if (item.product != null) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'SKU: ${item.product!.sku}',
+                                          style: theme.textTheme.bodySmall,
+                                        ),
+                                      ],
                                       const SizedBox(height: 4),
                                       Text(
                                         '\$${item.unitPrice.toStringAsFixed(0)} c/u',
@@ -2234,20 +2413,24 @@ class _CashierPanelState extends State<_CashierPanel> {
                                           padding: EdgeInsets.zero,
                                           constraints: const BoxConstraints(),
                                           onPressed: () {
-                                            if (item.quantity <
-                                                item.product.stockQuantity) {
+                                            final stockQuantity = item.product?.stockQuantity;
+                                            if (stockQuantity != null && item.quantity < stockQuantity) {
                                               posService.updateCartItemQuantity(
                                                   item.id, item.quantity + 1);
-                                            } else {
+                                            } else if (stockQuantity != null) {
                                               ScaffoldMessenger.of(context)
                                                   .showSnackBar(
                                                 SnackBar(
                                                   content: Text(
-                                                      'Stock máximo: ${item.product.stockQuantity}'),
+                                                      'Stock máximo: $stockQuantity'),
                                                   duration: const Duration(
                                                       seconds: 1),
                                                 ),
                                               );
+                                            } else {
+                                              // Ad-hoc item (no stock limit)
+                                              posService.updateCartItemQuantity(
+                                                  item.id, item.quantity + 1);
                                             }
                                           },
                                         ),
@@ -2283,16 +2466,40 @@ class _CashierPanelState extends State<_CashierPanel> {
               color: theme.colorScheme.surface,
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Row(
+                child: Column(
                   children: [
-                    Icon(Icons.shopping_cart_outlined,
-                        color: theme.colorScheme.outline),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'El carrito está vacío. Selecciona productos para comenzar.',
-                        style: theme.textTheme.bodyMedium,
-                      ),
+                    Row(
+                      children: [
+                        Icon(Icons.shopping_cart_outlined,
+                            color: theme.colorScheme.outline),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'El carrito está vacío. Selecciona productos para comenzar.',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _toggleAdHocForm(),
+                          icon: Icon(
+                            _showAdHocForm ? Icons.remove_circle_outline : Icons.add_circle_outline,
+                            size: 18,
+                          ),
+                          label: Text(_showAdHocForm ? 'Cancelar' : 'Agregar Item Personalizado'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -2809,7 +3016,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              item.product.name,
+                              item.displayName,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w600,
                               ),

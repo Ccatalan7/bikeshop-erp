@@ -92,6 +92,7 @@ class PurchaseService extends ChangeNotifier {
       final result = await _db.insert('suppliers', {
         'tenant_id': tenantId,
         'name': name,
+        'default_tax_treatment': 'tax_included', // Most suppliers charge IVA
       });
       final supplier = shared_supplier.Supplier.fromJson(result);
       _supplierCache = [..._supplierCache, supplier];
