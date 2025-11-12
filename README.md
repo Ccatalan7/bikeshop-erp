@@ -2,6 +2,34 @@
 
 Vinabike ERP is a modular back-office platform for bicycle workshops built with Flutter and Supabase. The application covers sales, purchases, inventory, CRM, accounting, and POS workflows while targeting desktop, web, and mobile deployments.
 
+## 📸 NEW: OCR for Purchase Invoices
+
+The app now supports **Optical Character Recognition (OCR)** to automatically extract data from purchase invoices and receipts. Simply photograph an invoice with your device camera or select an existing image, and the system automatically extracts:
+
+- ✅ Supplier name and RUT (Chilean tax ID)
+- ✅ Invoice number (Folio)
+- ✅ Date
+- ✅ Total amount
+- ✅ Line items (product descriptions, quantities, prices)
+
+**How to use:**
+1. Navigate to **Compras → Nueva Factura**
+2. Click the 📄 **document scanner icon** in the header
+3. Take a photo or select image from gallery
+4. Review extracted data in preview
+5. Click **"Usar Datos"** to auto-fill the form
+
+**Technology:** Google ML Kit Text Recognition v2 (free, offline on mobile, optimized for Chilean invoices)
+
+**Documentation:**
+- **User Guide:** `OCR_USER_GUIDE.md`
+- **Developer Guide:** `OCR_IMPLEMENTATION_GUIDE.md`
+- **Quick Reference:** `OCR_QUICK_REFERENCE.md`
+
+**Platforms:** Android, iOS, Web (Desktop support coming soon)
+
+---
+
 ## Sales → Invoices → Payments Flow
 
 The sales module now mirrors the Zoho Books lifecycle: invoices move from `borrador` → `enviado` → `pagado`, supporting partial and full payments. A dedicated payments list keeps all receipts in sync with their source invoices.

@@ -64,15 +64,27 @@ class DatabaseService extends ChangeNotifier {
     String? orderBy,
     bool descending = false,
     int? limit,
+    bool fetchAll = false, // New parameter to fetch all records with pagination
   }) async {
     try {
       if (kDebugMode) {
         debugPrint(
-            '🔍 DB Query: $table | where: $where | whereIn: ${whereIn?.length} items | orderBy: $orderBy | limit: $limit');
+            '🔍 DB Query: $table | where: $where | whereIn: ${whereIn?.length} items | orderBy: $orderBy | limit: $limit | fetchAll: $fetchAll');
+      }
+
+      // If fetchAll is true and no explicit limit, use pagination to get ALL records
+      if (fetchAll && limit == null) {
+        return await _selectWithPagination(
+          table,
+          where: where,
+          whereIn: whereIn,
+          orderBy: orderBy,
+          descending: descending,
+        );
       }
 
       // Use dynamic to handle different builder types in the chain
-    dynamic query = _client.from(table).select();
+      dynamic query = _client.from(table).select();
 
       // Handle simple WHERE clause
       if (where != null && where.contains('=')) {
@@ -97,7 +109,7 @@ class DatabaseService extends ChangeNotifier {
         query = query.limit(limit);
       }
 
-  final data = await query;
+      final data = await query;
 
       if (kDebugMode) {
         debugPrint('✅ DB Result: ${(data as List).length} rows from $table');
@@ -112,6 +124,69 @@ class DatabaseService extends ChangeNotifier {
       }
       rethrow;
     }
+  }
+
+  // Private helper for pagination (fetches all records in batches)
+  Future<List<Map<String, dynamic>>> _selectWithPagination(
+    String table, {
+    String? where,
+    List<String>? whereIn,
+    String? orderBy,
+    bool descending = false,
+  }) async {
+    const int batchSize = 1000;
+    int offset = 0;
+    List<Map<String, dynamic>> allRecords = [];
+    
+    if (kDebugMode) {
+      debugPrint('📄 Starting paginated fetch for $table (batch size: $batchSize)');
+    }
+
+    while (true) {
+      dynamic query = _client.from(table).select();
+
+      // Apply filters
+      if (where != null && where.contains('=')) {
+        final parts = where.split('=');
+        final field = parts[0].trim();
+        final value = parts.sublist(1).join('=').trim();
+        query = query.eq(field, value);
+      }
+
+      if (where != null && whereIn != null && whereIn.isNotEmpty) {
+        query = query.inFilter(where, whereIn);
+      }
+
+      // Apply ordering
+      if (orderBy != null) {
+        query = query.order(orderBy, ascending: !descending);
+      }
+
+      // Apply pagination
+      query = query.range(offset, offset + batchSize - 1);
+
+      final data = await query as List;
+      final batch = data.map((row) => Map<String, dynamic>.from(row as Map)).toList();
+      
+      allRecords.addAll(batch);
+
+      if (kDebugMode) {
+        debugPrint('📄 Fetched batch: ${batch.length} rows (total: ${allRecords.length})');
+      }
+
+      // If we got less than batchSize, we've reached the end
+      if (batch.length < batchSize) {
+        break;
+      }
+
+      offset += batchSize;
+    }
+
+    if (kDebugMode) {
+      debugPrint('✅ Pagination complete: ${allRecords.length} total rows from $table');
+    }
+
+    return allRecords;
   }
 
   Future<Map<String, dynamic>?> selectById(String table, String id) async {

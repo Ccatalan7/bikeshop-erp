@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  invoice-parser:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./main.py:/app/main.py
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

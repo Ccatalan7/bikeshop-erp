@@ -161,12 +161,16 @@ class Product {
           json['published'] ??
           true,
       productType: _parseProductType(json['product_type']),
-      createdAt: json['created_at'] is String
-          ? DateTime.parse(json['created_at'])
-          : (json['created_at'] as dynamic).toDate(),
-      updatedAt: json['updated_at'] is String
-          ? DateTime.parse(json['updated_at'])
-          : (json['updated_at'] as dynamic).toDate(),
+      createdAt: json['created_at'] == null
+          ? DateTime.now()
+          : (json['created_at'] is String
+              ? DateTime.parse(json['created_at'])
+              : (json['created_at'] as dynamic).toDate()),
+      updatedAt: json['updated_at'] == null
+          ? DateTime.now()
+          : (json['updated_at'] is String
+              ? DateTime.parse(json['updated_at'])
+              : (json['updated_at'] as dynamic).toDate()),
     );
   }
 

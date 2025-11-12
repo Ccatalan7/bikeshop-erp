@@ -31,6 +31,7 @@ import '../../modules/bikeshop/pages/wheel_rims_page.dart';
 import '../../modules/bikeshop/pages/wheel_spokes_page.dart';
 import '../../modules/bikeshop/pages/wheel_builder_wizard_page.dart';
 import '../../modules/bikeshop/pages/spoke_length_calculator_page.dart';
+import '../../modules/bikeshop/pages/bike_encyclopedia_page.dart';
 import '../../modules/inventory/pages/product_list_page.dart';
 import '../../modules/inventory/pages/product_form_page.dart';
 import '../../modules/inventory/pages/product_import_page.dart';
@@ -612,6 +613,16 @@ class AppRouter {
             context,
             state,
             const BikeBrandsPage(),
+          ),
+        ),
+        
+        // Bike Encyclopedia
+        GoRoute(
+          path: '/taller/bike-encyclopedia',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const BikeEncyclopediaPage(),
           ),
         ),
         

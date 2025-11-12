@@ -450,6 +450,7 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
       ),
       trailing: const Icon(Icons.chevron_right),
       onTap: () {
+        // Navigate to detail page
         Navigator.push(
           context,
           MaterialPageRoute(

@@ -1,0 +1,44 @@
+================================================================================
+MISSING PRODUCTS FROM ZOHO - IMPORTED TO ODOO
+================================================================================
+
+#    SKU                  Product Name                                       Stock    Price        Cost         Category                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+1    2000000305660        Asiento Radical Mountain Paseo N708A Con Resorte Negro     3.0      $12,000      $4,890       Asiento                       
+2    6927116112370        CAMARA 26 X 1.50/2.20 V/AUTO 48MM BUTYL ORNATE             2.0      $5,000       $1,690       Cámaras                       
+3    6938112671129        CAMARA 26 X 1.95/2.125 V/FRANCESA 48MM (NO ES EXACTAMENTE LA MISMA: 1.50X2.2 ORNATE)     4.0      $5,000       $1,961       Cámaras                       
+4    10895                CAMPANILLA CLASICA PB003                                   1.0      $3,000       $816         Campanillas                   
+5    7290001283677        Candado OnGuard Llave U-Lock NS 115X230mm Negro            2.0      $27,000      $10,870      Candados                      
+6    7290001283615        Candado OnGuard Llave U-Lock NS LS 115X292mm Azul          1.0      $27,000      $10,870      Candados                      
+7    00000000             Diagnóstico                                                0        $0           $0           (no category)                 
+8    7887                 Dot 5.1 Fluid 60ml ezmtb                                   1.0      $6,000       $2,270       Grasa/Aceites/Soluciones/Limpiadores
+9    20288                Funda de Cambio 10TEN con Teflón en caja 30 Mts.          1.0      $22,000      $8,990       Fundas y piolas               
+10   17171                Funda de Cambio Con Teflon Negra. Rollo 20Mts. Taiwán     1.0      $16,000      $5,990       Fundas y piolas               
+11   2000000480152        Horquilla Suntour 26" XCR 32 RLR Coil 120mm 9x100mm Negro 2022     1.0      $180,000     $117,585     Horquillas                    
+12   17159                Llanta Mavic 319, 29x32H Con Ojetillos.                    1.0      $30,000      $14,990      Llantas                       
+13   2000000419053        Manilla De Freno Aluminio KN Negr/Plat 3-4F                0.5      $4,000       $1,100       Manillas                      
+14   2895                 Manilla de Freno Ozono Aluminio 341AE                      3.0      $8,000       $3,270       Manillas                      
+15   2000000178066        Manillas SunRace Cambio M10 3x5/6/7V Par                   1.0      $12,000      $5,100       Shifters                      
+16   7351                 MAXXIS ALAMBRE 700x25c DETONATOR                           2.0      $28,000      $9,970       Neumáticos                    
+17   17196                MAZA (JGO) ALUMINIO QI Y SU (36H) PURPLE QS-403 CON BLOQ.  0.0      $15,000      $5,080       Maza                          
+18   2699                 Maza Trasera Freestyle sellada 14mm 9T 36H Red             1.0      $40,000      $18,750      Mazas                         
+19   23427                Maza Trasera NECO MTB, Aluminio, 36H, c/Bloqueo, Black     1.0      $24,000      $10,990      Maza                          
+20   4213                 Neumático 29 x 2.20 – KENDA – KADRE K1027 60TPI BK         2.0      $22,000      $9,950       Neumáticos                    
+21   23472                Neumatico RIDEXC COMP 26X2.10                              2.0      $10,000      $3,995       Neumáticos                    
+22   8859746615496        Neumático Vuelta USA 26x2.125" CB-570 PAN                  2.0      $14,000      $5,784       Neumáticos                    
+23   9274                 PUÑOS OZONO NEGROS 132mm 22mm                              4.0      $4,000       $970         Puños                         
+24   S59764               VOLANTE SHIMANO FC-TY501 6/7/8-SPEED, 170MM, 42X34X24T W/O CG, W/CRANK FIXING BOLT, BLACK, BULK AFCT EN CAJA     2.0      $35,000      $21,180      Volante                       
+
+================================================================================
+SUMMARY
+================================================================================
+Total Products:           24
+Total Stock:              38.5 units
+Total Value (at cost):    $359,983 CLP
+Total Value (at price):   $740,000 CLP
+Potential Margin:         $380,017 CLP (51.4%)
+
+STATUS: ✅ All 24 products successfully imported to Odoo with images
+        (23 with images, 1 without - Diagnóstico had no image in Zoho)
+
+================================================================================

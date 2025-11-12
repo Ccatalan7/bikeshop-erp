@@ -1,12 +1,31 @@
 # Zoho Import Scripts
 
+⚠️ **CRITICAL: READ THIS ENTIRE FILE BEFORE TOUCHING ANY SCRIPTS!** ⚠️
+
 Python scripts for importing data from Zoho Inventory/Books to Supabase.
+
+---
+
+## 🎯 WHAT YOU NEED TO PROVIDE (USER INPUT REQUIRED)
+
+**Before running ANY script, you MUST have:**
+
+1. **Zoho Client ID** - Get from Zoho API Console
+2. **Zoho Client Secret** - Get from Zoho API Console  
+3. **Zoho Grant Token** - Generate from Zoho API Console (expires in 10 min!)
+4. **Supabase Service Role Key** - Get from Supabase Dashboard > Settings > API
+
+**Once you have these 4 things, follow the Quick Start section below.**
+
+---
 
 ## 📁 File Overview
 
 | Script | Purpose | When to Use |
 |--------|---------|-------------|
-| `zoho_to_supabase_import.py` | **Main import pipeline** | Complete product image import (recommended) |
+| `import_all_zoho_products.py` | ⭐ **BULK IMPORT: ALL products + images** | Factory reset → fresh database (1,440 products) |
+| `zoho_to_supabase_import.py` | **Image-only import** | Products exist, need images only |
+| `import_two_products_with_images.py` | Test import (2 products) | Testing/debugging import logic |
 | `step1_get_zoho_tokens.py` | OAuth token exchange | First-time setup only |
 | `refresh_zoho_token.py` | Get fresh access token | When access token expires |
 | `check_supabase_buckets.py` | Verify storage buckets | Before running imports |
@@ -21,26 +40,80 @@ Python scripts for importing data from Zoho Inventory/Books to Supabase.
 pip3 install requests supabase-py
 ```
 
-### First-Time Setup
+### STEP 1: Get Zoho OAuth Tokens (REQUIRED FIRST!)
 
-1. **Get Zoho OAuth tokens:**
-   ```bash
-   python3 step1_get_zoho_tokens.py
-   ```
-   - Provide: Client ID, Client Secret, Grant Code
-   - Save the `refresh_token` output
+**YOU MUST RUN THIS FIRST - NOTHING ELSE WILL WORK WITHOUT TOKENS!**
 
-2. **Verify Supabase storage:**
-   ```bash
-   python3 check_supabase_buckets.py
-   ```
-   - Ensure `vinabike-assets` bucket exists
+```bash
+python3 step1_get_zoho_tokens.py
+```
 
-3. **Update credentials in main script:**
-   - Edit `zoho_to_supabase_import.py`
-   - Set: `ZOHO_REFRESH_TOKEN`, `SUPABASE_KEY` (service role)
+**When prompted, provide:**
+- ✅ Zoho Client ID (from Zoho API Console)
+- ✅ Zoho Client Secret (from Zoho API Console)
+- ✅ Zoho Grant Token (generate fresh one, expires in 10 min!)
 
-### Run Import
+**Output:** You'll get a `refresh_token` - **SAVE THIS!** You need it for all other scripts.
+
+**⚠️ If grant token expires before you run this, generate a new one from Zoho API Console!**
+
+---
+
+### STEP 2: Verify Supabase Storage
+---
+
+### STEP 2: Verify Supabase Storage
+
+```bash
+python3 check_supabase_buckets.py
+```
+- Ensure `vinabike-assets` bucket exists
+- If not, create it in Supabase Dashboard: Storage > New Bucket > `vinabike-assets` (public)
+
+---
+
+### STEP 3: Update Main Script with Tokens
+
+**Edit `zoho_to_supabase_import.py` and update these lines:**
+
+```python
+# Line ~20: Paste your refresh_token from Step 1
+ZOHO_REFRESH_TOKEN = "1000.xxxxx.xxxxx"  # ← UPDATE THIS!
+
+# Line ~30: Paste your Supabase service role key
+SUPABASE_KEY = "eyJhbGc..."  # ← UPDATE THIS!
+```
+
+**⚠️ DO NOT commit these tokens to git! Add to .gitignore!**
+
+---
+
+### STEP 4: Run Import
+
+**OPTION A: Bulk Import (ALL 1,440 Products) - Recommended for Factory Reset**
+
+```bash
+python3 import_all_zoho_products.py
+```
+
+**Features:**
+- ✅ Imports ALL products from Zoho (1,440 products)
+- ✅ Includes name, SKU, price, cost, stock quantities
+- ✅ Downloads and uploads images to Storage
+- ✅ Skips existing products (idempotent)
+- ✅ Progress reporting (every 50 products)
+- ✅ **Does NOT import categories** (use Odoo for that)
+
+**Expected runtime:** 10-20 minutes for full import
+
+**Use when:**
+- Fresh database after factory reset
+- Initial production data migration
+- Bulk product catalog setup
+
+---
+
+**OPTION B: Image-Only Import (For Existing Products)**
 
 ```bash
 python3 zoho_to_supabase_import.py
@@ -50,6 +123,10 @@ python3 zoho_to_supabase_import.py
 - Console progress (real-time)
 - `unmatched_products.csv` (products not found in Zoho)
 - Updated product records in Supabase
+
+**Use when:**
+- Products already exist in Supabase
+- Only need to add/update images
 
 ## 🔧 Configuration
 

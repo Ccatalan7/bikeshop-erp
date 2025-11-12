@@ -96,6 +96,11 @@ const List<MenuSubItem> _workshopMenuItems = [
     route: '/taller/marcas-modelos',
   ),
   MenuSubItem(
+    icon: Icons.menu_book,
+    title: '📚 Bike Encyclopedia',
+    route: '/taller/bike-encyclopedia',
+  ),
+  MenuSubItem(
     icon: Icons.settings_outlined,
     title: '🔧 Wheel Builder',
     route: '/taller/wheel-builder',

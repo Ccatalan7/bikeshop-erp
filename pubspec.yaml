@@ -65,6 +65,13 @@ dependencies:
   flutter_blue_plus_windows: ^1.26.1
   permission_handler: ^11.3.1
   qr_flutter: ^4.1.0
+  
+  # OCR (Text Recognition)
+  google_mlkit_text_recognition: ^0.13.1
+  google_mlkit_commons: ^0.8.0
+  
+  # PDF Processing (digital PDFs only - text extraction)
+  syncfusion_flutter_pdf: ^24.1.41  # Direct text extraction from digital PDFs
 
 dev_dependencies:
   flutter_test:

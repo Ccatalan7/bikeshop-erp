@@ -19,6 +19,7 @@ class ProductAutocompleteField extends StatefulWidget {
   final String? labelText;
   final String? hintText;
   final bool enabled;
+  final bool showCost; // Show cost instead of price (for purchase invoices)
 
   const ProductAutocompleteField({
     super.key,
@@ -29,6 +30,7 @@ class ProductAutocompleteField extends StatefulWidget {
     this.labelText = 'Artículo o servicio',
     this.hintText = 'Escriba para buscar o ingrese un artículo personalizado',
     this.enabled = true,
+    this.showCost = false, // Default to showing price
   });
 
   @override
@@ -94,8 +96,8 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     final size = renderBox.size;
     final position = renderBox.localToGlobal(Offset.zero);
     
-    // Use minimum 300px width for dropdown to show product info properly
-    final dropdownWidth = size.width < 300 ? 300.0 : size.width;
+    // Use wider dropdown (minimum 500px) like Zoho for better product info display
+    final dropdownWidth = size.width < 500 ? 500.0 : size.width;
     
     // Calculate available space below and above the field
     final screenHeight = MediaQuery.of(context).size.height;
@@ -137,11 +139,11 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       },
       child: Container(
         constraints: const BoxConstraints(
-          maxHeight: 400, // Increased from 300 to show more items
+          maxHeight: 400,
         ),
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(4),
           border: Border.all(color: theme.colorScheme.outline),
           boxShadow: [
             BoxShadow(
@@ -152,68 +154,181 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(4),
           child: ListView.builder(
             padding: EdgeInsets.zero,
+            shrinkWrap: true,
             itemCount: _filteredProducts.length + (widget.allowCustomItems ? 1 : 0),
             itemBuilder: (context, index) {
             // Custom item option at the end
             if (widget.allowCustomItems && index == _filteredProducts.length) {
               if (_controller.text.trim().isEmpty) return const SizedBox.shrink();
               
-              return InkWell(
-                onTap: () {
-                  _selectCustomItem(_controller.text);
-                  _removeOverlay();
-                },
-                child: ListTile(
-                  leading: Icon(Icons.add_circle, color: theme.colorScheme.secondary),
-                  title: Text('Agregar: "${_controller.text}"'),
-                  subtitle: const Text('Artículo personalizado (no en catálogo)'),
-                ),
-              );
+              return _buildCustomItemTile(theme);
             }
 
             final product = _filteredProducts[index];
-            final hasStock = product.stockQuantity > 0;
-
-            return InkWell(
-              onTap: () {
-                _selectProduct(product);
-                _removeOverlay();
-              },
-              child: ListTile(
-                leading: product.imageUrl != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: Image.network(
-                          product.imageUrl!,
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(Icons.inventory_2),
-                        ),
-                      )
-                    : const Icon(Icons.inventory_2),
-                title: Text(product.name),
-                subtitle: Text(
-                  'SKU: ${product.sku} • ${hasStock ? '${product.stockQuantity} ${product.unit.name}' : 'Sin stock'}',
-                  style: TextStyle(
-                    color: hasStock ? null : theme.colorScheme.error,
-                  ),
-                ),
-                trailing: Text(
-                  '\$${product.price.toStringAsFixed(0)}',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            );
+            return _buildProductTile(product, theme);
           },
         ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCustomItemTile(ThemeData theme) {
+    return InkWell(
+      onTap: () {
+        _selectCustomItem(_controller.text);
+        _removeOverlay();
+      },
+      hoverColor: theme.colorScheme.primary.withOpacity(0.08),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.add_circle, color: theme.colorScheme.secondary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Agregar: "${_controller.text}"',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    'Artículo personalizado (no en catálogo)',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductTile(Product product, ThemeData theme) {
+    final hasStock = product.stockQuantity > 0;
+    bool isHovered = false;
+    
+    return StatefulBuilder(
+      builder: (context, setHoverState) {
+        return MouseRegion(
+          onEnter: (_) => setHoverState(() => isHovered = true),
+          onExit: (_) => setHoverState(() => isHovered = false),
+          child: InkWell(
+            onTap: () {
+              _selectProduct(product);
+              _removeOverlay();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: isHovered 
+                    ? const Color(0xFF2196F3).withOpacity(0.12) // Zoho-like blue hover
+                    : Colors.transparent,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Product image (keep - only thing better than Zoho!)
+                  if (product.imageUrl != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: Image.network(
+                        product.imageUrl!,
+                        width: 40,
+                        height: 40,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Icon(
+                            Icons.inventory_2,
+                            size: 20,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Icon(
+                        Icons.inventory_2,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  const SizedBox(width: 12),
+                  // Product info - compact like Zoho
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          product.name,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w500,
+                            height: 1.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'SKU: ${product.sku} • ${hasStock ? '${product.stockQuantity} ${product.unit.name}' : 'Sin stock'}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: hasStock 
+                                ? theme.colorScheme.onSurfaceVariant 
+                                : theme.colorScheme.error,
+                            fontSize: 12,
+                            height: 1.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Price/Cost - right-aligned like Zoho
+                  Text(
+                    widget.showCost 
+                        ? '\$${product.cost.toStringAsFixed(0)}' 
+                        : '\$${product.price.toStringAsFixed(0)}',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: widget.showCost 
+                          ? theme.colorScheme.tertiary // Different color for cost
+                          : theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

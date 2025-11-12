@@ -637,6 +637,132 @@ begin
 end $$;
 
 -- ============================================================================
+-- BIKE CATALOG (ENCYCLOPEDIA) - Global Reference Database
+-- ============================================================================
+-- Purpose: Store comprehensive bike specifications from external APIs
+-- (BikeBook.io, Bike Index) for reference and compatibility matching.
+-- This is a GLOBAL table (no tenant_id) - shared across all shops.
+
+create table if not exists bike_catalog (
+  id uuid primary key default gen_random_uuid(),
+  
+  -- Identity
+  brand text not null,
+  model_name text not null,
+  model_year integer not null,
+  bike_type text, -- road, mountain, hybrid, gravel, bmx, city
+  
+  -- Frame & Geometry
+  frame_material text, -- aluminum, carbon, steel, titanium
+  frame_size_range text[], -- ['S', 'M', 'L'] or ['48cm', '52cm']
+  wheel_size text, -- 700c, 29", 27.5", 26", 650b, 20"
+  
+  -- Drivetrain
+  drivetrain_speeds integer, -- 8, 9, 10, 11, 12
+  drivetrain_config text, -- '1x11', '2x10', '3x8'
+  cassette_range text, -- '11-42', '11-50'
+  cassette_max_teeth integer,
+  chain_speeds integer,
+  crankset_model text,
+  rear_derailleur_model text,
+  front_derailleur_model text,
+  
+  -- Braking
+  brake_type text, -- rim, mechanical_disc, hydraulic_disc
+  brake_model text,
+  brake_rotor_size_front_mm integer,
+  brake_rotor_size_rear_mm integer,
+  
+  -- Wheels & Hubs
+  front_hub_model text,
+  rear_hub_model text,
+  front_hub_spacing_mm numeric(5,1), -- 100, 110
+  rear_hub_spacing_mm numeric(5,1), -- 130, 135, 142, 148
+  front_axle_type text, -- QR, thru_15mm, thru_20mm
+  rear_axle_type text, -- QR, thru_12mm
+  freehub_type text, -- shimano_hg, sram_xd, microspline
+  spoke_count integer, -- 24, 28, 32, 36
+  
+  -- Tires
+  tire_size_front text, -- '700x25c', '29x2.2'
+  tire_size_rear text,
+  max_tire_width_mm numeric(5,1),
+  
+  -- Cockpit
+  handlebar_type text, -- drop, flat, riser
+  stem_length_mm integer,
+  seatpost_diameter_mm numeric(4,1), -- 27.2, 30.9, 31.6
+  
+  -- Additional Info
+  weight_kg numeric(5,2),
+  msrp_usd numeric(10,2),
+  manufacturer_url text,
+  image_url text,
+  
+  -- Full specs storage (raw JSON from API)
+  full_specs_json jsonb,
+  
+  -- Data Quality
+  data_source text not null, -- 'bikebook', 'bike_index', 'manual'
+  data_confidence numeric(3,2) default 0.5, -- 0.0 to 1.0
+  external_id text, -- ID from source API
+  last_verified_at timestamp with time zone,
+  
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  
+  unique(brand, model_name, model_year)
+);
+
+-- Indexes for fast lookup
+create index if not exists idx_bike_catalog_brand on bike_catalog(lower(brand));
+create index if not exists idx_bike_catalog_model on bike_catalog(lower(model_name));
+create index if not exists idx_bike_catalog_year on bike_catalog(model_year);
+create index if not exists idx_bike_catalog_search on bike_catalog(lower(brand), model_year, lower(model_name));
+create index if not exists idx_bike_catalog_type on bike_catalog(bike_type) where bike_type is not null;
+create index if not exists idx_bike_catalog_source on bike_catalog(data_source);
+create index if not exists idx_bike_catalog_specs on bike_catalog using gin(full_specs_json);
+
+-- Full-text search
+create index if not exists idx_bike_catalog_model_fts on bike_catalog using gin(to_tsvector('english', model_name));
+
+-- No RLS needed - this is a global reference table accessible to all authenticated users
+alter table bike_catalog enable row level security;
+
+drop policy if exists "bike_catalog_select_all" on bike_catalog;
+drop policy if exists "bike_catalog_insert_admin" on bike_catalog;
+drop policy if exists "bike_catalog_update_admin" on bike_catalog;
+
+create policy "bike_catalog_select_all" on bike_catalog
+  for select to authenticated
+  using (true); -- Anyone authenticated can read
+
+create policy "bike_catalog_insert_admin" on bike_catalog
+  for insert to authenticated
+  with check (true); -- For now, any authenticated user can add bikes (later restrict to admin role)
+
+create policy "bike_catalog_update_admin" on bike_catalog
+  for update to authenticated
+  using (true);
+
+-- Trigger for updated_at
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger t
+    join pg_class c on c.oid = t.tgrelid
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and c.relname = 'bike_catalog'
+     and t.tgname = 'trg_bike_catalog_updated_at'
+  ) then
+    create trigger trg_bike_catalog_updated_at
+      before update on bike_catalog
+      for each row execute procedure public.set_updated_at();
+  end if;
+end $$;
+
+-- ============================================================================
 -- WHEEL BUILDING SYSTEM - Professional Spoke Calculator & Parts Compatibility
 -- ============================================================================
 -- This system enables mechanics to:
@@ -694,6 +820,11 @@ create index if not exists idx_wheel_hubs_hub_type on wheel_hubs(hub_type);
 
 alter table wheel_hubs enable row level security;
 
+drop policy if exists "wheel_hubs_select" on wheel_hubs;
+drop policy if exists "wheel_hubs_insert" on wheel_hubs;
+drop policy if exists "wheel_hubs_update" on wheel_hubs;
+drop policy if exists "wheel_hubs_delete" on wheel_hubs;
+
 create policy "wheel_hubs_select" on wheel_hubs for select to authenticated
   using (tenant_id = public.user_tenant_id());
 create policy "wheel_hubs_insert" on wheel_hubs for insert to authenticated
@@ -749,6 +880,11 @@ create index if not exists idx_wheel_rims_wheel_size on wheel_rims(wheel_size);
 
 alter table wheel_rims enable row level security;
 
+drop policy if exists "wheel_rims_select" on wheel_rims;
+drop policy if exists "wheel_rims_insert" on wheel_rims;
+drop policy if exists "wheel_rims_update" on wheel_rims;
+drop policy if exists "wheel_rims_delete" on wheel_rims;
+
 create policy "wheel_rims_select" on wheel_rims for select to authenticated
   using (tenant_id = public.user_tenant_id());
 create policy "wheel_rims_insert" on wheel_rims for insert to authenticated
@@ -799,6 +935,11 @@ create index if not exists idx_wheel_spokes_length on wheel_spokes(length_mm);
 create index if not exists idx_wheel_spokes_gauge on wheel_spokes(gauge);
 
 alter table wheel_spokes enable row level security;
+
+drop policy if exists "wheel_spokes_select" on wheel_spokes;
+drop policy if exists "wheel_spokes_insert" on wheel_spokes;
+drop policy if exists "wheel_spokes_update" on wheel_spokes;
+drop policy if exists "wheel_spokes_delete" on wheel_spokes;
 
 create policy "wheel_spokes_select" on wheel_spokes for select to authenticated
   using (tenant_id = public.user_tenant_id());
@@ -860,6 +1001,11 @@ create index if not exists idx_wheel_builds_hub on wheel_builds(hub_id);
 create index if not exists idx_wheel_builds_rim on wheel_builds(rim_id);
 
 alter table wheel_builds enable row level security;
+
+drop policy if exists "wheel_builds_select" on wheel_builds;
+drop policy if exists "wheel_builds_insert" on wheel_builds;
+drop policy if exists "wheel_builds_update" on wheel_builds;
+drop policy if exists "wheel_builds_delete" on wheel_builds;
 
 create policy "wheel_builds_select" on wheel_builds for select to authenticated
   using (tenant_id = public.user_tenant_id());
@@ -2286,15 +2432,26 @@ create table if not exists accounts (
       'taxPayable','taxReceivable','taxExpense'
     )),
   description text,
-  parent_id uuid references accounts(id),
+  parent_id uuid,
   is_active boolean not null default true,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
-  unique(tenant_id, code) -- Each tenant can have same account codes
+  unique(tenant_id, code), -- Each tenant can have same account codes
+  unique(tenant_id, id) -- Enable composite FK references (multi-tenant isolation)
 );
 
 -- Add tenant_id index for accounts
 create index if not exists idx_accounts_tenant on accounts(tenant_id);
+
+-- Add composite FK for accounts.parent_id (self-reference, tenant-scoped)
+do $$ begin
+  alter table accounts drop constraint if exists accounts_parent_id_fkey;
+  alter table accounts add constraint accounts_parent_id_fkey
+    foreign key (tenant_id, parent_id) references accounts(tenant_id, id) on delete restrict;
+exception
+  when undefined_column then null;
+  when others then raise notice '⚠️  accounts.parent_id FK: %', sqlerrm;
+end $$;
 
 alter table public.accounts
   add column if not exists tenant_id uuid references tenants(id) on delete cascade,
@@ -2930,7 +3087,7 @@ create table if not exists payment_methods (
   tenant_id uuid references tenants(id) on delete cascade not null,
   code text not null,
   name text not null,
-  account_id uuid not null references accounts(id),
+  account_id uuid not null,
   requires_reference boolean not null default false,
   default_tax_treatment text not null default 'no_tax' check (default_tax_treatment in ('no_tax', 'tax_included')),
   icon text,
@@ -2938,8 +3095,19 @@ create table if not exists payment_methods (
   is_active boolean not null default true,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
-  unique(tenant_id, code) -- Each tenant has their own payment methods
+  unique(tenant_id, code), -- Each tenant has their own payment methods
+  unique(tenant_id, id) -- Enable composite FK references (multi-tenant isolation)
 );
+
+-- Add composite FK for payment_methods.account_id (tenant-scoped)
+do $$ begin
+  alter table payment_methods drop constraint if exists payment_methods_account_id_fkey;
+  alter table payment_methods add constraint payment_methods_account_id_fkey
+    foreign key (tenant_id, account_id) references accounts(tenant_id, id) on delete restrict;
+exception
+  when undefined_column then null;
+  when others then raise notice '⚠️  payment_methods.account_id FK: %', sqlerrm;
+end $$;
 
 do $$ begin
   create index if not exists idx_payment_methods_tenant on payment_methods(tenant_id);
@@ -3511,7 +3679,7 @@ create table if not exists sales_payments (
   tenant_id uuid references tenants(id) on delete cascade not null,
   invoice_id uuid not null references sales_invoices(id) on delete cascade,
   invoice_reference text,
-  payment_method_id uuid not null references payment_methods(id),
+  payment_method_id uuid not null,
   amount numeric(12,2) not null default 0,
   date timestamp with time zone not null default now(),
   reference text,
@@ -3519,6 +3687,16 @@ create table if not exists sales_payments (
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+-- Add composite FK for sales_payments.payment_method_id (tenant-scoped)
+do $$ begin
+  alter table sales_payments drop constraint if exists sales_payments_payment_method_id_fkey;
+  alter table sales_payments add constraint sales_payments_payment_method_id_fkey
+    foreign key (tenant_id, payment_method_id) references payment_methods(tenant_id, id) on delete restrict;
+exception
+  when undefined_column then null;
+  when others then raise notice '⚠️  sales_payments.payment_method_id FK: %', sqlerrm;
+end $$;
 
 -- Migration: Handle existing sales_payments with old 'method' column
 -- CRITICAL: This must run BEFORE creating indexes on payment_method_id
@@ -3575,11 +3753,11 @@ begin
     set payment_method_id = v_cash_method_id
     where payment_method_id is null;
     
-    -- Add foreign key constraint
+    -- Add composite foreign key constraint (tenant-scoped)
     alter table sales_payments 
       add constraint sales_payments_payment_method_id_fkey 
-      foreign key (payment_method_id) 
-      references payment_methods(id);
+      foreign key (tenant_id, payment_method_id) 
+      references payment_methods(tenant_id, id);
     
     -- Drop old method column and constraint
     alter table sales_payments drop constraint if exists sales_payments_method_check;
@@ -5232,7 +5410,7 @@ create table if not exists purchase_payments (
   tenant_id uuid references tenants(id) on delete cascade not null,
   invoice_id uuid not null references purchase_invoices(id) on delete cascade,
   invoice_reference text,
-  payment_method_id uuid not null references payment_methods(id),
+  payment_method_id uuid not null,
   amount numeric(12,2) not null default 0,
   date timestamp with time zone not null default now(),
   reference text,
@@ -5240,6 +5418,16 @@ create table if not exists purchase_payments (
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+-- Add composite FK for purchase_payments.payment_method_id (tenant-scoped)
+do $$ begin
+  alter table purchase_payments drop constraint if exists purchase_payments_payment_method_id_fkey;
+  alter table purchase_payments add constraint purchase_payments_payment_method_id_fkey
+    foreign key (tenant_id, payment_method_id) references payment_methods(tenant_id, id) on delete restrict;
+exception
+  when undefined_column then null;
+  when others then raise notice '⚠️  purchase_payments.payment_method_id FK: %', sqlerrm;
+end $$;
 
 -- Migration: Handle existing purchase_payments with old column names
 -- CRITICAL: This must run BEFORE creating indexes
@@ -5403,11 +5591,11 @@ begin
     set payment_method_id = v_cash_method_id
     where payment_method_id is null;
     
-    -- Add foreign key constraint
+    -- Add composite foreign key constraint (tenant-scoped)
     alter table purchase_payments 
       add constraint purchase_payments_payment_method_id_fkey 
-      foreign key (payment_method_id) 
-      references payment_methods(id);
+      foreign key (tenant_id, payment_method_id) 
+      references payment_methods(tenant_id, id);
     
     -- Make payment_method_id NOT NULL
     alter table purchase_payments alter column payment_method_id set not null;
@@ -5415,7 +5603,8 @@ begin
     raise notice 'Migration complete for purchase_payments!';
   elsif not v_has_payment_method_id then
     raise notice 'Adding payment_method_id to purchase_payments...';
-    alter table purchase_payments add column payment_method_id uuid not null references payment_methods(id);
+    -- Add column without FK constraint (will be added separately via composite FK)
+    alter table purchase_payments add column payment_method_id uuid not null;
   end if;
 
   raise notice 'purchase_payments migration check complete';
@@ -5459,12 +5648,22 @@ create table if not exists expense_categories (
   tenant_id uuid references tenants(id) on delete cascade not null,
   name text not null,
   description text,
-  default_account_id uuid references accounts(id),
+  default_account_id uuid,
   default_tax_rate numeric(5,2) not null default 0,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
   unique(tenant_id, name) -- Each tenant has their own expense categories
 );
+
+-- Add composite FK for expense_categories.default_account_id (tenant-scoped)
+do $$ begin
+  alter table expense_categories drop constraint if exists expense_categories_default_account_id_fkey;
+  alter table expense_categories add constraint expense_categories_default_account_id_fkey
+    foreign key (tenant_id, default_account_id) references accounts(tenant_id, id) on delete set null;
+exception
+  when undefined_column then null;
+  when others then raise notice '⚠️  expense_categories.default_account_id FK: %', sqlerrm;
+end $$;
 
 do $$ begin
   create index if not exists idx_expense_categories_tenant on expense_categories(tenant_id);
@@ -5506,15 +5705,36 @@ create table if not exists expenses (
   approved_at timestamp with time zone,
   posted_at timestamp with time zone,
   paid_at timestamp with time zone,
-  liability_account_id uuid references accounts(id),
-  payment_account_id uuid references accounts(id),
-  payment_method_id uuid references payment_methods(id),
+  liability_account_id uuid,
+  payment_account_id uuid,
+  payment_method_id uuid,
   tags text[] default '{}',
   created_by uuid references auth.users(id),
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
   unique(tenant_id, expense_number) -- Each tenant can have same expense numbers
 );
+
+-- Add composite FKs for expenses (tenant-scoped)
+do $$ begin
+  -- liability_account_id -> accounts
+  alter table expenses drop constraint if exists expenses_liability_account_id_fkey;
+  alter table expenses add constraint expenses_liability_account_id_fkey
+    foreign key (tenant_id, liability_account_id) references accounts(tenant_id, id) on delete restrict;
+  
+  -- payment_account_id -> accounts
+  alter table expenses drop constraint if exists expenses_payment_account_id_fkey;
+  alter table expenses add constraint expenses_payment_account_id_fkey
+    foreign key (tenant_id, payment_account_id) references accounts(tenant_id, id) on delete restrict;
+  
+  -- payment_method_id -> payment_methods
+  alter table expenses drop constraint if exists expenses_payment_method_id_fkey;
+  alter table expenses add constraint expenses_payment_method_id_fkey
+    foreign key (tenant_id, payment_method_id) references payment_methods(tenant_id, id) on delete restrict;
+exception
+  when undefined_column then null;
+  when others then raise notice '⚠️  expenses FKs: %', sqlerrm;
+end $$;
 
 -- Drop old global unique constraint if it exists (migration from single-tenant)
 do $$
@@ -5558,9 +5778,9 @@ alter table public.expenses
   add column if not exists approved_at timestamp with time zone,
   add column if not exists posted_at timestamp with time zone,
   add column if not exists paid_at timestamp with time zone,
-  add column if not exists liability_account_id uuid references accounts(id),
-  add column if not exists payment_account_id uuid references accounts(id),
-  add column if not exists payment_method_id uuid references payment_methods(id),
+  add column if not exists liability_account_id uuid,
+  add column if not exists payment_account_id uuid,
+  add column if not exists payment_method_id uuid,
   add column if not exists tags text[] default '{}',
   add column if not exists created_by uuid references auth.users(id),
   add column if not exists created_at timestamp with time zone not null default now(),
@@ -5655,7 +5875,7 @@ create table if not exists expense_lines (
   tenant_id uuid references tenants(id) on delete cascade not null,
   expense_id uuid not null references expenses(id) on delete cascade,
   line_index integer not null default 0,
-  account_id uuid not null references accounts(id),
+  account_id uuid not null,
   account_code text not null,
   account_name text not null,
   description text,
@@ -5669,6 +5889,16 @@ create table if not exists expense_lines (
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+-- Add composite FK for expense_lines.account_id (tenant-scoped)
+do $$ begin
+  alter table expense_lines drop constraint if exists expense_lines_account_id_fkey;
+  alter table expense_lines add constraint expense_lines_account_id_fkey
+    foreign key (tenant_id, account_id) references accounts(tenant_id, id) on delete restrict;
+exception
+  when undefined_column then null;
+  when others then raise notice '⚠️  expense_lines.account_id FK: %', sqlerrm;
+end $$;
 
 create index if not exists idx_expense_lines_expense_id
   on expense_lines(expense_id);
@@ -5708,8 +5938,8 @@ create table if not exists expense_payments (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   expense_id uuid not null references expenses(id) on delete cascade,
-  payment_method_id uuid references payment_methods(id),
-  payment_account_id uuid references accounts(id),
+  payment_method_id uuid,
+  payment_account_id uuid,
   amount numeric(14,2) not null default 0,
   payment_date timestamp with time zone not null default now(),
   reference text,
@@ -5717,6 +5947,22 @@ create table if not exists expense_payments (
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+-- Add composite FKs for expense_payments (tenant-scoped)
+do $$ begin
+  -- payment_method_id -> payment_methods
+  alter table expense_payments drop constraint if exists expense_payments_payment_method_id_fkey;
+  alter table expense_payments add constraint expense_payments_payment_method_id_fkey
+    foreign key (tenant_id, payment_method_id) references payment_methods(tenant_id, id) on delete restrict;
+  
+  -- payment_account_id -> accounts
+  alter table expense_payments drop constraint if exists expense_payments_payment_account_id_fkey;
+  alter table expense_payments add constraint expense_payments_payment_account_id_fkey
+    foreign key (tenant_id, payment_account_id) references accounts(tenant_id, id) on delete restrict;
+exception
+  when undefined_column then null;
+  when others then raise notice '⚠️  expense_payments FKs: %', sqlerrm;
+end $$;
 
 create index if not exists idx_expense_payments_expense_id
   on expense_payments(expense_id);
@@ -7348,8 +7594,8 @@ begin
     p_invoice.tenant_id,
     '2120',
     'IVA Crédito Fiscal',
-    'asset',
-    'currentAsset',
+    'tax',
+    'taxReceivable',
     'IVA pagado en compras, recuperable',
     null
   );

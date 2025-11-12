@@ -350,8 +350,10 @@ class CategoryService extends ChangeNotifier {
             continue;
           }
 
-          // Parse path
-          final parts = trimmedPath.split('/').map((s) => s.trim()).toList();
+          // Parse path - use ' / ' (space-slash-space) as delimiter to avoid splitting on embedded slashes
+          // Example: "Mantenimiento / Abrillantadores/Renovadores" should split into:
+          //   ["Mantenimiento", "Abrillantadores/Renovadores"] (NOT ["Mantenimiento", "Abrillantadores", "Renovadores"])
+          final parts = trimmedPath.split(' / ').map((s) => s.trim()).toList();
           final level = parts.length - 1;
           final name = parts.last;
 

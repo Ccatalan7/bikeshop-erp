@@ -11,11 +11,13 @@ import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/invoice_parser_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
+import '../../../shared/widgets/ocr_upload_widget.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
 
@@ -224,6 +226,159 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           ),
         );
       }
+    }
+  }
+  
+  /// Open OCR scanner to extract invoice data from image
+  Future<void> _openOCRScanner() async {
+    if (!_canEditFields) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ No se puede escanear en facturas enviadas'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    // Show OCR upload widget in bottom sheet
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 24,
+          right: 24,
+          top: 24,
+        ),
+        child: OCRUploadWidget(
+          documentType: OCRDocumentType.invoice,
+          showPreview: true,
+          onComplete: (parsedInvoice) {
+            // Close bottom sheet
+            Navigator.of(context).pop();
+            
+            // Apply extracted data to form
+            _applyOCRData(parsedInvoice);
+          },
+          onError: (error) {
+            // Error already shown in widget
+            print('OCR Error: $error');
+          },
+        ),
+      ),
+    );
+  }
+  
+  /// Apply OCR-extracted data to the form
+  void _applyOCRData(ParsedInvoice parsedInvoice) {
+    setState(() {
+      // 1. Invoice number (if extracted)
+      if (parsedInvoice.invoiceNumber != null && parsedInvoice.invoiceNumber!.isNotEmpty) {
+        _invoiceNumberController.text = parsedInvoice.invoiceNumber!;
+      }
+      
+      // 2. Date (if extracted)
+      if (parsedInvoice.date != null) {
+        _issueDate = parsedInvoice.date!;
+        _dueDate = _issueDate.add(const Duration(days: 30));
+      }
+      
+      // 3. Supplier (match by RUT or name)
+      if (parsedInvoice.rut != null || parsedInvoice.supplierName != null) {
+        final rut = parsedInvoice.rut?.replaceAll(RegExp(r'[.\-]'), ''); // Normalize RUT
+        final name = parsedInvoice.supplierName?.toLowerCase();
+        
+        // Try to match existing supplier
+        final matchedSupplier = _supplierCache.cast<shared_supplier.Supplier?>().firstWhere(
+          (supplier) {
+            if (supplier == null) return false;
+            
+            // Match by RUT (if available)
+            if (rut != null && supplier.rut != null) {
+              final supplierRut = supplier.rut!.replaceAll(RegExp(r'[.\-]'), '');
+              if (supplierRut == rut) return true;
+            }
+            
+            // Match by name (fuzzy)
+            if (name != null) {
+              final supplierName = supplier.name.toLowerCase();
+              return supplierName.contains(name) || name.contains(supplierName);
+            }
+            
+            return false;
+          },
+          orElse: () => null,
+        );
+        
+        if (matchedSupplier != null) {
+          _selectedSupplier = matchedSupplier;
+        }
+      }
+      
+      // 4. Total amount (show as reference in notes if no line items)
+      if (parsedInvoice.total != null && parsedInvoice.lineItems.isEmpty) {
+        final totalStr = ChileanUtils.formatCurrency(parsedInvoice.total!);
+        _notesController.text = 'Total detectado: $totalStr\n${_notesController.text}';
+      }
+      
+      // 5. Line items (if extracted)
+      if (parsedInvoice.lineItems.isNotEmpty) {
+        for (final item in parsedInvoice.lineItems) {
+          // Try to match product by name
+          final matchedProduct = _productCache.cast<Product?>().firstWhere(
+            (product) {
+              if (product == null) return false;
+              final productName = product.name.toLowerCase();
+              final itemDesc = item.description.toLowerCase();
+              return productName.contains(itemDesc) || itemDesc.contains(productName);
+            },
+            orElse: () => null,
+          );
+          
+          if (matchedProduct != null) {
+            // Add matched product
+            final newLine = PurchaseInvoiceItem(
+              productId: matchedProduct.id,
+              productName: matchedProduct.name,
+              productSku: matchedProduct.sku,
+              quantity: item.quantity ?? 1,
+              unitCost: item.unitPrice ?? matchedProduct.cost,
+              discount: 0,
+            );
+            final newEntry = _PurchaseLineEntry(line: newLine);
+            newEntry.attachListeners(_recalculateTotals);
+            _lineEntries.add(newEntry);
+          }
+        }
+      }
+      
+      // 6. Set tax treatment if total detected
+      if (parsedInvoice.total != null && _taxTreatment == TaxTreatment.noTax) {
+        // Assume tax included for Chilean invoices
+        _taxTreatment = TaxTreatment.taxIncluded;
+      }
+    });
+    
+    // Show success message
+    if (mounted) {
+      final extractedFields = <String>[];
+      if (parsedInvoice.invoiceNumber != null) extractedFields.add('N° Factura');
+      if (parsedInvoice.supplierName != null) extractedFields.add('Proveedor');
+      if (parsedInvoice.date != null) extractedFields.add('Fecha');
+      if (parsedInvoice.total != null) extractedFields.add('Total');
+      if (parsedInvoice.lineItems.isNotEmpty) extractedFields.add('${parsedInvoice.lineItems.length} productos');
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '✅ Datos extraídos: ${extractedFields.join(', ')}',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -1128,6 +1283,17 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           ),
           const SizedBox(width: 16),
           if (!widget.readOnly && _canEditFields) ...[
+            // OCR Scanner Button
+            IconButton(
+              onPressed: _openOCRScanner,
+              icon: const Icon(Icons.document_scanner_outlined),
+              tooltip: 'Escanear Factura (OCR)',
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.blue.withOpacity(0.1),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Barcode Scanner Button
             IconButton(
               onPressed: _toggleScanner,
               icon: Icon(
@@ -1729,6 +1895,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       allowCustomItems: false, // Purchases use catalog products only
       labelText: 'Agregar producto o servicio',
       hintText: 'Buscar por nombre o SKU...',
+      showCost: true, // Show cost instead of price for purchases
     );
   }
 

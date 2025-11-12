@@ -63,6 +63,16 @@ class _ProductListPageState extends State<ProductListPage> {
   ProductViewMode _viewMode = ProductViewMode.table;
   Product? _selectedProduct; // For split-pane detail view
   
+  // Pagination
+  int _currentPage = 1;
+  int _itemsPerPage = 200;
+  int get _totalPages => (_filteredProducts.length / _itemsPerPage).ceil();
+  List<Product> get _paginatedProducts {
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = (startIndex + _itemsPerPage).clamp(0, _filteredProducts.length);
+    return _filteredProducts.sublist(startIndex, endIndex);
+  }
+  
   StreamSubscription? _scanSubscription;
   final _remoteScannerService = RemoteScannerService();
   bool _scannerEnabled = false;
@@ -298,6 +308,9 @@ class _ProductListPageState extends State<ProductListPage> {
     }
 
     _filteredProducts = filtered;
+    
+    // Reset to page 1 when filters change
+    _currentPage = 1;
   }
 
   void _onSearchChanged(String value) {
@@ -419,15 +432,17 @@ class _ProductListPageState extends State<ProductListPage> {
                   ),
                   child: ListView.builder(
                     controller: _tableScrollController,
-                    itemCount: _filteredProducts.length,
+                    itemCount: _paginatedProducts.length,
                     itemBuilder: (context, index) {
-                      final product = _filteredProducts[index];
+                      final product = _paginatedProducts[index];
                       final isSelected = _selectedProduct?.id == product.id;
                       return _buildZohoTableRow(product, theme, isSelected);
                     },
                   ),
                 ),
               ),
+              // Pagination controls
+              _buildPaginationControls(theme),
             ],
           ),
         ),
@@ -1777,5 +1792,106 @@ class _ProductListPageState extends State<ProductListPage> {
     if (product.isOutOfStock) return Icons.block;
     if (product.isLowStock) return Icons.warning_amber_outlined;
     return Icons.check_circle_outline;
+  }
+
+  // Pagination controls
+  Widget _buildPaginationControls(ThemeData theme) {
+    if (_totalPages <= 1) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: theme.dividerColor),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Page info
+          Text(
+            'Página $_currentPage de $_totalPages (${_filteredProducts.length} productos)',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          // Navigation controls
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.first_page),
+                onPressed: _currentPage > 1 ? _goToFirstPage : null,
+                tooltip: 'Primera página',
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: _currentPage > 1 ? _previousPage : null,
+                tooltip: 'Página anterior',
+              ),
+              // Page selector dropdown
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: theme.dividerColor),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: _currentPage,
+                    items: List.generate(_totalPages, (index) {
+                      final pageNum = index + 1;
+                      return DropdownMenuItem(
+                        value: pageNum,
+                        child: Text('$pageNum'),
+                      );
+                    }),
+                    onChanged: (page) {
+                      if (page != null) _goToPage(page);
+                    },
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: _currentPage < _totalPages ? _nextPage : null,
+                tooltip: 'Página siguiente',
+              ),
+              IconButton(
+                icon: const Icon(Icons.last_page),
+                onPressed: _currentPage < _totalPages ? _goToLastPage : null,
+                tooltip: 'Última página',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _goToFirstPage() {
+    setState(() => _currentPage = 1);
+  }
+
+  void _previousPage() {
+    if (_currentPage > 1) {
+      setState(() => _currentPage--);
+    }
+  }
+
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() => _currentPage++);
+    }
+  }
+
+  void _goToLastPage() {
+    setState(() => _currentPage = _totalPages);
+  }
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= _totalPages) {
+      setState(() => _currentPage = page);
+    }
   }
 }

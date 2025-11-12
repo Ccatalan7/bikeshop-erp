@@ -36,8 +36,8 @@ class InventoryService extends ChangeNotifier {
           return ids.add(id);
         }).toList();
       } else {
-        // Select with JOIN to get category name
-        data = await _db.select('products');
+        // Select with JOIN to get category name - fetch ALL products with pagination
+        data = await _db.select('products', fetchAll: true);
       }
 
       List<Product> products =

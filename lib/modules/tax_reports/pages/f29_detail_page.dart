@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../../shared/widgets/main_layout.dart';
 import '../models/f29_declaration.dart';
 import '../services/f29_service.dart';
 
@@ -26,57 +25,35 @@ class _F29DetailPageState extends State<F29DetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    return MainLayout(
-      title: 'F29 - ${_f29.monthName} ${_f29.periodYear}',
-      child: Column(
-        children: [
-          // Action bar
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor,
-                  width: 1,
-                ),
-              ),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('F29 - ${_f29.monthName} ${_f29.periodYear}'),
+        actions: [
+          if (_f29.isDraft)
+            TextButton.icon(
+              icon: const Icon(Icons.send),
+              label: const Text('Presentar al SII'),
+              onPressed: () => _submitToSII(),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (_f29.isDraft)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.send),
-                    label: const Text('Presentar al SII'),
-                    onPressed: () => _submitToSII(),
-                  ),
-                if (_f29.isSubmitted) ...[
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.payment),
-                    label: const Text('Marcar como pagado'),
-                    onPressed: () => _markAsPaid(),
-                  ),
-                ],
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.note_add),
-                  label: const Text('Notas'),
-                  onPressed: () => _editNotes(),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.picture_as_pdf),
-                  label: const Text('Exportar PDF'),
-                  onPressed: () => _exportPDF(),
-                ),
-              ],
+          if (_f29.isSubmitted)
+            TextButton.icon(
+              icon: const Icon(Icons.payment),
+              label: const Text('Marcar como pagado'),
+              onPressed: () => _markAsPaid(),
             ),
+          IconButton(
+            icon: const Icon(Icons.note_add),
+            tooltip: 'Notas',
+            onPressed: () => _editNotes(),
           ),
-          // Content
-          Expanded(
-            child: SingleChildScrollView(
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            tooltip: 'Exportar PDF',
+            onPressed: () => _exportPDF(),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,9 +74,6 @@ class _F29DetailPageState extends State<F29DetailPage> {
           ],
         ),
       ),
-            ),
-          ],
-        ),
     );
   }
 
