@@ -13283,10 +13283,10 @@ end $$;
 
 -- Journal Entries: Tenant isolation (accounting)
 do $$ begin
-  create policy "journal_entries_select" on journal_entries for select using (tenant_id = public.user_tenant_id());
-  create policy "journal_entries_insert" on journal_entries for insert with check (tenant_id = public.user_tenant_id());
-  create policy "journal_entries_update" on journal_entries for update using (tenant_id = public.user_tenant_id());
-  create policy "journal_entries_delete" on journal_entries for delete using (tenant_id = public.user_tenant_id());
+  create policy "journal_entries_select" on journal_entries for select to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "journal_entries_insert" on journal_entries for insert to authenticated with check (tenant_id = public.user_tenant_id());
+  create policy "journal_entries_update" on journal_entries for update to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "journal_entries_delete" on journal_entries for delete to authenticated using (tenant_id = public.user_tenant_id());
   raise notice '✓ Created RLS policies for journal_entries';
 exception
   when undefined_table then raise notice '⚠ Table journal_entries does not exist yet';
@@ -13296,10 +13296,10 @@ end $$;
 
 -- Journal Lines: Tenant isolation (accounting)
 do $$ begin
-  create policy "journal_lines_select" on journal_lines for select using (tenant_id = public.user_tenant_id());
-  create policy "journal_lines_insert" on journal_lines for insert with check (tenant_id = public.user_tenant_id());
-  create policy "journal_lines_update" on journal_lines for update using (tenant_id = public.user_tenant_id());
-  create policy "journal_lines_delete" on journal_lines for delete using (tenant_id = public.user_tenant_id());
+  create policy "journal_lines_select" on journal_lines for select to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "journal_lines_insert" on journal_lines for insert to authenticated with check (tenant_id = public.user_tenant_id());
+  create policy "journal_lines_update" on journal_lines for update to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "journal_lines_delete" on journal_lines for delete to authenticated using (tenant_id = public.user_tenant_id());
   raise notice '✓ Created RLS policies for journal_lines';
 exception
   when undefined_table then raise notice '⚠ Table journal_lines does not exist yet';
