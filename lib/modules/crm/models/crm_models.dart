@@ -113,10 +113,12 @@ class Customer {
   }
 
   String get initials {
-    final words = name.split(' ');
+    if (name.trim().isEmpty) return '?';
+    
+    final words = name.trim().split(' ').where((w) => w.isNotEmpty).toList();
     if (words.length >= 2) {
       return '${words[0][0]}${words[1][0]}'.toUpperCase();
-    } else if (words.isNotEmpty) {
+    } else if (words.isNotEmpty && words[0].isNotEmpty) {
       return words[0][0].toUpperCase();
     }
     return '?';

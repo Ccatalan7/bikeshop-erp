@@ -44,17 +44,29 @@ class ProductTile extends StatelessWidget {
                       color: theme.colorScheme.surfaceVariant,
                     ),
                     child: product.imageUrl != null
-                        ? CachedNetworkImage(
-                            imageUrl: product.imageUrl!,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => const Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                            errorWidget: (context, url, error) => Icon(
-                              isService
-                                  ? Icons.design_services
-                                  : Icons.pedal_bike,
-                              size: 40,
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CachedNetworkImage(
+                              imageUrl: product.imageUrl!,
+                              fit: BoxFit.cover,
+                              memCacheWidth: 200,
+                              memCacheHeight: 200,
+                              placeholder: (context, url) => Container(
+                                color: theme.colorScheme.surfaceVariant,
+                                child: const Center(
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: theme.colorScheme.surfaceVariant,
+                                child: Icon(
+                                  isService
+                                      ? Icons.design_services
+                                      : Icons.pedal_bike,
+                                  size: 40,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                             ),
                           )
                         : Icon(

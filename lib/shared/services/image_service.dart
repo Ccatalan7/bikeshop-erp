@@ -111,11 +111,30 @@ class ImageService {
     if (imageUrl == null || imageUrl.isEmpty) {
       imageWidget = errorWidget ?? _buildDefaultPlaceholder();
     } else {
+      // Calculate optimal cache dimensions (scale down large images)
+      final cacheWidth = width != null && width.isFinite 
+          ? (width * 2).toInt()  // 2x for retina displays
+          : 800;  // Default max width for lists
+      final cacheHeight = height != null && height.isFinite
+          ? (height * 2).toInt()
+          : 800;
+      
       imageWidget = CachedNetworkImage(
         imageUrl: imageUrl,
         width: width,
         height: height,
         fit: fit,
+        // CRITICAL: Memory cache optimization - prevents loading full resolution
+        memCacheWidth: cacheWidth,
+        memCacheHeight: cacheHeight,
+        // CRITICAL: Disk cache optimization
+        maxWidthDiskCache: cacheWidth,
+        maxHeightDiskCache: cacheHeight,
+        // CRITICAL: No fade animation for cached images (prevents flicker)
+        fadeInDuration: const Duration(milliseconds: 0),
+        fadeOutDuration: const Duration(milliseconds: 0),
+        // Use URL as cache key for consistent caching
+        cacheKey: imageUrl,
         placeholder: (context, url) =>
             placeholder ?? _buildLoadingPlaceholder(),
         errorWidget: (context, url, error) =>

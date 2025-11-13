@@ -363,12 +363,14 @@ class MainLayout extends StatelessWidget {
   final Widget? child;
   final Widget? body;
   final String? title;
+  final VoidCallback? onBackPressed;
 
   const MainLayout({
     super.key,
     this.child,
     this.body,
     this.title,
+    this.onBackPressed,
   });
 
   @override
@@ -469,6 +471,12 @@ class MainLayout extends StatelessWidget {
       // Mobile layout with drawer
       return Scaffold(
         appBar: AppBar(
+          leading: onBackPressed != null
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: onBackPressed,
+                )
+              : null,
           title: Text(title ?? 'Vinabike ERP'),
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
           actions: [

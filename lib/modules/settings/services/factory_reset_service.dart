@@ -1,9 +1,67 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/database_service.dart';
+import '../models/reset_configuration.dart';
 
 class FactoryResetService {
   final SupabaseClient _supabase = Supabase.instance.client;
   final TenantService _tenantService = TenantService();
+  final DatabaseService _databaseService = DatabaseService();
+
+  /// Get all saved reset configurations for current tenant
+  Future<List<ResetConfiguration>> getConfigurations() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) return [];
+
+    final response = await _supabase
+        .from('reset_configurations')
+        .select()
+        .eq('tenant_id', tenantId)
+        .order('name');
+
+    return (response as List<dynamic>)
+        .map((json) => ResetConfiguration.fromJson(json as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Save a new reset configuration
+  Future<ResetConfiguration> saveConfiguration(ResetConfiguration config) async {
+    final data = config.toJson();
+    final response = await _databaseService.insert('reset_configurations', data);
+    return ResetConfiguration.fromJson(response);
+  }
+
+  /// Update an existing reset configuration
+  Future<ResetConfiguration> updateConfiguration(ResetConfiguration config) async {
+    if (config.id == null) {
+      throw Exception('Cannot update configuration without ID');
+    }
+    
+    final data = config.toJson();
+    final response = await _databaseService.update('reset_configurations', config.id!, data);
+    return ResetConfiguration.fromJson(response);
+  }
+
+  /// Delete a reset configuration
+  Future<void> deleteConfiguration(String configId) async {
+    await _databaseService.delete('reset_configurations', configId);
+  }
+
+  /// Perform reset using a saved configuration
+  Future<void> performResetFromConfiguration(ResetConfiguration config) async {
+    await performSelectiveReset(
+      deleteSales: config.deleteSales,
+      deletePurchases: config.deletePurchases,
+      deleteInventory: config.deleteInventory,
+      deleteStockMovements: config.deleteStockMovements,
+      deleteCustomers: config.deleteCustomers,
+      deleteSuppliers: config.deleteSuppliers,
+      deleteAccounting: config.deleteAccounting,
+      deleteEmployees: config.deleteEmployees,
+      deleteMechanic: config.deleteMechanic,
+      deleteEcommerce: config.deleteEcommerce,
+    );
+  }
 
   /// Performs a complete factory reset by deleting all data from CURRENT TENANT ONLY
   /// WARNING: This is irreversible!

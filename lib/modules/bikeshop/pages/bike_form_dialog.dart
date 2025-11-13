@@ -26,14 +26,20 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   final _formKey = GlobalKey<FormState>();
 
   // Controllers
-  late TextEditingController _brandController;
-  late TextEditingController _modelController;
   late TextEditingController _yearController;
   late TextEditingController _serialNumberController;
   late TextEditingController _colorController;
   late TextEditingController _frameSizeController;
   late TextEditingController _wheelSizeController;
   late TextEditingController _notesController;
+
+  // Brand and model selection
+  BikeBrand? _selectedBrand;
+  BikeModel? _selectedModel;
+  List<BikeBrand> _brands = [];
+  List<BikeModel> _models = [];
+  bool _loadingBrands = false;
+  bool _loadingModels = false;
 
   BikeType _selectedType = BikeType.mountain;
   DateTime? _purchaseDate;
@@ -51,8 +57,6 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     super.initState();
 
     // Initialize controllers with existing bike data if editing
-    _brandController = TextEditingController(text: widget.bike?.brand);
-    _modelController = TextEditingController(text: widget.bike?.model);
     _yearController =
         TextEditingController(text: widget.bike?.year?.toString() ?? '');
     _serialNumberController =
@@ -68,12 +72,256 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       _warrantyUntil = widget.bike!.warrantyUntil;
       _imageUrls = List.from(widget.bike!.imageUrls);
     }
+    
+    // Load brands and initialize selection
+    _loadBrands();
+  }
+  
+  Future<void> _loadBrands() async {
+    setState(() => _loadingBrands = true);
+    try {
+      final service = context.read<BikeshopService>();
+      _brands = await service.getBikeBrands(activeOnly: true);
+      
+      // If editing, find and set the selected brand by name
+      if (widget.bike != null && widget.bike!.brand != null && widget.bike!.brand!.isNotEmpty) {
+        try {
+          _selectedBrand = _brands.firstWhere(
+            (b) => b.name.toLowerCase() == widget.bike!.brand!.toLowerCase(),
+          );
+          if (_selectedBrand != null) {
+            await _loadModels(_selectedBrand!.id!);
+            // Find and set the selected model by name
+            if (widget.bike!.model != null && widget.bike!.model!.isNotEmpty) {
+              try {
+                _selectedModel = _models.firstWhere(
+                  (m) => m.name.toLowerCase() == widget.bike!.model!.toLowerCase(),
+                );
+              } catch (e) {
+                // Model not found, leave null
+              }
+            }
+          }
+        } catch (e) {
+          // Brand not found, leave null
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading brands: $e');
+    } finally {
+      setState(() => _loadingBrands = false);
+    }
+  }
+  
+  Future<void> _loadModels(String brandId) async {
+    setState(() => _loadingModels = true);
+    try {
+      final service = context.read<BikeshopService>();
+      _models = await service.getBikeModels(brandId: brandId, activeOnly: true);
+    } catch (e) {
+      debugPrint('Error loading models: $e');
+    } finally {
+      setState(() => _loadingModels = false);
+    }
+  }
+  
+  // Quick-add brand dialog
+  Future<void> _showQuickAddBrandDialog() async {
+    final nameController = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Nueva Marca'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            labelText: 'Nombre de la marca',
+            hintText: 'Trek, Giant, Specialized...',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameController.text.trim().isEmpty) return;
+              Navigator.pop(context, true);
+            },
+            child: const Text('Crear'),
+          ),
+        ],
+      ),
+    );
+    
+    if (result == true && nameController.text.trim().isNotEmpty) {
+      try {
+        final service = context.read<BikeshopService>();
+        final tenantService = context.read<TenantService>();
+        final tenantId = await tenantService.getTenantId();
+        
+        // Check if brand already exists
+        final brandName = nameController.text.trim();
+        final existingBrand = _brands.firstWhere(
+          (b) => b.name.toLowerCase() == brandName.toLowerCase(),
+          orElse: () => BikeBrand(tenantId: tenantId!, name: '', isActive: true),
+        );
+        
+        if (existingBrand.id != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('La marca "$brandName" ya existe'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+        
+        final newBrand = BikeBrand(
+          tenantId: tenantId!,
+          name: brandName,
+          isActive: true,
+        );
+        
+        final created = await service.createBikeBrand(newBrand);
+        
+        // Reload brands and find the created one
+        await _loadBrands();
+        final createdBrand = _brands.firstWhere(
+          (b) => b.id == created.id,
+          orElse: () => created,
+        );
+        
+        setState(() {
+          _selectedBrand = createdBrand;
+          _selectedModel = null;
+          _models = [];
+        });
+        
+        if (createdBrand.id != null) {
+          await _loadModels(createdBrand.id!);
+        }
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Marca "${created.name}" creada')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString().contains('duplicate') ? 'La marca ya existe' : e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+  
+  // Quick-add model dialog
+  Future<void> _showQuickAddModelDialog() async {
+    if (_selectedBrand == null) return;
+    
+    final nameController = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Nuevo Modelo - ${_selectedBrand!.name}'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            labelText: 'Nombre del modelo',
+            hintText: 'Marlin 7, Escape 3...',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameController.text.trim().isEmpty) return;
+              Navigator.pop(context, true);
+            },
+            child: const Text('Crear'),
+          ),
+        ],
+      ),
+    );
+    
+    if (result == true && nameController.text.trim().isNotEmpty) {
+      try {
+        final service = context.read<BikeshopService>();
+        final tenantService = context.read<TenantService>();
+        final tenantId = await tenantService.getTenantId();
+        
+        // Check if model already exists
+        final modelName = nameController.text.trim();
+        final existingModel = _models.firstWhere(
+          (m) => m.name.toLowerCase() == modelName.toLowerCase(),
+          orElse: () => BikeModel(tenantId: tenantId!, brandId: '', name: '', isActive: true),
+        );
+        
+        if (existingModel.id != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('El modelo "$modelName" ya existe'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+        
+        final newModel = BikeModel(
+          tenantId: tenantId!,
+          brandId: _selectedBrand!.id!,
+          name: modelName,
+          isActive: true,
+        );
+        
+        final created = await service.createBikeModel(newModel);
+        
+        // Reload models and find the created one
+        await _loadModels(_selectedBrand!.id!);
+        final createdModel = _models.firstWhere(
+          (m) => m.id == created.id,
+          orElse: () => created,
+        );
+        
+        setState(() {
+          _selectedModel = createdModel;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Modelo "${created.name}" creado')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString().contains('duplicate') ? 'El modelo ya existe' : e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
   void dispose() {
-    _brandController.dispose();
-    _modelController.dispose();
     _yearController.dispose();
     _serialNumberController.dispose();
     _colorController.dispose();
@@ -208,8 +456,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         id: widget.bike?.id,
         tenantId: tenantId,
         customerId: widget.customerId,
-        brand: _brandController.text.trim(),
-        model: _modelController.text.trim(),
+        brand: _selectedBrand?.name ?? '',
+        model: _selectedModel?.name ?? '',
         year: int.tryParse(_yearController.text.trim()),
         bikeType: _selectedType,
         serialNumber: _serialNumberController.text.trim().isEmpty
@@ -275,7 +523,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       builder: (context) => AlertDialog(
         title: const Text('Confirmar eliminación'),
         content: Text(
-            '¿Está seguro que desea eliminar la bicicleta "${_brandController.text} ${_modelController.text}"?\n\nEsta acción no se puede deshacer.'),
+            '¿Está seguro que desea eliminar la bicicleta "${_selectedBrand?.name ?? ''} ${_selectedModel?.name ?? ''}"?\n\nEsta acción no se puede deshacer.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -375,43 +623,93 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Brand & Model
+                      // Brand & Model - Dropdowns with quick-add
                       Row(
                         children: [
+                          // Brand Dropdown
                           Expanded(
-                            child: TextFormField(
-                              controller: _brandController,
-                              decoration: const InputDecoration(
-                                labelText: 'Marca *',
-                                hintText: 'Trek, Giant, Specialized...',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.branding_watermark),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'La marca es requerida';
-                                }
-                                return null;
-                              },
-                            ),
+                            child: _loadingBrands
+                                ? const Center(child: CircularProgressIndicator())
+                                : DropdownButtonFormField<BikeBrand>(
+                                    value: _selectedBrand,
+                                    decoration: InputDecoration(
+                                      labelText: 'Marca *',
+                                      border: const OutlineInputBorder(),
+                                      suffixIcon: IconButton(
+                                        icon: const Icon(Icons.add_circle_outline),
+                                        tooltip: 'Agregar nueva marca',
+                                        onPressed: () => _showQuickAddBrandDialog(),
+                                      ),
+                                    ),
+                                    items: _brands.map((brand) {
+                                      return DropdownMenuItem(
+                                        value: brand,
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.branding_watermark, size: 20),
+                                            const SizedBox(width: 8),
+                                            Text(brand.name),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (brand) async {
+                                      setState(() {
+                                        _selectedBrand = brand;
+                                        _selectedModel = null; // Reset model when brand changes
+                                        _models = [];
+                                      });
+                                      if (brand != null) {
+                                        await _loadModels(brand.id!);
+                                      }
+                                    },
+                                    validator: (value) {
+                                      if (value == null) {
+                                        return 'La marca es requerida';
+                                      }
+                                      return null;
+                                    },
+                                  ),
                           ),
                           const SizedBox(width: 16),
+                          // Model Dropdown
                           Expanded(
-                            child: TextFormField(
-                              controller: _modelController,
-                              decoration: const InputDecoration(
-                                labelText: 'Modelo *',
-                                hintText: 'Marlin 7, Escape 3...',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.directions_bike),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'El modelo es requerido';
-                                }
-                                return null;
-                              },
-                            ),
+                            child: _loadingModels
+                                ? const Center(child: CircularProgressIndicator())
+                                : DropdownButtonFormField<BikeModel>(
+                                    value: _selectedModel,
+                                    decoration: InputDecoration(
+                                      labelText: 'Modelo *',
+                                      border: const OutlineInputBorder(),
+                                      prefixIcon: const Icon(Icons.directions_bike),
+                                      suffixIcon: _selectedBrand != null
+                                          ? IconButton(
+                                              icon: const Icon(Icons.add_circle_outline),
+                                              tooltip: 'Agregar nuevo modelo',
+                                              onPressed: () => _showQuickAddModelDialog(),
+                                            )
+                                          : null,
+                                    ),
+                                    items: _models.map((model) {
+                                      return DropdownMenuItem(
+                                        value: model,
+                                        child: Text(model.name),
+                                      );
+                                    }).toList(),
+                                    onChanged: _selectedBrand == null
+                                        ? null // Disable if no brand selected
+                                        : (model) {
+                                            setState(() {
+                                              _selectedModel = model;
+                                            });
+                                          },
+                                    validator: (value) {
+                                      if (value == null) {
+                                        return 'El modelo es requerido';
+                                      }
+                                      return null;
+                                    },
+                                  ),
                           ),
                         ],
                       ),

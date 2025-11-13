@@ -6,6 +6,7 @@ import '../../../shared/models/customer.dart';
 import '../../../shared/models/payment_method.dart' as pm;
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart';
+import '../../../shared/services/number_generation_service.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../sales/models/sales_models.dart' as sales_models;
@@ -328,7 +329,10 @@ class POSService extends ChangeNotifier {
         throw Exception('Monto insuficiente para completar la venta.');
       }
 
-      final invoiceNumber = _buildInvoiceNumber(timestamp);
+      // Generate invoice number using new sequential system
+      final numberService = NumberGenerationService();
+      final invoiceNumber = await numberService.nextSalesInvoiceNumber();
+      
       final invoiceItems = _cartItems.map((item) {
         final discountAmount = item.discountAmount;
         return sales_models.InvoiceItem(
@@ -524,6 +528,8 @@ class POSService extends ChangeNotifier {
         .toList();
   }
 
+  // Deprecated: Old invoice numbering (kept for reference)
+  // Now uses NumberGenerationService.nextSalesInvoiceNumber()
   String _buildInvoiceNumber(DateTime timestamp) {
     final datePortion =
         '${timestamp.year}${timestamp.month.toString().padLeft(2, '0')}${timestamp.day.toString().padLeft(2, '0')}';

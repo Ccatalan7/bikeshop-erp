@@ -58,7 +58,7 @@ import '../../modules/pos/pages/pos_payment_page.dart';
 import '../../modules/pos/pages/pos_receipt_page.dart';
 import '../../modules/pos/models/pos_transaction.dart';
 import '../../modules/settings/pages/settings_page.dart';
-import '../../modules/settings/pages/factory_reset_page.dart';
+import '../../modules/settings/pages/factory_reset_page_new.dart';
 import '../../modules/settings/pages/backup_management_page.dart';
 import '../../modules/settings/pages/appearance_settings_page.dart';
 import '../../modules/settings/pages/user_management_page.dart';
@@ -1054,7 +1054,7 @@ class AppRouter {
             context,
             state,
             const MainLayout(
-              child: FactoryResetPage(),
+              child: FactoryResetPageNew(),
             ),
           ),
         ),

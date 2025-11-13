@@ -183,10 +183,54 @@ class DatabaseService extends ChangeNotifier {
     }
 
     if (kDebugMode) {
-      debugPrint('✅ Pagination complete: ${allRecords.length} total rows from $table');
+      debugPrint('✅ Completed paginated fetch for $table: ${allRecords.length} total rows');
     }
 
     return allRecords;
+  }
+
+  /// Select records with specific pagination range (for UI pagination)
+  Future<List<Map<String, dynamic>>> selectWithPagination(
+    String table, {
+    required int from,
+    required int to,
+    String? where,
+    String? orderBy,
+    bool descending = false,
+  }) async {
+    try {
+      dynamic query = _client.from(table).select();
+
+      // Apply tenant filter
+      final tenantId = await getTenantId();
+      if (tenantId != null && !_isSystemTable(table)) {
+        query = query.eq('tenant_id', tenantId);
+      }
+
+      // Apply additional filters
+      if (where != null && where.contains('=')) {
+        final parts = where.split('=');
+        final field = parts[0].trim();
+        final value = parts.sublist(1).join('=').trim();
+        query = query.eq(field, value);
+      }
+
+      // Apply ordering
+      if (orderBy != null) {
+        query = query.order(orderBy, ascending: !descending);
+      }
+
+      // Apply range
+      query = query.range(from, to);
+
+      final data = await query as List;
+      return data.map((row) => Map<String, dynamic>.from(row as Map)).toList();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error in selectWithPagination: $e');
+      }
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>?> selectById(String table, String id) async {
@@ -416,5 +460,31 @@ class DatabaseService extends ChangeNotifier {
       data['created_at'] ??= now;
     }
     data['updated_at'] = now;
+  }
+
+  /// Get current user's tenant ID
+  Future<String?> getTenantId() async {
+    try {
+      final userId = _client.auth.currentUser?.id;
+      if (userId == null) return null;
+
+      final profileResponse = await _client
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      return profileResponse?['tenant_id'] as String?;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Error getting tenant_id: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Check if table should be excluded from tenant filtering
+  bool _isSystemTable(String table) {
+    return _excludedTables.contains(table);
   }
 }

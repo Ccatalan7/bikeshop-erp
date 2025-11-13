@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
-import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../models/crm_models.dart';
 import '../services/customer_service.dart';
@@ -23,6 +22,16 @@ class _CustomerListPageState extends State<CustomerListPage> {
   List<Customer> _filteredCustomers = [];
   bool _isLoading = true;
   String _searchTerm = '';
+  
+  // Pagination
+  int _currentPage = 1;
+  int _itemsPerPage = 50;
+  int get _totalPages => (_filteredCustomers.length / _itemsPerPage).ceil();
+  List<Customer> get _paginatedCustomers {
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = (startIndex + _itemsPerPage).clamp(0, _filteredCustomers.length);
+    return _filteredCustomers.sublist(startIndex, endIndex);
+  }
 
   @override
   void initState() {
@@ -32,7 +41,10 @@ class _CustomerListPageState extends State<CustomerListPage> {
   }
 
   Future<void> _loadCustomers() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _currentPage = 1;
+    });
     try {
       final customers = await _customerService.getCustomers();
       setState(() {
@@ -296,16 +308,24 @@ class _CustomerListPageState extends State<CustomerListPage> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadCustomers,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16.0),
-        itemCount: _filteredCustomers.length,
-        itemBuilder: (context, index) {
-          final customer = _filteredCustomers[index];
-          return _buildCustomerCard(customer);
-        },
-      ),
+    return Column(
+      children: [
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _loadCustomers,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16.0),
+              itemCount: _paginatedCustomers.length,
+              itemBuilder: (context, index) {
+                final customer = _paginatedCustomers[index];
+                return _buildCustomerCard(customer);
+              },
+            ),
+          ),
+        ),
+        // Pagination controls at the bottom
+        _buildPaginationControls(),
+      ],
     );
   }
 
@@ -475,5 +495,106 @@ class _CustomerListPageState extends State<CustomerListPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildPaginationControls() {
+    if (_totalPages <= 1) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: theme.dividerColor),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Page info
+          Text(
+            'Página $_currentPage de $_totalPages (${_filteredCustomers.length} clientes)',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          // Navigation controls
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.first_page),
+                onPressed: _currentPage > 1 ? _goToFirstPage : null,
+                tooltip: 'Primera página',
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: _currentPage > 1 ? _previousPage : null,
+                tooltip: 'Página anterior',
+              ),
+              // Page selector dropdown
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: theme.dividerColor),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: _currentPage,
+                    items: List.generate(_totalPages, (index) {
+                      final pageNum = index + 1;
+                      return DropdownMenuItem(
+                        value: pageNum,
+                        child: Text('$pageNum'),
+                      );
+                    }),
+                    onChanged: (page) {
+                      if (page != null) _goToPage(page);
+                    },
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: _currentPage < _totalPages ? _nextPage : null,
+                tooltip: 'Página siguiente',
+              ),
+              IconButton(
+                icon: const Icon(Icons.last_page),
+                onPressed: _currentPage < _totalPages ? _goToLastPage : null,
+                tooltip: 'Última página',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _goToFirstPage() {
+    setState(() => _currentPage = 1);
+  }
+
+  void _previousPage() {
+    if (_currentPage > 1) {
+      setState(() => _currentPage--);
+    }
+  }
+
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() => _currentPage++);
+    }
+  }
+
+  void _goToLastPage() {
+    setState(() => _currentPage = _totalPages);
+  }
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= _totalPages) {
+      setState(() => _currentPage = page);
+    }
   }
 }

@@ -41,9 +41,9 @@ class BikeshopService extends ChangeNotifier {
           return ids.add(id);
         }).toList();
       } else if (customerId != null && customerId.isNotEmpty) {
-        data = await _db.select('bikes', where: 'customer_id=$customerId');
+        data = await _db.select('bikes', where: 'customer_id=$customerId', fetchAll: true);
       } else {
-        data = await _db.select('bikes');
+        data = await _db.select('bikes', fetchAll: true);
       }
 
       return data.map((json) => Bike.fromJson(json)).toList()
@@ -173,17 +173,19 @@ class BikeshopService extends ChangeNotifier {
     bool activeOnly = true,
   }) async {
     try {
-      String? query;
+      final client = Supabase.instance.client;
+      dynamic query = client.from('bike_models').select();
+      
       if (brandId != null && brandId.isNotEmpty) {
-        query = activeOnly
-            ? 'brand_id=$brandId,is_active=true'
-            : 'brand_id=$brandId';
-      } else {
-        query = activeOnly ? 'is_active=true' : null;
+        query = query.eq('brand_id', brandId);
       }
-
-      final data = await _db.select('bike_models', where: query);
-      return data.map((json) => BikeModel.fromJson(json)).toList()
+      
+      if (activeOnly) {
+        query = query.eq('is_active', true);
+      }
+      
+      final data = await query as List;
+      return data.map((json) => BikeModel.fromJson(json as Map<String, dynamic>)).toList()
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     } catch (e) {
       if (kDebugMode) print('Error fetching bike models: $e');
@@ -270,7 +272,7 @@ class BikeshopService extends ChangeNotifier {
         }
       }
 
-      data = await _db.select('mechanic_jobs', where: whereClause);
+      data = await _db.select('mechanic_jobs', where: whereClause, fetchAll: true);
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
         final searchLower = searchTerm.toLowerCase();

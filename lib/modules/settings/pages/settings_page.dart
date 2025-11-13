@@ -1,8 +1,74 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  String? _userEmail;
+  String? _tenantId;
+  String? _subdomain;
+  String? _role;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInfo();
+  }
+
+  Future<void> _loadUserInfo() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      _userEmail = user.email;
+
+      // Get tenant info
+      final profileData = await Supabase.instance.client
+          .from('user_profiles')
+          .select('tenant_id, role')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (profileData != null) {
+        _tenantId = profileData['tenant_id'];
+        _role = profileData['role'];
+
+        // Get subdomain
+        final tenantData = await Supabase.instance.client
+            .from('tenants')
+            .select('subdomain')
+            .eq('id', _tenantId!)
+            .maybeSingle();
+
+        if (tenantData != null) {
+          _subdomain = tenantData['subdomain'];
+        }
+      }
+
+      setState(() => _isLoading = false);
+    } catch (e) {
+      debugPrint('Error loading user info: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _copyToClipboard(String text, String label) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label copiado al portapapeles')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,6 +78,52 @@ class SettingsPage extends StatelessWidget {
       ),
       body: ListView(
         children: [
+          // User/Tenant Info Section
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            _buildSection(
+              context,
+              title: 'Información de Cuenta',
+              icon: Icons.account_circle,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.email, color: Colors.blue),
+                  title: const Text('Email'),
+                  subtitle: Text(_userEmail ?? 'No disponible'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.copy, size: 18),
+                    onPressed: () => _copyToClipboard(_userEmail ?? '', 'Email'),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.store, color: Colors.orange),
+                  title: const Text('Tienda (Subdomain)'),
+                  subtitle: Text(_subdomain ?? 'No disponible'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.copy, size: 18),
+                    onPressed: () => _copyToClipboard(_subdomain ?? '', 'Subdomain'),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.badge, color: Colors.purple),
+                  title: const Text('Rol'),
+                  subtitle: Text(_role ?? 'No disponible'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.vpn_key, color: Colors.green),
+                  title: const Text('Tenant ID'),
+                  subtitle: Text(_tenantId ?? 'No disponible'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.copy, size: 18),
+                    onPressed: () => _copyToClipboard(_tenantId ?? '', 'Tenant ID'),
+                  ),
+                ),
+              ],
+            ),
           _buildSection(
             context,
             title: 'Sistema',

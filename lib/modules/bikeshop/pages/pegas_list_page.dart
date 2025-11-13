@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
-import '../../../shared/services/database_service.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
+import '../widgets/pega_detail_view.dart';
 
 class PegasListPage extends StatefulWidget {
   const PegasListPage({super.key});
@@ -34,12 +35,31 @@ class _PegasListPageState extends State<PegasListPage> {
   bool _showCompleted = false;
   String _sortBy = 'arrival_date'; // arrival_date, deadline, priority, status
 
+  // Split-pane state
+  MechanicJob? _selectedJob;
+  double _listPaneWidth = 500.0;
+  static const double _minListPaneWidth = 350.0;
+  static const double _maxListPaneWidth = 800.0;
+
   @override
   void initState() {
     super.initState();
     _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
     _customerService = Provider.of<CustomerService>(context, listen: false);
+    _loadPreferences();
     _loadData();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _listPaneWidth = prefs.getDouble('pegas_list_pane_width') ?? 500.0;
+    });
+  }
+
+  Future<void> _saveListPaneWidth(double width) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('pegas_list_pane_width', width);
   }
 
   Future<void> _loadData() async {
@@ -357,10 +377,91 @@ class _PegasListPageState extends State<PegasListPage> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _buildJobsList(),
+                : Builder(
+                    builder: (context) {
+                      print('🔵 DEBUG: Building content. _selectedJob: ${_selectedJob?.jobNumber ?? "NULL"}');
+                      return _selectedJob == null
+                          ? _buildFullView()
+                          : _buildSplitView();
+                    },
+                  ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFullView() {
+    return _buildJobsList();
+  }
+
+  Widget _buildSplitView() {
+    return Row(
+      children: [
+        // Left pane - Jobs list
+        Container(
+          width: _listPaneWidth,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              right: BorderSide(color: Colors.grey[300]!, width: 1),
+            ),
+          ),
+          child: _buildJobsList(),
+        ),
+
+        // Resize handle
+        MouseRegion(
+          cursor: SystemMouseCursors.resizeColumn,
+          child: GestureDetector(
+            onHorizontalDragUpdate: (details) {
+              setState(() {
+                _listPaneWidth = (_listPaneWidth + details.delta.dx)
+                    .clamp(_minListPaneWidth, _maxListPaneWidth);
+              });
+            },
+            onHorizontalDragEnd: (_) {
+              _saveListPaneWidth(_listPaneWidth);
+            },
+            child: Container(
+              width: 1,
+              color: Colors.grey[300],
+              child: Center(
+                child: Container(
+                  width: 8,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[400],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // Right pane - Detail view
+        Expanded(
+          child: PegaDetailView(
+            job: _selectedJob!,
+            customer: _customers[_selectedJob!.customerId],
+            bike: _bikes[_selectedJob!.bikeId],
+            onClose: () {
+              setState(() {
+                _selectedJob = null;
+              });
+            },
+            onEdit: () {
+              context
+                  .push('/taller/pegas/${_selectedJob!.id}')
+                  .then((_) => _loadData());
+            },
+            onStatusChange: (newStatus) {
+              _updateJobStatus(_selectedJob!, newStatus);
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -500,7 +601,11 @@ class _PegasListPageState extends State<PegasListPage> {
       elevation: 2,
       child: InkWell(
         onTap: () {
-          context.push('/taller/pegas/${job.id}').then((_) => _loadData());
+          print('🔵 DEBUG: Pega card tapped! Job: ${job.jobNumber}');
+          setState(() {
+            _selectedJob = job;
+            print('🔵 DEBUG: _selectedJob set to: ${_selectedJob?.jobNumber}');
+          });
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(

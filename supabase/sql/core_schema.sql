@@ -3048,6 +3048,7 @@ create table if not exists sales_invoices (
     check (lower(status) = any (array[
       'draft','borrador',
       'sent','enviado','enviada','emitido','emitida','issued',
+      'confirmed','confirmado','confirmada',
       'paid','pagado','pagada',
       'overdue','vencido','vencida',
       'cancelled','cancelado','cancelada','anulado','anulada'
@@ -4090,12 +4091,12 @@ begin
   ) values (
     v_entry_id,
     v_tenant_id,
-    concat('PAY-', to_char(now(), 'YYYYMMDDHH24MISS')),
+    public.get_next_document_number(v_tenant_id, 'journal_entry'),
     coalesce(p_payment.date, now()),
     v_description,
     'payment',
     'sales_payments',
-    p_payment.id::text,
+    v_invoice.invoice_number,
     'posted',
     p_payment.amount,
     p_payment.amount,
@@ -4370,12 +4371,12 @@ begin
   ) values (
     v_entry_id,
     v_tenant_id,
-    concat('PPAY-', to_char(now(), 'YYYYMMDDHH24MISS')),
+    public.get_next_document_number(v_tenant_id, 'journal_entry'),
     coalesce(v_payment.date, now()),
     v_description,
     'payment',
     'purchase_payments',
-    v_payment.id::text,
+    v_invoice.invoice_number,
     'posted',
     v_payment.amount,
     v_payment.amount,
@@ -4880,12 +4881,12 @@ begin
   ) values (
     v_entry_id,
     v_tenant_id,
-    concat('INV-', to_char(now(), 'YYYYMMDDHH24MISS')),
+    public.get_next_document_number(v_tenant_id, 'journal_entry'),
     coalesce(p_invoice.date, now()),
     v_description,
     'sales',
     'sales_invoices',
-    p_invoice.id::text,
+    p_invoice.invoice_number,
     'posted',
     v_total,
     v_total,
@@ -5150,10 +5151,15 @@ begin
       perform public.restore_sales_invoice_inventory(OLD);
     end if;
     
-    -- DELETE journal entry
+    -- DELETE invoice journal entry (using invoice_number as reference)
     delete from public.journal_entries
     where source_module = 'sales_invoices'
-      and source_reference = OLD.id::text;
+      and source_reference = OLD.invoice_number;
+    
+    -- DELETE all payment journal entries for this invoice
+    delete from public.journal_entries
+    where source_module = 'sales_payments'
+      and source_reference = OLD.invoice_number;
     
     raise notice '🔵 handle_sales_invoice_change: DELETE completed, now cascade trigger should fire';
     return OLD;
@@ -7755,12 +7761,12 @@ begin
   ) values (
     v_entry_id,
     p_invoice.tenant_id,
-    concat('PINV-', to_char(now(), 'YYYYMMDDHH24MISS')),
+    public.get_next_document_number(p_invoice.tenant_id, 'journal_entry'),
     coalesce(p_invoice.date, now()),
     v_description,
     'purchase',
     'purchase_invoices',
-    p_invoice.id::text,
+    p_invoice.invoice_number,
     'posted',
     p_invoice.total,
     p_invoice.total,
@@ -7854,22 +7860,28 @@ begin
 end;
 $$;
 
-create or replace function public.delete_purchase_invoice_journal_entry(p_invoice_id uuid)
+create or replace function public.delete_purchase_invoice_journal_entry(p_invoice_number text)
 returns void
 language plpgsql
 security definer
 set search_path = public
 as $$
 begin
-  if p_invoice_id is null then
+  if p_invoice_number is null then
     return;
   end if;
 
+  -- Delete invoice journal entry
   delete from public.journal_entries
   where source_module = 'purchase_invoices'
-    and source_reference = p_invoice_id::text;
+    and source_reference = p_invoice_number;
 
-  raise notice 'delete_purchase_invoice_journal_entry: deleted entry for invoice %', p_invoice_id;
+  -- Delete all payment journal entries for this invoice
+  delete from public.journal_entries
+  where source_module = 'purchase_payments'
+    and source_reference = p_invoice_number;
+
+  raise notice 'delete_purchase_invoice_journal_entry: deleted entries for invoice %', p_invoice_number;
 end;
 $$;
 
@@ -7974,7 +7986,7 @@ begin
     elsif v_old_status IN ('confirmed', 'received', 'paid') AND v_new_status IN ('draft', 'sent', 'cancelled') then
       -- Transitioning FROM confirmed/received/paid to draft/sent/cancelled: delete journal entry
       raise notice 'handle_purchase_invoice_change: transitioning FROM confirmed/received/paid, deleting journal entry';
-      perform public.delete_purchase_invoice_journal_entry(OLD.id);
+      perform public.delete_purchase_invoice_journal_entry(OLD.invoice_number);
       
     elsif v_old_status = v_new_status AND v_old_status IN ('confirmed', 'received', 'paid') then
       -- Staying at same confirmed+ status but invoice data might have changed
@@ -7984,7 +7996,7 @@ begin
          OLD.total IS DISTINCT FROM NEW.total OR
          OLD.supplier_id IS DISTINCT FROM NEW.supplier_id then
         raise notice 'handle_purchase_invoice_change: amounts changed at same status, recreating journal entry';
-        perform public.delete_purchase_invoice_journal_entry(OLD.id);
+        perform public.delete_purchase_invoice_journal_entry(OLD.invoice_number);
         perform public.create_purchase_invoice_journal_entry(NEW);
       end if;
     end if;
@@ -8019,7 +8031,7 @@ begin
     -- Delete journal entry if was confirmed or later
     if v_old_status IN ('confirmed', 'received', 'paid') then
       raise notice 'handle_purchase_invoice_change: deleting confirmed/received/paid invoice, deleting journal entry';
-      perform public.delete_purchase_invoice_journal_entry(OLD.id);
+      perform public.delete_purchase_invoice_journal_entry(OLD.invoice_number);
     end if;
     
     return OLD;
@@ -9087,6 +9099,14 @@ create table if not exists mechanic_jobs (
   updated_at timestamp with time zone not null default now()
 );
 
+-- Add tax_treatment column to mechanic_jobs
+alter table mechanic_jobs 
+  add column if not exists tax_treatment text not null default 'no_tax' 
+  check (tax_treatment in ('no_tax', 'tax_included'));
+
+comment on column mechanic_jobs.tax_treatment is
+  'Tax treatment for the invoice created from this job. no_tax = no IVA, tax_included = 19% IVA included';
+
 -- Migration: Add missing columns to mechanic_jobs table
 do $$
 begin
@@ -9750,12 +9770,20 @@ begin
   -- Draft invoices can be created for future work planning
   -- User can add items later before posting
   
-  -- Calculate IVA (19% for Chile)
-  v_iva := round(v_subtotal * 0.19, 2);
-  v_total := v_subtotal + v_iva;
+  -- Calculate IVA based on job's tax treatment
+  -- ✅ FIX: Read tax_treatment from job instead of hardcoding
+  if v_job.tax_treatment = 'tax_included' then
+    -- Tax included: net = subtotal ÷ 1.19, iva = subtotal - net
+    v_iva := round(v_subtotal - (v_subtotal / 1.19), 2);
+  else
+    -- No tax: iva = 0
+    v_iva := 0;
+  end if;
   
-  -- Generate invoice number (will be updated if needed)
-  v_invoice_number := 'INV-' || to_char(v_invoice_date, 'YYYYMMDD') || '-' || gen_random_uuid()::text;
+  v_total := v_subtotal;  -- Total is always the subtotal (what customer pays)
+  
+  -- Generate invoice number using new sequential system
+  v_invoice_number := public.get_next_document_number(v_tenant_id, 'sales_invoice');
   
   -- Create the invoice with status 'draft' for user review
   insert into public.sales_invoices (
@@ -9770,6 +9798,8 @@ begin
     status,
     subtotal,
     iva_amount,
+    net_amount,
+    tax_treatment,
     total,
     paid_amount,
     balance,
@@ -9788,6 +9818,11 @@ begin
     'draft',  -- Always start as draft for review
     v_subtotal,
     v_iva,
+    case 
+      when v_job.tax_treatment = 'tax_included' then v_subtotal / 1.19
+      else v_subtotal
+    end,  -- net_amount
+    v_job.tax_treatment,  -- tax_treatment from job
     v_total,
     0,  -- Not paid yet
     v_total,  -- Full balance pending
@@ -10147,16 +10182,17 @@ begin
   -- Determine if paid
   v_is_paid := (lower(v_invoice.status) = 'paid');
   
-  -- Update job status
+  -- Update job status AND tax treatment
   update mechanic_jobs
   set 
     is_invoiced = true,
     is_paid = v_is_paid,
+    tax_treatment = v_invoice.tax_treatment,  -- ✅ Sync tax treatment from invoice to job
     updated_at = now()
   where id = v_job_id;
   
-  raise notice 'Synced invoice % status (%) to job (is_paid: %)', 
-    p_invoice_id, v_invoice.status, v_is_paid;
+  raise notice 'Synced invoice % status (%) and tax treatment (%) to job (is_paid: %)', 
+    p_invoice_id, v_invoice.status, v_invoice.tax_treatment, v_is_paid;
 end;
 $$;
 
@@ -10276,8 +10312,17 @@ begin
   
   -- Calculate totals with FRESH data (not using stale v_job record)
   v_subtotal := v_parts_cost + v_labor_cost - v_discount;
-  v_iva_amount := round(v_subtotal * 0.19, 0);
-  v_total := v_subtotal + v_iva_amount;
+  
+  -- ✅ FIX: Calculate IVA based on job's tax treatment (not hardcoded)
+  if v_job.tax_treatment = 'tax_included' then
+    -- Tax included: net = subtotal ÷ 1.19, iva = subtotal - net
+    v_iva_amount := round(v_subtotal - (v_subtotal / 1.19), 0);
+  else
+    -- No tax: iva = 0
+    v_iva_amount := 0;
+  end if;
+  
+  v_total := v_subtotal;  -- Total is always the subtotal (what customer pays)
   
   -- Update the invoice with fresh calculations
   update sales_invoices
@@ -10285,6 +10330,11 @@ begin
     items = v_items,
     subtotal = v_subtotal,
     iva_amount = v_iva_amount,
+    net_amount = case 
+      when v_job.tax_treatment = 'tax_included' then v_subtotal / 1.19
+      else v_subtotal
+    end,
+    tax_treatment = v_job.tax_treatment,
     total = v_total,
     discount_amount = v_discount,
     updated_at = now()
@@ -10497,11 +10547,11 @@ begin
     created_at,
     updated_at
   ) values (
-    public.generate_journal_entry_number(),
+    public.get_next_document_number(v_job.tenant_id, 'journal_entry'),
     coalesce(v_job.completed_at, now()),
     'Mechanic Job ' || v_job.job_number || ' - ' || coalesce(v_job.diagnosis, 'Service completed'),
     'mechanic_jobs',
-    p_job_id::text,
+    v_job.job_number,
     'posted',
     now(),
     now()
@@ -15419,211 +15469,235 @@ begin
   -- START TRANSACTION: Delete existing data and restore backup
   -- WARNING: This will delete ALL tenant data and restore from backup
   
-  -- Delete existing data (in reverse dependency order)
+  -- Delete existing data (in STRICT reverse dependency order)
+  -- Level 5: Deepest children first
   delete from journal_lines where entry_id in (select id from journal_entries where tenant_id = p_tenant_id);
-  delete from journal_entries where tenant_id = p_tenant_id;
-  delete from sales_payments where tenant_id = p_tenant_id;
-  delete from sales_invoices where tenant_id = p_tenant_id;
-  delete from purchase_payments where tenant_id = p_tenant_id;
-  delete from purchase_invoices where tenant_id = p_tenant_id;
   delete from mechanic_job_items where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id);
   delete from mechanic_job_labor where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id);
   delete from mechanic_job_timeline where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id);
+  delete from online_order_items where order_id in (select id from online_orders where tenant_id = p_tenant_id);
+  delete from employee_contracts where tenant_id = p_tenant_id;
+  delete from attendance_records where tenant_id = p_tenant_id;
+  
+  -- Level 4: Tables that reference Level 5 or standalone with FKs
+  delete from journal_entries where tenant_id = p_tenant_id;
+  delete from sales_payments where tenant_id = p_tenant_id;
+  delete from purchase_payments where tenant_id = p_tenant_id;
   delete from mechanic_jobs where tenant_id = p_tenant_id;
   delete from bikes where tenant_id = p_tenant_id;
-  delete from bike_models where tenant_id = p_tenant_id;
-  delete from bike_brands where tenant_id = p_tenant_id;
-  delete from online_order_items where order_id in (select id from online_orders where tenant_id = p_tenant_id);
   delete from online_orders where tenant_id = p_tenant_id;
+  delete from stock_movements where tenant_id = p_tenant_id;
+  
+  -- Level 3: Invoices and e-commerce content
+  delete from sales_invoices where tenant_id = p_tenant_id;
+  delete from purchase_invoices where tenant_id = p_tenant_id;
   delete from featured_products where tenant_id = p_tenant_id;
   delete from website_blocks where tenant_id = p_tenant_id;
   delete from website_content where tenant_id = p_tenant_id;
   delete from website_banners where tenant_id = p_tenant_id;
   delete from website_settings where tenant_id = p_tenant_id;
-  delete from stock_movements where tenant_id = p_tenant_id;
-  delete from attendance_records where tenant_id = p_tenant_id;
-  delete from employee_contracts where tenant_id = p_tenant_id;
-  delete from employees where tenant_id = p_tenant_id;
+  delete from company_settings where tenant_id = p_tenant_id;
+  
+  -- Level 2: Payment methods (references accounts), then products/employees/bikes
+  delete from payment_methods where tenant_id = p_tenant_id;  -- BEFORE accounts!
   delete from products where tenant_id = p_tenant_id;
+  delete from employees where tenant_id = p_tenant_id;
+  delete from bike_models where tenant_id = p_tenant_id;
+  
+  -- Level 1: Base tables (brands, categories, customers, suppliers, accounts)
+  delete from accounts where tenant_id = p_tenant_id;  -- AFTER payment_methods!
   delete from product_categories where tenant_id = p_tenant_id;
   delete from product_brands where tenant_id = p_tenant_id;
+  delete from bike_brands where tenant_id = p_tenant_id;
   delete from customers where tenant_id = p_tenant_id;
   delete from suppliers where tenant_id = p_tenant_id;
   
   -- Restore data from backup
   -- Product Brands (restore before products)
-  if v_backup_data ? 'product_brands' and v_backup_data->'product_brands' is not null then
+  if v_backup_data ? 'product_brands' and v_backup_data->'product_brands' is not null and jsonb_typeof(v_backup_data->'product_brands') = 'array' then
     insert into product_brands select * from jsonb_populate_recordset(null::product_brands, v_backup_data->'product_brands');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
-  -- Products
-  if v_backup_data ? 'products' and v_backup_data->'products' is not null then
-    insert into products select * from jsonb_populate_recordset(null::products, v_backup_data->'products');
-    v_tables_restored := v_tables_restored + 1;
-  end if;
-  
-  -- Product Categories
-  if v_backup_data ? 'product_categories' and v_backup_data->'product_categories' is not null then
+  -- Product Categories (restore BEFORE products - they have FK dependency)
+  if v_backup_data ? 'product_categories' and v_backup_data->'product_categories' is not null and jsonb_typeof(v_backup_data->'product_categories') = 'array' then
     insert into product_categories select * from jsonb_populate_recordset(null::product_categories, v_backup_data->'product_categories');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
+  -- Products (restore AFTER categories - products reference category_id)
+  if v_backup_data ? 'products' and v_backup_data->'products' is not null and jsonb_typeof(v_backup_data->'products') = 'array' then
+    insert into products select * from jsonb_populate_recordset(null::products, v_backup_data->'products');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
   -- Customers
-  if v_backup_data ? 'customers' and v_backup_data->'customers' is not null then
+  if v_backup_data ? 'customers' and v_backup_data->'customers' is not null and jsonb_typeof(v_backup_data->'customers') = 'array' then
     insert into customers select * from jsonb_populate_recordset(null::customers, v_backup_data->'customers');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Suppliers
-  if v_backup_data ? 'suppliers' and v_backup_data->'suppliers' is not null then
+  if v_backup_data ? 'suppliers' and v_backup_data->'suppliers' is not null and jsonb_typeof(v_backup_data->'suppliers') = 'array' then
     insert into suppliers select * from jsonb_populate_recordset(null::suppliers, v_backup_data->'suppliers');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Sales Invoices
-  if v_backup_data ? 'sales_invoices' and v_backup_data->'sales_invoices' is not null then
+  if v_backup_data ? 'sales_invoices' and v_backup_data->'sales_invoices' is not null and jsonb_typeof(v_backup_data->'sales_invoices') = 'array' then
     insert into sales_invoices select * from jsonb_populate_recordset(null::sales_invoices, v_backup_data->'sales_invoices');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Sales Payments
-  if v_backup_data ? 'sales_payments' and v_backup_data->'sales_payments' is not null then
+  if v_backup_data ? 'sales_payments' and v_backup_data->'sales_payments' is not null and jsonb_typeof(v_backup_data->'sales_payments') = 'array' then
     insert into sales_payments select * from jsonb_populate_recordset(null::sales_payments, v_backup_data->'sales_payments');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Purchase Invoices
-  if v_backup_data ? 'purchase_invoices' and v_backup_data->'purchase_invoices' is not null then
+  if v_backup_data ? 'purchase_invoices' and v_backup_data->'purchase_invoices' is not null and jsonb_typeof(v_backup_data->'purchase_invoices') = 'array' then
     insert into purchase_invoices select * from jsonb_populate_recordset(null::purchase_invoices, v_backup_data->'purchase_invoices');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Purchase Payments
-  if v_backup_data ? 'purchase_payments' and v_backup_data->'purchase_payments' is not null then
+  if v_backup_data ? 'purchase_payments' and v_backup_data->'purchase_payments' is not null and jsonb_typeof(v_backup_data->'purchase_payments') = 'array' then
     insert into purchase_payments select * from jsonb_populate_recordset(null::purchase_payments, v_backup_data->'purchase_payments');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Employees & Contracts
-  if v_backup_data ? 'employees' and v_backup_data->'employees' is not null then
+  if v_backup_data ? 'employees' and v_backup_data->'employees' is not null and jsonb_typeof(v_backup_data->'employees') = 'array' then
     insert into employees select * from jsonb_populate_recordset(null::employees, v_backup_data->'employees');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
-  if v_backup_data ? 'employee_contracts' and v_backup_data->'employee_contracts' is not null then
+  if v_backup_data ? 'employee_contracts' and v_backup_data->'employee_contracts' is not null and jsonb_typeof(v_backup_data->'employee_contracts') = 'array' then
     insert into employee_contracts select * from jsonb_populate_recordset(null::employee_contracts, v_backup_data->'employee_contracts');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Attendance
-  if v_backup_data ? 'attendance_records' and v_backup_data->'attendance_records' is not null then
+  if v_backup_data ? 'attendance_records' and v_backup_data->'attendance_records' is not null and jsonb_typeof(v_backup_data->'attendance_records') = 'array' then
     insert into attendance_records select * from jsonb_populate_recordset(null::attendance_records, v_backup_data->'attendance_records');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Accounting
-  if v_backup_data ? 'accounts' and v_backup_data->'accounts' is not null then
+  if v_backup_data ? 'accounts' and v_backup_data->'accounts' is not null and jsonb_typeof(v_backup_data->'accounts') = 'array' then
     insert into accounts select * from jsonb_populate_recordset(null::accounts, v_backup_data->'accounts');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
-  if v_backup_data ? 'journal_entries' and v_backup_data->'journal_entries' is not null then
+  -- Payment Methods (restore after accounts - they reference account_id)
+  if v_backup_data ? 'payment_methods' and v_backup_data->'payment_methods' is not null and jsonb_typeof(v_backup_data->'payment_methods') = 'array' then
+    insert into payment_methods select * from jsonb_populate_recordset(null::payment_methods, v_backup_data->'payment_methods');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
+  if v_backup_data ? 'journal_entries' and v_backup_data->'journal_entries' is not null and jsonb_typeof(v_backup_data->'journal_entries') = 'array' then
     insert into journal_entries select * from jsonb_populate_recordset(null::journal_entries, v_backup_data->'journal_entries');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
-  if v_backup_data ? 'journal_lines' and v_backup_data->'journal_lines' is not null then
+  if v_backup_data ? 'journal_lines' and v_backup_data->'journal_lines' is not null and jsonb_typeof(v_backup_data->'journal_lines') = 'array' then
     insert into journal_lines select * from jsonb_populate_recordset(null::journal_lines, v_backup_data->'journal_lines');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Stock Movements
-  if v_backup_data ? 'stock_movements' and v_backup_data->'stock_movements' is not null then
+  if v_backup_data ? 'stock_movements' and v_backup_data->'stock_movements' is not null and jsonb_typeof(v_backup_data->'stock_movements') = 'array' then
     insert into stock_movements select * from jsonb_populate_recordset(null::stock_movements, v_backup_data->'stock_movements');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Bike Brands (restore before bike_models and bikes)
-  if v_backup_data ? 'bike_brands' and v_backup_data->'bike_brands' is not null then
+  if v_backup_data ? 'bike_brands' and v_backup_data->'bike_brands' is not null and jsonb_typeof(v_backup_data->'bike_brands') = 'array' then
     insert into bike_brands select * from jsonb_populate_recordset(null::bike_brands, v_backup_data->'bike_brands');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Bike Models (restore before bikes)
-  if v_backup_data ? 'bike_models' and v_backup_data->'bike_models' is not null then
+  if v_backup_data ? 'bike_models' and v_backup_data->'bike_models' is not null and jsonb_typeof(v_backup_data->'bike_models') = 'array' then
     insert into bike_models select * from jsonb_populate_recordset(null::bike_models, v_backup_data->'bike_models');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Bikes
-  if v_backup_data ? 'bikes' and v_backup_data->'bikes' is not null then
+  if v_backup_data ? 'bikes' and v_backup_data->'bikes' is not null and jsonb_typeof(v_backup_data->'bikes') = 'array' then
     insert into bikes select * from jsonb_populate_recordset(null::bikes, v_backup_data->'bikes');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Mechanic Jobs (Pegas)
-  if v_backup_data ? 'mechanic_jobs' and v_backup_data->'mechanic_jobs' is not null then
+  if v_backup_data ? 'mechanic_jobs' and v_backup_data->'mechanic_jobs' is not null and jsonb_typeof(v_backup_data->'mechanic_jobs') = 'array' then
     insert into mechanic_jobs select * from jsonb_populate_recordset(null::mechanic_jobs, v_backup_data->'mechanic_jobs');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Mechanic Job Items
-  if v_backup_data ? 'mechanic_job_items' and v_backup_data->'mechanic_job_items' is not null then
+  if v_backup_data ? 'mechanic_job_items' and v_backup_data->'mechanic_job_items' is not null and jsonb_typeof(v_backup_data->'mechanic_job_items') = 'array' then
     insert into mechanic_job_items select * from jsonb_populate_recordset(null::mechanic_job_items, v_backup_data->'mechanic_job_items');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Mechanic Job Labor
-  if v_backup_data ? 'mechanic_job_labor' and v_backup_data->'mechanic_job_labor' is not null then
+  if v_backup_data ? 'mechanic_job_labor' and v_backup_data->'mechanic_job_labor' is not null and jsonb_typeof(v_backup_data->'mechanic_job_labor') = 'array' then
     insert into mechanic_job_labor select * from jsonb_populate_recordset(null::mechanic_job_labor, v_backup_data->'mechanic_job_labor');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Mechanic Job Timeline
-  if v_backup_data ? 'mechanic_job_timeline' and v_backup_data->'mechanic_job_timeline' is not null then
+  if v_backup_data ? 'mechanic_job_timeline' and v_backup_data->'mechanic_job_timeline' is not null and jsonb_typeof(v_backup_data->'mechanic_job_timeline') = 'array' then
     insert into mechanic_job_timeline select * from jsonb_populate_recordset(null::mechanic_job_timeline, v_backup_data->'mechanic_job_timeline');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
+  -- Company Settings
+  if v_backup_data ? 'company_settings' and v_backup_data->'company_settings' is not null and jsonb_typeof(v_backup_data->'company_settings') = 'array' then
+    insert into company_settings select * from jsonb_populate_recordset(null::company_settings, v_backup_data->'company_settings');
+    v_tables_restored := v_tables_restored + 1;
+  end if;
+  
   -- Website Settings
-  if v_backup_data ? 'website_settings' and v_backup_data->'website_settings' is not null then
+  if v_backup_data ? 'website_settings' and v_backup_data->'website_settings' is not null and jsonb_typeof(v_backup_data->'website_settings') = 'array' then
     insert into website_settings select * from jsonb_populate_recordset(null::website_settings, v_backup_data->'website_settings');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Website Banners
-  if v_backup_data ? 'website_banners' and v_backup_data->'website_banners' is not null then
+  if v_backup_data ? 'website_banners' and v_backup_data->'website_banners' is not null and jsonb_typeof(v_backup_data->'website_banners') = 'array' then
     insert into website_banners select * from jsonb_populate_recordset(null::website_banners, v_backup_data->'website_banners');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Website Content
-  if v_backup_data ? 'website_content' and v_backup_data->'website_content' is not null then
+  if v_backup_data ? 'website_content' and v_backup_data->'website_content' is not null and jsonb_typeof(v_backup_data->'website_content') = 'array' then
     insert into website_content select * from jsonb_populate_recordset(null::website_content, v_backup_data->'website_content');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Website Blocks
-  if v_backup_data ? 'website_blocks' and v_backup_data->'website_blocks' is not null then
+  if v_backup_data ? 'website_blocks' and v_backup_data->'website_blocks' is not null and jsonb_typeof(v_backup_data->'website_blocks') = 'array' then
     insert into website_blocks select * from jsonb_populate_recordset(null::website_blocks, v_backup_data->'website_blocks');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Featured Products
-  if v_backup_data ? 'featured_products' and v_backup_data->'featured_products' is not null then
+  if v_backup_data ? 'featured_products' and v_backup_data->'featured_products' is not null and jsonb_typeof(v_backup_data->'featured_products') = 'array' then
     insert into featured_products select * from jsonb_populate_recordset(null::featured_products, v_backup_data->'featured_products');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Online Orders
-  if v_backup_data ? 'online_orders' and v_backup_data->'online_orders' is not null then
+  if v_backup_data ? 'online_orders' and v_backup_data->'online_orders' is not null and jsonb_typeof(v_backup_data->'online_orders') = 'array' then
     insert into online_orders select * from jsonb_populate_recordset(null::online_orders, v_backup_data->'online_orders');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
   -- Online Order Items
-  if v_backup_data ? 'online_order_items' and v_backup_data->'online_order_items' is not null then
+  if v_backup_data ? 'online_order_items' and v_backup_data->'online_order_items' is not null and jsonb_typeof(v_backup_data->'online_order_items') = 'array' then
     insert into online_order_items select * from jsonb_populate_recordset(null::online_order_items, v_backup_data->'online_order_items');
     v_tables_restored := v_tables_restored + 1;
   end if;
@@ -15730,4 +15804,141 @@ end;
 $$;
 
 grant execute on function public.cleanup_old_backups(uuid) to authenticated;
+
+-- ============================================================
+-- DOCUMENT NUMBERING SYSTEM
+-- Sequential human-friendly numbers for all document types
+-- ============================================================
+
+-- Table: document_sequences
+-- Stores last used number for each document type per tenant
+create table if not exists document_sequences (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  document_type text not null, -- 'sales_invoice', 'purchase_invoice', 'journal_entry', etc.
+  last_number integer not null default 0,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, document_type)
+);
+
+create index if not exists idx_document_sequences_tenant on document_sequences(tenant_id);
+
+-- RLS for document_sequences
+alter table document_sequences enable row level security;
+
+drop policy if exists "document_sequences_select" on document_sequences;
+drop policy if exists "document_sequences_insert" on document_sequences;
+drop policy if exists "document_sequences_update" on document_sequences;
+
+create policy "document_sequences_select" on document_sequences
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "document_sequences_insert" on document_sequences
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "document_sequences_update" on document_sequences
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Function: get_next_document_number
+-- Generates next sequential number for a document type
+-- Format: PREFIX-NNNN (e.g., FV-0143)
+create or replace function public.get_next_document_number(
+  p_tenant_id uuid,
+  p_document_type text,
+  p_prefix text default null
+) returns text
+language plpgsql
+security definer
+as $$
+declare
+  v_next_number integer;
+  v_prefix text;
+  v_formatted_number text;
+begin
+  -- Default prefixes if not provided
+  v_prefix := coalesce(p_prefix, case p_document_type
+    when 'sales_invoice' then 'FV'
+    when 'purchase_invoice' then 'FC'
+    when 'sales_payment' then 'PV'
+    when 'purchase_payment' then 'PC'
+    when 'journal_entry' then 'AC'
+    when 'mechanic_job' then 'PG'
+    when 'stock_adjustment' then 'AJ'
+    else 'DOC'
+  end);
+  
+  -- Insert or update sequence (atomic operation)
+  insert into document_sequences (tenant_id, document_type, last_number)
+  values (p_tenant_id, p_document_type, 1)
+  on conflict (tenant_id, document_type)
+  do update set
+    last_number = document_sequences.last_number + 1,
+    updated_at = now()
+  returning last_number into v_next_number;
+  
+  -- Format: PREFIX-NNNNN (e.g., FV-00143)
+  v_formatted_number := v_prefix || '-' || lpad(v_next_number::text, 5, '0');
+  
+  return v_formatted_number;
+end;
+$$;
+
+grant execute on function public.get_next_document_number(uuid, text, text) to authenticated;
+
+-- =====================================================
+-- FACTORY RESET CONFIGURATIONS
+-- =====================================================
+
+-- Table: reset_configurations
+-- Stores saved factory reset configurations for custom resets
+create table if not exists reset_configurations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  name text not null,
+  description text,
+  delete_sales boolean not null default false,
+  delete_purchases boolean not null default false,
+  delete_inventory boolean not null default false,
+  delete_stock_movements boolean not null default false,
+  delete_customers boolean not null default false,
+  delete_suppliers boolean not null default false,
+  delete_accounting boolean not null default false,
+  delete_employees boolean not null default false,
+  delete_mechanic boolean not null default false,
+  delete_ecommerce boolean not null default false,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  unique(tenant_id, name)
+);
+
+create index if not exists idx_reset_configurations_tenant on reset_configurations(tenant_id);
+
+-- RLS for reset_configurations
+alter table reset_configurations enable row level security;
+
+drop policy if exists "reset_configurations_select" on reset_configurations;
+drop policy if exists "reset_configurations_insert" on reset_configurations;
+drop policy if exists "reset_configurations_update" on reset_configurations;
+drop policy if exists "reset_configurations_delete" on reset_configurations;
+
+create policy "reset_configurations_select" on reset_configurations
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "reset_configurations_insert" on reset_configurations
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "reset_configurations_update" on reset_configurations
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "reset_configurations_delete" on reset_configurations
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
 

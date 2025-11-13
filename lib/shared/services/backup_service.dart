@@ -61,7 +61,20 @@ class BackupService extends ChangeNotifier {
         'p_notes': notes,
       });
 
-      final result = BackupResult.fromJson(response);
+      debugPrint('🔍 Backup response type: ${response.runtimeType}');
+      debugPrint('🔍 Backup response: $response');
+
+      // Handle different response formats
+      Map<String, dynamic> responseData;
+      if (response is Map<String, dynamic>) {
+        responseData = response;
+      } else if (response is List && response.isNotEmpty) {
+        responseData = response.first as Map<String, dynamic>;
+      } else {
+        throw Exception('Unexpected response format: ${response.runtimeType}');
+      }
+
+      final result = BackupResult.fromJson(responseData);
 
       if (result.success) {
         await loadBackups(); // Reload list
@@ -91,7 +104,20 @@ class BackupService extends ChangeNotifier {
         'p_tenant_id': tenantId,
       });
 
-      final result = BackupResult.fromJson(response);
+      debugPrint('🔍 Restore response type: ${response.runtimeType}');
+      debugPrint('🔍 Restore response: $response');
+
+      // Handle different response formats
+      Map<String, dynamic> responseData;
+      if (response is Map<String, dynamic>) {
+        responseData = response;
+      } else if (response is List && response.isNotEmpty) {
+        responseData = response.first as Map<String, dynamic>;
+      } else {
+        throw Exception('Unexpected response format: ${response.runtimeType}');
+      }
+
+      final result = BackupResult.fromJson(responseData);
 
       if (result.success) {
         await loadBackups(); // Reload list

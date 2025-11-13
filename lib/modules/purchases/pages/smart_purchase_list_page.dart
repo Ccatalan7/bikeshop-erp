@@ -25,15 +25,24 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   bool _selectAll = false;
   List<Supplier> _suppliers = [];
   
+  // Pagination
+  static const int _itemsPerPage = 100;
+  int _currentPage = 1;
+  
   // Cache for invoice data to avoid multiple queries
   final Map<String, Map<String, dynamic>> _invoiceCache = {};
 
   @override
   void initState() {
     super.initState();
-    _initializeService();
-    _loadSuppliers();
-    _preloadInvoiceData();
+    // Use post-frame callback to avoid blocking initial render
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _initializeService();
+        _loadSuppliers();
+        _preloadInvoiceData();
+      }
+    });
   }
   
   /// Preload all invoice data in one query
@@ -60,32 +69,24 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   }
 
   /// Initialize service once (sets up real-time listeners)
-  void _initializeService() {
+  Future<void> _initializeService() async {
     final pageStartTime = DateTime.now();
     debugPrint('⏱️ [PAGE] Smart Purchase List page mounted');
     
     final service = context.read<SmartPurchaseListService>();
     
-    // If already initialized, data is instantly available - no need for post-frame callback
+    // If already initialized, data is instantly available
     if (service.isInitialized) {
       final cachedTime = DateTime.now().difference(pageStartTime).inMilliseconds;
       debugPrint('✅ [PAGE] Using cached data - ready instantly in ${cachedTime}ms');
       return;
     }
     
-    // Only use post-frame callback if we need to do async initialization
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final callbackTime = DateTime.now().difference(pageStartTime).inMilliseconds;
-      debugPrint('⏱️ [PAGE] Post-frame callback executed after ${callbackTime}ms');
-      
-      if (mounted) {
-        debugPrint('⏱️ [PAGE] Calling service.initialize()...');
-        service.initialize().then((_) {
-          final totalPageTime = DateTime.now().difference(pageStartTime).inMilliseconds;
-          debugPrint('✅ [PAGE] TOTAL PAGE LOAD TIME: ${totalPageTime}ms');
-        });
-      }
-    });
+    // Initialize service asynchronously
+    debugPrint('⏱️ [PAGE] Calling service.initialize()...');
+    await service.initialize();
+    final totalPageTime = DateTime.now().difference(pageStartTime).inMilliseconds;
+    debugPrint('✅ [PAGE] TOTAL PAGE LOAD TIME: ${totalPageTime}ms');
   }
 
   String? _getInvoiceNumber(String? invoiceId) {
@@ -398,7 +399,10 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                       isDense: true,
                     ),
                     onChanged: (value) {
-                      setState(() => _searchQuery = value);
+                      setState(() {
+                        _searchQuery = value;
+                        _currentPage = 1; // Reset to first page
+                      });
                       service.loadItems(
                         statusFilter: _statusFilter,
                         supplierFilter: _supplierFilter,
@@ -427,7 +431,10 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     ],
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() => _statusFilter = value);
+                        setState(() {
+                          _statusFilter = value;
+                          _currentPage = 1; // Reset to first page
+                        });
                         service.loadItems(
                           statusFilter: value,
                           supplierFilter: _supplierFilter,
@@ -464,7 +471,10 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     ],
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() => _supplierFilter = value);
+                        setState(() {
+                          _supplierFilter = value;
+                          _currentPage = 1; // Reset to first page
+                        });
                         service.loadItems(
                           statusFilter: _statusFilter,
                           supplierFilter: value,  // Pass the value as-is ('all', 'none', or supplier_id)
@@ -495,7 +505,10 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     ],
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() => _priorityFilter = value);
+                        setState(() {
+                          _priorityFilter = value;
+                          _currentPage = 1; // Reset to first page
+                        });
                         _applyClientSideFilters();
                       }
                     },
@@ -583,19 +596,60 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     
     return items;
   }
+  
+  /// Get paginated items for current page
+  List<SmartPurchaseListItem> _getPaginatedItems(List<SmartPurchaseListItem> allItems) {
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = (startIndex + _itemsPerPage).clamp(0, allItems.length);
+    
+    if (startIndex >= allItems.length) {
+      return [];
+    }
+    
+    return allItems.sublist(startIndex, endIndex);
+  }
+  
+  /// Get total number of pages
+  int _getTotalPages(int totalItems) {
+    return (totalItems / _itemsPerPage).ceil();
+  }
+  
+  /// Go to specific page
+  void _goToPage(int page) {
+    setState(() {
+      _currentPage = page;
+      _selectedItems.clear(); // Clear selection when changing pages
+      _selectAll = false;
+    });
+  }
 
   Widget _buildItemsList(SmartPurchaseListService service) {
     final buildStart = DateTime.now();
     final filteredItems = _getFilteredItems(service);
+    final totalItems = filteredItems.length;
+    final totalPages = _getTotalPages(totalItems);
+    final paginatedItems = _getPaginatedItems(filteredItems);
     
-    debugPrint('⏱️ [LIST BUILD] Building list with ${filteredItems.length} items...');
+    debugPrint('⏱️ [LIST BUILD] Building page $_currentPage/$totalPages with ${paginatedItems.length} items (${totalItems} total)...');
 
     final widget = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Pagination info and controls at top
+        if (totalItems > _itemsPerPage) ...[
+          _buildPaginationControls(totalItems, totalPages),
+          const SizedBox(height: 8),
+        ],
+        
         _buildTableHeader(),
-        ...filteredItems.map((item) => _buildItemRow(item, service)),
+        ...paginatedItems.map((item) => _buildItemRow(item, service)),
+        
+        // Pagination controls at bottom
+        if (totalItems > _itemsPerPage) ...[
+          const SizedBox(height: 16),
+          _buildPaginationControls(totalItems, totalPages),
+        ],
       ],
     );
     
@@ -1596,5 +1650,131 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         ),
       );
     }
+  }
+  
+  /// Build pagination controls with page numbers
+  Widget _buildPaginationControls(int totalItems, int totalPages) {
+    final startItem = (_currentPage - 1) * _itemsPerPage + 1;
+    final endItem = (_currentPage * _itemsPerPage).clamp(0, totalItems);
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Items count info
+          Text(
+            'Mostrando $startItem-$endItem de $totalItems productos',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          
+          // Pagination controls
+          Row(
+            children: [
+              // First page button
+              IconButton(
+                icon: const Icon(Icons.first_page),
+                onPressed: _currentPage > 1 ? () => _goToPage(1) : null,
+                tooltip: 'Primera página',
+              ),
+              
+              // Previous page button
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: _currentPage > 1 ? () => _goToPage(_currentPage - 1) : null,
+                tooltip: 'Página anterior',
+              ),
+              
+              // Page numbers
+              ..._buildPageNumbers(totalPages),
+              
+              // Next page button
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: _currentPage < totalPages ? () => _goToPage(_currentPage + 1) : null,
+                tooltip: 'Página siguiente',
+              ),
+              
+              // Last page button
+              IconButton(
+                icon: const Icon(Icons.last_page),
+                onPressed: _currentPage < totalPages ? () => _goToPage(totalPages) : null,
+                tooltip: 'Última página',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  /// Build page number buttons (show current +/- 2 pages)
+  List<Widget> _buildPageNumbers(int totalPages) {
+    final List<Widget> pageButtons = [];
+    
+    // Show current page +/- 2 pages
+    final startPage = (_currentPage - 2).clamp(1, totalPages);
+    final endPage = (_currentPage + 2).clamp(1, totalPages);
+    
+    // Add ellipsis before if needed
+    if (startPage > 1) {
+      pageButtons.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text('...', style: TextStyle(color: Colors.grey[600])),
+        ),
+      );
+    }
+    
+    // Add page numbers
+    for (int i = startPage; i <= endPage; i++) {
+      final isCurrentPage = i == _currentPage;
+      pageButtons.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: isCurrentPage
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '$i',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
+              : TextButton(
+                  onPressed: () => _goToPage(i),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text('$i'),
+                ),
+        ),
+      );
+    }
+    
+    // Add ellipsis after if needed
+    if (endPage < totalPages) {
+      pageButtons.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text('...', style: TextStyle(color: Colors.grey[600])),
+        ),
+      );
+    }
+    
+    return pageButtons;
   }
 }

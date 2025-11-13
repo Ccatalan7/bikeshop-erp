@@ -1,5 +1,7 @@
 // Bikeshop Models - Bikes, Jobs, Service Packages, Labor, Timeline
 
+import '../../../shared/models/tax_treatment.dart';
+
 DateTime _parseDate(dynamic value) {
   if (value is DateTime) return value;
   if (value is String) {
@@ -612,6 +614,7 @@ class MechanicJob {
   final double discountAmount;
   final double taxAmount;
   final double totalCost;
+  final TaxTreatment taxTreatment;  // ← Add this field
   final String? invoiceId;
   final bool isInvoiced;
   final bool isPaid;
@@ -651,6 +654,7 @@ class MechanicJob {
     this.discountAmount = 0,
     this.taxAmount = 0,
     this.totalCost = 0,
+    this.taxTreatment = TaxTreatment.noTax,  // ← Add default
     this.invoiceId,
     this.isInvoiced = false,
     this.isPaid = false,
@@ -696,6 +700,9 @@ class MechanicJob {
           double.tryParse(json['discount_amount']?.toString() ?? '0') ?? 0,
       taxAmount: double.tryParse(json['tax_amount']?.toString() ?? '0') ?? 0,
       totalCost: double.tryParse(json['total_cost']?.toString() ?? '0') ?? 0,
+      taxTreatment: json['tax_treatment'] == 'tax_included' 
+          ? TaxTreatment.taxIncluded 
+          : TaxTreatment.noTax,  // ← Add parsing
       invoiceId: json['invoice_id']?.toString(),
       isInvoiced: json['is_invoiced'] as bool? ?? false,
       isPaid: json['is_paid'] as bool? ?? false,
@@ -742,6 +749,7 @@ class MechanicJob {
       'discount_amount': discountAmount,
       'tax_amount': taxAmount,
       'total_cost': totalCost,
+      'tax_treatment': taxTreatment.toValue(),  // ← Add to toJson
       'invoice_id': invoiceId,
       'is_invoiced': isInvoiced,
       'is_paid': isPaid,

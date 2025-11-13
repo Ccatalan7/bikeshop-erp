@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import '../../../shared/models/product.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/number_generation_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -263,7 +265,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           _applyInvoice(invoice);
         }
       } else {
-        _invoiceNumberController.text = _buildSuggestedNumber();
+        _invoiceNumberController.text = await _generateInvoiceNumber();
 
         // Preselect customer if coming from a job
         if (widget.preselectedJobId != null) {
@@ -280,7 +282,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             backgroundColor: Colors.red,
           ),
         );
-        _invoiceNumberController.text = _buildSuggestedNumber();
+        _invoiceNumberController.text = await _generateInvoiceNumber();
       }
     } finally {
       if (mounted) {
@@ -294,7 +296,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
     _invoiceNumberController.text = invoice.invoiceNumber.isNotEmpty
         ? invoice.invoiceNumber
-        : _buildSuggestedNumber();
+        : _buildSuggestedNumber(); // Keep old fallback for existing invoices
     _referenceController.text = invoice.reference ?? '';
 
     Customer? resolvedCustomer;
@@ -361,11 +363,23 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   String _buildSuggestedNumber() {
+    // Deprecated: Use NumberGenerationService.nextSalesInvoiceNumber() instead
+    // This fallback should rarely be used
     final now = DateTime.now();
     final datePortion =
         '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final timePortion = now.millisecondsSinceEpoch.toString().substring(7);
     return 'FV-$datePortion-$timePortion';
+  }
+
+  Future<String> _generateInvoiceNumber() async {
+    try {
+      final numberService = NumberGenerationService();
+      return await numberService.nextSalesInvoiceNumber();
+    } catch (e) {
+      if (kDebugMode) print('Error generating invoice number: $e');
+      return _buildSuggestedNumber(); // Fallback to old method
+    }
   }
 
   Future<void> _loadJobAndPreselectCustomer(String jobId) async {
@@ -919,7 +933,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    
+    // Check if we should return to a specific page (e.g., from pegas table)
+    final returnTo = GoRouterState.of(context).uri.queryParameters['returnTo'];
+    
     return MainLayout(
+      onBackPressed: returnTo != null && returnTo.isNotEmpty
+          ? () => context.go(returnTo)
+          : null, // null = use default back button behavior
       child: Form(
         key: _formKey,
         child: Column(
@@ -1093,8 +1114,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         children: [
           IconButton(
             onPressed: () {
-              // Navigate back to invoice list
-              context.go('/sales/invoices');
+              // Check if we should return to a specific page (e.g., from pegas table)
+              final returnTo = GoRouterState.of(context).uri.queryParameters['returnTo'];
+              if (returnTo != null && returnTo.isNotEmpty) {
+                context.go(returnTo);
+              } else {
+                // Default: Navigate back to invoice list
+                context.go('/sales/invoices');
+              }
             },
             icon: const Icon(Icons.arrow_back),
             tooltip: 'Volver',

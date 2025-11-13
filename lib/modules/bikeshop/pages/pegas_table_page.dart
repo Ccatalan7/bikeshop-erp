@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/services/database_service.dart';
@@ -13,6 +14,7 @@ import '../../crm/services/customer_service.dart';
 import '../../sales/models/sales_models.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
+import '../widgets/pega_detail_view.dart';
 
 enum PegasViewMode { table, board, calendar }
 
@@ -59,6 +61,12 @@ class _PegasTablePageState extends State<PegasTablePage>
   List<MechanicJobLabor> _selectedJobLabor = [];
   bool _loadingDetails = false;
 
+  // Split-pane state for table view
+  static const double _minListPaneWidth = 400.0;
+  static const double _minDetailPaneWidth = 300.0; // Minimum for detail view
+  static const double _defaultListPaneWidth = 1000.0; // Default: list takes more space, detail narrower
+  double _listPaneWidth = _defaultListPaneWidth;
+
   // Column visibility and sorting
   String? _sortColumn = 'arrival_date';
   bool _sortAscending = false; // Show newest first by default
@@ -93,13 +101,25 @@ class _PegasTablePageState extends State<PegasTablePage>
     _databaseService = Provider.of<DatabaseService>(context, listen: false);
     _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
     _customerService = Provider.of<CustomerService>(context, listen: false);
+    _loadListPaneWidth();
     _loadData();
+    
+    // Listen to realtime changes
+    _bikeshopService.addListener(_onRealtimeUpdate);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _bikeshopService.removeListener(_onRealtimeUpdate);
     super.dispose();
+  }
+  
+  void _onRealtimeUpdate() {
+    // Reload data when realtime event occurs
+    if (mounted) {
+      _loadData();
+    }
   }
 
   @override
@@ -129,10 +149,12 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Future<void> _openInvoice(String invoiceId) async {
     _markNeedsRefresh();
-    // Use the new invoice form page (consolidated view with edit/workflow)
-    await context.push('/sales/invoices/$invoiceId/edit');
+    // Navigate to invoice form page with returnTo parameter
+    await context.push('/sales/invoices/$invoiceId/edit?returnTo=/taller/pegas');
     if (!mounted) return;
+    debugPrint('🔄 Reloading data after invoice edit...');
     await _loadData();
+    debugPrint('✅ Data reloaded - invoices count: ${_invoices.length}');
   }
 
   Future<void> _loadData() async {
@@ -259,6 +281,23 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
       }
     }
+  }
+
+  // SharedPreferences for split-pane width persistence
+  Future<void> _loadListPaneWidth() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedWidth = prefs.getDouble('pegas_list_pane_width');
+    if (savedWidth != null && mounted) {
+      setState(() {
+        // Just use the saved width, will be clamped dynamically in _buildSplitView
+        _listPaneWidth = savedWidth;
+      });
+    }
+  }
+
+  Future<void> _saveListPaneWidth(double width) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('pegas_list_pane_width', width);
   }
 
   void _applyFiltersAndSort() {
@@ -418,27 +457,138 @@ class _PegasTablePageState extends State<PegasTablePage>
     return MainLayout(
       child: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _viewMode == PegasViewMode.table
-              ? Column(
-                  children: [
-                    _buildHeader(),
-                    _buildSmartToolbar(),
-                    Expanded(
-                      child: _buildViewContent(),
-                    ),
-                  ],
-                )
-              : SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      _buildHeader(),
-                      SizedBox(
-                        height: MediaQuery.of(context).size.height - 120,
-                        child: _buildViewContent(),
+          : _viewMode == PegasViewMode.table && _selectedJob != null
+              ? _buildSplitView()
+              : _viewMode == PegasViewMode.table
+                  ? Column(
+                      children: [
+                        _buildHeader(),
+                        _buildSmartToolbar(),
+                        Expanded(
+                          child: _buildViewContent(),
+                        ),
+                      ],
+                    )
+                  : SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          _buildHeader(),
+                          SizedBox(
+                            height: MediaQuery.of(context).size.height - 120,
+                            child: _buildViewContent(),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
+    );
+  }
+
+  Widget _buildSplitView() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        
+        return Row(
+          children: [
+            // Left: Jobs list (with horizontal scroll)
+            SizedBox(
+              width: _listPaneWidth.clamp(
+                _minListPaneWidth,
+                availableWidth - _minDetailPaneWidth - 1, // Leave space for detail + divider
+              ),
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  _buildSmartToolbar(),
+                  Expanded(
+                    child: _buildViewContent(),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Resize handle (1px border acts as visual divider + drag area)
+            Container(
+              width: 1,
+              decoration: BoxDecoration(
+                color: Theme.of(context).dividerColor,
+              ),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.resizeColumn,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragUpdate: (details) {
+                    setState(() {
+                      final maxWidth = availableWidth - _minDetailPaneWidth - 1;
+                      _listPaneWidth = (_listPaneWidth + details.delta.dx)
+                          .clamp(_minListPaneWidth, maxWidth);
+                    });
+                    _saveListPaneWidth(_listPaneWidth);
+                  },
+                  child: Container(
+                    width: 8, // Wider hit area for easier dragging
+                    color: Colors.transparent,
                   ),
                 ),
+              ),
+            ),
+            
+            // Right: Detail view (takes remaining space)
+            Expanded(
+              child: Container(
+                constraints: BoxConstraints(
+                  minWidth: _minDetailPaneWidth,
+                ),
+                child: PegaDetailView(
+                  job: _selectedJob!,
+                  customer: _customers[_selectedJob!.customerId],
+                  bike: _bikes[_selectedJob!.bikeId],
+                  items: _selectedJobItems,
+                  labor: _selectedJobLabor,
+                  productImages: _productImages,
+                  onClose: () {
+                    setState(() {
+                      _selectedJob = null;
+                      _selectedJobItems = [];
+                      _selectedJobLabor = [];
+                      _productImages = {};
+                    });
+                  },
+                  onEdit: () async {
+                    // Navigate to form, refresh on return
+                    await context.push('/taller/pegas/${_selectedJob!.id}');
+                    if (!mounted) return;
+                    await _loadData();
+                    // Reload detail after edit
+                    if (_selectedJob != null) {
+                      setState(() => _loadingDetails = true);
+                      await _loadJobDetails(_selectedJob!);
+                    }
+                  },
+                  onStatusChange: (newStatus) async {
+                    // Update job status
+                    final updatedJob = _selectedJob!.copyWith(status: newStatus);
+                    await _databaseService.update(
+                      'mechanic_jobs',
+                      updatedJob.id!,
+                      updatedJob.toJson(),
+                    );
+                    if (!mounted) return;
+                    await _loadData();
+                    // Reload the selected job with updated data
+                    final updated = _jobs.firstWhere((j) => j.id == _selectedJob!.id);
+                    setState(() {
+                      _selectedJob = updated;
+                      _loadingDetails = true;
+                    });
+                    await _loadJobDetails(updated);
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -955,11 +1105,22 @@ class _PegasTablePageState extends State<PegasTablePage>
       final bike = _bikes[job.bikeId];
       final isOverdue = job.isOverdue;
       final daysElapsed = DateTime.now().difference(job.arrivalDate).inDays;
+      final isSelected = _selectedJob?.id == job.id;
 
       return DataRow(
+        selected: isSelected,
+        color: WidgetStateProperty.resolveWith<Color?>((states) {
+          if (isSelected) {
+            return Colors.grey.withOpacity(0.2); // Light grey highlight for selected row
+          }
+          return null; // Default row color
+        }),
         onSelectChanged: (_) {
-          _markNeedsRefresh(); // Mark for refresh when returning
-          context.push('/taller/pegas/${job.id}');
+          setState(() {
+            _selectedJob = job;
+            _loadingDetails = true;
+          });
+          _loadJobDetails(job);
         },
         cells: _visibleColumns
             .where((col) => _getAllColumnIds().contains(col))
@@ -1547,9 +1708,65 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Get invoice details if available
     final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
+    
+    // Debug output
+    if (job.invoiceId != null && invoice != null) {
+      debugPrint('📄 Job ${job.jobNumber}: invoice total=${invoice.total}, balance=${invoice.balance}, status=${invoice.status}');
+    } else if (job.invoiceId != null && invoice == null) {
+      debugPrint('⚠️ Job ${job.jobNumber}: has invoiceId=${job.invoiceId} but invoice NOT found in map!');
+    }
+    
     final isPaid = invoice?.status == 'paid' || job.isPaid;
     final balance = invoice?.balance ?? job.totalCost;
     final total = invoice?.total ?? job.totalCost;
+    
+    // Get invoice status label (Spanish)
+    String statusLabel = 'PENDIENTE';
+    Color statusColor = Colors.orange[900]!;
+    Color bgColor = Colors.orange[100]!;
+    Color borderColor = Colors.orange[300]!;
+    IconData statusIcon = Icons.attach_money;
+    
+    if (invoice != null) {
+      final status = invoice.status.name.toLowerCase();
+      if (status == 'paid' || status == 'pagado' || status == 'pagada') {
+        statusLabel = 'PAGADO';
+        statusColor = Colors.green[900]!;
+        bgColor = Colors.green[100]!;
+        borderColor = Colors.green[300]!;
+        statusIcon = Icons.check_circle;
+      } else if (status == 'confirmed' || status == 'confirmado' || status == 'confirmada') {
+        statusLabel = 'CONFIRMADO';
+        statusColor = Colors.green[700]!;
+        bgColor = Colors.green[50]!;
+        borderColor = Colors.green[200]!;
+        statusIcon = Icons.verified;
+      } else if (status == 'draft' || status == 'borrador') {
+        statusLabel = 'BORRADOR';
+        statusColor = Colors.grey[700]!;
+        bgColor = Colors.grey[100]!;
+        borderColor = Colors.grey[300]!;
+        statusIcon = Icons.edit_document;
+      } else if (status == 'sent' || status == 'enviado' || status == 'enviada' || status == 'emitido' || status == 'emitida' || status == 'issued') {
+        statusLabel = 'ENVIADO';
+        statusColor = Colors.blue[900]!;
+        bgColor = Colors.blue[100]!;
+        borderColor = Colors.blue[300]!;
+        statusIcon = Icons.send;
+      } else if (status == 'overdue' || status == 'vencido' || status == 'vencida') {
+        statusLabel = 'VENCIDO';
+        statusColor = Colors.red[900]!;
+        bgColor = Colors.red[100]!;
+        borderColor = Colors.red[300]!;
+        statusIcon = Icons.warning;
+      } else if (status == 'cancelled' || status == 'cancelado' || status == 'cancelada' || status == 'anulado' || status == 'anulada') {
+        statusLabel = 'CANCELADO';
+        statusColor = Colors.grey[700]!;
+        bgColor = Colors.grey[100]!;
+        borderColor = Colors.grey[300]!;
+        statusIcon = Icons.cancel;
+      }
+    }
 
     return InkWell(
       onTap: () async {
@@ -1560,10 +1777,10 @@ class _PegasTablePageState extends State<PegasTablePage>
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: isPaid ? Colors.green[100] : Colors.orange[100],
+          color: bgColor,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isPaid ? Colors.green[300]! : Colors.orange[300]!,
+            color: borderColor,
             width: 2,
           ),
         ),
@@ -1574,17 +1791,17 @@ class _PegasTablePageState extends State<PegasTablePage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  isPaid ? Icons.check_circle : Icons.attach_money,
+                  statusIcon,
                   size: 16,
-                  color: isPaid ? Colors.green[900] : Colors.orange[900],
+                  color: statusColor,
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  isPaid ? 'PAGADO' : 'PENDIENTE',
+                  statusLabel,
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: isPaid ? Colors.green[900] : Colors.orange[900],
+                    color: statusColor,
                   ),
                 ),
               ],

@@ -244,7 +244,8 @@ class InventoryService extends ChangeNotifier {
     }
 
     try {
-      final rawProducts = await _db!.select('products');
+      // Fetch ALL products (uses pagination internally to bypass 1000 row limit)
+      final rawProducts = await _db!.select('products', fetchAll: true);
       final products = rawProducts.map(_productFromMap).toList()
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 

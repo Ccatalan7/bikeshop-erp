@@ -38,13 +38,35 @@ class CustomerService extends ChangeNotifier {
           return ids.add(id);
         }).toList();
       } else {
-        data = await _db.select('customers');
+        // Fetch ALL customers (uses pagination internally to bypass 1000 row limit)
+        data = await _db.select('customers', fetchAll: true, orderBy: 'name');
       }
 
-      return data.map((json) => Customer.fromJson(json)).toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
+      return data.map((json) => Customer.fromJson(json)).toList();
     } catch (e) {
       if (kDebugMode) print('Error fetching customers: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Customer>> getCustomersPaginated({
+    required int page,
+    required int pageSize,
+  }) async {
+    try {
+      final from = page * pageSize;
+      final to = from + pageSize - 1;
+
+      final data = await _db.selectWithPagination(
+        'customers',
+        from: from,
+        to: to,
+        orderBy: 'name',
+      );
+
+      return data.map((json) => Customer.fromJson(json)).toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching customers (paginated): $e');
       rethrow;
     }
   }

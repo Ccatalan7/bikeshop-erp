@@ -38,15 +38,29 @@ class CartItemCard extends StatelessWidget {
                 color: theme.colorScheme.surfaceVariant,
               ),
               child: item.product?.imageUrl != null
-                  ? CachedNetworkImage(
-                      imageUrl: item.product!.imageUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      errorWidget: (context, url, error) => const Icon(
-                        Icons.pedal_bike,
-                        size: 24,
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: CachedNetworkImage(
+                        imageUrl: item.product!.imageUrl!,
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.cover,
+                        memCacheWidth: 120,
+                        memCacheHeight: 120,
+                        placeholder: (context, url) => Container(
+                          color: theme.colorScheme.surfaceVariant,
+                          child: const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: theme.colorScheme.surfaceVariant,
+                          child: Icon(
+                            Icons.pedal_bike,
+                            size: 24,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                       ),
                     )
                   : Icon(

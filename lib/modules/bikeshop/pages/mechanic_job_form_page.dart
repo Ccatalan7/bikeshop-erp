@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -5,7 +7,10 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../modules/crm/models/crm_models.dart';
+import '../../../modules/sales/models/sales_models.dart';
 import '../../../shared/models/product.dart';
+import '../../../shared/models/tax_treatment.dart';
+import '../../../shared/services/database_service.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/services/inventory_service.dart';
@@ -60,6 +65,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   DateTime? _selectedDeadline;
   bool _requiresApproval = false;
   bool _isWarrantyJob = false;
+  TaxTreatment _taxTreatment = TaxTreatment.noTax; // Default: no tax (matches sales invoice)
 
   // Parts and labor
   final List<_JobPartItem> _partItems = [];
@@ -161,8 +167,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final bikeshopService =
           Provider.of<BikeshopService>(context, listen: false);
 
+      debugPrint('🔍 Loading job with ID: ${widget.jobId}');
       final job = await bikeshopService.getJobById(widget.jobId!);
+      
       if (job == null) {
+        debugPrint('❌ Job not found: ${widget.jobId}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Pega no encontrada')),
@@ -171,6 +180,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
         return;
       }
+      
+      debugPrint('✅ Job loaded: ${job.jobNumber}');
 
       // Load customer and bikes
       final customer = _customers.firstWhere((c) => c.id == job.customerId);
@@ -183,6 +194,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final parts = await bikeshopService.getJobItems(job.id!);
       final labor = await bikeshopService.getJobLabor(job.id!);
 
+      // Load tax treatment from job itself (primary source)
+      TaxTreatment loadedTaxTreatment = job.taxTreatment;
+      debugPrint('✅ Tax treatment loaded from job: $loadedTaxTreatment');
+
       if (mounted) {
         setState(() {
           _existingJob = job;
@@ -193,6 +208,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _selectedDeadline = job.deadline;
           _requiresApproval = job.requiresApproval;
           _isWarrantyJob = job.isWarrantyJob;
+          _taxTreatment = loadedTaxTreatment; // ← Set the loaded tax treatment
 
           _clientRequestController.text = job.clientRequest ?? '';
           _diagnosisController.text = job.diagnosis ?? '';
@@ -273,6 +289,68 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     });
   }
 
+  Future<Customer?> _createQuickCustomer(String name) async {
+    if (name.trim().isEmpty) return null;
+    try {
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant_id del usuario');
+      }
+
+      final customer = Customer(
+        tenantId: tenantId,
+        name: name.trim(),
+        rut: '',
+      );
+
+      final customerService =
+          Provider.of<CustomerService>(context, listen: false);
+      final created = await customerService.createCustomer(customer);
+      
+      // Add to cached list
+      setState(() {
+        _customers.add(created);
+      });
+      
+      return created;
+    } catch (e) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al crear cliente: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return null;
+    }
+  }
+
+  Future<void> _showCustomerSelector() async {
+    final customerService =
+        Provider.of<CustomerService>(context, listen: false);
+
+    final selected = await showDialog<Customer>(
+      context: context,
+      builder: (context) {
+        return _CustomerSelector(
+          initialCustomers: List<Customer>.from(_customers),
+          customerService: customerService,
+          onCreateCustomer: _createQuickCustomer,
+        );
+      },
+    );
+
+    if (selected != null && mounted) {
+      await _selectCustomer(selected);
+      final exists = _customers.any((customer) => customer.id == selected.id);
+      if (!exists) {
+        setState(() {
+          _customers.add(selected);
+        });
+      }
+    }
+  }
+
   void _addCatalogPart(Product product) {
     // Always add as new line (allow duplicates on different lines)
     setState(() {
@@ -343,12 +421,28 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return double.tryParse(_discountController.text) ?? 0.0;
   }
 
+  double get _netAmount {
+    final afterDiscount = _subtotal - _discountAmount;
+    if (_taxTreatment == TaxTreatment.taxIncluded) {
+      // Tax included: net = total ÷ 1.19
+      return afterDiscount / 1.19;
+    } else {
+      // No tax: net = full amount
+      return afterDiscount;
+    }
+  }
+
   double get _taxAmount {
-    return (_subtotal - _discountAmount) * 0.19; // 19% IVA
+    if (_taxTreatment == TaxTreatment.noTax) {
+      return 0.0;
+    }
+    // Tax included: iva = total - net
+    return (_subtotal - _discountAmount) - _netAmount;
   }
 
   double get _total {
-    return _subtotal - _discountAmount + _taxAmount;
+    // Total is ALWAYS subtotal - discount (customer pays this)
+    return _subtotal - _discountAmount;
   }
 
   Future<void> _saveJob() async {
@@ -413,6 +507,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         laborCost: 0,
         taxAmount: 0,
         totalCost: 0,
+        taxTreatment: _taxTreatment,  // ← Add tax treatment
         // CRITICAL: Preserve invoice_id and invoice flags when updating!
         invoiceId: _existingJob?.invoiceId,
         isInvoiced: _existingJob?.isInvoiced ?? false,
@@ -489,7 +584,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       // AFTER all items are updated, sync to invoice if it exists
       if (_existingJob?.invoiceId != null) {
+        debugPrint('🔄 Syncing job to invoice: ${_existingJob!.invoiceId}');
         await bikeshopService.syncJobToInvoice(jobId);
+        
+        // Also update the invoice's tax treatment to match the pega
+        debugPrint('💰 Current tax treatment: $_taxTreatment');
+        await _updateInvoiceTaxTreatment(_existingJob!.invoiceId!);
+      } else {
+        debugPrint('⚠️ No invoice linked to this job');
       }
 
       // Create invoice AFTER items are added (awesome feature!)
@@ -507,8 +609,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             backgroundColor: Colors.green,
           ),
         );
-        // Navigate to pegas table after successful creation/update
-        context.go('/taller/pegas');
+        // Pop back to previous page (table will auto-refresh)
+        context.pop();
       }
     } catch (e) {
       if (mounted) {
@@ -520,6 +622,68 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       setState(() {
         _isSaving = false;
       });
+    }
+  }
+
+  Future<void> _updateInvoiceTaxTreatment(String invoiceId) async {
+    try {
+      final databaseService = Provider.of<DatabaseService>(context, listen: false);
+      
+      // Fetch the current invoice
+      final invoiceData = await databaseService.selectById('sales_invoices', invoiceId);
+      if (invoiceData == null) {
+        debugPrint('⚠️ Invoice not found: $invoiceId');
+        return;
+      }
+      
+      final invoice = Invoice.fromJson(invoiceData);
+      
+      // Check if tax treatment actually changed
+      final currentTaxTreatment = invoice.taxTreatment;
+      if (currentTaxTreatment == _taxTreatment) {
+        debugPrint('✅ Tax treatment unchanged: $_taxTreatment');
+        return;
+      }
+      
+      debugPrint('🔄 Updating invoice tax treatment: $currentTaxTreatment → $_taxTreatment');
+      
+      // Recalculate invoice totals based on new tax treatment
+      // Note: subtotal stays the same (sum of line items), we only change net_amount and iva_amount
+      final subtotal = invoice.subtotal;
+      double netAmount;
+      double ivaAmount;
+      final total = subtotal; // Total is always the subtotal (what customer pays)
+      
+      if (_taxTreatment == TaxTreatment.noTax) {
+        // No tax: net = full subtotal, iva = 0
+        netAmount = subtotal;
+        ivaAmount = 0;
+      } else {
+        // Tax included: net = subtotal ÷ 1.19, iva = subtotal - net
+        netAmount = subtotal / 1.19;
+        ivaAmount = subtotal - netAmount;
+      }
+      
+      debugPrint('💰 Recalculated: subtotal=$subtotal, net=$netAmount, iva=$ivaAmount, total=$total');
+      
+      // Update the invoice
+      await databaseService.update(
+        'sales_invoices',
+        invoiceId,
+        {
+          'tax_treatment': _taxTreatment.toValue(),
+          'net_amount': netAmount,
+          'iva_amount': ivaAmount,
+          'total': total,
+          'balance': total - invoice.paidAmount,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+      );
+      
+      debugPrint('✅ Invoice tax treatment updated successfully');
+    } catch (e) {
+      debugPrint('❌ Error updating invoice tax treatment: $e');
+      // Don't rethrow - this shouldn't block saving the pega
     }
   }
 
@@ -1013,28 +1177,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DropdownButtonFormField<Customer>(
-          value: _selectedCustomer,
-          decoration: const InputDecoration(
-            labelText: 'Cliente *',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.person),
-          ),
-          items: _customers.map((customer) {
-            return DropdownMenuItem(
-              value: customer,
-              child: Text(customer.name),
-            );
-          }).toList(),
-          onChanged: widget.jobId != null
+        // Customer selector with quick add
+        InkWell(
+          onTap: widget.jobId != null
               ? null // Disable editing customer in edit mode
-              : (customer) {
-                  if (customer != null) {
-                    _selectCustomer(customer);
-                  }
-                },
-          validator: (value) =>
-              value == null ? 'Seleccione un cliente' : null,
+              : _showCustomerSelector,
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'Cliente *',
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.person),
+              suffixIcon: widget.jobId == null
+                  ? const Icon(Icons.arrow_drop_down)
+                  : null,
+              errorText: _selectedCustomer == null && _formKey.currentState != null
+                  ? 'Seleccione un cliente'
+                  : null,
+            ),
+            child: Text(
+              _selectedCustomer?.name ?? 'Seleccione un cliente',
+              style: _selectedCustomer != null
+                  ? null
+                  : TextStyle(color: Colors.grey[600]),
+            ),
+          ),
         ),
         const SizedBox(height: 16),
         // Custom bike dropdown with action buttons
@@ -2228,8 +2394,46 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ),
           ],
         ),
+        const SizedBox(height: 16),
+        // Tax Treatment Dropdown
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Tratamiento de IVA:',
+                style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<TaxTreatment>(
+              value: _taxTreatment,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 8),
+                isDense: true,
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: TaxTreatment.noTax,
+                  child: Text('Sin IVA'),
+                ),
+                DropdownMenuItem(
+                  value: TaxTreatment.taxIncluded,
+                  child: Text('IVA Incluido (19%)'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _taxTreatment = value);
+                }
+              },
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
-        _buildCostRow('IVA (19%):', _taxAmount, false),
+        if (_taxTreatment == TaxTreatment.taxIncluded) ...[
+          _buildCostRow('Neto:', _netAmount, false),
+          const SizedBox(height: 8),
+          _buildCostRow('IVA (19%):', _taxAmount, false),
+        ],
         const Divider(thickness: 2),
         _buildCostRow('TOTAL:', _total, true, fontSize: 20),
       ],
@@ -2981,6 +3185,355 @@ class _LaborEntryDialogState extends State<_LaborEntryDialog> {
           child: const Text('Agregar'),
         ),
       ],
+    );
+  }
+}
+
+// Customer Selector Widget
+class _CustomerSelector extends StatefulWidget {
+  final List<Customer> initialCustomers;
+  final CustomerService customerService;
+  final Future<Customer?> Function(String name) onCreateCustomer;
+
+  const _CustomerSelector({
+    required this.initialCustomers,
+    required this.customerService,
+    required this.onCreateCustomer,
+  });
+
+  @override
+  State<_CustomerSelector> createState() => _CustomerSelectorState();
+}
+
+class _CustomerSelectorState extends State<_CustomerSelector> {
+  late List<Customer> _customers = widget.initialCustomers;
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+  bool _isSearching = false;
+  bool _showCreateForm = false;
+  
+  // Form controllers
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _rutController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    _nameController.dispose();
+    _rutController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String term) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
+      setState(() => _isSearching = true);
+      try {
+        final results = term.trim().isEmpty
+            ? widget.initialCustomers
+            : await widget.customerService.getCustomers(searchTerm: term);
+        if (mounted) {
+          setState(() => _customers = results);
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() => _customers = widget.initialCustomers);
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isSearching = false);
+        }
+      }
+    });
+  }
+
+  Future<void> _handleCreateCustomer() async {
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El nombre es obligatorio'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final customer = await _createCustomerWithData({
+      'name': _nameController.text.trim(),
+      'rut': _rutController.text.trim(),
+      'email': _emailController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'address': _addressController.text.trim(),
+    });
+
+    if (customer != null && mounted) {
+      Navigator.of(context).pop(customer);
+    }
+  }
+
+  Future<Customer?> _createCustomerWithData(Map<String, String> data) async {
+    try {
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant_id del usuario');
+      }
+
+      final customer = Customer(
+        tenantId: tenantId,
+        name: data['name']!,
+        rut: data['rut'] ?? '',
+        email: data['email']?.isEmpty == true ? null : data['email'],
+        phone: data['phone']?.isEmpty == true ? null : data['phone'],
+        address: data['address']?.isEmpty == true ? null : data['address'],
+      );
+
+      final customerService =
+          Provider.of<CustomerService>(context, listen: false);
+      final created = await customerService.createCustomer(customer);
+      
+      // Add to list
+      setState(() {
+        _customers.add(created);
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cliente "${created.name}" creado exitosamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      
+      return created;
+    } catch (e) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al crear cliente: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Dialog(
+      backgroundColor: theme.colorScheme.surface,
+      insetPadding: const EdgeInsets.all(16),
+      child: Container(
+        width: 600,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.person_search,
+                    color: theme.colorScheme.onPrimary,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Seleccionar Cliente',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: theme.colorScheme.onPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.close, color: theme.colorScheme.onPrimary),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Search field
+                    TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        labelText: 'Buscar cliente',
+                        hintText: 'Buscar por nombre, RUT, email...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onChanged: _onSearchChanged,
+                    ),
+                    const SizedBox(height: 16),
+              
+              // Toggle button
+              OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _showCreateForm = !_showCreateForm;
+                    if (!_showCreateForm) {
+                      // Clear form when collapsing
+                      _nameController.clear();
+                      _rutController.clear();
+                      _emailController.clear();
+                      _phoneController.clear();
+                      _addressController.clear();
+                    }
+                  });
+                },
+                icon: Icon(_showCreateForm ? Icons.expand_less : Icons.person_add),
+                label: Text(_showCreateForm ? 'Cancelar' : 'Crear cliente nuevo'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+              ),
+              
+              // Inline create form
+              if (_showCreateForm) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.colorScheme.outline.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Nombre *',
+                          hintText: 'Nombre completo',
+                          isDense: true,
+                        ),
+                        textCapitalization: TextCapitalization.words,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _rutController,
+                        decoration: const InputDecoration(
+                          labelText: 'RUT',
+                          hintText: '12.345.678-9',
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _emailController,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          hintText: 'cliente@ejemplo.com',
+                          isDense: true,
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _phoneController,
+                        decoration: const InputDecoration(
+                          labelText: 'Teléfono',
+                          hintText: '+56 9 1234 5678',
+                          isDense: true,
+                        ),
+                        keyboardType: TextInputType.phone,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _addressController,
+                        decoration: const InputDecoration(
+                          labelText: 'Dirección',
+                          hintText: 'Calle, número, comuna',
+                          isDense: true,
+                        ),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _handleCreateCustomer,
+                        icon: const Icon(Icons.check),
+                        label: const Text('Crear y Seleccionar'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              
+            const SizedBox(height: 16),
+            if (_isSearching) const LinearProgressIndicator(minHeight: 2),
+            
+            // Customer list (only show when not creating)
+            if (!_showCreateForm)
+              Container(
+                height: 400,
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.2),
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: _customers.isEmpty
+                    ? const Center(child: Text('No se encontraron clientes'))
+                    : ListView.separated(
+                        itemCount: _customers.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final customer = _customers[index];
+                          return ListTile(
+                            title: Text(customer.name),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (customer.rut.isNotEmpty)
+                                  Text('RUT: ${customer.rut}'),
+                                if ((customer.email ?? '').isNotEmpty)
+                                  Text(customer.email!),
+                                if ((customer.phone ?? '').isNotEmpty)
+                                  Text(customer.phone!),
+                              ],
+                            ),
+                            onTap: () => Navigator.of(context).pop(customer),
+                          );
+                        },
+                      ),
+              ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
