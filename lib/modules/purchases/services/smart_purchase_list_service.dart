@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/database_service.dart';
@@ -32,6 +33,12 @@ class SmartPurchaseListService extends ChangeNotifier {
   // Real-time subscriptions
   RealtimeChannel? _purchaseListChannel;
   RealtimeChannel? _productsChannel;
+  
+  // Debounce timer for bulk operations
+  Timer? _debounceTimer;
+  
+  // Pause realtime updates during bulk operations
+  bool _pauseRealtime = false;
   
   // Cache for enriched product data (product_id → product details)
   final Map<String, Map<String, dynamic>> _productCache = {};
@@ -124,10 +131,23 @@ class SmartPurchaseListService extends ChangeNotifier {
   Future<void> _loadBaseData(String tenantId) async {
     final queryStartTime = DateTime.now();
     
+    // PERFORMANCE: Only load pending items on initial load (default view)
+    // Other statuses will load on-demand when user changes filter
     final response = await _client
         .from('smart_purchase_list')
-        .select('*')
+        .select('''
+          *,
+          products!smart_purchase_list_product_id_fkey(
+            category_id,
+            product_categories!products_category_id_fkey(
+              id,
+              name,
+              full_path
+            )
+          )
+        ''')
         .eq('tenant_id', tenantId)
+        .eq('status', 'pending') // Only load pending items initially
         .order('priority', ascending: false)
         .order('added_date', ascending: false);
     
@@ -202,6 +222,12 @@ class SmartPurchaseListService extends ChangeNotifier {
   
   /// Handle real-time changes to smart_purchase_list table
   void _handlePurchaseListChange(PostgresChangePayload payload) {
+    // Skip realtime updates during bulk operations
+    if (_pauseRealtime) {
+      debugPrint('⏸️ [REALTIME] Paused - skipping update');
+      return;
+    }
+    
     debugPrint('🔔 [REALTIME] Purchase list change detected! (Page may be closed)');
     debugPrint('   Event Type: ${payload.eventType}');
     debugPrint('   Current items count: ${_items.length}');
@@ -240,13 +266,22 @@ class SmartPurchaseListService extends ChangeNotifier {
           break;
       }
       
-      debugPrint('📢 [REALTIME] Notifying listeners... (${_items.length} items total)');
-      notifyListeners();
-      debugPrint('✅ [REALTIME] Listeners notified - data persisted in singleton');
+      debugPrint('📢 [REALTIME] Scheduling debounced notify... (${_items.length} items total)');
+      _debouncedNotify();
+      debugPrint('✅ [REALTIME] Notify scheduled - data persisted in singleton');
     } catch (e, stackTrace) {
       debugPrint('❌ [REALTIME] Error handling purchase list change: $e');
       debugPrint('Stack trace: $stackTrace');
     }
+  }
+  
+  /// Debounced notify to batch rapid updates (e.g., bulk operations)
+  void _debouncedNotify() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      debugPrint('🔔 [DEBOUNCE] Notifying listeners now');
+      notifyListeners();
+    });
   }
   
   /// Handle real-time stock changes in products table
@@ -351,15 +386,100 @@ class SmartPurchaseListService extends ChangeNotifier {
       return;
     }
     
-    // Otherwise, just apply filters to cached data (instant!)
-    debugPrint('⚡ Applying filters to cached data (instant)');
-    notifyListeners(); // Trigger UI update with current data
+    // If status filter changed, fetch new data from database
+    if (statusFilter != null && statusFilter != 'all') {
+      debugPrint('📥 Loading items for status: $statusFilter');
+      _isLoading = true;
+      notifyListeners();
+      
+      try {
+        final tenantId = await _tenantService.getTenantId();
+        if (tenantId == null) return;
+        
+        final response = await _client
+            .from('smart_purchase_list')
+            .select('''
+              *,
+              products!smart_purchase_list_product_id_fkey(
+                category_id,
+                product_categories!products_category_id_fkey(
+                  id,
+                  name,
+                  full_path
+                )
+              )
+            ''')
+            .eq('tenant_id', tenantId)
+            .eq('status', statusFilter)
+            .order('priority', ascending: false)
+            .order('added_date', ascending: false);
+        
+        final items = response as List<dynamic>;
+        
+        // Replace items with filtered results
+        _items = items
+            .map((json) => SmartPurchaseListItem.fromJson(json))
+            .toList();
+        
+        debugPrint('✅ Loaded ${_items.length} items for status: $statusFilter');
+      } catch (e) {
+        debugPrint('❌ Error loading items: $e');
+      } finally {
+        _isLoading = false;
+        notifyListeners();
+      }
+    } else if (statusFilter == 'all') {
+      // Load all items when "all" selected
+      debugPrint('📥 Loading ALL items');
+      _isLoading = true;
+      notifyListeners();
+      
+      try {
+        final tenantId = await _tenantService.getTenantId();
+        if (tenantId == null) return;
+        
+        final response = await _client
+            .from('smart_purchase_list')
+            .select('''
+              *,
+              products!smart_purchase_list_product_id_fkey(
+                category_id,
+                product_categories!products_category_id_fkey(
+                  id,
+                  name,
+                  full_path
+                )
+              )
+            ''')
+            .eq('tenant_id', tenantId)
+            .order('priority', ascending: false)
+            .order('added_date', ascending: false);
+        
+        final items = response as List<dynamic>;
+        
+        _items = items
+            .map((json) => SmartPurchaseListItem.fromJson(json))
+            .toList();
+        
+        debugPrint('✅ Loaded ${_items.length} total items');
+      } catch (e) {
+        debugPrint('❌ Error loading items: $e');
+      } finally {
+        _isLoading = false;
+        notifyListeners();
+      }
+    } else {
+      // Just filter cached data for pending (already loaded)
+      debugPrint('⚡ Using cached pending items (instant)');
+      notifyListeners();
+    }
   }
   
   /// Get filtered items (computed property for UI)
   List<SmartPurchaseListItem> getFilteredItems({
     String? statusFilter,
     String? supplierFilter,
+    String? categoryFilter,
     String searchQuery = '',
   }) {
     var filtered = List<SmartPurchaseListItem>.from(_items);
@@ -375,6 +495,15 @@ class SmartPurchaseListService extends ChangeNotifier {
         filtered = filtered.where((item) => item.supplierId == null).toList();
       } else {
         filtered = filtered.where((item) => item.supplierId == supplierFilter).toList();
+      }
+    }
+    
+    // Apply category filter
+    if (categoryFilter != null && categoryFilter != 'all') {
+      if (categoryFilter == 'none' || categoryFilter == '') {
+        filtered = filtered.where((item) => item.categoryId == null).toList();
+      } else {
+        filtered = filtered.where((item) => item.categoryId == categoryFilter).toList();
       }
     }
     
@@ -647,6 +776,84 @@ class SmartPurchaseListService extends ChangeNotifier {
     await updateItem(itemId, {
       'status': 'ignored',
     });
+  }
+
+  /// Update item status (e.g., archive, unarchive)
+  Future<void> updateStatus(String itemId, String status) async {
+    await updateItem(itemId, {
+      'status': status,
+    });
+  }
+
+  /// Bulk update status for multiple items (optimized for performance)
+  Future<void> bulkUpdateStatus(List<String> itemIds, String status) async {
+    if (itemIds.isEmpty) return;
+    
+    try {
+      debugPrint('🔄 Bulk updating ${itemIds.length} items to status: $status');
+      
+      // UNSUBSCRIBE from realtime to prevent event flood
+      debugPrint('📴 Unsubscribing from realtime channels...');
+      await _purchaseListChannel?.unsubscribe();
+      await _productsChannel?.unsubscribe();
+      
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) throw Exception('No tenant ID');
+
+      // Single database query for all items - MUCH FASTER!
+      await _client
+          .from('smart_purchase_list')
+          .update({'status': status})
+          .inFilter('id', itemIds)
+          .eq('tenant_id', tenantId);
+
+      debugPrint('✅ Bulk update complete - refreshing data');
+      
+      // Reload items with the OPPOSITE status of what we just set
+      // If we archived items, reload pending. If we unarchived, reload archived.
+      final reloadStatus = status == 'archived' ? 'pending' : 'archived';
+      
+      final response = await _client
+          .from('smart_purchase_list')
+          .select('''
+            *,
+            products!smart_purchase_list_product_id_fkey(
+              category_id,
+              product_categories!products_category_id_fkey(
+                id,
+                name,
+                full_path
+              )
+            )
+          ''')
+          .eq('tenant_id', tenantId)
+          .eq('status', reloadStatus)
+          .order('priority', ascending: false)
+          .order('added_date', ascending: false);
+      
+      _items = (response as List<dynamic>)
+          .map((json) => SmartPurchaseListItem.fromJson(json))
+          .toList();
+      
+      debugPrint('✅ Reloaded ${_items.length} $reloadStatus items');
+      
+      // RESUBSCRIBE to realtime
+      debugPrint('📡 Resubscribing to realtime channels...');
+      _setupRealtimeListeners(tenantId);
+      
+      notifyListeners();
+      debugPrint('✅ Bulk operation complete - realtime restored');
+    } catch (e) {
+      // Always try to restore realtime on error
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId != null) {
+        _setupRealtimeListeners(tenantId);
+      }
+      _error = 'Error bulk updating items: $e';
+      debugPrint('❌ $_error');
+      notifyListeners();
+      rethrow;
+    }
   }
 
   /// Get items grouped by supplier

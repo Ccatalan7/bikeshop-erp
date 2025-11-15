@@ -419,15 +419,17 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         if (widget.initialLineItems != null && widget.initialLineItems!.isNotEmpty) {
           for (final item in widget.initialLineItems!) {
             final productId = item['product_id'] as String?;
+            final productName = item['product_name'] as String?;
+            final productSku = item['product_sku'] as String?;
             final suggestedQty = (item['suggested_quantity'] as int?) ?? 1;
             
-            if (productId != null && _productCache.isNotEmpty) {
+            if (productId != null && productId.isNotEmpty && _productCache.isNotEmpty) {
               try {
                 final product = _productCache.firstWhere(
                   (p) => p.id == productId,
                 );
                 
-                // Add line with suggested quantity
+                // Add line with suggested quantity from database product
                 final entry = _PurchaseLineEntry(
                   line: PurchaseInvoiceItem(
                     productId: product.id,
@@ -442,9 +444,39 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                 entry.attachListeners(_recalculateTotals);
                 _lineEntries.add(entry);
               } catch (e) {
-                // Product not found in cache, skip
                 debugPrint('⚠️ Product $productId not found: $e');
+                // Product not found in cache, add as ad-hoc item
+                if (productName != null && productName.isNotEmpty) {
+                  final entry = _PurchaseLineEntry(
+                    line: PurchaseInvoiceItem(
+                      productId: '', // Ad-hoc item (empty string)
+                      productName: productName,
+                      productSku: productSku,
+                      quantity: suggestedQty.toDouble(),
+                      unitCost: 0, // User will fill this
+                      discount: 0,
+                      ivaRate: _ivaRate,
+                    ),
+                  );
+                  entry.attachListeners(_recalculateTotals);
+                  _lineEntries.add(entry);
+                }
               }
+            } else if (productName != null && productName.isNotEmpty) {
+              // No productId or empty, add as ad-hoc item
+              final entry = _PurchaseLineEntry(
+                line: PurchaseInvoiceItem(
+                  productId: '', // Ad-hoc item (empty string)
+                  productName: productName,
+                  productSku: productSku,
+                  quantity: suggestedQty.toDouble(),
+                  unitCost: 0, // User will fill this
+                  discount: 0,
+                  ivaRate: _ivaRate,
+                ),
+              );
+              entry.attachListeners(_recalculateTotals);
+              _lineEntries.add(entry);
             }
           }
           

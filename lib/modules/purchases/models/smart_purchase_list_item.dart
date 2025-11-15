@@ -3,6 +3,8 @@ class SmartPurchaseListItem {
   final String? productId;
   final String productName;
   final String? productSku;
+  final String? categoryId;
+  final String? categoryName;
   final String? supplierId;
   final String? supplierName;
   final int suggestedQuantity;
@@ -33,6 +35,8 @@ class SmartPurchaseListItem {
     this.productId,
     required this.productName,
     this.productSku,
+    this.categoryId,
+    this.categoryName,
     this.supplierId,
     this.supplierName,
     required this.suggestedQuantity,
@@ -60,11 +64,32 @@ class SmartPurchaseListItem {
   });
 
   factory SmartPurchaseListItem.fromJson(Map<String, dynamic> json) {
+    // Extract category from nested products join
+    String? categoryId;
+    String? categoryName;
+    
+    if (json['products'] != null && json['products'] is Map) {
+      final products = json['products'] as Map<String, dynamic>;
+      categoryId = products['category_id'] as String?;
+      
+      if (products['product_categories'] != null && products['product_categories'] is Map) {
+        final category = products['product_categories'] as Map<String, dynamic>;
+        categoryId = category['id'] as String?;
+        categoryName = category['full_path'] as String? ?? category['name'] as String?;
+      }
+    }
+    
+    // Fallback to direct fields if they exist
+    categoryId ??= json['category_id'] as String?;
+    categoryName ??= json['category_name'] as String?;
+    
     return SmartPurchaseListItem(
       id: json['id'] as String,
       productId: json['product_id'] as String?,
       productName: json['product_name'] as String? ?? '',
       productSku: json['product_sku'] as String?,
+      categoryId: categoryId,
+      categoryName: categoryName,
       supplierId: json['supplier_id'] as String?,
       supplierName: json['supplier_name'] as String?,
       suggestedQuantity: json['suggested_quantity'] as int? ?? 1,
@@ -110,6 +135,8 @@ class SmartPurchaseListItem {
       'product_id': productId,
       'product_name': productName,
       'product_sku': productSku,
+      'category_id': categoryId,
+      'category_name': categoryName,
       'supplier_id': supplierId,
       'supplier_name': supplierName,
       'suggested_quantity': suggestedQuantity,
@@ -142,6 +169,8 @@ class SmartPurchaseListItem {
     String? productId,
     String? productName,
     String? productSku,
+    String? categoryId,
+    String? categoryName,
     String? supplierId,
     String? supplierName,
     int? suggestedQuantity,
@@ -172,6 +201,8 @@ class SmartPurchaseListItem {
       productId: productId ?? this.productId,
       productName: productName ?? this.productName,
       productSku: productSku ?? this.productSku,
+      categoryId: categoryId ?? this.categoryId,
+      categoryName: categoryName ?? this.categoryName,
       supplierId: supplierId ?? this.supplierId,
       supplierName: supplierName ?? this.supplierName,
       suggestedQuantity: suggestedQuantity ?? this.suggestedQuantity,

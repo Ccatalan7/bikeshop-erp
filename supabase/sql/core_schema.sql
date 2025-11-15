@@ -2079,7 +2079,7 @@ create table if not exists smart_purchase_list (
   suggested_quantity integer not null default 1,
   actual_quantity integer, -- User can override suggested quantity
   status text not null default 'pending'
-    check (status in ('pending','ordered','received','ignored','cancelled')),
+    check (status in ('pending','ordered','received','ignored','cancelled','archived')),
   priority numeric(5,2) not null default 50, -- 0-100 scale
   rotation_kpi numeric(5,2), -- How fast the item moves (sales per day)
   days_since_last_purchase integer,
@@ -2113,6 +2113,13 @@ alter table smart_purchase_list add column if not exists stock_at_order integer;
 
 -- Add stock_at_receipt column if it doesn't exist (migration for existing tables)
 alter table smart_purchase_list add column if not exists stock_at_receipt integer;
+
+-- Add category columns if they don't exist (migration for existing tables)
+alter table smart_purchase_list add column if not exists category_id uuid references product_categories(id) on delete set null;
+alter table smart_purchase_list add column if not exists category_name text;
+
+-- Add index for category filtering
+create index if not exists idx_smart_purchase_list_category on smart_purchase_list(category_id);
 
 -- Enable RLS for smart_purchase_list
 alter table smart_purchase_list enable row level security;
@@ -9032,7 +9039,7 @@ end $$;
 create table if not exists mechanic_jobs (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  job_number text not null unique, -- Auto-generated: MJ-YYYYMMDD-001
+  job_number text not null unique, -- Auto-generated: PG-00001
   customer_id uuid not null references customers(id) on delete cascade,
   bike_id uuid not null references bikes(id) on delete cascade,
   service_package_id uuid references service_packages(id) on delete set null,
@@ -9548,7 +9555,7 @@ create trigger trg_delete_invoice_cascade_pega
   for each row
   execute function public.cascade_delete_pega_invoice();
 
--- Function: Auto-generate job number (MJ-YYYYMMDD-###)
+-- Function: Auto-generate job number (PG-#####)
 create or replace function public.generate_mechanic_job_number()
 returns text
 language plpgsql
@@ -9556,18 +9563,17 @@ security definer
 set search_path = public
 as $$
 declare
-  v_date_prefix text;
   v_count integer;
   v_job_number text;
 begin
-  v_date_prefix := 'MJ-' || to_char(now(), 'YYYYMMDD') || '-';
-  
+  -- Count all existing pegas (including deleted via soft delete if any)
   select count(*) + 1
   into v_count
   from mechanic_jobs
-  where job_number like v_date_prefix || '%';
+  where job_number like 'PG-%';
   
-  v_job_number := v_date_prefix || lpad(v_count::text, 3, '0');
+  -- Generate simple sequential number: PG-00001, PG-00002, etc.
+  v_job_number := 'PG-' || lpad(v_count::text, 5, '0');
   
   return v_job_number;
 end;

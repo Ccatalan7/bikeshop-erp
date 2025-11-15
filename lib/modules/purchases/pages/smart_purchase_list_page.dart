@@ -7,6 +7,7 @@ import '../services/purchase_service.dart';
 import '../models/smart_purchase_list_item.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/models/supplier.dart';
+import '../../../shared/services/tenant_service.dart';
 import 'purchase_invoice_form_page.dart';
 
 class SmartPurchaseListPage extends StatefulWidget {
@@ -19,11 +20,17 @@ class SmartPurchaseListPage extends StatefulWidget {
 class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   String _statusFilter = 'pending';
   String _supplierFilter = 'all';
+  String _categoryFilter = 'all';
   String _priorityFilter = 'all';
   String _searchQuery = '';
   final Set<String> _selectedItems = {};
   bool _selectAll = false;
   List<Supplier> _suppliers = [];
+  List<Map<String, dynamic>> _categories = [];
+  bool _isArchiving = false; // Loading state for bulk operations
+  
+  // Alternatives cache: itemId -> list of alternative products with stock
+  final Map<String, List<Map<String, dynamic>>> _alternativesCache = {};
   
   // Pagination
   static const int _itemsPerPage = 100;
@@ -35,11 +42,14 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   @override
   void initState() {
     super.initState();
+    // Clear alternatives cache to recalculate with new matching logic
+    _alternativesCache.clear();
     // Use post-frame callback to avoid blocking initial render
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _initializeService();
         _loadSuppliers();
+        _loadCategories();
         _preloadInvoiceData();
       }
     });
@@ -145,17 +155,523 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     }
   }
 
+  Future<void> _loadCategories() async {
+    try {
+      final tenantService = context.read<TenantService>();
+      final tenantId = await tenantService.getTenantId();
+      if (tenantId == null) return;
+
+      final response = await Supabase.instance.client
+          .from('product_categories')
+          .select('id, name, full_path')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .order('full_path');
+
+      if (mounted) {
+        setState(() {
+          _categories = (response as List<dynamic>).cast<Map<String, dynamic>>();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading categories: $e');
+    }
+  }
+
+  String _getCategoryDisplayName() {
+    if (_categoryFilter == 'all') return 'Todas';
+    if (_categoryFilter == 'none') return 'Sin categoría';
+    
+    final category = _categories.firstWhere(
+      (cat) => cat['id'] == _categoryFilter,
+      orElse: () => {},
+    );
+    
+    return category['full_path'] as String? ?? category['name'] as String? ?? 'Seleccionar...';
+  }
+
+  String _extractCategoryName(String? fullPath) {
+    if (fullPath == null || fullPath.isEmpty) return 'Sin categoría';
+    
+    // Extract last part after final " / "
+    final parts = fullPath.split(' / ');
+    return parts.last.trim();
+  }
+
+  /// Find alternative products with similar specs/keywords
+  Future<List<Map<String, dynamic>>> _findAlternatives(SmartPurchaseListItem item) async {
+    // Check cache first
+    if (_alternativesCache.containsKey(item.id)) {
+      return _alternativesCache[item.id]!;
+    }
+
+    try {
+      final tenantService = context.read<TenantService>();
+      final tenantId = await tenantService.getTenantId();
+      if (tenantId == null) return [];
+
+      // Extract keywords from product name (remove common words)
+      final keywords = _extractKeywords(item.productName);
+      if (keywords.length < 2) return []; // Need at least 2 keywords to match
+
+      // Build search query - match products with same category and similar keywords
+      var query = Supabase.instance.client
+          .from('products')
+          .select('id, name, sku, stock_quantity, cost, price')
+          .eq('tenant_id', tenantId)
+          .gt('stock_quantity', 0); // Only products with stock
+
+      // Filter by category if available
+      if (item.categoryId != null && item.categoryId!.isNotEmpty) {
+        query = query.eq('category_id', item.categoryId!);
+      }
+
+      // Exclude the current product
+      if (item.productId != null && item.productId!.isNotEmpty) {
+        query = query.neq('id', item.productId!);
+      }
+
+      final response = await query.limit(50);
+      final products = response as List<dynamic>;
+
+      // Extract specs from original product (keywords already extracted above)
+      final originalSpecs = _extractSpecs(item.productName);
+      
+      // Debug: Log extracted specs
+      debugPrint('🔍 Original: ${item.productName}');
+      debugPrint('   Sizes: ${originalSpecs['sizes']}, Widths: ${originalSpecs['widths']}, Keywords: $keywords');
+
+      // Score and filter products based on SPEC matching (critical) + keyword overlap
+      final alternatives = <Map<String, dynamic>>[];
+      for (final product in products) {
+        final productName = product['name'] as String;
+        final productSpecs = _extractSpecs(productName);
+        final productNameLower = productName.toLowerCase();
+        
+        int specMatchScore = 0;
+        
+        // CRITICAL: Match wheel sizes (must match!)
+        if (originalSpecs['sizes']!.isNotEmpty) {
+          for (final size in originalSpecs['sizes']!) {
+            if (productSpecs['sizes']!.contains(size)) {
+              specMatchScore += 10; // Size match is CRITICAL
+              break;
+            }
+          }
+        }
+        
+        // Match widths (important for tubes/tires)
+        if (originalSpecs['widths']!.isNotEmpty) {
+          for (final width in originalSpecs['widths']!) {
+            if (productSpecs['widths']!.contains(width)) {
+              specMatchScore += 3;
+              break;
+            }
+          }
+        }
+        
+        // Match diameters (important for axles, hubs)
+        if (originalSpecs['diameters']!.isNotEmpty) {
+          for (final diameter in originalSpecs['diameters']!) {
+            if (productSpecs['diameters']!.contains(diameter)) {
+              specMatchScore += 5;
+              break;
+            }
+          }
+        }
+        
+        // Match standards (QR, presta, etc.)
+        if (originalSpecs['standards']!.isNotEmpty) {
+          for (final standard in originalSpecs['standards']!) {
+            if (productSpecs['standards']!.contains(standard)) {
+              specMatchScore += 2;
+              break;
+            }
+          }
+        }
+        
+        // Secondary: keyword matching
+        int keywordMatches = 0;
+        for (final keyword in keywords) {
+          if (productNameLower.contains(keyword)) {
+            keywordMatches++;
+          }
+        }
+
+        // STRICT MATCHING: If original has wheel size, alternative MUST have matching size
+        final originalHasSize = originalSpecs['sizes']!.isNotEmpty;
+        final hasSpecMatch = specMatchScore >= 10; // Size match
+        final hasStrongKeywordMatch = keywordMatches >= (keywords.length * 0.6).ceil();
+        
+        // If original has detectable wheel size, alternative MUST match it (no keyword fallback)
+        final isValidMatch = originalHasSize ? hasSpecMatch : (hasSpecMatch || hasStrongKeywordMatch);
+        
+        if (isValidMatch) {
+          alternatives.add({
+            'id': product['id'],
+            'name': product['name'],
+            'sku': product['sku'],
+            'stock': product['stock_quantity'],
+            'cost': product['cost'],
+            'price': product['price'],
+            'match_score': specMatchScore + keywordMatches,
+            'spec_score': specMatchScore,
+          });
+        }
+      }
+
+      // Sort by spec score first (most important), then total score
+      alternatives.sort((a, b) {
+        final specCompare = (b['spec_score'] as int).compareTo(a['spec_score'] as int);
+        if (specCompare != 0) return specCompare;
+        return (b['match_score'] as int).compareTo(a['match_score'] as int);
+      });
+
+      // Cache the results
+      _alternativesCache[item.id] = alternatives;
+      
+      return alternatives;
+    } catch (e) {
+      debugPrint('Error finding alternatives: $e');
+      return [];
+    }
+  }
+
+  /// Extract meaningful keywords from product name
+  List<String> _extractKeywords(String productName) {
+    final name = productName.toLowerCase();
+    
+    // Common words to ignore (Spanish and English) + TOO GENERIC product types
+    final stopWords = {
+      'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'para', 'con', 'sin',
+      'the', 'a', 'an', 'and', 'or', 'of', 'for', 'with', 'without', 'in', 'on',
+      'camara', 'eje', 'valvula', 'tube', 'axle', 'valve', 'bicicleta', // Too generic
+    };
+
+    // Split by spaces and special characters
+    final words = name.split(RegExp(r'[\s\-\/,]+'));
+    
+    // Filter out stop words and very short words
+    final keywords = words
+        .where((word) => word.length >= 2 && !stopWords.contains(word))
+        .toList();
+
+    return keywords;
+  }
+
+  /// Extract critical specs (sizes, measurements, standards)
+  Map<String, List<String>> _extractSpecs(String productName) {
+    final specs = <String, List<String>>{
+      'sizes': [], // 26, 27.5, 29, 700c, etc.
+      'widths': [], // 1.5, 1.95, 2.0, etc.
+      'diameters': [], // 9mm, 12mm, 15mm, etc.
+      'standards': [], // QR, thru-axle, presta, schrader, etc.
+    };
+    
+    final nameLower = productName.toLowerCase();
+    
+    // Extract wheel sizes - MUST be preceded by space/start and followed by space/X/x/-
+    // This prevents matching "20" in "2.20" or "16" in "M16"
+    final sizePattern = RegExp(r'(?:^|\s)(16|20|24|26|27\.?5?|28|29|700c?)(?:\s|x|X|-|$)');
+    for (final match in sizePattern.allMatches(nameLower)) {
+      final size = match.group(1)!;
+      if (!specs['sizes']!.contains(size)) {
+        specs['sizes']!.add(size);
+      }
+    }
+    
+    // Extract widths (1.5, 1.95, 2.0, 2.125, etc.) - the SECOND number in "26 X 1.5" pattern
+    final widthPattern = RegExp(r'\b(\d+\.?\d*)\s*(?:x|X|a)\s*(\d+\.?\d*)');
+    final widthMatches = widthPattern.allMatches(nameLower);
+    for (final match in widthMatches) {
+      if (match.group(2) != null) {
+        final width = match.group(2)!;
+        if (!specs['widths']!.contains(width)) {
+          specs['widths']!.add(width);
+        }
+      }
+    }
+    
+    // Extract diameters (9mm, 12mm, 15mm, 33mm, 48mm, etc.)
+    final diameterPattern = RegExp(r'\b(\d+)\s*mm\b');
+    for (final match in diameterPattern.allMatches(nameLower)) {
+      final diameter = match.group(1)! + 'mm';
+      if (!specs['diameters']!.contains(diameter)) {
+        specs['diameters']!.add(diameter);
+      }
+    }
+    
+    // Extract valve types and standards
+    if (nameLower.contains('presta')) specs['standards']!.add('presta');
+    if (nameLower.contains('schrader')) specs['standards']!.add('schrader');
+    if (nameLower.contains('auto')) specs['standards']!.add('auto');
+    if (nameLower.contains('qr') || nameLower.contains('quick')) specs['standards']!.add('qr');
+    if (nameLower.contains('thru') || nameLower.contains('eje pasante')) specs['standards']!.add('thru-axle');
+    
+    return specs;
+  }
+
+  Future<void> _showCategoryPicker(BuildContext context) async {
+    String searchQuery = '';
+    
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final filteredCategories = searchQuery.isEmpty
+              ? _categories
+              : _categories.where((cat) {
+                  final fullPath = (cat['full_path'] as String? ?? '').toLowerCase();
+                  final name = (cat['name'] as String? ?? '').toLowerCase();
+                  final query = searchQuery.toLowerCase();
+                  return fullPath.contains(query) || name.contains(query);
+                }).toList();
+
+          return AlertDialog(
+            title: const Text('Seleccionar Categoría'),
+            content: SizedBox(
+              width: 500,
+              height: 500,
+              child: Column(
+                children: [
+                  // Search bar
+                  TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Buscar categoría',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        searchQuery = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Categories list
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.all_inclusive),
+                          title: const Text('Todas'),
+                          selected: _categoryFilter == 'all',
+                          onTap: () {
+                            setState(() {
+                              _categoryFilter = 'all';
+                              _currentPage = 1;
+                            });
+                            Navigator.pop(context);
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.category_outlined),
+                          title: const Text('Sin categoría'),
+                          selected: _categoryFilter == 'none',
+                          onTap: () {
+                            setState(() {
+                              _categoryFilter = 'none';
+                              _currentPage = 1;
+                            });
+                            Navigator.pop(context);
+                          },
+                        ),
+                        const Divider(),
+                        ...filteredCategories.map((category) {
+                          final categoryId = category['id'] as String;
+                          final fullPath = category['full_path'] as String? ?? category['name'] as String;
+                          final name = category['name'] as String;
+                          
+                          return ListTile(
+                            leading: const Icon(Icons.folder),
+                            title: Text(name),
+                            subtitle: Text(
+                              fullPath,
+                              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                            ),
+                            selected: _categoryFilter == categoryId,
+                            onTap: () {
+                              setState(() {
+                                _categoryFilter = categoryId;
+                                _currentPage = 1;
+                              });
+                              Navigator.pop(context);
+                            },
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _showAlternativesDialog(
+    BuildContext context,
+    SmartPurchaseListItem item,
+    List<Map<String, dynamic>> alternatives,
+  ) async {
+    final totalStock = alternatives.fold<int>(
+      0,
+      (sum, alt) => sum + (alt['stock'] as int),
+    );
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.shopping_bag, color: Colors.green),
+            const SizedBox(width: 8),
+            const Text('Alternativas Disponibles'),
+          ],
+        ),
+        content: SizedBox(
+          width: 600,
+          height: 400,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Original product info
+              Card(
+                color: Colors.grey[100],
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Producto sin stock:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.productName,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'Stock: ${item.currentStock} / ${item.minStockLevel}',
+                        style: TextStyle(fontSize: 12, color: Colors.red[700]),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Summary
+              Text(
+                'Se encontraron ${alternatives.length} alternativas con $totalStock unidades en total:',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              
+              // Alternatives list
+              Expanded(
+                child: ListView.builder(
+                  itemCount: alternatives.length,
+                  itemBuilder: (context, index) {
+                    final alt = alternatives[index];
+                    final stock = alt['stock'] as int;
+                    final matchScore = alt['match_score'] as int;
+                    
+                    return Card(
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: stock > 10 ? Colors.green : Colors.orange,
+                          child: Text(
+                            '$stock',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          alt['name'] as String,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (alt['sku'] != null)
+                              Text('SKU: ${alt['sku']}', style: const TextStyle(fontSize: 11)),
+                            Text(
+                              'Stock disponible: $stock unidades',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: stock > 10 ? Colors.green : Colors.orange,
+                              ),
+                            ),
+                          ],
+                        ),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (alt['price'] != null)
+                              Text(
+                                '\$${(alt['price'] as num).toStringAsFixed(0)}',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: List.generate(
+                                matchScore.clamp(0, 5),
+                                (i) => const Icon(Icons.star, size: 12, color: Colors.amber),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final buildStart = DateTime.now();
     debugPrint('⏱️ [PAGE BUILD] Starting build...');
     
-    final widget = MainLayout(
-      title: 'Lista Inteligente de Compras',
-      child: Column(
-        children: [
-          // Top actions bar
-          Padding(
+    final widget = Stack(
+      children: [
+        MainLayout(
+          title: 'Lista Inteligente de Compras',
+          child: Column(
+            children: [
+              // Top actions bar
+              Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -264,6 +780,32 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
           ),
         ],
       ),
+    ),
+    
+    // Loading overlay for bulk operations
+    if (_isArchiving)
+      Container(
+        color: Colors.black54,
+        child: const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text(
+                    'Archivando productos...',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
     );
     
     final buildTime = DateTime.now().difference(buildStart).inMilliseconds;
@@ -399,15 +941,11 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                       isDense: true,
                     ),
                     onChanged: (value) {
+                      // Only update local state - client-side filtering via _getFilteredItems()
                       setState(() {
                         _searchQuery = value;
                         _currentPage = 1; // Reset to first page
                       });
-                      service.loadItems(
-                        statusFilter: _statusFilter,
-                        supplierFilter: _supplierFilter,
-                        searchQuery: value,
-                      );
                     },
                   ),
                 ),
@@ -428,6 +966,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                       DropdownMenuItem(value: 'ordered', child: Text('Ordenado')),
                       DropdownMenuItem(value: 'received', child: Text('Recibido')),
                       DropdownMenuItem(value: 'ignored', child: Text('Ignorado')),
+                      DropdownMenuItem(value: 'archived', child: Text('Archivado')),
                     ],
                     onChanged: (value) {
                       if (value != null) {
@@ -498,7 +1037,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     ),
                     items: const [
                       DropdownMenuItem(value: 'all', child: Text('Todas')),
-                      DropdownMenuItem(value: 'critical', child: Text('Crítica (>80)')),
+                      DropdownMenuItem(value: 'critical', child: Text('Crítica (80+)')),
                       DropdownMenuItem(value: 'high', child: Text('Alta (60-80)')),
                       DropdownMenuItem(value: 'medium', child: Text('Media (40-60)')),
                       DropdownMenuItem(value: 'low', child: Text('Baja (<40)')),
@@ -509,11 +1048,36 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                           _priorityFilter = value;
                           _currentPage = 1; // Reset to first page
                         });
-                        _applyClientSideFilters();
                       }
                     },
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Third row: Category filter
+            Row(
+              children: [
+                // Category Filter (searchable)
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _showCategoryPicker(context),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Categoría',
+                        prefixIcon: Icon(Icons.category),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      child: Text(
+                        _getCategoryDisplayName(),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ),
+                const Expanded(flex: 1, child: SizedBox()), // Spacer to match layout
               ],
             ),
           ],
@@ -522,12 +1086,9 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     );
   }
 
-  void _applyClientSideFilters() {
-    // Priority filter is applied client-side
-    setState(() {});
-  }
-
   Widget _buildBulkActions() {
+    final isArchivedView = _statusFilter == 'archived';
+    
     return Card(
       color: Theme.of(context).primaryColor.withOpacity(0.1),
       child: Padding(
@@ -540,8 +1101,15 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             ),
             const Spacer(),
             TextButton.icon(
-              onPressed: _generatePurchaseOrder,
-              icon: const Icon(Icons.shopping_bag),
+              onPressed: isArchivedView ? _bulkUnarchive : _bulkArchive,
+              icon: Icon(isArchivedView ? Icons.unarchive : Icons.archive),
+              label: Text(isArchivedView ? 'Desarchivar' : 'Archivar'),
+            ),
+            const SizedBox(width: 8),
+            if (!isArchivedView)
+              TextButton.icon(
+                onPressed: _generatePurchaseOrder,
+                icon: const Icon(Icons.shopping_bag),
               label: const Text('Generar Orden de Compra'),
             ),
             const SizedBox(width: 8),
@@ -572,6 +1140,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     var items = service.getFilteredItems(
       statusFilter: _statusFilter,
       supplierFilter: _supplierFilter,
+      categoryFilter: _categoryFilter,
       searchQuery: _searchQuery,
     );
     
@@ -642,7 +1211,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
           const SizedBox(height: 8),
         ],
         
-        _buildTableHeader(),
+        _buildTableHeader(paginatedItems, filteredItems),
         ...paginatedItems.map((item) => _buildItemRow(item, service)),
         
         // Pagination controls at bottom
@@ -659,8 +1228,12 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     return widget;
   }
 
-  Widget _buildTableHeader() {
+  Widget _buildTableHeader(
+    List<SmartPurchaseListItem> paginatedItems,
+    List<SmartPurchaseListItem> filteredItems,
+  ) {
     final isReceivedView = _statusFilter == 'received';
+    final hasMultiplePages = filteredItems.length > _itemsPerPage;
     
     return Container(
       decoration: BoxDecoration(
@@ -673,28 +1246,59 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
           if (!isReceivedView) ...[
             SizedBox(
               width: 40,
-              child: Checkbox(
-                value: _selectAll,
-                onChanged: (value) {
-                  setState(() {
-                    _selectAll = value ?? false;
-                    if (_selectAll) {
-                      _selectedItems.addAll(
-                        context.read<SmartPurchaseListService>().items.map((i) => i.id),
-                      );
-                    } else {
-                      _selectedItems.clear();
-                    }
-                  });
-                },
+              child: Tooltip(
+                message: 'Seleccionar productos en esta página',
+                child: Checkbox(
+                  value: _selectAll,
+                  onChanged: (value) {
+                    setState(() {
+                      _selectAll = value ?? false;
+                      if (_selectAll) {
+                        // Select only items on current page
+                        _selectedItems.addAll(
+                          paginatedItems.map((i) => i.id),
+                        );
+                      } else {
+                        _selectedItems.clear();
+                      }
+                    });
+                  },
+                ),
               ),
             ),
+            if (hasMultiplePages) ...[
+              Tooltip(
+                message: 'Seleccionar todos los productos (todas las páginas)',
+                child: TextButton.icon(
+                  icon: const Icon(Icons.select_all, size: 16),
+                  label: const Text('Todos', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _selectedItems.clear();
+                      _selectedItems.addAll(
+                        filteredItems.map((i) => i.id),
+                      );
+                      _selectAll = true;
+                    });
+                  },
+                ),
+              ),
+            ],
             const SizedBox(width: 50, child: Text('Prioridad', style: TextStyle(fontWeight: FontWeight.bold))),
             const SizedBox(width: 16),
           ],
           const Expanded(flex: 2, child: Text('Producto', style: TextStyle(fontWeight: FontWeight.bold))),
           const SizedBox(width: 16),
+          const Expanded(child: Text('Categoría', style: TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(width: 16),
           const Expanded(child: Text('Proveedor', style: TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(width: 16),
+          const SizedBox(width: 120, child: Text('Alternativas', style: TextStyle(fontWeight: FontWeight.bold))),
           const SizedBox(width: 16),
           if (isReceivedView) ...[
             const SizedBox(width: 120, child: Text('Stock Inicial', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -792,10 +1396,69 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
           ),
           const SizedBox(width: 16),
           
+          // Category
+          Expanded(
+            flex: 1,
+            child: Tooltip(
+              message: item.categoryName ?? 'Sin categoría',
+              waitDuration: const Duration(milliseconds: 500),
+              child: Text(
+                _extractCategoryName(item.categoryName),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          
           // Supplier
           Expanded(
             flex: 1,
             child: Text(item.supplierName ?? 'Sin proveedor'),
+          ),
+          const SizedBox(width: 16),
+          
+          // Alternatives
+          SizedBox(
+            width: 120,
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _findAlternatives(item),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Text('-', style: TextStyle(color: Colors.grey));
+                }
+                
+                final alternatives = snapshot.data!;
+                final totalStock = alternatives.fold<int>(
+                  0, 
+                  (sum, alt) => sum + (alt['stock'] as int),
+                );
+                
+                return InkWell(
+                  onTap: () => _showAlternativesDialog(context, item, alternatives),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        size: 16,
+                        color: totalStock > 10 ? Colors.green : Colors.orange,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          '${alternatives.length} (${totalStock}u)',
+                          style: TextStyle(
+                            color: Colors.blue[700],
+                            decoration: TextDecoration.underline,
+                            fontSize: 12,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
           const SizedBox(width: 16),
           
@@ -963,6 +1626,11 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     icon: const Icon(Icons.edit, size: 18),
                     onPressed: () => _showEditItemDialog(item, service),
                     tooltip: 'Editar',
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.archive, size: 18),
+                    onPressed: () => service.updateStatus(item.id, 'archived'),
+                    tooltip: 'Archivar',
                   ),
                   IconButton(
                     icon: const Icon(Icons.visibility_off, size: 18),
@@ -1460,6 +2128,152 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     }
   }
 
+  void _bulkArchive() async {
+    if (_selectedItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecciona al menos un producto'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Archivar productos'),
+        content: Text('¿Archivar ${_selectedItems.length} productos seleccionados?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Archivar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isArchiving = true;
+    });
+
+    try {
+      final service = context.read<SmartPurchaseListService>();
+      final count = _selectedItems.length;
+      
+      // Bulk archive in single query (much faster!)
+      await service.bulkUpdateStatus(_selectedItems.toList(), 'archived');
+
+      if (mounted) {
+        setState(() {
+          _selectedItems.clear();
+          _selectAll = false;
+          _currentPage = 1; // Reset to page 1 after archiving
+          _isArchiving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ $count productos archivados'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isArchiving = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al archivar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _bulkUnarchive() async {
+    if (_selectedItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecciona al menos un producto'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Desarchivar productos'),
+        content: Text('¿Desarchivar ${_selectedItems.length} productos seleccionados?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Desarchivar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isArchiving = true;
+    });
+
+    try {
+      final service = context.read<SmartPurchaseListService>();
+      final count = _selectedItems.length;
+      
+      // Bulk unarchive (set status back to pending)
+      await service.bulkUpdateStatus(_selectedItems.toList(), 'pending');
+
+      if (mounted) {
+        setState(() {
+          _selectedItems.clear();
+          _selectAll = false;
+          _currentPage = 1;
+          _isArchiving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ $count productos desarchivados'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isArchiving = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al desarchivar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _generatePurchaseOrder() async {
     if (_selectedItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1543,10 +2357,13 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       String? finalSupplierId = selectedSupplier;
       if (selectedSupplier == 'SELECT_OTHER') {
         finalSupplierId = await _showSupplierPicker();
-        if (finalSupplierId == null && !mounted) return;
+        if (finalSupplierId == null) return; // User cancelled supplier selection
       }
       
+      debugPrint('📦 Creating purchase order with ${selectedItemsList.length} items for supplier: $finalSupplierId');
+      
       // Navigate with ALL selected products, regardless of their assigned supplier
+      if (!mounted) return;
       await _navigateToPurchaseForm(selectedItemsList, finalSupplierId);
     } catch (e) {
       if (!mounted) return;
@@ -1560,19 +2377,73 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   }
 
   Future<String?> _showSupplierPicker() async {
-    // TODO: Load suppliers from database and show selection dialog
-    // For now, return null (no supplier selected)
+    String searchQuery = '';
+    
     return showDialog<String?>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Seleccionar Proveedor'),
-        content: const Text('Función de selección de proveedores en desarrollo'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final filteredSuppliers = searchQuery.isEmpty
+              ? _suppliers
+              : _suppliers.where((supplier) {
+                  final name = supplier.name.toLowerCase();
+                  final query = searchQuery.toLowerCase();
+                  return name.contains(query);
+                }).toList();
+
+          return AlertDialog(
+            title: const Text('Seleccionar Proveedor'),
+            content: SizedBox(
+              width: 500,
+              height: 500,
+              child: Column(
+                children: [
+                  // Search bar
+                  TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Buscar proveedor',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        searchQuery = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Suppliers list
+                  Expanded(
+                    child: filteredSuppliers.isEmpty
+                        ? const Center(
+                            child: Text('No se encontraron proveedores'),
+                          )
+                        : ListView.builder(
+                            itemCount: filteredSuppliers.length,
+                            itemBuilder: (context, index) {
+                              final supplier = filteredSuppliers[index];
+                              return ListTile(
+                                title: Text(supplier.name),
+                                subtitle: supplier.email != null
+                                    ? Text(supplier.email!)
+                                    : null,
+                                onTap: () => Navigator.pop(context, supplier.id),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1583,28 +2454,46 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   ) async {
     if (!mounted) return;
     
-    // Prepare line items data
-    final lineItems = items.map((item) => {
-      'product_id': item.productId,
-      'product_name': item.productName,
-      'product_sku': item.productSku,
-      'suggested_quantity': item.suggestedQuantity,
-    }).toList();
-    
-    // Navigate to purchase invoice form with pre-filled data
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PurchaseInvoiceFormPage(
-          initialSupplierId: supplierId,
-          initialLineItems: lineItems,
+    try {
+      debugPrint('🚀 Navigating to purchase form with ${items.length} items');
+      
+      // Prepare line items data
+      final lineItems = items.map((item) => {
+        'product_id': item.productId,
+        'product_name': item.productName,
+        'product_sku': item.productSku,
+        'suggested_quantity': item.suggestedQuantity,
+      }).toList();
+      
+      debugPrint('📋 Line items prepared: ${lineItems.length}');
+      
+      // Navigate to purchase invoice form with pre-filled data
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PurchaseInvoiceFormPage(
+            initialSupplierId: supplierId,
+            initialLineItems: lineItems,
+          ),
         ),
-      ),
-    );
-    
-    // Reload the list when coming back
-    if (mounted) {
-      context.read<SmartPurchaseListService>().loadItems();
+      );
+      
+      debugPrint('✅ Returned from purchase form');
+      
+      // Reload the list when coming back
+      if (mounted) {
+        context.read<SmartPurchaseListService>().loadItems();
+      }
+    } catch (e) {
+      debugPrint('❌ Error navigating to purchase form: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al abrir formulario: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
