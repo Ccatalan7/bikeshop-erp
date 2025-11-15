@@ -57,6 +57,7 @@ ZOHO_CLIENT_SECRET = config.ZOHO_CLIENT_SECRET
 ZOHO_REFRESH_TOKEN = config.ZOHO_REFRESH_TOKEN
 ZOHO_ORG_ID = config.ZOHO_ORG_ID
 ZOHO_API_DOMAIN = config.ZOHO_API_DOMAIN
+ZOHO_OAUTH_DOMAIN = getattr(config, 'ZOHO_OAUTH_DOMAIN', 'https://accounts.zoho.com')
 
 ODOO_URL = config.ODOO_URL
 ODOO_DB = config.ODOO_DB
@@ -74,7 +75,7 @@ def fetch_zoho_products() -> List[Dict]:
     print("\n📥 Fetching products from Zoho...")
     
     # Get access token
-    token_url = f"{ZOHO_API_DOMAIN}/oauth/v2/token"
+    token_url = f"{ZOHO_OAUTH_DOMAIN}/oauth/v2/token"
     token_params = {
         'refresh_token': ZOHO_REFRESH_TOKEN,
         'client_id': ZOHO_CLIENT_ID,

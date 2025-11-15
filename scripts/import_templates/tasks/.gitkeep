@@ -1,0 +1,7 @@
+# Task-specific scripts go here
+
+Examples:
+- sync_prices_zoho_to_flutter.py
+- import_customers_from_zoho.py
+- update_skus_odoo_to_zoho.py
+- match_products_by_name.py
