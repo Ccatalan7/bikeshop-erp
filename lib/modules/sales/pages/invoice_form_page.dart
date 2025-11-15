@@ -19,6 +19,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
+import '../../inventory/pages/product_form_page.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 
@@ -761,6 +762,34 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       _lineEntries.add(entry);
       _autocompleteKey++; // Reset autocomplete field
     });
+  }
+
+  void _autoAddEmptyLineIfNeeded() {
+    // Check if the last line has a product selected
+    if (_lineEntries.isEmpty) return;
+    
+    final lastEntry = _lineEntries.last;
+    if (lastEntry.product != null || lastEntry.productNameController.text.isNotEmpty) {
+      // Last line is filled, add a new empty line
+      final line = _InvoiceLine(
+        productId: null,
+        product: null,
+        name: '',
+        sku: '',
+        quantity: 1,
+        unitPrice: 0,
+        discount: 0,
+        cost: 0,
+        isCatalogProduct: false,
+      );
+
+      final entry = _InvoiceLineEntry(line);
+      entry.attachListeners(_handleLinesChanged);
+
+      setState(() {
+        _lineEntries.add(entry);
+      });
+    }
   }
 
   void _removeLine(_InvoiceLineEntry entry) {
@@ -1622,7 +1651,6 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   Widget _buildCompactLineRow(ThemeData theme, int index, _InvoiceLineEntry entry) {
     final line = entry.line;
-    final isAdHoc = !line.isCatalogProduct;
     final canMoveUp = index > 1 && _canEditFields;
     final canMoveDown = index < _lineEntries.length && _canEditFields;
     
@@ -1702,128 +1730,19 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             // Product details column
             Expanded(
               child: Container(
-                constraints: const BoxConstraints(minWidth: 250), // Allow more shrinking for better fit
+                constraints: const BoxConstraints(minWidth: 250),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   border: Border(
                     right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
                   ),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Product image
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: theme.colorScheme.outline.withOpacity(0.2),
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(5),
-                        child: line.product?.imageUrl != null
-                            ? Image.network(
-                                line.product!.imageUrl!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Icon(
-                                  Icons.inventory_2_outlined,
-                                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
-                                  size: 24,
-                                ),
-                              )
-                            : Icon(
-                                isAdHoc ? Icons.edit_note : Icons.inventory_2_outlined,
-                                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
-                                size: 24,
-                              ),
-                      ),
-                    ),
-                    
-                    const SizedBox(width: 12),
-                    
-                    // Product name + SKU + description
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Product name
-                          Text(
-                            line.name,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          
-                          // SKU
-                          if (!isAdHoc && line.sku.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(
-                                'SKU (Código de artículo): ${line.sku}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                          
-                          // Description field
-                          if (_canEditFields)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: TextField(
-                                controller: entry.descriptionController,
-                                decoration: InputDecoration(
-                                  hintText: isAdHoc 
-                                      ? 'Agregar detalles del servicio...' 
-                                      : 'Agregue una descripción a su artículo',
-                                  hintStyle: theme.textTheme.bodySmall?.copyWith(
-                                    fontSize: 12,
-                                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(4),
-                                    borderSide: BorderSide(
-                                      color: theme.colorScheme.outline.withOpacity(0.3),
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(4),
-                                    borderSide: BorderSide(
-                                      color: theme.colorScheme.outline.withOpacity(0.3),
-                                    ),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  isDense: true,
-                                ),
-                                style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
-                                maxLines: 3,
-                                minLines: 1,
-                              ),
-                            )
-                          else if (entry.descriptionController.text.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Text(
-                                entry.descriptionController.text,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontSize: 12,
-                                ),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
+                child: entry.buildSmartProductField(
+                  context,
+                  theme,
+                  _canEditFields,
+                  () => setState(() {}),
+                  () => _autoAddEmptyLineIfNeeded(),
                 ),
               ),
             ),
@@ -2245,20 +2164,27 @@ class _InvoiceLine {
 
 class _InvoiceLineEntry {
   _InvoiceLineEntry(this.line)
-      : quantityController =
+      : product = line.product,
+        quantityController =
             TextEditingController(text: line.quantity.toStringAsFixed(0)),
         unitPriceController =
             TextEditingController(text: line.unitPrice.toStringAsFixed(0)),
         discountController =
             TextEditingController(text: line.discount.toStringAsFixed(0)),
-        descriptionController =
-            TextEditingController(text: line.description ?? '');
+        productNameController = TextEditingController(text: line.name),
+        productSkuController = TextEditingController(text: line.sku),
+        descriptionController = TextEditingController(text: line.description ?? ''),
+        productNameFocusNode = FocusNode();
 
   final _InvoiceLine line;
+  Product? product; // Store full product for image access
   final TextEditingController quantityController;
   final TextEditingController unitPriceController;
   final TextEditingController discountController;
+  final TextEditingController productNameController;
+  final TextEditingController productSkuController;
   final TextEditingController descriptionController;
+  final FocusNode productNameFocusNode;
   VoidCallback? _listener;
 
   void attachListeners(VoidCallback listener) {
@@ -2266,6 +2192,7 @@ class _InvoiceLineEntry {
     quantityController.addListener(_onQuantityChanged);
     unitPriceController.addListener(_onUnitPriceChanged);
     discountController.addListener(_onDiscountChanged);
+    // Don't listen to productNameController - only update on selection
   }
 
   InvoiceItem toInvoiceItem() {
@@ -2323,7 +2250,364 @@ class _InvoiceLineEntry {
     quantityController.dispose();
     unitPriceController.dispose();
     discountController.dispose();
+    productNameController.dispose();
+    productSkuController.dispose();
     descriptionController.dispose();
+    productNameFocusNode.dispose();
+  }
+  
+  Widget buildSmartProductField(BuildContext context, ThemeData theme, bool canEdit, VoidCallback onUpdate, VoidCallback onAutoAdd) {
+    final hasProduct = line.name.isNotEmpty;
+    
+    // If can't edit, show as text
+    if (!canEdit) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            line.name,
+            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (line.sku.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                'SKU: ${line.sku}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          if (descriptionController.text.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                descriptionController.text,
+                style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+              ),
+            ),
+        ],
+      );
+    }
+    
+    // If product set, show Zoho-style card
+    if (hasProduct) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Product image
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceVariant.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: theme.colorScheme.outline.withOpacity(0.15)),
+                ),
+                child: product?.imageUrl != null && product!.imageUrl!.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Image.network(
+                          product!.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(
+                            Icons.inventory_2_outlined,
+                            size: 24,
+                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                          ),
+                        ),
+                      )
+                    : Icon(
+                        Icons.inventory_2_outlined,
+                        size: 24,
+                        color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              // Product details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            line.name,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        // 3-dot menu for catalog products
+                        if (product != null)
+                          PopupMenuButton<String>(
+                            icon: Icon(Icons.more_horiz, size: 20, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6)),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 200),
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                _showEditProductDialog(context, product!);
+                              } else if (value == 'details') {
+                                _showProductDetailsPane(context, product!, theme);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18, color: theme.colorScheme.primary),
+                                    const SizedBox(width: 12),
+                                    const Text('Editar artículo'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'details',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.inventory_2_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
+                                    const SizedBox(width: 12),
+                                    const Text('Ver detalles del artículo'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        // X button
+                        InkWell(
+                          onTap: () {
+                            product = null;
+                            productNameController.clear();
+                            productSkuController.clear();
+                            descriptionController.clear();
+                            onUpdate();
+                            Future.delayed(const Duration(milliseconds: 100), () {
+                              productNameFocusNode.requestFocus();
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(Icons.close, size: 16, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (line.sku.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          'SKU (Código de artículo): ${line.sku}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Description field
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: TextField(
+              controller: descriptionController,
+              decoration: InputDecoration(
+                hintText: 'Agregue una descripción a su artículo',
+                hintStyle: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                  fontSize: 13,
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+              style: theme.textTheme.bodySmall?.copyWith(fontSize: 13),
+              maxLines: 3,
+              minLines: 3,
+            ),
+          ),
+        ],
+      );
+    }
+    
+    // Empty product - show search field
+    return ProductAutocompleteField(
+      key: ValueKey('product_${hashCode}'),
+      controller: productNameController,
+      focusNode: productNameFocusNode,
+      autoFocus: true,
+      allowCustomItems: true,
+      labelText: null,
+      hintText: 'Buscar producto o escribir nombre...',
+      showCost: false, // Show price for sales
+      onProductSelected: (selection) {
+        if (selection.isCatalogProduct && selection.product != null) {
+          product = selection.product;
+          productNameController.text = selection.product!.name;
+          productSkuController.text = selection.product!.sku;
+          unitPriceController.text = selection.product!.price.toStringAsFixed(0);
+          
+          // Auto-fill description
+          if (selection.product!.description != null && selection.product!.description!.isNotEmpty) {
+            descriptionController.text = selection.product!.description!;
+          }
+          
+          onUpdate();
+          onAutoAdd();
+        } else if (!selection.isCatalogProduct) {
+          product = null;
+          productNameController.text = selection.displayText;
+          productSkuController.clear();
+          onUpdate();
+          onAutoAdd();
+        }
+      },
+    );
+  }
+  
+  void _showEditProductDialog(BuildContext context, Product product) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 900, maxHeight: 700),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: ProductFormPage(productId: product.id, showInDialog: true),
+          ),
+        ),
+      ),
+    );
+  }
+  
+  void _showProductDetailsPane(BuildContext context, Product product, ThemeData theme) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Product Details',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Material(
+            elevation: 8,
+            child: Container(
+              width: 400,
+              height: MediaQuery.of(context).size.height,
+              color: theme.scaffoldBackgroundColor,
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: theme.dividerColor)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.inventory_2_outlined, color: theme.colorScheme.primary),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text('Detalles del artículo', style: theme.textTheme.titleLarge),
+                        ),
+                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(context).pop()),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (product.imageUrl != null && product.imageUrl!.isNotEmpty)
+                            Center(
+                              child: Container(
+                                width: 200,
+                                height: 200,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: theme.dividerColor),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(product.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.inventory_2_outlined, size: 80)),
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 24),
+                          Text(product.name, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 16),
+                          _detailRow('SKU', product.sku),
+                          if (product.description != null && product.description!.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            Text('Descripción', style: theme.textTheme.labelLarge),
+                            const SizedBox(height: 4),
+                            Text(product.description!),
+                          ],
+                          const SizedBox(height: 16),
+                          _detailRow('Precio', '\$${product.price.toStringAsFixed(0)}'),
+                          _detailRow('Costo', '\$${product.cost.toStringAsFixed(0)}'),
+                          _detailRow('Stock', '${product.stockQuantity}'),
+                          if (product.brand != null && product.brand!.isNotEmpty)
+                            _detailRow('Marca', product.brand!),
+                          if (product.model != null && product.model!.isNotEmpty)
+                            _detailRow('Modelo', product.model!),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return SlideTransition(
+          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOut)),
+          child: child,
+        );
+      },
+    );
+  }
+  
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 100, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
   }
 }
 

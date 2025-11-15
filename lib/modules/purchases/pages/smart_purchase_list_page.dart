@@ -2457,33 +2457,22 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     try {
       debugPrint('🚀 Navigating to purchase form with ${items.length} items');
       
-      // Prepare line items data
-      final lineItems = items.map((item) => {
-        'product_id': item.productId,
-        'product_name': item.productName,
-        'product_sku': item.productSku,
-        'suggested_quantity': item.suggestedQuantity,
-      }).toList();
-      
-      debugPrint('📋 Line items prepared: ${lineItems.length}');
-      
-      // Navigate to purchase invoice form with pre-filled data
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PurchaseInvoiceFormPage(
-            initialSupplierId: supplierId,
-            initialLineItems: lineItems,
-          ),
-        ),
+      // Store data in service to be picked up by the form
+      final purchaseService = context.read<PurchaseService>();
+      purchaseService.setPendingSmartPurchaseData(
+        supplierId: supplierId,
+        lineItems: items.map((item) => {
+          'product_id': item.productId,
+          'product_name': item.productName,
+          'product_sku': item.productSku,
+          'suggested_quantity': item.suggestedQuantity,
+        }).toList(),
       );
       
-      debugPrint('✅ Returned from purchase form');
+      // Navigate using GoRouter like everyone else!
+      context.go('/purchases/new');
       
-      // Reload the list when coming back
-      if (mounted) {
-        context.read<SmartPurchaseListService>().loadItems();
-      }
+      debugPrint('✅ Navigated to purchase form');
     } catch (e) {
       debugPrint('❌ Error navigating to purchase form: $e');
       if (mounted) {

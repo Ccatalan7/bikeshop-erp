@@ -18,6 +18,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../../../shared/widgets/ocr_upload_widget.dart';
+import '../../inventory/pages/product_form_page.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
 
@@ -80,9 +81,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   List<Product> _productCache = const [];
   
   StreamSubscription? _scanSubscription;
-  final _remoteScannerService = RemoteScannerService();
+  RemoteScannerService? _remoteScannerService; // Lazy init to avoid blocking
   bool _scannerEnabled = false;
-  int _autocompleteKey = 0; // Reset autocomplete field after adding product
 
   @override
   void initState() {
@@ -98,12 +98,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
     
-    // Listen for barcode scans
-    _scanSubscription = _remoteScannerService.scanStream.listen((scan) {
-      if (mounted && _canEditFields) {
-        _handleBarcodeScan(scan.barcode);
-      }
-    });
+    // DON'T subscribe to barcode scanner here - causes freeze!
+    // Will be set up after initialization completes
   }
 
   @override
@@ -133,11 +129,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
     
     try {
+      // Lazy init scanner service
+      _remoteScannerService ??= RemoteScannerService();
+      
       if (_scannerEnabled) {
-        await _remoteScannerService.stopListening();
+        await _remoteScannerService!.stopListening();
         setState(() => _scannerEnabled = false);
       } else {
-        await _remoteScannerService.startListening();
+        await _remoteScannerService!.startListening();
         setState(() => _scannerEnabled = true);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -383,17 +382,50 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   Future<void> _initialize() async {
-    _purchaseService = context.read<PurchaseService>();
-    _inventoryService = context.read<InventoryService>();
-
+    debugPrint('🔍 PurchaseForm._initialize() START');
+    
     try {
-      final results = await Future.wait([
-        _purchaseService.getSuppliers(forceRefresh: true),
-        _inventoryService.getProducts(forceRefresh: true),
-      ]);
+      debugPrint('🔍 Getting PurchaseService from context...');
+      _purchaseService = context.read<PurchaseService>();
+      debugPrint('✅ Got PurchaseService');
+      
+      debugPrint('🔍 Getting InventoryService from context...');
+      _inventoryService = context.read<InventoryService>();
+      debugPrint('✅ Got InventoryService');
+    } catch (e) {
+      debugPrint('❌ Error getting services: $e');
+      rethrow;
+    }
 
-      _supplierCache = results[0] as List<shared_supplier.Supplier>;
-      _productCache = results[1] as List<Product>;
+    if (!mounted) {
+      debugPrint('⚠️ Widget not mounted after getting services');
+      return;
+    }
+    
+    try {
+      // Load suppliers first (blocking)
+      debugPrint('🔍 Setting loading state...');
+      setState(() => _isLoading = true);
+      debugPrint('✅ Loading state set');
+      
+      debugPrint('🔍 Loading suppliers (forceRefresh: false)...');
+      _supplierCache = await _purchaseService.getSuppliers(forceRefresh: false);
+      debugPrint('✅ Loaded ${_supplierCache.length} suppliers');
+      
+      if (!mounted) {
+        debugPrint('⚠️ Widget not mounted after loading suppliers');
+        return;
+      }
+      
+      // Load products second (blocking)
+      debugPrint('🔍 Loading products (forceRefresh: false)...');
+      _productCache = await _inventoryService.getProducts(forceRefresh: false);
+      debugPrint('✅ Loaded ${_productCache.length} products');
+      
+      if (!mounted) {
+        debugPrint('⚠️ Widget not mounted after loading products');
+        return;
+      }
 
       if (widget.invoiceId != null) {
         final invoice =
@@ -405,19 +437,25 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       } else {
         _invoiceNumberController.text = _buildSuggestedNumber();
         
-        // Pre-fill from smart purchase list if provided
-        if (widget.initialSupplierId != null && _supplierCache.isNotEmpty) {
+        // Check for pending data from smart purchase list (via service)
+        final pendingData = _purchaseService.consumePendingSmartPurchaseData();
+        
+        // Pre-fill from constructor params OR pending data from service
+        final supplierId = widget.initialSupplierId ?? pendingData?['supplierId'] as String?;
+        final lineItems = widget.initialLineItems ?? pendingData?['lineItems'] as List<Map<String, dynamic>>?;
+        
+        if (supplierId != null && _supplierCache.isNotEmpty) {
           try {
             _selectedSupplier = _supplierCache.firstWhere(
-              (s) => s.id == widget.initialSupplierId,
+              (s) => s.id == supplierId,
             );
           } catch (e) {
             // Supplier not found, leave null
           }
         }
         
-        if (widget.initialLineItems != null && widget.initialLineItems!.isNotEmpty) {
-          for (final item in widget.initialLineItems!) {
+        if (lineItems != null && lineItems.isNotEmpty) {
+          for (final item in lineItems) {
             final productId = item['product_id'] as String?;
             final productName = item['product_name'] as String?;
             final productSku = item['product_sku'] as String?;
@@ -483,7 +521,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           // Recalculate totals after adding all lines
           if (_lineEntries.isNotEmpty) {
             _recalculateTotals();
+          } else {
+            // If no lines, add one empty line to start
+            _addEmptyLine();
           }
+        } else {
+          // New invoice - start with one empty line
+          _addEmptyLine();
         }
       }
     } catch (e) {
@@ -498,6 +542,16 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
+        
+        // Set up barcode scanner subscription AFTER initialization completes
+        // Lazy init scanner service only when needed
+        _remoteScannerService ??= RemoteScannerService();
+        _scanSubscription = _remoteScannerService!.scanStream.listen((scan) {
+          if (mounted && _canEditFields) {
+            _handleBarcodeScan(scan.barcode);
+          }
+        });
+        debugPrint('✅ Barcode scanner subscription set up');
       }
     }
   }
@@ -1058,9 +1112,32 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     });
     _recalculateTotals();
   }
+  
+  void _addEmptyLine() {
+    if (!_canEditFields) return;
+    
+    final entry = _PurchaseLineEntry(
+      line: PurchaseInvoiceItem(
+        productId: '',
+        productName: '',
+        productSku: null,
+        quantity: 1,
+        unitCost: 0,
+        discount: 0,
+        ivaRate: _ivaRate,
+      ),
+    );
+    entry.attachListeners(_recalculateTotals);
+
+    setState(() {
+      _lineEntries.add(entry);
+    });
+  }
 
   @override
+  @override
   Widget build(BuildContext context) {
+    debugPrint('🎨 PurchaseInvoiceFormPage.build() called, _isLoading = $_isLoading');
     return MainLayout(
       child: Form(
         key: _formKey,
@@ -1824,74 +1901,6 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                     canEdit: _canEditFields,
                   )
                 ),
-                
-              // Add new line (search field)
-              if (_canEditFields)
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                    ),
-                  ),
-                  child: IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Empty space for # column
-                        Container(
-                          width: _colIndexWidth,
-                          decoration: BoxDecoration(
-                            border: Border(
-                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                            ),
-                          ),
-                        ),
-                        
-                        // Search field spanning the product details column
-                        Expanded(
-                          child: Container(
-                            constraints: const BoxConstraints(minWidth: 250),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                              ),
-                            ),
-                            child: _buildProductSearchField(),
-                          ),
-                        ),
-                        
-                        // Empty spaces for other columns to maintain alignment
-                        Container(
-                          width: _colQuantityWidth,
-                          decoration: BoxDecoration(
-                            border: Border(
-                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                            ),
-                          ),
-                        ),
-                        Container(
-                          width: _colPriceWidth,
-                          decoration: BoxDecoration(
-                            border: Border(
-                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                            ),
-                          ),
-                        ),
-                        Container(
-                          width: _colDiscountWidth,
-                          decoration: BoxDecoration(
-                            border: Border(
-                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: _colTotalWidth),
-                        SizedBox(width: _colActionsWidth),
-                      ],
-                    ),
-                  ),
-                ),
               
               // Empty state
               if (_lineEntries.isEmpty && !_canEditFields)
@@ -1913,44 +1922,6 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         );
       },
     );
-  }
-
-  Widget _buildProductSearchField() {
-    return ProductAutocompleteField(
-      key: ValueKey(_autocompleteKey), // Reset field when key changes
-      onProductSelected: (selection) {
-        if (selection.isCatalogProduct && selection.product != null) {
-          _addProduct(selection.product!);
-        }
-        // Custom items not supported yet for purchases
-      },
-      allowCustomItems: false, // Purchases use catalog products only
-      labelText: 'Agregar producto o servicio',
-      hintText: 'Buscar por nombre o SKU...',
-      showCost: true, // Show cost instead of price for purchases
-    );
-  }
-
-  void _addProduct(Product product) {
-    if (!_canEditFields) return;
-    
-    final entry = _PurchaseLineEntry(
-      line: PurchaseInvoiceItem(
-        productId: product.id,
-        productName: product.name,
-        productSku: product.sku,
-        quantity: 1,
-        unitCost: product.cost > 0 ? product.cost : product.price,
-        discount: 0,
-        ivaRate: _ivaRate,
-      ),
-    );
-    entry.attachListeners(_recalculateTotals);
-
-    setState(() {
-      _lineEntries.add(entry);
-      _autocompleteKey++; // Reset autocomplete field
-    });
   }
 
   Widget _buildReferenceSection(ThemeData theme) {
@@ -2032,19 +2003,28 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 }
 
 class _PurchaseLineEntry {
-  _PurchaseLineEntry({required PurchaseInvoiceItem line})
+  _PurchaseLineEntry({required PurchaseInvoiceItem line, this.product})
       : line = line,
         quantityController =
             TextEditingController(text: line.quantity.toStringAsFixed(0)),
         unitCostController =
             TextEditingController(text: line.unitCost.toStringAsFixed(0)),
         discountController =
-            TextEditingController(text: line.discount.toStringAsFixed(0));
+            TextEditingController(text: line.discount.toStringAsFixed(0)),
+        productNameController = TextEditingController(text: line.productName ?? ''),
+        productSkuController = TextEditingController(text: line.productSku ?? ''),
+        descriptionController = TextEditingController(),
+        productNameFocusNode = FocusNode();
 
   PurchaseInvoiceItem line;
+  Product? product; // Store full product for image access
   final TextEditingController quantityController;
   final TextEditingController unitCostController;
   final TextEditingController discountController;
+  final TextEditingController productNameController;
+  final TextEditingController productSkuController;
+  final TextEditingController descriptionController;
+  final FocusNode productNameFocusNode;
 
   void attachListeners(VoidCallback onChanged) {
     quantityController.addListener(() {
@@ -2071,12 +2051,22 @@ class _PurchaseLineEntry {
         onChanged();
       }
     });
+    // ❌ DON'T listen to productNameController - it causes auto-selection on every keystroke
+    // Product name is updated ONLY when onProductSelected is called in ProductAutocompleteField
+    productSkuController.addListener(() {
+      line = line.copyWith(productSku: productSkuController.text);
+      onChanged();
+    });
   }
 
   void dispose() {
     quantityController.dispose();
     unitCostController.dispose();
     discountController.dispose();
+    productNameController.dispose();
+    productSkuController.dispose();
+    descriptionController.dispose();
+    productNameFocusNode.dispose();
   }
 }
 
@@ -2148,55 +2138,9 @@ class _PurchaseLineRowState extends State<_PurchaseLineRow> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Product image placeholder
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: theme.colorScheme.outline.withOpacity(0.2),
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.inventory_2_outlined,
-                          color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
-                          size: 24,
-                        ),
-                      ),
-                      
-                      const SizedBox(width: 12),
-                      
-                      // Product name + SKU
+                      // Smart product field - shows product card OR search field
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Product name
-                            Text(
-                              line.productName ?? 'Producto',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            
-                            // SKU
-                            if (line.productSku != null && line.productSku!.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  'SKU (Código de artículo): ${line.productSku}',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
+                        child: _buildSmartProductField(line, theme),
                       ),
                     ],
                   ),
@@ -2322,6 +2266,461 @@ class _PurchaseLineRowState extends State<_PurchaseLineRow> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // Smart product field - Zoho-style: shows product card when filled, search when empty
+  Widget _buildSmartProductField(PurchaseInvoiceItem line, ThemeData theme) {
+    // If can't edit, just show as text
+    if (!widget.canEdit) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            line.productName ?? 'Producto',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (line.productSku != null && line.productSku!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                'SKU: ${line.productSku}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+    
+    final hasProduct = (line.productName?.isNotEmpty ?? false);
+    
+    // If product is set, show Zoho-style card with X button
+    if (hasProduct) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Product row with image, name, and X button
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Product image (48x48 like Zoho, larger than before)
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceVariant.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.15),
+                  ),
+                ),
+                child: widget.entry.product?.imageUrl != null && widget.entry.product!.imageUrl!.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Image.network(
+                          widget.entry.product!.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              Icons.inventory_2_outlined,
+                              size: 24,
+                              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                            );
+                          },
+                        ),
+                      )
+                    : Icon(
+                        Icons.inventory_2_outlined,
+                        size: 24,
+                        color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              // Product details column
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Product name with menu and X button
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            line.productName!,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        // 3-dot menu button (only for catalog products)
+                        if (widget.entry.product != null)
+                          PopupMenuButton<String>(
+                            icon: Icon(
+                              Icons.more_horiz,
+                              size: 20,
+                              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 200),
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                _showEditProductDialog(widget.entry.product!);
+                              } else if (value == 'details') {
+                                _showProductDetailsPane(widget.entry.product!);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text('Editar artículo'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'details',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.inventory_2_outlined,
+                                      size: 18,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text('Ver detalles del artículo'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        // X button
+                        InkWell(
+                          onTap: () {
+                            widget.entry.product = null;
+                            widget.entry.productNameController.clear();
+                            widget.entry.productSkuController.clear();
+                            widget.entry.descriptionController.clear();
+                            widget.entry.line = widget.entry.line.copyWith(
+                              productId: '',
+                              productName: '',
+                              productSku: '',
+                            );
+                            setState(() {});
+                            Future.delayed(const Duration(milliseconds: 100), () {
+                              if (mounted) {
+                                widget.entry.productNameFocusNode.requestFocus();
+                              }
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.close,
+                              size: 16,
+                              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    // SKU
+                    if (line.productSku != null && line.productSku!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          'SKU (Código de artículo): ${line.productSku}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Description field (like Zoho) - separate box below
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: theme.colorScheme.outline.withOpacity(0.3),
+              ),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: TextField(
+              controller: widget.entry.descriptionController,
+              decoration: InputDecoration(
+                hintText: 'Agregue una descripción a su artículo',
+                hintStyle: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                  fontSize: 13,
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: 13,
+              ),
+              maxLines: 3,
+              minLines: 3,
+            ),
+          ),
+        ],
+      );
+    }
+    
+    // Empty product - show search field
+    return ProductAutocompleteField(
+      key: ValueKey('product_${widget.entry.hashCode}'),
+      controller: widget.entry.productNameController,
+      focusNode: widget.entry.productNameFocusNode,
+      autoFocus: true, // Auto-focus when field appears
+      allowCustomItems: true,
+      labelText: null,
+      hintText: 'Buscar producto o escribir nombre...',
+      showCost: true,
+      onProductSelected: (selection) {
+        if (selection.isCatalogProduct && selection.product != null) {
+          // Replace with catalog product
+          widget.entry.product = selection.product; // Store full product for image
+          widget.entry.line = widget.entry.line.copyWith(
+            productId: selection.product!.id,
+            productName: selection.product!.name,
+            productSku: selection.product!.sku,
+            unitCost: selection.product!.cost > 0 ? selection.product!.cost : selection.product!.price,
+          );
+          widget.entry.unitCostController.text = widget.entry.line.unitCost.toStringAsFixed(0);
+          
+          // Auto-fill description from product
+          if (selection.product!.description != null && selection.product!.description!.isNotEmpty) {
+            widget.entry.descriptionController.text = selection.product!.description!;
+          }
+          
+          setState(() {});
+          
+          // Auto-add new empty line after selecting product
+          _autoAddEmptyLineIfNeeded();
+        } else if (!selection.isCatalogProduct) {
+          // Keep as ad-hoc, update name
+          widget.entry.product = null; // Clear product for ad-hoc items
+          widget.entry.line = widget.entry.line.copyWith(
+            productId: '',
+            productName: selection.displayText,
+            productSku: null,
+          );
+          setState(() {});
+          
+          // Auto-add new empty line after entering ad-hoc product
+          _autoAddEmptyLineIfNeeded();
+        }
+      },
+    );
+  }
+  
+  void _autoAddEmptyLineIfNeeded() {
+    // Check if this is the last line and it has a product name
+    final parentState = _getParentState();
+    final isLastLine = widget.entry == parentState._lineEntries.last;
+    final hasProduct = widget.entry.line.productName?.isNotEmpty ?? false;
+    
+    if (isLastLine && hasProduct) {
+      // Add new empty line automatically
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          parentState._addEmptyLine();
+        }
+      });
+    }
+  }
+  
+  _PurchaseInvoiceFormPageState _getParentState() {
+    return context.findAncestorStateOfType<_PurchaseInvoiceFormPageState>()!;
+  }
+  
+  void _showEditProductDialog(Product product) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 900, maxHeight: 700),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: ProductFormPage(productId: product.id, showInDialog: true),
+          ),
+        ),
+      ),
+    );
+  }
+  
+  void _showProductDetailsPane(Product product) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Product Details',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Material(
+            elevation: 8,
+            child: Container(
+              width: 400,
+              height: MediaQuery.of(context).size.height,
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: Column(
+                children: [
+                  // Header with close button
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Theme.of(context).dividerColor),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.inventory_2_outlined, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Detalles del artículo',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Scrollable content
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Product image
+                          if (product.imageUrl != null && product.imageUrl!.isNotEmpty)
+                            Center(
+                              child: Container(
+                                width: 200,
+                                height: 200,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Theme.of(context).dividerColor),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    product.imageUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Icon(Icons.inventory_2_outlined, size: 80);
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 24),
+                          // Product name
+                          Text(
+                            product.name,
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          // SKU
+                          _detailRow('SKU', product.sku),
+                          // Description
+                          if (product.description != null && product.description!.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            Text('Descripción', style: Theme.of(context).textTheme.labelLarge),
+                            const SizedBox(height: 4),
+                            Text(product.description!),
+                          ],
+                          const SizedBox(height: 16),
+                          _detailRow('Precio', '\$${product.price.toStringAsFixed(0)}'),
+                          _detailRow('Costo', '\$${product.cost.toStringAsFixed(0)}'),
+                          _detailRow('Stock', '${product.stockQuantity}'),
+                          if (product.brand != null && product.brand!.isNotEmpty)
+                            _detailRow('Marca', product.brand!),
+                          if (product.model != null && product.model!.isNotEmpty)
+                            _detailRow('Modelo', product.model!),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOut)),
+          child: child,
+        );
+      },
+    );
+  }
+  
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(value),
+          ),
+        ],
       ),
     );
   }

@@ -7,7 +7,9 @@
       "type": "dart",
       "program": "lib/main.dart",
       "args": [
-        "--dart-define=ENV=development"
+        "--dart-define=ENV=development",
+        "--dart-define=DEBUG_EMAIL=vinabikechile@gmail.com",
+        "--dart-define=DEBUG_PASSWORD=000000"
       ]
     },
     {

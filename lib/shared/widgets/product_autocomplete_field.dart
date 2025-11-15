@@ -14,23 +14,27 @@ import '../models/product.dart';
 class ProductAutocompleteField extends StatefulWidget {
   final Function(ProductSelection) onProductSelected;
   final TextEditingController? controller;
+  final FocusNode? focusNode; // Allow external focus control
   final String? initialValue;
   final bool allowCustomItems;
   final String? labelText;
   final String? hintText;
   final bool enabled;
   final bool showCost; // Show cost instead of price (for purchase invoices)
+  final bool autoFocus; // Auto-focus when created
 
   const ProductAutocompleteField({
     super.key,
     required this.onProductSelected,
     this.controller,
+    this.focusNode,
     this.initialValue,
     this.allowCustomItems = true,
     this.labelText = 'Artículo o servicio',
     this.hintText = 'Escriba para buscar o ingrese un artículo personalizado',
     this.enabled = true,
     this.showCost = false, // Default to showing price
+    this.autoFocus = false,
   });
 
   @override
@@ -52,7 +56,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   void initState() {
     super.initState();
     _controller = widget.controller ?? TextEditingController();
-    _focusNode = FocusNode();
+    _focusNode = widget.focusNode ?? FocusNode();
     _inventoryService = Provider.of<shared_inventory.InventoryService>(context, listen: false);
     _controller.text = widget.initialValue ?? '';
     _loadProducts();
@@ -69,6 +73,15 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         });
       }
     });
+    
+    // Auto-focus if requested
+    if (widget.autoFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _focusNode.requestFocus();
+        }
+      });
+    }
   }
 
   @override
@@ -77,7 +90,9 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     if (widget.controller == null) {
       _controller.dispose();
     }
-    _focusNode.dispose();
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 

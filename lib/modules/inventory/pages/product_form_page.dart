@@ -25,8 +25,9 @@ import '../services/inventory_service.dart' as inventory_services;
 
 class ProductFormPage extends StatefulWidget {
   final String? productId;
+  final bool showInDialog; // Hide MainLayout when true
 
-  const ProductFormPage({super.key, this.productId});
+  const ProductFormPage({super.key, this.productId, this.showInDialog = false});
 
   @override
   State<ProductFormPage> createState() => _ProductFormPageState();
@@ -764,7 +765,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
         ),
       );
 
-      context.pop();
+      // Use Navigator.pop() instead of context.pop() to work in dialogs
+      Navigator.of(context).pop();
     } catch (e, stackTrace) {
       // Log to console immediately
       print('🔴🔴🔴 PRODUCT SAVE ERROR 🔴🔴🔴');
@@ -805,48 +807,53 @@ class _ProductFormPageState extends State<ProductFormPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return MainLayout(
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                // Debug error banner
-                if (_lastError != null)
-                  Container(
-                    width: double.infinity,
-                    color: Colors.red,
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('ERROR:',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold)),
-                        SelectableText(_lastError!,
-                            style: const TextStyle(color: Colors.white)),
-                        const SizedBox(height: 8),
-                        const Text('STACK:',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10)),
-                        SelectableText(_lastStackTrace ?? '',
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 8)),
-                      ],
-                    ),
-                  ),
-                _buildHeader(theme),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: _buildForm(theme),
+    final content = _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : Column(
+            children: [
+              // Debug error banner
+              if (_lastError != null)
+                Container(
+                  width: double.infinity,
+                  color: Colors.red,
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('ERROR:',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold)),
+                      SelectableText(_lastError!,
+                          style: const TextStyle(color: Colors.white)),
+                      const SizedBox(height: 8),
+                      const Text('STACK:',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10)),
+                      SelectableText(_lastStackTrace ?? '',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 8)),
+                    ],
                   ),
                 ),
-              ],
-            ),
-    );
+              _buildHeader(theme),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: _buildForm(theme),
+                ),
+              ),
+            ],
+          );
+    
+    // Skip MainLayout when shown in dialog
+    if (widget.showInDialog) {
+      return content;
+    }
+    
+    return MainLayout(child: content);
   }
 
   Widget _buildHeader(ThemeData theme) {
@@ -858,7 +865,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => context.pop(),
+            onPressed: () => Navigator.of(context).pop(),
             icon: const Icon(Icons.arrow_back),
             tooltip: 'Volver',
           ),

@@ -534,22 +534,36 @@ class _AppSidebarState extends State<AppSidebar> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    try {
-      final routerState = GoRouterState.of(context);
-      final currentLocation = routerState.uri.path;
-      if (currentLocation != _lastLocation) {
-        _lastLocation = currentLocation;
-        final matchingSection = _resolveSectionForPath(currentLocation);
-        if (matchingSection != _expandedSection) {
-          setState(() {
-            _expandedSection = matchingSection;
-          });
+    
+    // Defer GoRouter access to avoid blocking Navigator.push navigation
+    // This is critical - accessing GoRouter synchronously blocks the UI thread
+    Future.microtask(() {
+      if (!mounted) return;
+      
+      try {
+        // Check if GoRouter is available first
+        final router = GoRouter.maybeOf(context);
+        if (router == null) {
+          debugPrint('⚠️ AppSidebar: GoRouter not available (Navigator.push?)');
+          return;
         }
+        
+        final routerState = GoRouterState.of(context);
+        final currentLocation = routerState.uri.path;
+        if (currentLocation != _lastLocation) {
+          _lastLocation = currentLocation;
+          final matchingSection = _resolveSectionForPath(currentLocation);
+          if (matchingSection != _expandedSection && mounted) {
+            setState(() {
+              _expandedSection = matchingSection;
+            });
+          }
+        }
+      } catch (e) {
+        // Silently ignore - not a fatal error when using Navigator.push
+        debugPrint('⚠️ AppSidebar: Could not access GoRouterState: $e');
       }
-    } catch (e) {
-      // GoRouterState not available in this context, skip menu highlighting
-      // This can happen when MainLayout is used inside a sub-page without direct route
-    }
+    });
   }
 
   void _handleExpansionChange(String sectionKey, bool expand) {
@@ -612,7 +626,10 @@ class _AppSidebarState extends State<AppSidebar> {
     // Safely get current location, fallback to empty string if not in GoRouter context
     String currentLocation = '';
     try {
-      currentLocation = GoRouterState.of(context).uri.path;
+      final routerState = GoRouter.maybeOf(context);
+      if (routerState != null) {
+        currentLocation = GoRouterState.of(context).uri.path;
+      }
     } catch (e) {
       // Not in GoRouter context (e.g., opened via Navigator.push)
       currentLocation = '';

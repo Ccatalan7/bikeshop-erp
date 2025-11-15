@@ -21,7 +21,9 @@ migrate_working_dir/
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
-#.vscode/
+# ⚠️ IMPORTANT: .vscode/launch.json contains DEBUG_EMAIL and DEBUG_PASSWORD
+# Use launch.json.example as template, copy to launch.json and add your credentials
+.vscode/launch.json
 
 # Flutter/Dart/Pub related
 **/doc/api/

@@ -27,6 +27,10 @@ class PurchaseService extends ChangeNotifier {
   bool _invoicesLoaded = false;
   bool _paymentsLoaded = false;
   
+  // Pending data from smart purchase list
+  String? _pendingSupplierId;
+  List<Map<String, dynamic>>? _pendingLineItems;
+  
   // Realtime channels
   RealtimeChannel? _purchaseInvoicesChannel;
   RealtimeChannel? _purchasePaymentsChannel;
@@ -36,6 +40,35 @@ class PurchaseService extends ChangeNotifier {
 
   static void setAccountingService(AccountingService accountingService) {
     _accountingService = accountingService;
+  }
+
+  // Store data from smart purchase list to be picked up by form page
+  void setPendingSmartPurchaseData({
+    String? supplierId,
+    List<Map<String, dynamic>>? lineItems,
+  }) {
+    _pendingSupplierId = supplierId;
+    _pendingLineItems = lineItems;
+    debugPrint('📦 PurchaseService: Stored pending data - supplier: $supplierId, items: ${lineItems?.length}');
+  }
+  
+  // Retrieve and clear pending data (consume once)
+  Map<String, dynamic>? consumePendingSmartPurchaseData() {
+    if (_pendingSupplierId == null && _pendingLineItems == null) {
+      return null;
+    }
+    
+    final data = {
+      'supplierId': _pendingSupplierId,
+      'lineItems': _pendingLineItems,
+    };
+    
+    // Clear after consuming
+    _pendingSupplierId = null;
+    _pendingLineItems = null;
+    
+    debugPrint('📦 PurchaseService: Consumed pending data');
+    return data;
   }
 
   Future<List<shared_supplier.Supplier>> getSuppliers({

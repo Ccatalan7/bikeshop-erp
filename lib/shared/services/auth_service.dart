@@ -29,6 +29,12 @@ class AuthService extends ChangeNotifier {
       debugPrint('✅ [AuthService] Session exists on init, setting isInitializing=false');
       _isInitializing = false;
     }
+    
+    // 🚀 AUTO-LOGIN FOR DEBUG MODE
+    if (kDebugMode && _session == null) {
+      debugPrint('🚀 [AuthService] DEBUG MODE: Auto-login enabled');
+      _autoLoginForDebug();
+    }
   }
 
   final SupabaseClient _client = Supabase.instance.client;
@@ -173,6 +179,41 @@ class AuthService extends ChangeNotifier {
     _currentUser = session?.user ?? _client.auth.currentUser;
     _isInitializing = false;
     notifyListeners();
+  }
+  
+  /// 🚀 AUTO-LOGIN FOR DEBUG MODE
+  /// Automatically logs in with your credentials when running in debug mode
+  Future<void> _autoLoginForDebug() async {
+    try {
+      // Read credentials from dart-defines (set in .vscode/launch.json)
+      const debugEmail = String.fromEnvironment('DEBUG_EMAIL', defaultValue: '');
+      const debugPassword = String.fromEnvironment('DEBUG_PASSWORD', defaultValue: '');
+      
+      if (debugEmail.isEmpty || debugPassword.isEmpty) {
+        debugPrint('⚠️ [AuthService] Auto-login skipped: No credentials configured');
+        debugPrint('💡 Set DEBUG_EMAIL and DEBUG_PASSWORD in .vscode/launch.json');
+        return;
+      }
+      
+      debugPrint('🚀 [AuthService] Attempting auto-login with: $debugEmail');
+      
+      await Future.delayed(const Duration(milliseconds: 500)); // Small delay to ensure Supabase is ready
+      
+      final response = await _client.auth.signInWithPassword(
+        email: debugEmail,
+        password: debugPassword,
+      );
+      
+      if (response.session != null) {
+        _syncAuth(response.session);
+        debugPrint('✅ [AuthService] Auto-login successful!');
+      } else {
+        debugPrint('❌ [AuthService] Auto-login failed: No session returned');
+      }
+    } catch (e) {
+      debugPrint('❌ [AuthService] Auto-login error: $e');
+      // Don't throw - just let user login manually if auto-login fails
+    }
   }
 
   @override
