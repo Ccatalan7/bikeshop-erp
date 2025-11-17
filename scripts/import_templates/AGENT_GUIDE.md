@@ -26,41 +26,63 @@ Based on the task, determine which platforms you need:
 - **Odoo** - ERP data, products, contacts
 - **Supabase/Flutter** - App database (products, customers, etc.)
 
-### Step 3: Ask for Credentials (What expires vs what doesn't)
+### Step 3: Ask for Credentials (Smart Reuse Pattern)
 
-**If task involves Zoho, ask user for these 3 values:**
+**🔑 Credential Management Philosophy:**
+- **Ask ONCE per conversation session** - store in variables, reuse for multiple operations
+- **Only ask again if:** User explicitly says credentials changed, or you get auth errors
+- **Token expiry is handled internally** - Access tokens auto-refresh, you don't need to ask again
 
-"I need your Zoho credentials to connect:"
-- **Client ID** (format: `1000.XXXXX...`) - Rotates periodically
-- **Client Secret** (format: `284793177...`) - Rotates periodically
-- **Refresh Token** (format: `1000.9ab73074...`) - Long-lived but CAN expire
+**If task involves Zoho:**
 
-**If task involves Odoo, ask user for:**
+First time in conversation:
+```python
+# Ask once, store for session
+print("\n🔑 I need your Zoho credentials (I'll reuse them for this session):")
+zoho_client_id = input("Client ID: ").strip()
+zoho_client_secret = input("Client Secret: ").strip()
+zoho_refresh_token = input("Refresh Token: ").strip()
+```
 
-"I need your Odoo API Key:"
-- **API Key** (format: `9056488e5a0f...`) - Can expire/rotate
+Later in same conversation:
+```python
+# Reuse stored credentials - DON'T ask again
+zoho = ZohoConnection(zoho_client_id, zoho_client_secret, zoho_refresh_token)
+```
 
-**Already hardcoded in config.py (NEVER EXPIRE):**
-- Supabase URL + Service Role Key (permanent)
-- Odoo URL + Database + Username (permanent, only API key changes)
-- Zoho API domains + Organization ID (permanent)
-- Tenant ID (permanent)
+**If task involves Odoo:**
 
-**Token Lifecycle:**
-- ❌ **Access Token** - Expires in 1 hour → NEVER store, regenerate on every run
-- ⚠️ **Refresh Token** - Lasts months but CAN expire → Ask user each time
-- ⚠️ **Odoo API Key** - Can expire/rotate → Ask user each time
-- ✅ **Client ID/Secret** - Stable but can be rotated → Ask user each time
-- ✅ **Organization ID** - Permanent → Hardcoded in config.py
-- ✅ **Service Keys** - Permanent → Hardcoded in config.py
-- ✅ **URLs/Databases** - Permanent → Hardcoded in config.py
+First time in conversation:
+```python
+# Ask once, store for session
+print("\n🔑 I need your Odoo API Key (I'll reuse it for this session):")
+odoo_api_key = input("API Key: ").strip()
+```
 
-**Do NOT ask for:**
-- Supabase URL/keys (permanent, already hardcoded)
-- Odoo URL/Database/Username (permanent, already hardcoded)
-- Zoho API domains (permanent URLs, already hardcoded)
-- Zoho Organization ID (permanent, already hardcoded)
-- Tenant ID (permanent, already hardcoded)
+Later in same conversation:
+```python
+# Reuse stored credentials - DON'T ask again
+odoo = OdooConnection(odoo_api_key)
+```
+
+**Already hardcoded in config.py (NEVER ask, NEVER expire):**
+- Supabase URL + Service Role Key
+- Odoo URL + Database + Username
+- Zoho API domains + Organization ID
+- Tenant ID
+
+**When to ask for credentials again:**
+- ✅ User says "use different credentials" or "credentials changed"
+- ✅ You get 401 Unauthorized or authentication errors
+- ❌ NOT on every script run in same conversation
+- ❌ NOT because access token expired (handled internally)
+
+**Smart Pattern:**
+1. **First operation**: Ask for credentials, store in variables
+2. **Second operation in same conversation**: Reuse stored credentials
+3. **User says "update prices"**: Use existing credentials
+4. **User says "sync products"**: Use existing credentials
+5. **User says "my token expired"**: Ask for fresh credentials
 
 ### Step 4: Import Connection Modules
 
@@ -83,12 +105,14 @@ from connections.supabase_connection import SupabaseConnection
 
 ```python
 def main():
-    # Ask user for OAuth credentials (if Zoho)
-    print("\n🔑 Zoho OAuth Credentials Needed")
-    print("   (These can expire/rotate - provide fresh values)\n")
-    client_id = input("Zoho Client ID: ").strip()
-    client_secret = input("Zoho Client Secret: ").strip()
-    refresh_token = input("Zoho Refresh Token: ").strip()
+    # Smart credential management:
+    # - If agent has stored credentials from earlier → reuse them
+    # - If first time or auth failed → ask user
+    print("\n🔑 Zoho credentials needed")
+    print("   (I'll reuse these for the rest of our conversation)\n")
+    client_id = input("Client ID: ").strip()
+    client_secret = input("Client Secret: ").strip()
+    refresh_token = input("Refresh Token: ").strip()
     
     # Initialize connections (org ID from config.py)
     zoho = ZohoConnection(client_id, client_secret, refresh_token)
@@ -410,27 +434,30 @@ def fetch_with_pagination(url, params):
 
 ## 🚨 Important Rules
 
-1. **NEVER hardcode tokens in connection files** - they are templates, not task scripts
-2. **ALWAYS ask user for credentials that can expire:**
-   - Zoho: Client ID, Secret, Refresh Token
-   - Odoo: API Key
-3. **NEVER ask for**: Supabase credentials, Zoho Org ID, Odoo URL/DB/Username (permanent in config.py)
-4. **ALWAYS create NEW task scripts** in tasks/ folder - don't modify connection templates
-5. **ALWAYS use pagination** - datasets have 1000+ records
-6. **ALWAYS match by name** when SKUs don't align between systems
-7. **ALWAYS show preview** before updating records
-8. **ALWAYS ask for confirmation** before applying changes
-9. **ALWAYS use tenant_id filter** for Supabase queries
-10. **ALWAYS handle errors gracefully** - show which records failed
-11. **ALWAYS provide summary** at the end (✅ Updated: X, ❌ Failed: Y)
+1. **Smart credential reuse** - Ask once per conversation, reuse for multiple operations
+2. **Only ask again if**: User says credentials changed, or you get auth errors
+3. **Connection templates stay clean** - Never write credentials into template files
+4. **Access tokens handled internally** - They expire hourly but auto-refresh, don't ask user
+5. **Use pagination** - Datasets have 1000+ records
+6. **Match by name** when SKUs don't align between systems
+7. **Show preview** before updating records
+8. **Ask confirmation** before applying changes
+9. **Use tenant_id filter** for Supabase queries
+10. **Handle errors gracefully** - Show which records failed
+11. **Provide summary** at the end (✅ Updated: X, ❌ Failed: Y)
 
-**Token Management:**
-- **Access Token** (1-hour expiry) → Generated automatically by connection class, never ask user
-- **Refresh Token** (months, can expire) → Ask user every time
-- **Client ID/Secret** (can rotate) → Ask user every time
-- **Odoo API Key** (can expire/rotate) → Ask user every time
-- **Organization ID** (permanent) → Hardcoded in config.py, never ask
-- **Service Keys** (permanent) → Hardcoded in config.py, never ask
+**Credential Lifecycle:**
+- **First task**: Ask for Zoho/Odoo credentials, store in variables
+- **Second task (same conversation)**: Reuse stored credentials
+- **Third task (same conversation)**: Still reuse same credentials
+- **Auth error**: Ask user "Credentials expired? Need fresh ones?"
+- **User says "yes"**: Ask for credentials again
+- **New conversation/session**: Ask for credentials fresh
+
+**What NEVER expires (don't ask):**
+- Supabase URL, service key, tenant ID
+- Odoo URL, database, username
+- Zoho API domains, organization ID
 
 ---
 
@@ -458,16 +485,16 @@ def main():
     print("🔧 [TASK NAME]")
     print("=" * 80)
     
-    # Ask for OAuth credentials (if Zoho)
-    print("\n🔑 Zoho OAuth Credentials Needed")
-    print("   (These can expire/rotate - provide fresh values)\n")
-    client_id = input("Zoho Client ID: ").strip()
-    client_secret = input("Zoho Client Secret: ").strip()
-    refresh_token = input("Zoho Refresh Token: ").strip()
+    # Ask for credentials ONLY if not already provided in this conversation
+    # The agent should store these and reuse them for multiple operations
+    print("\n🔑 I'll need your Zoho credentials for this session")
+    client_id = input("Client ID: ").strip()
+    client_secret = input("Client Secret: ").strip()
+    refresh_token = input("Refresh Token: ").strip()
     
-    # Initialize connections (org ID from config.py)
+    # Initialize connections
     zoho = ZohoConnection(client_id, client_secret, refresh_token)
-    supabase = SupabaseConnection()  # Uses permanent config.py credentials
+    supabase = SupabaseConnection()  # Uses config.py
     
     # Fetch data
     print("\n📥 Fetching data...")
@@ -510,6 +537,11 @@ if __name__ == "__main__":
         traceback.print_exc()
 ```
 
+**💡 Agent Intelligence:**
+- If you already asked for Zoho credentials earlier in this conversation, **reuse them** - don't run this script from scratch
+- If you have stored `client_id`, `client_secret`, `refresh_token` in conversation context, **pass them directly** to `ZohoConnection()`
+- Only prompt user for credentials if you don't have them yet or if auth fails
+
 ---
 
 ## 🎓 Summary for AI Agents
@@ -517,23 +549,37 @@ if __name__ == "__main__":
 **When user asks for an import/sync task:**
 
 1. Ask: "What do you want to accomplish?"
-2. Ask for credentials based on platforms involved:
+2. **Check if you already have credentials from earlier in conversation:**
+   - If YES: Reuse them (say "Using your previously provided credentials")
+   - If NO: Ask for credentials based on platforms involved
+3. Ask for credentials (ONLY if needed):
    - **Zoho**: Client ID, Client Secret, Refresh Token
    - **Odoo**: API Key
    - **Supabase**: Nothing (uses config.py)
-3. Import connection modules from `connections/` (they are templates)
-4. Write task-specific logic in NEW file
-5. Save in `tasks/[descriptive_name].py` (NEVER modify connection templates)
-6. Show preview, ask confirmation, apply changes
-7. Display summary report
+4. Store credentials in variables for session reuse
+5. Import connection modules from `connections/` (they are templates)
+6. Write task-specific logic in NEW file in `tasks/` folder
+7. Show preview, ask confirmation, apply changes
+8. Display summary report
 
-**What's already configured:**
-- ✅ Supabase URL, service key, tenant ID (permanent)
-- ✅ Odoo URL, database, username (permanent, only API key changes)
-- ✅ Zoho API domains + Organization ID (permanent)
+**Example conversation flow:**
 
-**What to ask user every time:**
-- ❌ Zoho: Client ID, Secret, Refresh Token (can expire/rotate)
-- ❌ Odoo: API Key (can expire/rotate)
+**User:** "Sync prices from Zoho to Flutter"
+**Agent:** Asks for Zoho credentials (3 fields), stores them, runs task
 
-**Your job:** Write the business logic for that specific task using connection modules as building blocks. Connection modules handle token refresh automatically (access tokens expire hourly but are auto-renewed).
+**User:** "Now sync SKUs too"
+**Agent:** Reuses stored Zoho credentials (doesn't ask again), runs task
+
+**User:** "Update products from Odoo to Zoho"
+**Agent:** Reuses Zoho credentials, asks for Odoo API key (first time), stores it, runs task
+
+**User:** "Sync suppliers from Odoo"
+**Agent:** Reuses stored Odoo API key (doesn't ask again), runs task
+
+**User:** "My Zoho token expired"
+**Agent:** Asks for fresh Zoho credentials, updates stored values, runs task
+
+**What's already configured (never ask):**
+- ✅ Supabase URL, service key, tenant ID
+- ✅ Odoo URL, database, username
+- ✅ Zoho API domains + Organization ID
