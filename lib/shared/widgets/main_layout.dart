@@ -1072,7 +1072,7 @@ class _AppSidebarState extends State<AppSidebar> {
         ),
         child: Icon(
           appearanceService.homeIcon,
-          color: Colors.white,
+          color: theme.colorScheme.onPrimary,
           size: 18,
         ),
       ),
@@ -1161,11 +1161,14 @@ class AppDrawer extends StatelessWidget {
                               fit: BoxFit.contain,
                               filterQuality: FilterQuality.high,
                             ),
-                            placeholder: (context, url) => const Center(
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                              ),
-                            ),
+                            placeholder: (context, url) {
+                              final theme = Theme.of(context);
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                              );
+                            },
                             errorWidget: (context, url, error) =>
                                 _buildDefaultDrawerHeader(
                                     context, appearanceService),
@@ -1453,6 +1456,7 @@ class AppDrawer extends StatelessWidget {
 
   Widget _buildDefaultDrawerHeader(
       BuildContext context, AppearanceService appearanceService) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
@@ -1461,23 +1465,23 @@ class AppDrawer extends StatelessWidget {
           padding: const EdgeInsets.all(4),
           child: Icon(
             appearanceService.homeIcon,
-            color: Colors.white,
+            color: theme.colorScheme.onPrimary,
             size: 48,
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Vinabike ERP',
           style: TextStyle(
-            color: Colors.white,
+            color: theme.colorScheme.onPrimary,
             fontSize: 24,
             fontWeight: FontWeight.bold,
           ),
         ),
-        const Text(
+        Text(
           'Sistema Integral de Gestión',
           style: TextStyle(
-            color: Colors.white70,
+            color: theme.colorScheme.onPrimary.withOpacity(0.7),
             fontSize: 14,
           ),
         ),

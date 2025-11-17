@@ -207,12 +207,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 title: 'Tema',
                 subtitle: 'Claro, oscuro, automático',
                 iconColor: Colors.purple,
-                onTap: () {
-                  // TODO: Implement theme selector
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Próximamente...')),
-                  );
-                },
+                onTap: () => context.push('/settings/appearance'),
               ),
               _buildSettingTile(
                 context,

@@ -16,6 +16,73 @@ class AppearanceSettingsPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Theme Mode Section
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.palette_outlined,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Tema de la Aplicación',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Selecciona el tema visual del sistema',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.7),
+                        ),
+                  ),
+                  const SizedBox(height: 24),
+                  Consumer<AppearanceService>(
+                    builder: (context, appearanceService, _) {
+                      return SegmentedButton<ThemeMode>(
+                        segments: const [
+                          ButtonSegment(
+                            value: ThemeMode.light,
+                            label: Text('Claro'),
+                            icon: Icon(Icons.light_mode),
+                          ),
+                          ButtonSegment(
+                            value: ThemeMode.dark,
+                            label: Text('Oscuro'),
+                            icon: Icon(Icons.dark_mode),
+                          ),
+                          ButtonSegment(
+                            value: ThemeMode.system,
+                            label: Text('Sistema'),
+                            icon: Icon(Icons.settings_brightness),
+                          ),
+                        ],
+                        selected: {appearanceService.themeMode},
+                        onSelectionChanged: (Set<ThemeMode> newSelection) {
+                          appearanceService.setThemeMode(newSelection.first);
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
           // Company Logo Section
           Card(
             child: Padding(
@@ -249,42 +316,84 @@ class AppearanceSettingsPage extends StatelessWidget {
 
   Future<void> _handleLogoUpload(
       BuildContext context, AppearanceService appearanceService) async {
+    BuildContext? dialogContext;
+    
     try {
+      debugPrint('[AppearanceSettings] pickImage() called');
+      
       // Pick image
       final result = await ImageService.pickImage();
 
+      debugPrint('[AppearanceSettings] pickImage() returned: ${result != null ? "Got file: ${result.name}" : "null (cancelled)"}');
+
       if (result == null) {
+        debugPrint('[AppearanceSettings] User cancelled, returning');
         return; // User cancelled
       }
 
-      if (!context.mounted) return;
+      debugPrint('[AppearanceSettings] File size: ${result.bytes.length} bytes');
 
-      // Show loading dialog
+      if (!context.mounted) {
+        debugPrint('[AppearanceSettings] Context not mounted after pick, returning');
+        return;
+      }
+
+      debugPrint('[AppearanceSettings] Showing loading dialog');
+
+      // Show loading dialog and capture its context
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
-          child: Card(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Subiendo logo...'),
-                ],
+        builder: (BuildContext ctx) {
+          dialogContext = ctx; // Capture the dialog context
+          return const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Subiendo logo...'),
+                  ],
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       );
 
-      // Upload image
-      await appearanceService.uploadCompanyLogo(result.bytes, result.name);
+      debugPrint('[AppearanceSettings] Loading dialog shown');
+      debugPrint('[AppearanceSettings] Starting upload: ${result.name}');
+
+      // Upload image with timeout
+      await appearanceService.uploadCompanyLogo(result.bytes, result.name)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              debugPrint('[AppearanceSettings] Upload TIMED OUT after 30 seconds');
+              throw Exception('Upload timed out after 30 seconds');
+            },
+          );
+
+      debugPrint('[AppearanceSettings] Upload completed successfully');
+
+      // Close dialog using the captured context
+      if (dialogContext != null && dialogContext!.mounted) {
+        debugPrint('[AppearanceSettings] Closing dialog with dialog context');
+        Navigator.of(dialogContext!).pop();
+      } else if (context.mounted) {
+        debugPrint('[AppearanceSettings] Closing dialog with main context');
+        Navigator.of(context).pop();
+      }
+
+      debugPrint('[AppearanceSettings] Dialog closed, refreshing logo');
+
+      // Force refresh the logo to show the new one immediately
+      appearanceService.refreshLogo();
 
       if (!context.mounted) return;
-      Navigator.pop(context); // Close loading dialog
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
@@ -295,10 +404,26 @@ class AppearanceSettingsPage extends StatelessWidget {
         ),
       );
     } catch (e) {
-      if (!context.mounted) return;
-
+      debugPrint('[AppearanceSettings] Upload error: $e');
+      
       // Close loading dialog if open
-      Navigator.pop(context);
+      if (dialogContext != null && dialogContext!.mounted) {
+        try {
+          debugPrint('[AppearanceSettings] Closing dialog after error (dialog context)');
+          Navigator.of(dialogContext!).pop();
+        } catch (navError) {
+          debugPrint('[AppearanceSettings] Error closing dialog: $navError');
+        }
+      } else if (context.mounted) {
+        try {
+          debugPrint('[AppearanceSettings] Closing dialog after error (main context)');
+          Navigator.of(context).pop();
+        } catch (navError) {
+          debugPrint('[AppearanceSettings] Error closing dialog: $navError');
+        }
+      }
+
+      if (!context.mounted) return;
 
       // Show error message
       ScaffoldMessenger.of(context).showSnackBar(

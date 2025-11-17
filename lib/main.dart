@@ -126,14 +126,7 @@ class VinabikeApp extends StatelessWidget {
           return tenantService;
         }),
         ChangeNotifierProvider(create: (_) => PaymentMethodService()),
-        ChangeNotifierProvider(create: (_) {
-          final service = AppearanceService();
-          // Auto-refresh logo on app start to get latest version
-          Future.delayed(const Duration(seconds: 2), () {
-            service.refreshLogo();
-          });
-          return service;
-        }),
+        ChangeNotifierProvider(create: (_) => AppearanceService()),
         ChangeNotifierProvider(create: (_) {
           final navigationService = NavigationService();
           navigationService.initialize();
@@ -289,9 +282,19 @@ class VinabikeApp extends StatelessWidget {
 
           // CRITICAL: Use context.watch() to rebuild when auth state changes
           final authService = context.watch<AuthService>();
+          final appearanceService = context.watch<AppearanceService>();
           
           debugPrint('🔐 [Main] Auth check: isAuthenticated=${authService.isAuthenticated}, isInitializing=${authService.isInitializing}');
           debugPrint('📍 [Main] isPublicStoreHost=$isPublicStoreHost');
+          debugPrint('🎨 [Main] Theme mode: ${appearanceService.themeMode}');
+
+          // Reload appearance settings after authentication completes
+          if (authService.isAuthenticated && !appearanceService.isInitialized) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              debugPrint('🎨 [Main] Reloading appearance settings after authentication');
+              appearanceService.reloadSettings();
+            });
+          }
 
           // Show loading screen while auth is initializing
           if (authService.isInitializing) {
@@ -314,7 +317,7 @@ class VinabikeApp extends StatelessWidget {
               title: 'Vinabike',
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
-              themeMode: ThemeMode.light,
+              themeMode: appearanceService.themeMode,
               scrollBehavior: AppScrollBehavior(),
               routerConfig: AppRouter.createRouter(
                 authService,
@@ -342,7 +345,7 @@ class VinabikeApp extends StatelessWidget {
             title: 'Vinabike',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: ThemeMode.light,
+            themeMode: appearanceService.themeMode,
             scrollBehavior: AppScrollBehavior(),
             debugShowCheckedModeBanner: false,
             localizationsDelegates: const [
@@ -370,10 +373,8 @@ class VinabikeApp extends StatelessWidget {
                 return Scaffold(
                   body: Column(
                     children: [
-                      Container(
-                        color: Colors.white,
-                        child: const WorkspaceTabBar(),
-                      ),
+                      // Workspace tab bar uses theme
+                      const WorkspaceTabBar(),
                       Expanded(
                         child: IndexedStack(
                           index: workspaceManager.activeIndex,

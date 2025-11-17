@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/constants/storage_constants.dart';
@@ -8,11 +9,13 @@ import '../../../shared/constants/storage_constants.dart';
 class AppearanceService extends ChangeNotifier {
   static const String _homeIconKey = 'home_icon';
   static const String _companyLogoKey = 'company_logo';
+  static const String _themeModeKey = 'theme_mode';
 
   IconData _homeIcon = Icons.pedal_bike;
   String? _companyLogoUrl;
   bool _isInitialized = false;
   int _cacheBuster = DateTime.now().millisecondsSinceEpoch;
+  ThemeMode _themeMode = ThemeMode.light;
 
   final _supabase = Supabase.instance.client;
 
@@ -31,6 +34,7 @@ class AppearanceService extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
   bool get hasCustomLogo =>
       _companyLogoUrl != null && _companyLogoUrl!.isNotEmpty;
+  ThemeMode get themeMode => _themeMode;
 
   // Available home icons for selection
   static const List<HomeIconOption> availableIcons = [
@@ -73,10 +77,30 @@ class AppearanceService extends ChangeNotifier {
 
   Future<void> _loadSettings() async {
     try {
+      // Load theme mode from SharedPreferences (local, per-device)
+      final prefs = await SharedPreferences.getInstance();
+      final themeModeString = prefs.getString(_themeModeKey);
+      if (themeModeString != null) {
+        _themeMode = ThemeMode.values.firstWhere(
+          (mode) => mode.name == themeModeString,
+          orElse: () => ThemeMode.light,
+        );
+      }
+
+      // Get tenant_id for loading settings
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        debugPrint('[AppearanceService] No tenant found, skipping settings load');
+        _isInitialized = true;
+        notifyListeners();
+        return;
+      }
+
       // Load settings from Supabase database (global, synced across devices)
       final response = await _supabase
           .from('company_settings')
           .select('key, value')
+          .eq('tenant_id', tenantId)
           .inFilter('key', [_homeIconKey, _companyLogoKey]);
 
       for (final row in response) {
@@ -108,6 +132,12 @@ class AppearanceService extends ChangeNotifier {
   void refreshLogo() {
     _cacheBuster = DateTime.now().millisecondsSinceEpoch;
     notifyListeners();
+  }
+
+  /// Reload settings from database (call after authentication)
+  Future<void> reloadSettings() async {
+    debugPrint('[AppearanceService] reloadSettings() called');
+    await _loadSettings();
   }
 
   Future<void> setHomeIcon(IconData icon, String iconCode) async {
@@ -160,13 +190,18 @@ class AppearanceService extends ChangeNotifier {
 
   Future<void> uploadCompanyLogo(Uint8List imageBytes, String fileName) async {
     try {
+      debugPrint('[AppearanceService] uploadCompanyLogo started: $fileName');
+      
       // Get tenant_id
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
         throw Exception('No tenant found');
       }
+      
+      debugPrint('[AppearanceService] Tenant ID: $tenantId');
 
       // Upload to Supabase storage
+      debugPrint('[AppearanceService] Uploading to storage...');
       final imageUrl = await ImageService.uploadBytes(
         bytes: imageBytes,
         fileName: fileName,
@@ -174,8 +209,11 @@ class AppearanceService extends ChangeNotifier {
         folder: 'company_logos',
       );
 
+      debugPrint('[AppearanceService] Upload complete, URL: $imageUrl');
+
       if (imageUrl != null) {
         // Check if setting exists
+        debugPrint('[AppearanceService] Checking existing settings...');
         final existing = await _supabase
             .from('company_settings')
             .select('id')
@@ -183,14 +221,18 @@ class AppearanceService extends ChangeNotifier {
             .eq('key', _companyLogoKey)
             .maybeSingle();
 
+        debugPrint('[AppearanceService] Existing record: ${existing != null ? "found" : "not found"}');
+
         if (existing != null) {
           // Update existing record
+          debugPrint('[AppearanceService] Updating existing record...');
           await _supabase.from('company_settings').update({
             'value': imageUrl,
             'updated_at': DateTime.now().toIso8601String()
           }).eq('tenant_id', tenantId).eq('key', _companyLogoKey);
         } else {
           // Insert new record
+          debugPrint('[AppearanceService] Inserting new record...');
           await _supabase.from('company_settings').insert({
             'tenant_id': tenantId,
             'key': _companyLogoKey,
@@ -199,10 +241,19 @@ class AppearanceService extends ChangeNotifier {
           });
         }
 
+        debugPrint('[AppearanceService] Database updated successfully');
+
         _companyLogoUrl = imageUrl;
         // Update cache-buster to force reload on all devices
         _cacheBuster = DateTime.now().millisecondsSinceEpoch;
+        
+        debugPrint('[AppearanceService] Logo URL set to: $_companyLogoUrl');
+        debugPrint('[AppearanceService] Cache buster: $_cacheBuster');
+        debugPrint('[AppearanceService] Notifying listeners...');
+        
         notifyListeners();
+        
+        debugPrint('[AppearanceService] Upload complete!');
       } else {
         throw Exception('Failed to upload image');
       }
@@ -230,6 +281,19 @@ class AppearanceService extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('[AppearanceService] Error removing logo: $e');
+      rethrow;
+    }
+  }
+
+  /// Set theme mode (light, dark, or system)
+  Future<void> setThemeMode(ThemeMode mode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_themeModeKey, mode.name);
+      _themeMode = mode;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[AppearanceService] Error saving theme mode: $e');
       rethrow;
     }
   }
