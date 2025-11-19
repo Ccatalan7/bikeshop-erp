@@ -46,6 +46,18 @@ class Invoice {
   final List<InvoiceItem> items;
   final DateTime createdAt;
   final DateTime updatedAt;
+  
+  // ✅ UNIFIED ARCHITECTURE (Nov 18, 2025): Pega-specific fields
+  final String invoiceType; // 'sale', 'pega', 'service'
+  final String? bikeId; // For pegas: the bike being serviced
+  final String? mechanicId; // For pegas: assigned mechanic
+  final String? jobNumber; // For pegas: PG-00001 style number
+  final DateTime? entryDate; // For pegas: when bike arrived
+  final DateTime? deliveryDate; // For pegas: when bike was delivered
+  final bool requiresApproval; // For pegas: needs customer OK
+  final bool isWarranty; // For pegas: warranty work
+  final String? workDescription; // For pegas: work performed
+  final String? notes; // Internal notes
 
   Invoice({
     this.id,
@@ -68,6 +80,16 @@ class Invoice {
     this.items = const [],
     DateTime? createdAt,
     DateTime? updatedAt,
+    this.invoiceType = 'sale',
+    this.bikeId,
+    this.mechanicId,
+    this.jobNumber,
+    this.entryDate,
+    this.deliveryDate,
+    this.requiresApproval = false,
+    this.isWarranty = false,
+    this.workDescription,
+    this.notes,
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
@@ -92,6 +114,16 @@ class Invoice {
     List<InvoiceItem>? items,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? invoiceType,
+    String? bikeId,
+    String? mechanicId,
+    String? jobNumber,
+    DateTime? entryDate,
+    DateTime? deliveryDate,
+    bool? requiresApproval,
+    bool? isWarranty,
+    String? workDescription,
+    String? notes,
   }) {
     return Invoice(
       id: id ?? this.id,
@@ -114,6 +146,16 @@ class Invoice {
       items: items ?? this.items,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      invoiceType: invoiceType ?? this.invoiceType,
+      bikeId: bikeId ?? this.bikeId,
+      mechanicId: mechanicId ?? this.mechanicId,
+      jobNumber: jobNumber ?? this.jobNumber,
+      entryDate: entryDate ?? this.entryDate,
+      deliveryDate: deliveryDate ?? this.deliveryDate,
+      requiresApproval: requiresApproval ?? this.requiresApproval,
+      isWarranty: isWarranty ?? this.isWarranty,
+      workDescription: workDescription ?? this.workDescription,
+      notes: notes ?? this.notes,
     );
   }
 
@@ -144,6 +186,16 @@ class Invoice {
           .toList(),
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
+      invoiceType: json['invoice_type']?.toString() ?? 'sale',
+      bikeId: json['bike_id']?.toString(),
+      mechanicId: json['mechanic_id']?.toString(),
+      jobNumber: json['job_number']?.toString(),
+      entryDate: json['entry_date'] != null ? _parseDate(json['entry_date']) : null,
+      deliveryDate: json['delivery_date'] != null ? _parseDate(json['delivery_date']) : null,
+      requiresApproval: json['requires_approval'] as bool? ?? false,
+      isWarranty: json['is_warranty'] as bool? ?? false,
+      workDescription: json['work_description']?.toString(),
+      notes: json['notes']?.toString(),
     );
   }
 
@@ -167,6 +219,16 @@ class Invoice {
       'tax_treatment': taxTreatment.toValue(),
       'net_amount': netAmount,
       'items': items.map((item) => item.toFirestoreMap()).toList(),
+      'invoice_type': invoiceType,
+      if (bikeId != null) 'bike_id': bikeId,
+      if (mechanicId != null) 'mechanic_id': mechanicId,
+      if (jobNumber != null) 'job_number': jobNumber,
+      if (entryDate != null) 'entry_date': entryDate!.toUtc().toIso8601String(),
+      if (deliveryDate != null) 'delivery_date': deliveryDate!.toUtc().toIso8601String(),
+      'requires_approval': requiresApproval,
+      'is_warranty': isWarranty,
+      if (workDescription != null) 'work_description': workDescription,
+      if (notes != null) 'notes': notes,
     };
   }
 
@@ -214,6 +276,11 @@ class InvoiceItem {
   final double discount;
   final double lineTotal;
   final double cost;
+  
+  // ✅ UNIFIED ARCHITECTURE (Nov 18, 2025): Service/Labor fields
+  final bool isService; // true = labor/service, false = product
+  final double? hours; // For services: hours worked
+  final double? hourlyRate; // For services: rate per hour
 
   InvoiceItem({
     this.id,
@@ -228,6 +295,9 @@ class InvoiceItem {
     this.discount = 0,
     double? lineTotal,
     this.cost = 0,
+    this.isService = false,
+    this.hours,
+    this.hourlyRate,
   }) : lineTotal = lineTotal ?? (quantity * unitPrice - discount);
 
   InvoiceItem copyWith({
@@ -243,6 +313,9 @@ class InvoiceItem {
     double? discount,
     double? lineTotal,
     double? cost,
+    bool? isService,
+    double? hours,
+    double? hourlyRate,
   }) {
     return InvoiceItem(
       id: id ?? this.id,
@@ -257,6 +330,9 @@ class InvoiceItem {
       discount: discount ?? this.discount,
       lineTotal: lineTotal ?? this.lineTotal,
       cost: cost ?? this.cost,
+      isService: isService ?? this.isService,
+      hours: hours ?? this.hours,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
     );
   }
 
@@ -274,6 +350,9 @@ class InvoiceItem {
       discount: (json['discount'] as num?)?.toDouble() ?? 0,
       lineTotal: (json['line_total'] as num?)?.toDouble(),
       cost: (json['cost'] as num?)?.toDouble() ?? 0,
+      isService: json['is_service'] as bool? ?? false,
+      hours: (json['hours'] as num?)?.toDouble(),
+      hourlyRate: (json['hourly_rate'] as num?)?.toDouble(),
     );
   }
 
@@ -291,6 +370,9 @@ class InvoiceItem {
       'discount': discount,
       'line_total': lineTotal,
       'cost': cost,
+      'is_service': isService,
+      if (hours != null) 'hours': hours,
+      if (hourlyRate != null) 'hourly_rate': hourlyRate,
     };
   }
 }

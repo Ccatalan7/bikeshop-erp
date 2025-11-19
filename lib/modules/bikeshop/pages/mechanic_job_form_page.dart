@@ -1633,13 +1633,19 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           // Header/Content divider
                           Divider(height: 1, thickness: 1, color: theme.colorScheme.outline.withOpacity(0.2)),
                           
-                          // Part items and add row
+                          // Part items, labor items, and add row
                           Column(
                             children: [
                               // Existing part items
                               if (_partItems.isNotEmpty)
                                 ..._partItems.asMap().entries.map((entry) => 
                                   _buildPartRow(theme, entry.key + 1, entry.value, entry.key)
+                                ),
+                              
+                              // Existing labor items (displayed after parts)
+                              if (_laborItems.isNotEmpty)
+                                ..._laborItems.asMap().entries.map((entry) => 
+                                  _buildLaborRow(theme, _partItems.length + entry.key + 1, entry.value, entry.key)
                                 ),
                               
                               // Add new part row (always show)
@@ -1722,6 +1728,19 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   ),
                 );
               },
+            ),
+            const SizedBox(height: 12),
+            // Add service button
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _addLaborItem,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Agregar Servicio'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
             ),
           ],
     );
@@ -2252,7 +2271,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           
-                          // Custom description
+                          // Custom description only
                           if (item.hasCustomDescription)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
@@ -2275,9 +2294,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ),
             ),
             
-            // Fecha column
+            // Quantity column (always 1 for services)
             Container(
-              width: _colDateWidth,
+              width: _colQuantityWidth,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
                 border: Border(
@@ -2286,43 +2305,49 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ),
               child: Center(
                 child: Text(
-                  DateFormat('dd/MM/yyyy').format(item.date),
+                  '1',
                   style: theme.textTheme.bodyMedium,
                 ),
               ),
             ),
             
-            // Horas column
+            // Unit Price column - EDITABLE
             Container(
-              width: _colHoursWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              width: _colPriceWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 border: Border(
                   right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
                 ),
               ),
-              child: Center(
-                child: Text(
-                  item.hours.toStringAsFixed(2),
-                  style: theme.textTheme.bodyMedium,
+              child: TextFormField(
+                initialValue: item.total.toStringAsFixed(0),
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(4),
+                    borderSide: BorderSide(color: theme.colorScheme.outline.withOpacity(0.3)),
+                  ),
+                  prefixText: '\$ ',
+                  prefixStyle: theme.textTheme.bodyMedium,
                 ),
-              ),
-            ),
-            
-            // Tarifa column
-            Container(
-              width: _colRateWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.hourlyRate),
-                  style: theme.textTheme.bodyMedium,
-                ),
+                onChanged: (value) {
+                  final newPrice = double.tryParse(value) ?? 0;
+                  setState(() {
+                    // Update hourlyRate to match new total (since hours=1, rate=total)
+                    _laborItems[itemIndex] = _JobLaborItem(
+                      serviceProduct: item.serviceProduct,
+                      description: item.description,
+                      hours: 1.0,
+                      hourlyRate: newPrice,
+                      date: item.date,
+                    );
+                  });
+                },
               ),
             ),
             
@@ -2363,10 +2388,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildCostRow('Repuestos:', _partsCost, false),
-        const SizedBox(height: 8),
-        _buildCostRow('Mano de obra:', _laborCost, false),
-        const Divider(),
         _buildCostRow('Subtotal:', _subtotal, true),
         const SizedBox(height: 8),
         Row(

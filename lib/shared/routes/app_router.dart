@@ -573,11 +573,10 @@ class AppRouter {
         GoRoute(
           path: '/taller/pegas/nueva',
           pageBuilder: (context, state) {
-            final customerId = state.uri.queryParameters['customer_id'];
             return _buildPageWithNoTransition(
               context,
               state,
-              MechanicJobFormPage(customerId: customerId),
+              const MechanicJobFormPage(),
             );
           },
         ),

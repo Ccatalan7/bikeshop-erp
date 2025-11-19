@@ -36,6 +36,7 @@ import 'modules/sales/services/sales_service.dart';
 import 'modules/settings/services/appearance_service.dart';
 import 'modules/bikeshop/services/bikeshop_service.dart';
 import 'modules/bikeshop/services/wheel_building_service.dart';
+import 'modules/bikeshop/services/smart_task_service.dart';
 import 'modules/hr/services/hr_service.dart';
 import 'modules/website/services/website_service.dart';
 import 'modules/website/services/mercadopago_service.dart';
@@ -166,6 +167,9 @@ class VinabikeApp extends StatelessWidget {
                   Provider.of<DatabaseService>(context, listen: false),
                 )),
         ChangeNotifierProvider(create: (context) => WheelBuildingService()),
+        ChangeNotifierProvider(create: (context) => SmartTaskService(
+              Provider.of<DatabaseService>(context, listen: false),
+            )),
         ChangeNotifierProvider(
             create: (context) => AccountingService(
                   Provider.of<DatabaseService>(context, listen: false),

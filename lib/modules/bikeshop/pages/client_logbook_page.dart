@@ -1830,7 +1830,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
                 children: [
                   // Job number
                   Text(
-                    job.jobNumber.isEmpty ? 'Sin número' : job.jobNumber,
+                    job.jobNumber ?? 'Sin número',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -2141,7 +2141,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
                         if (job != null)
                           _buildTimelineMetaChip(
                             icon: Icons.build,
-                            label: job.jobNumber.isNotEmpty
+                            label: (job.jobNumber?.isNotEmpty ?? false)
                                 ? 'Pega ${job.jobNumber}'
                                 : 'Pega sin número',
                           ),

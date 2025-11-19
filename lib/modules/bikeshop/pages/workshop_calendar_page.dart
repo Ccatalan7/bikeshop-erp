@@ -540,7 +540,7 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _bikeNames[job.bikeId] ?? job.jobNumber,
+                      _bikeNames[job.bikeId] ?? job.jobNumber ?? 'Sin #',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                       ),
@@ -684,7 +684,7 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
               Text(
                 _bikeBrand != null || _bikeModel != null
                     ? '${_bikeBrand ?? ''} ${_bikeModel ?? ''}'.trim()
-                    : job.jobNumber,
+                    : job.jobNumber ?? 'Sin #',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.bold,

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../shared/services/database_service.dart';
-import '../models/financial_report.dart';
+
 import '../models/report_line.dart';
 import '../models/income_statement.dart';
 import '../models/balance_sheet.dart';

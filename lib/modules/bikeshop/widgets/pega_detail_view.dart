@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../crm/models/crm_models.dart';
 import '../models/bikeshop_models.dart';
+import 'tasks_tab_view.dart';
 
-class PegaDetailView extends StatelessWidget {
+class PegaDetailView extends StatefulWidget {
   final MechanicJob job;
   final Customer? customer;
   final Bike? bike;
@@ -14,6 +16,10 @@ class PegaDetailView extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onEdit;
   final Function(JobStatus) onStatusChange;
+  final Function(MechanicJobItem)? onItemAdded;
+  final Function(String itemId)? onItemRemoved;
+  final Function(MechanicJobLabor)? onLaborAdded;
+  final Function(String laborId)? onLaborRemoved;
 
   const PegaDetailView({
     super.key,
@@ -26,62 +32,112 @@ class PegaDetailView extends StatelessWidget {
     required this.onClose,
     required this.onEdit,
     required this.onStatusChange,
+    this.onItemAdded,
+    this.onItemRemoved,
+    this.onLaborAdded,
+    this.onLaborRemoved,
   });
+
+  @override
+  State<PegaDetailView> createState() => _PegaDetailViewState();
+}
+
+class _PegaDetailViewState extends State<PegaDetailView> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       child: Column(
         children: [
           // Header with close button
           Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.blue[50],
-              border: Border(bottom: BorderSide(color: Colors.blue[200]!)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        job.jobNumber,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (customer != null)
-                        Text(
-                          customer!.name,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                    ],
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  tooltip: 'Editar',
-                  onPressed: onEdit,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  tooltip: 'Cerrar',
-                  onPressed: onClose,
-                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.job.jobNumber ?? 'Nuevo Trabajo',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (widget.customer != null)
+                          Text(
+                            widget.customer!.name,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit),
+                    tooltip: 'Editar',
+                    onPressed: widget.onEdit,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Cerrar',
+                    onPressed: widget.onClose,
+                  ),
+                ],
+              ),
+            ),
+
+            // Tab Bar
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Detalles', icon: Icon(Icons.info_outline, size: 20)),
+                Tab(text: 'Tareas', icon: Icon(Icons.checklist, size: 20)),
               ],
             ),
-          ),
 
-          // Detail content (scrollable)
-          Expanded(
-            child: SingleChildScrollView(
+            // Tab Views
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildDetailsTab(),
+                  _buildTasksTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
+    );
+  }
+
+  Widget _buildDetailsTab() {
+    return SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,18 +148,18 @@ class PegaDetailView extends StatelessWidget {
                       Expanded(
                         child: _buildInfoCard(
                           'Estado',
-                          job.status.displayName,
+                          widget.job.status.displayName,
                           Icons.info_outline,
-                          _getStatusColor(job.status),
+                          _getStatusColor(widget.job.status),
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: _buildInfoCard(
                           'Prioridad',
-                          job.priority.displayName,
+                          widget.job.priority.displayName,
                           Icons.priority_high,
-                          _getPriorityColor(job.priority),
+                          _getPriorityColor(widget.job.priority),
                         ),
                       ),
                     ],
@@ -116,7 +172,7 @@ class PegaDetailView extends StatelessWidget {
                       Expanded(
                         child: _buildInfoCard(
                           'Fecha de Ingreso',
-                          DateFormat('dd/MM/yyyy').format(job.arrivalDate),
+                          DateFormat('dd/MM/yyyy').format(widget.job.arrivalDate),
                           Icons.login,
                           Colors.blue,
                         ),
@@ -125,11 +181,11 @@ class PegaDetailView extends StatelessWidget {
                       Expanded(
                         child: _buildInfoCard(
                           'Plazo de Entrega',
-                          job.deadline != null
-                              ? DateFormat('dd/MM/yyyy').format(job.deadline!)
+                          widget.job.deadline != null
+                              ? DateFormat('dd/MM/yyyy').format(widget.job.deadline!)
                               : 'Sin plazo',
-                          job.isOverdue ? Icons.warning : Icons.event,
-                          job.isOverdue ? Colors.red : Colors.grey,
+                          widget.job.isOverdue ? Icons.warning : Icons.event,
+                          widget.job.isOverdue ? Colors.red : Colors.grey,
                         ),
                       ),
                     ],
@@ -139,40 +195,40 @@ class PegaDetailView extends StatelessWidget {
                   // Bike information
                   _buildSectionHeader('Información de la Bicicleta'),
                   const SizedBox(height: 12),
-                  if (bike != null) _buildBikeDetails(bike!) else const Text('Sin bicicleta asignada'),
+                  if (widget.bike != null) _buildBikeDetails(widget.bike!) else const Text('Sin bicicleta asignada'),
                   const SizedBox(height: 24),
 
                   // Customer information
                   _buildSectionHeader('Información del Cliente'),
                   const SizedBox(height: 12),
-                  if (customer != null) _buildCustomerDetails(customer!) else const Text('Sin cliente asignado'),
+                  if (widget.customer != null) _buildCustomerDetails(widget.customer!) else const Text('Sin cliente asignado'),
                   const SizedBox(height: 24),
 
                   // Client request (always show)
                   _buildSectionHeader('Solicitud del Cliente'),
                   const SizedBox(height: 12),
-                  _buildContentBox(job.clientRequest ?? ''),
+                  _buildContentBox(widget.job.clientRequest ?? ''),
                   const SizedBox(height: 24),
 
                   // Diagnosis (always show)
                   _buildSectionHeader('Diagnóstico'),
                   const SizedBox(height: 12),
-                  _buildContentBox(job.diagnosis ?? ''),
+                  _buildContentBox(widget.job.diagnosis ?? ''),
                   const SizedBox(height: 24),
 
                   // Technician notes (always show)
                   _buildSectionHeader('Notas del Técnico'),
                   const SizedBox(height: 12),
-                  _buildContentBox(job.notes ?? ''),
+                  _buildContentBox(widget.job.notes ?? ''),
                   const SizedBox(height: 24),
 
                   // Assigned technician
-                  if (job.assignedTechnicianName != null) ...[
+                  if (widget.job.assignedTechnicianName != null) ...[
                     _buildSectionHeader('Técnico Asignado'),
                     const SizedBox(height: 12),
                     _buildInfoCard(
                       'Técnico',
-                      job.assignedTechnicianName!,
+                      widget.job.assignedTechnicianName!,
                       Icons.person,
                       Colors.purple,
                     ),
@@ -180,45 +236,45 @@ class PegaDetailView extends StatelessWidget {
                   ],
 
                   // Products and Services
-                  if (items.isNotEmpty || labor.isNotEmpty) ...[
+                  if (widget.items.isNotEmpty || widget.labor.isNotEmpty) ...[
                     _buildSectionHeader('Repuestos y Servicios'),
                     const SizedBox(height: 12),
                     
                     // Products/Parts
-                    if (items.isNotEmpty) ...[
-                      ...items.map((item) => _buildProductItem(item)),
+                    if (widget.items.isNotEmpty) ...[
+                      ...widget.items.map((item) => _buildProductItem(item)),
                     ],
                     
                     // Labor/Services
-                    if (labor.isNotEmpty) ...[
-                      ...labor.map((laborItem) => _buildLaborItem(laborItem)),
+                    if (widget.labor.isNotEmpty) ...[
+                      ...widget.labor.map((laborItem) => _buildLaborItem(laborItem)),
                     ],
                     
                     const SizedBox(height: 24),
                   ],
 
                   // Cost information
-                  if (job.totalCost > 0) ...[
+                  if (widget.job.totalCost > 0) ...[
                     _buildSectionHeader('Costos'),
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        if (job.partsCost > 0)
+                        if (widget.job.partsCost > 0)
                           Expanded(
                             child: _buildInfoCard(
                               'Repuestos',
-                              '\$${job.partsCost.toStringAsFixed(0)}',
+                              '\$${widget.job.partsCost.toStringAsFixed(0)}',
                               Icons.build_circle,
                               Colors.orange,
                             ),
                           ),
-                        if (job.partsCost > 0 && job.laborCost > 0)
+                        if (widget.job.partsCost > 0 && widget.job.laborCost > 0)
                           const SizedBox(width: 16),
-                        if (job.laborCost > 0)
+                        if (widget.job.laborCost > 0)
                           Expanded(
                             child: _buildInfoCard(
                               'Mano de Obra',
-                              '\$${job.laborCost.toStringAsFixed(0)}',
+                              '\$${widget.job.laborCost.toStringAsFixed(0)}',
                               Icons.handyman,
                               Colors.blue,
                             ),
@@ -228,7 +284,7 @@ class PegaDetailView extends StatelessWidget {
                     const SizedBox(height: 12),
                     _buildInfoCard(
                       'Total',
-                      '\$${job.totalCost.toStringAsFixed(0)}',
+                      '\$${widget.job.totalCost.toStringAsFixed(0)}',
                       Icons.attach_money,
                       Colors.green,
                     ),
@@ -240,7 +296,7 @@ class PegaDetailView extends StatelessWidget {
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: onEdit,
+                          onPressed: widget.onEdit,
                           icon: const Icon(Icons.edit),
                           label: const Text('Editar Pega'),
                           style: ElevatedButton.styleFrom(
@@ -263,10 +319,6 @@ class PegaDetailView extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -278,12 +330,12 @@ class PegaDetailView extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: JobStatus.values
-              .where((s) => s != job.status)
+              .where((s) => s != widget.job.status)
               .map((status) => ListTile(
                     title: Text(status.displayName),
                     onTap: () {
                       Navigator.pop(context);
-                      onStatusChange(status);
+                      widget.onStatusChange(status);
                     },
                   ))
               .toList(),
@@ -311,7 +363,7 @@ class PegaDetailView extends StatelessWidget {
 
   Widget _buildInfoCard(String label, String value, IconData icon, Color color) {
     // Use subtle gray background instead of circus colors
-    final isWarning = color == Colors.red && job.isOverdue;
+    final isWarning = color == Colors.red && widget.job.isOverdue;
     final bgColor = isWarning ? Colors.red.shade50 : Colors.grey.shade50;
     final borderColor = isWarning ? Colors.red.shade200 : Colors.grey.shade300;
     final iconColor = isWarning ? Colors.red.shade700 : Colors.grey.shade600;
@@ -396,16 +448,16 @@ class PegaDetailView extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      bike.displayName,
+                      widget.bike?.displayName ?? 'Sin nombre',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (bike.serialNumber != null) ...[
+                    if (widget.bike?.serialNumber != null) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'Serie: ${bike.serialNumber}',
+                        'Serie: ${widget.bike?.serialNumber}',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey[600],
@@ -442,20 +494,20 @@ class PegaDetailView extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      customer.name,
+                      widget.customer?.name ?? 'Sin nombre',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (customer.email != null) ...[
+                    if (widget.customer?.email != null) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
                           Icon(Icons.email, size: 14, color: Colors.grey[600]),
                           const SizedBox(width: 4),
                           Text(
-                            customer.email!,
+                            widget.customer?.email ?? '',
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.grey[600],
@@ -464,14 +516,14 @@ class PegaDetailView extends StatelessWidget {
                         ],
                       ),
                     ],
-                    if (customer.phone != null) ...[
+                    if (widget.customer?.phone != null) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
                           Icon(Icons.phone, size: 14, color: Colors.grey[600]),
                           const SizedBox(width: 4),
                           Text(
-                            customer.phone!,
+                            widget.customer?.phone ?? '',
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.grey[600],
@@ -509,11 +561,11 @@ class PegaDetailView extends StatelessWidget {
               color: Colors.grey.shade200,
               borderRadius: BorderRadius.circular(6),
             ),
-            child: item.productId != null && productImages.containsKey(item.productId)
+            child: item.productId != null && widget.productImages.containsKey(item.productId)
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(6),
                     child: Image.network(
-                      productImages[item.productId]!,
+                      widget.productImages[item.productId]!,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Icon(
                         Icons.inventory_2,
@@ -684,5 +736,21 @@ class PegaDetailView extends StatelessWidget {
       case JobPriority.baja:
         return Colors.grey;
     }
+  }
+
+  // ============================================================
+  // TASKS TAB - Smart To-Do List
+  // ============================================================
+
+  Widget _buildTasksTab() {
+    // Use new TasksTabView with SmartTaskService
+    return TasksTabView(
+      jobId: widget.job.id!,
+      readOnly: false,
+      onItemAdded: widget.onItemAdded,
+      onItemRemoved: widget.onItemRemoved,
+      onLaborAdded: widget.onLaborAdded,
+      onLaborRemoved: widget.onLaborRemoved,
+    );
   }
 }

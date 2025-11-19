@@ -5,6 +5,148 @@
 create extension if not exists "pgcrypto";
 
 --------------------------------------------------------------------------------
+-- ⚠️ CLEANUP: Remove old legacy task triggers/functions (Nov 18, 2025)
+--------------------------------------------------------------------------------
+-- CRITICAL: Drop ALL triggers on mechanic_job_items, mechanic_job_labor, and mechanic_job_tasks
+-- that reference old task functions (cascade will remove dependencies)
+do $$
+declare
+  r record;
+begin
+  -- Drop ALL triggers on mechanic_job_tasks first (prevent any misattached triggers)
+  for r in (
+    select trigger_name 
+    from information_schema.triggers 
+    where event_object_table = 'mechanic_job_tasks'
+  ) loop
+    execute format('drop trigger if exists %I on mechanic_job_tasks cascade', r.trigger_name);
+    raise notice 'Dropped task trigger: %', r.trigger_name;
+  end loop;
+  
+  -- Drop ALL triggers on mechanic_job_items that might cause conflicts
+  for r in (
+    select trigger_name 
+    from information_schema.triggers 
+    where event_object_table = 'mechanic_job_items'
+      and trigger_name like '%task%'
+  ) loop
+    execute format('drop trigger if exists %I on mechanic_job_items cascade', r.trigger_name);
+    raise notice 'Dropped trigger: %', r.trigger_name;
+  end loop;
+  
+  -- Drop ALL triggers on mechanic_job_labor that might cause conflicts
+  for r in (
+    select trigger_name 
+    from information_schema.triggers 
+    where event_object_table = 'mechanic_job_labor'
+      and trigger_name like '%task%'
+  ) loop
+    execute format('drop trigger if exists %I on mechanic_job_labor cascade', r.trigger_name);
+    raise notice 'Dropped trigger: %', r.trigger_name;
+  end loop;
+  
+  -- Drop ALL triggers on mechanic_jobs related to tasks
+  for r in (
+    select trigger_name 
+    from information_schema.triggers 
+    where event_object_table = 'mechanic_jobs'
+      and trigger_name like '%task%'
+  ) loop
+    execute format('drop trigger if exists %I on mechanic_jobs cascade', r.trigger_name);
+    raise notice 'Dropped trigger: %', r.trigger_name;
+  end loop;
+end $$;
+
+-- Drop old functions explicitly
+drop function if exists public.auto_create_task_for_job_item() cascade;
+drop function if exists public.auto_create_task_for_job_labor() cascade;
+drop function if exists public.sync_tasks_with_job_status() cascade;
+drop function if exists public.get_job_task_summary(uuid) cascade;
+
+-- Drop old indexes
+drop index if exists idx_mechanic_job_tasks_item cascade;
+drop index if exists idx_mechanic_job_tasks_labor cascade;
+drop index if exists idx_mechanic_job_tasks_status cascade;
+drop index if exists idx_mechanic_job_tasks_assigned cascade;
+
+-- Migrate old column names to new schema (safe - preserves data)
+do $$
+begin
+  -- Rename title → task_name (if old column exists)
+  if exists (
+    select 1 from information_schema.columns 
+    where table_name = 'mechanic_job_tasks' and column_name = 'title'
+  ) and not exists (
+    select 1 from information_schema.columns 
+    where table_name = 'mechanic_job_tasks' and column_name = 'task_name'
+  ) then
+    alter table mechanic_job_tasks rename column title to task_name;
+    raise notice '✅ Renamed title → task_name';
+  end if;
+
+  -- Rename job_item_id → parent_item_id
+  if exists (
+    select 1 from information_schema.columns 
+    where table_name = 'mechanic_job_tasks' and column_name = 'job_item_id'
+  ) and not exists (
+    select 1 from information_schema.columns 
+    where table_name = 'mechanic_job_tasks' and column_name = 'parent_item_id'
+  ) then
+    alter table mechanic_job_tasks rename column job_item_id to parent_item_id;
+    raise notice '✅ Renamed job_item_id → parent_item_id';
+  end if;
+
+  -- Rename job_labor_id → parent_labor_id
+  if exists (
+    select 1 from information_schema.columns 
+    where table_name = 'mechanic_job_tasks' and column_name = 'job_labor_id'
+  ) and not exists (
+    select 1 from information_schema.columns 
+    where table_name = 'mechanic_job_tasks' and column_name = 'parent_labor_id'
+  ) then
+    alter table mechanic_job_tasks rename column job_labor_id to parent_labor_id;
+    raise notice '✅ Renamed job_labor_id → parent_labor_id';
+  end if;
+
+  -- Migrate status → is_completed (if old column exists)
+  if exists (
+    select 1 from information_schema.columns 
+    where table_name = 'mechanic_job_tasks' and column_name = 'status'
+  ) and not exists (
+    select 1 from information_schema.columns 
+    where table_name = 'mechanic_job_tasks' and column_name = 'is_completed'
+  ) then
+    alter table mechanic_job_tasks add column is_completed boolean;
+    update mechanic_job_tasks 
+      set is_completed = (status = 'completed') 
+      where is_completed is null;
+    alter table mechanic_job_tasks alter column is_completed set not null;
+    alter table mechanic_job_tasks alter column is_completed set default false;
+    alter table mechanic_job_tasks drop column status cascade;
+    raise notice '✅ Migrated status → is_completed';
+  end if;
+
+  -- Drop old columns that don't exist in new schema
+  alter table mechanic_job_tasks drop column if exists task_type cascade;
+  alter table mechanic_job_tasks drop column if exists priority cascade;
+  alter table mechanic_job_tasks drop column if exists assigned_to cascade;
+  alter table mechanic_job_tasks drop column if exists assigned_technician_name cascade;
+  alter table mechanic_job_tasks drop column if exists estimated_duration_minutes cascade;
+  alter table mechanic_job_tasks drop column if exists actual_duration_minutes cascade;
+  alter table mechanic_job_tasks drop column if exists started_at cascade;
+  alter table mechanic_job_tasks drop column if exists is_auto_generated cascade;
+  alter table mechanic_job_tasks drop column if exists completed_by cascade;
+  alter table mechanic_job_tasks drop column if exists completed_by_name cascade;
+  alter table mechanic_job_tasks drop column if exists notes cascade;
+
+  raise notice '✅ Legacy task schema cleanup complete';
+exception
+  when others then
+    raise notice '⚠️ Migration note: %', sqlerrm;
+end $$;
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ⚙️ REQUIRED SUPABASE DASHBOARD CONFIGURATION (After deploying this schema)
 --------------------------------------------------------------------------------
 -- 
@@ -9364,6 +9506,241 @@ create index if not exists idx_mechanic_job_labor_job_id on mechanic_job_labor(j
 create index if not exists idx_mechanic_job_labor_technician_id on mechanic_job_labor(technician_id) where technician_id is not null;
 create index if not exists idx_mechanic_job_labor_service_product on mechanic_job_labor(service_product_id) where service_product_id is not null;
 
+-- ============================================================
+-- TABLE: mechanic_job_tasks (SMART TASKS SYSTEM)
+-- ============================================================
+-- Smart task checklist for mechanic jobs
+-- Features:
+-- - Auto-parsed from product/service descriptions
+-- - Ad-hoc tasks with optional pricing
+-- - Hierarchical (linked to parent items/labor)
+-- - Completion tracking with timestamps
+-- - Three-way sync with invoice and pega forms
+create table if not exists mechanic_job_tasks (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  job_id uuid not null references mechanic_jobs(id) on delete cascade,
+  
+  -- Link to parent product/service (PRIMARY KEY BINDING)
+  -- NULL = standalone ad-hoc task
+  parent_item_id uuid references mechanic_job_items(id) on delete cascade,
+  parent_labor_id uuid references mechanic_job_labor(id) on delete cascade,
+  
+  -- Task details
+  task_name text not null,
+  task_description text,
+  is_completed boolean not null default false,
+  completed_at timestamp with time zone,
+  completed_by_user_id uuid references auth.users(id) on delete set null,
+  
+  -- Ad-hoc pricing (creates additional line item when set)
+  is_adhoc boolean not null default false,
+  adhoc_price numeric(12,2), -- NULL = included in parent, NOT NULL = separate charge
+  adhoc_item_id uuid references mechanic_job_items(id) on delete set null, -- Link to auto-created item
+  
+  -- Linking behavior
+  is_standalone boolean not null default false, -- true = not linked to any parent
+  
+  -- Smart features
+  parsed_from_description boolean not null default false, -- Auto-generated from P/S description
+  display_order integer not null default 0, -- User can reorder tasks
+  
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  
+  -- Constraints
+  check (
+    -- Ad-hoc task must have price if it's not free
+    (is_adhoc = false) OR 
+    (is_adhoc = true and (adhoc_price is null or adhoc_price >= 0))
+  ),
+  check (
+    -- Must have parent OR be standalone
+    (parent_item_id is not null or parent_labor_id is not null) OR
+    (is_standalone = true)
+  ),
+  check (
+    -- Cannot have both item and labor parent
+    not (parent_item_id is not null and parent_labor_id is not null)
+  )
+);
+
+-- Add columns if not exist (migration safety)
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'tenant_id') then
+    alter table mechanic_job_tasks add column tenant_id uuid references tenants(id) on delete cascade not null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'job_id') then
+    alter table mechanic_job_tasks add column job_id uuid not null references mechanic_jobs(id) on delete cascade;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'parent_item_id') then
+    alter table mechanic_job_tasks add column parent_item_id uuid references mechanic_job_items(id) on delete cascade;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'parent_labor_id') then
+    alter table mechanic_job_tasks add column parent_labor_id uuid references mechanic_job_labor(id) on delete cascade;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'task_name') then
+    alter table mechanic_job_tasks add column task_name text;
+    update mechanic_job_tasks set task_name = 'Task' where task_name is null;
+    alter table mechanic_job_tasks alter column task_name set not null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'task_description') then
+    alter table mechanic_job_tasks add column task_description text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'is_completed') then
+    alter table mechanic_job_tasks add column is_completed boolean;
+    update mechanic_job_tasks set is_completed = false where is_completed is null;
+    alter table mechanic_job_tasks alter column is_completed set not null;
+    alter table mechanic_job_tasks alter column is_completed set default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'completed_at') then
+    alter table mechanic_job_tasks add column completed_at timestamp with time zone;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'completed_by_user_id') then
+    alter table mechanic_job_tasks add column completed_by_user_id uuid references auth.users(id) on delete set null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'is_adhoc') then
+    alter table mechanic_job_tasks add column is_adhoc boolean;
+    update mechanic_job_tasks set is_adhoc = false where is_adhoc is null;
+    alter table mechanic_job_tasks alter column is_adhoc set not null;
+    alter table mechanic_job_tasks alter column is_adhoc set default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'adhoc_price') then
+    alter table mechanic_job_tasks add column adhoc_price numeric(12,2);
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'adhoc_item_id') then
+    alter table mechanic_job_tasks add column adhoc_item_id uuid references mechanic_job_items(id) on delete set null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'is_standalone') then
+    alter table mechanic_job_tasks add column is_standalone boolean;
+    update mechanic_job_tasks set is_standalone = false where is_standalone is null;
+    alter table mechanic_job_tasks alter column is_standalone set not null;
+    alter table mechanic_job_tasks alter column is_standalone set default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'parsed_from_description') then
+    alter table mechanic_job_tasks add column parsed_from_description boolean;
+    update mechanic_job_tasks set parsed_from_description = false where parsed_from_description is null;
+    alter table mechanic_job_tasks alter column parsed_from_description set not null;
+    alter table mechanic_job_tasks alter column parsed_from_description set default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'display_order') then
+    alter table mechanic_job_tasks add column display_order integer;
+    update mechanic_job_tasks set display_order = 0 where display_order is null;
+    alter table mechanic_job_tasks alter column display_order set not null;
+    alter table mechanic_job_tasks alter column display_order set default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'created_at') then
+    alter table mechanic_job_tasks add column created_at timestamp with time zone;
+    update mechanic_job_tasks set created_at = now() where created_at is null;
+    alter table mechanic_job_tasks alter column created_at set not null;
+    alter table mechanic_job_tasks alter column created_at set default now();
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'updated_at') then
+    alter table mechanic_job_tasks add column updated_at timestamp with time zone;
+    update mechanic_job_tasks set updated_at = now() where updated_at is null;
+    alter table mechanic_job_tasks alter column updated_at set not null;
+    alter table mechanic_job_tasks alter column updated_at set default now();
+  end if;
+  
+  -- ============================================================
+  -- MIGRATION: Drop old task schema columns (Nov 18, 2025)
+  -- ============================================================
+  -- Remove old columns: title, status, task_type, job_item_id, job_labor_id
+  -- These were replaced by: task_name, is_completed, parent_item_id, parent_labor_id
+  
+  -- Drop old constraints first
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'title') then
+    -- Drop NOT NULL constraint if exists
+    alter table mechanic_job_tasks alter column title drop not null;
+    alter table mechanic_job_tasks drop column title cascade;
+    raise notice 'Dropped old column: title';
+  end if;
+  
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'status') then
+    alter table mechanic_job_tasks drop column status cascade;
+    raise notice 'Dropped old column: status';
+  end if;
+  
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'task_type') then
+    alter table mechanic_job_tasks drop column task_type cascade;
+    raise notice 'Dropped old column: task_type';
+  end if;
+  
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'job_item_id') then
+    alter table mechanic_job_tasks drop column job_item_id cascade;
+    raise notice 'Dropped old column: job_item_id';
+  end if;
+  
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'job_labor_id') then
+    alter table mechanic_job_tasks drop column job_labor_id cascade;
+    raise notice 'Dropped old column: job_labor_id';
+  end if;
+  
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'priority') then
+    alter table mechanic_job_tasks drop column priority cascade;
+    raise notice 'Dropped old column: priority';
+  end if;
+  
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'assigned_to') then
+    alter table mechanic_job_tasks drop column assigned_to cascade;
+    raise notice 'Dropped old column: assigned_to';
+  end if;
+  
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'assigned_technician_name') then
+    alter table mechanic_job_tasks drop column assigned_technician_name cascade;
+    raise notice 'Dropped old column: assigned_technician_name';
+  end if;
+  
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'estimated_duration_minutes') then
+    alter table mechanic_job_tasks drop column estimated_duration_minutes cascade;
+    raise notice 'Dropped old column: estimated_duration_minutes';
+  end if;
+  
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'started_at') then
+    alter table mechanic_job_tasks drop column started_at cascade;
+    raise notice 'Dropped old column: started_at';
+  end if;
+  
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'is_auto_generated') then
+    alter table mechanic_job_tasks drop column is_auto_generated cascade;
+    raise notice 'Dropped old column: is_auto_generated';
+  end if;
+  
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'description') then
+    alter table mechanic_job_tasks drop column description cascade;
+    raise notice 'Dropped old column: description';
+  end if;
+end $$;
+
+create index if not exists idx_mechanic_job_tasks_tenant on mechanic_job_tasks(tenant_id);
+create index if not exists idx_mechanic_job_tasks_job on mechanic_job_tasks(job_id);
+create index if not exists idx_mechanic_job_tasks_parent_item on mechanic_job_tasks(parent_item_id) where parent_item_id is not null;
+create index if not exists idx_mechanic_job_tasks_parent_labor on mechanic_job_tasks(parent_labor_id) where parent_labor_id is not null;
+create index if not exists idx_mechanic_job_tasks_completion on mechanic_job_tasks(is_completed, job_id);
+
+-- ============================================================
+-- TABLE: mechanic_job_task_preferences (USER COLLAPSE STATE)
+-- ============================================================
+-- Stores per-user, per-job UI preferences for task collapsing
+create table if not exists mechanic_job_task_preferences (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  job_id uuid not null references mechanic_jobs(id) on delete cascade,
+  
+  -- Which parent items/labor are collapsed (array of IDs)
+  collapsed_item_ids uuid[] not null default '{}',
+  collapsed_labor_ids uuid[] not null default '{}',
+  
+  updated_at timestamp with time zone not null default now(),
+  
+  unique(user_id, job_id)
+);
+
+create index if not exists idx_task_prefs_user_job on mechanic_job_task_preferences(user_id, job_id);
+create index if not exists idx_task_prefs_tenant on mechanic_job_task_preferences(tenant_id);
+
 -- Table: mechanic_job_timeline
 -- Audit trail / history of status changes and events
 create table if not exists mechanic_job_timeline (
@@ -9423,6 +9800,110 @@ end $$;
 
 create index if not exists idx_mechanic_job_timeline_job_id on mechanic_job_timeline(job_id);
 create index if not exists idx_mechanic_job_timeline_created_at on mechanic_job_timeline(created_at desc);
+
+-- ============================================================
+-- ❌ OLD LEGACY TASK FUNCTIONS REMOVED (Nov 18, 2025)
+-- ============================================================
+-- The following OLD functions have been COMPLETELY REMOVED:
+--   - auto_create_task_for_job_item() 
+--   - auto_create_task_for_job_labor()
+--   - sync_tasks_with_job_status()
+--   - get_job_task_summary()
+--   - trg_auto_create_task_for_item
+--   - trg_auto_create_task_for_labor
+--   - trg_sync_tasks_with_job_status
+--
+-- The NEW smart task system uses:
+--   - auto_parse_item_description() (line ~12100)
+--   - Automatically parses bullet points from descriptions
+--   - Creates sub-tasks linked to parent products/services
+-- ============================================================
+
+-- ============================================================
+-- MECHANIC JOB COST CALCULATION TRIGGERS
+-- Auto-update parts_cost, labor_cost, and total_cost in mechanic_jobs
+-- when items or labor are added/updated/deleted
+-- ============================================================
+
+-- Function: Recalculate mechanic job costs
+create or replace function public.update_mechanic_job_costs()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_parts_cost numeric;
+  v_labor_cost numeric;
+  v_total_cost numeric;
+begin
+  -- Calculate parts cost
+  select coalesce(sum(total_price), 0)
+  into v_parts_cost
+  from mechanic_job_items
+  where job_id = coalesce(NEW.job_id, OLD.job_id);
+  
+  -- Calculate labor cost
+  select coalesce(sum(total_cost), 0)
+  into v_labor_cost
+  from mechanic_job_labor
+  where job_id = coalesce(NEW.job_id, OLD.job_id);
+  
+  -- Calculate total
+  v_total_cost := v_parts_cost + v_labor_cost;
+  
+  -- Update mechanic_jobs table
+  update mechanic_jobs
+  set 
+    parts_cost = v_parts_cost,
+    labor_cost = v_labor_cost,
+    total_cost = v_total_cost,
+    updated_at = now()
+  where id = coalesce(NEW.job_id, OLD.job_id);
+  
+  return coalesce(NEW, OLD);
+end;
+$$;
+
+-- Triggers for mechanic_job_items
+drop trigger if exists trg_update_job_costs_on_item_insert on mechanic_job_items;
+create trigger trg_update_job_costs_on_item_insert
+  after insert on mechanic_job_items
+  for each row
+  execute function public.update_mechanic_job_costs();
+
+drop trigger if exists trg_update_job_costs_on_item_update on mechanic_job_items;
+create trigger trg_update_job_costs_on_item_update
+  after update on mechanic_job_items
+  for each row
+  when (OLD.total_price is distinct from NEW.total_price)
+  execute function public.update_mechanic_job_costs();
+
+drop trigger if exists trg_update_job_costs_on_item_delete on mechanic_job_items;
+create trigger trg_update_job_costs_on_item_delete
+  after delete on mechanic_job_items
+  for each row
+  execute function public.update_mechanic_job_costs();
+
+-- Triggers for mechanic_job_labor
+drop trigger if exists trg_update_job_costs_on_labor_insert on mechanic_job_labor;
+create trigger trg_update_job_costs_on_labor_insert
+  after insert on mechanic_job_labor
+  for each row
+  execute function public.update_mechanic_job_costs();
+
+drop trigger if exists trg_update_job_costs_on_labor_update on mechanic_job_labor;
+create trigger trg_update_job_costs_on_labor_update
+  after update on mechanic_job_labor
+  for each row
+  when (OLD.total_cost is distinct from NEW.total_cost)
+  execute function public.update_mechanic_job_costs();
+
+drop trigger if exists trg_update_job_costs_on_labor_delete on mechanic_job_labor;
+create trigger trg_update_job_costs_on_labor_delete
+  after delete on mechanic_job_labor
+  for each row
+  execute function public.update_mechanic_job_costs();
 
 -- ============================================================
 -- BIKESHOP MODULE - Trigger Functions and Business Logic
@@ -9556,6 +10037,14 @@ create trigger trg_delete_invoice_cascade_pega
   execute function public.cascade_delete_pega_invoice();
 
 -- Function: Auto-generate job number (PG-#####)
+-- Sequence for generating unique mechanic job numbers
+drop sequence if exists public.mechanic_job_number_seq cascade;
+create sequence public.mechanic_job_number_seq
+  start with 1
+  increment by 1
+  no cycle;
+
+-- Function: Generate unique mechanic job number (uses sequence - no race conditions)
 create or replace function public.generate_mechanic_job_number()
 returns text
 language plpgsql
@@ -9563,17 +10052,14 @@ security definer
 set search_path = public
 as $$
 declare
-  v_count integer;
+  v_next_number integer;
   v_job_number text;
 begin
-  -- Count all existing pegas (including deleted via soft delete if any)
-  select count(*) + 1
-  into v_count
-  from mechanic_jobs
-  where job_number like 'PG-%';
+  -- Get next value from sequence (guaranteed unique, no race conditions)
+  v_next_number := nextval('public.mechanic_job_number_seq');
   
-  -- Generate simple sequential number: PG-00001, PG-00002, etc.
-  v_job_number := 'PG-' || lpad(v_count::text, 5, '0');
+  -- Format as PG-00001, PG-00002, etc.
+  v_job_number := 'PG-' || lpad(v_next_number::text, 5, '0');
   
   return v_job_number;
 end;
@@ -10242,11 +10728,9 @@ begin
     return;
   end if;
 
-  -- Prevent circular sync: if we're already deep in triggers, skip
-  if pg_trigger_depth() > 2 then
-    raise notice 'sync_job_to_invoice: trigger depth too deep (%), skipping', pg_trigger_depth();
-    return;
-  end if;
+  -- ✅ REMOVED trigger depth check - it was preventing syncs during cascade deletes
+  -- When deleting services with subtasks, trigger depth > 2 and sync would fail
+  -- The circular sync flag above is sufficient protection
 
   -- Get the job and its linked invoice
   select * into v_job
@@ -10970,6 +11454,26 @@ create trigger trg_mechanic_jobs_change
   for each row execute procedure public.handle_mechanic_job_change();
 
 -- Trigger function: Handle mechanic job items changes
+-- BEFORE trigger to calculate item total_price
+create or replace function public.calculate_mechanic_job_item_total()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Calculate total_price = quantity × unit_price
+  NEW.total_price := coalesce(NEW.quantity, 0) * coalesce(NEW.unit_price, 0);
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_calculate_mechanic_job_item_total on mechanic_job_items cascade;
+create trigger trg_calculate_mechanic_job_item_total
+  before insert or update on mechanic_job_items
+  for each row execute procedure public.calculate_mechanic_job_item_total();
+
+-- AFTER trigger to update job costs and sync to invoice
 create or replace function public.handle_mechanic_job_items_change()
 returns trigger
 language plpgsql
@@ -11044,10 +11548,21 @@ begin
     return null;
   end if;
 
-  -- SKIP DELETE operations - let the app handle manual sync after batch delete+insert
-  -- This prevents syncing with zero items in the middle of a job update
+  -- Handle DELETE operations - get job_id from old_table
   if TG_OP = 'DELETE' then
-    raise notice 'sync_job_items_to_invoice_statement: skipping DELETE (manual sync required)';
+    for v_job_id in select distinct job_id from old_table
+    loop
+      -- Recalculate costs first to update job record with new totals
+      perform public.recalculate_mechanic_job_costs(v_job_id);
+      
+      -- Find the linked invoice
+      select invoice_id into v_invoice_id from mechanic_jobs where id = v_job_id;
+      
+      if v_invoice_id is not null then
+        -- Sync this job to its invoice (will remove deleted items)
+        perform public.sync_job_to_invoice(v_job_id);
+      end if;
+    end loop;
     return null;
   end if;
 
@@ -11086,6 +11601,26 @@ create trigger trg_mechanic_job_items_sync_invoice_delete
   for each statement execute procedure public.sync_job_items_to_invoice_statement();
 
 -- Trigger function: Handle mechanic job labor changes
+-- BEFORE trigger to calculate labor total_cost
+create or replace function public.calculate_mechanic_job_labor_total()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Calculate total_cost = hours_worked × hourly_rate
+  NEW.total_cost := coalesce(NEW.hours_worked, 0) * coalesce(NEW.hourly_rate, 0);
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_calculate_mechanic_job_labor_total on mechanic_job_labor cascade;
+create trigger trg_calculate_mechanic_job_labor_total
+  before insert or update on mechanic_job_labor
+  for each row execute procedure public.calculate_mechanic_job_labor_total();
+
+-- AFTER trigger to update job costs and sync to invoice
 create or replace function public.handle_mechanic_job_labor_change()
 returns trigger
 language plpgsql
@@ -11160,10 +11695,21 @@ begin
     return null;
   end if;
 
-  -- SKIP DELETE operations - let the app handle manual sync after batch delete+insert
-  -- This prevents syncing with zero items in the middle of a job update
+  -- Handle DELETE operations - get job_id from old_table
   if TG_OP = 'DELETE' then
-    raise notice 'sync_job_labor_to_invoice_statement: skipping DELETE (manual sync required)';
+    for v_job_id in select distinct job_id from old_table
+    loop
+      -- Recalculate costs first to update job record with new totals
+      perform public.recalculate_mechanic_job_costs(v_job_id);
+      
+      -- Find the linked invoice
+      select invoice_id into v_invoice_id from mechanic_jobs where id = v_job_id;
+      
+      if v_invoice_id is not null then
+        -- Sync this job to its invoice (will remove deleted labor)
+        perform public.sync_job_to_invoice(v_job_id);
+      end if;
+    end loop;
     return null;
   end if;
 
@@ -11236,6 +11782,357 @@ drop trigger if exists trg_mechanic_job_labor_updated_at on mechanic_job_labor c
 create trigger trg_mechanic_job_labor_updated_at
   before update on mechanic_job_labor
   for each row execute procedure public.set_updated_at();
+
+-- ============================================================================
+-- SMART TASKS SYSTEM - Functions & Triggers
+-- ============================================================================
+-- Three-way sync system for tasks, items, and invoices
+-- Features:
+-- - Auto-parse product/service descriptions into sub-tasks
+-- - Ad-hoc tasks with pricing → auto-create items
+-- - Hierarchical task structure (parent → sub-tasks)
+-- - Completion tracking with user attribution
+-- ============================================================================
+
+-- Function: Parse product/service description into tasks
+-- Intelligently extracts bullet points and creates sub-tasks
+create or replace function public.parse_description_to_tasks(
+  p_tenant_id uuid,
+  p_job_id uuid,
+  p_parent_item_id uuid default null,
+  p_parent_labor_id uuid default null,
+  p_description text default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_task_line text;
+  v_task_name text;
+  v_task_count integer := 0;
+  v_lines text[];
+begin
+  if p_description is null or trim(p_description) = '' then
+    return 0;
+  end if;
+  
+  -- Split description by newlines
+  v_lines := string_to_array(p_description, E'\n');
+  
+  -- Parse each line
+  foreach v_task_line in array v_lines
+  loop
+    v_task_line := trim(v_task_line);
+    
+    -- Check if line starts with bullet markers: -, •, *, →, ✓, ☐, ☑, 1., 2., etc.
+    if v_task_line ~ '^[-•*→✓☐☑]' or v_task_line ~ '^\d+\.' then
+      -- Remove bullet marker and clean up
+      v_task_name := regexp_replace(v_task_line, '^[-•*→✓☐☑]\s*', '');
+      v_task_name := regexp_replace(v_task_name, '^\d+\.\s*', '');
+      v_task_name := trim(v_task_name);
+      
+      -- Skip empty lines
+      if length(v_task_name) > 0 then
+        insert into mechanic_job_tasks (
+          tenant_id,
+          job_id,
+          parent_item_id,
+          parent_labor_id,
+          task_name,
+          parsed_from_description,
+          is_standalone,
+          display_order
+        ) values (
+          p_tenant_id,
+          p_job_id,
+          p_parent_item_id,
+          p_parent_labor_id,
+          v_task_name,
+          true,
+          false,
+          v_task_count
+        );
+        
+        v_task_count := v_task_count + 1;
+      end if;
+    end if;
+  end loop;
+  
+  return v_task_count;
+end;
+$$;
+
+-- Function: Create ad-hoc item for task with pricing
+-- Called when user adds price to ad-hoc task
+create or replace function public.create_adhoc_item_for_task(
+  p_task_id uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_task record;
+  v_item_id uuid;
+  v_syncing_flag text;
+begin
+  -- Prevent circular sync
+  v_syncing_flag := current_setting('app.syncing_task_to_item', true);
+  if v_syncing_flag = 'true' then
+    raise notice 'create_adhoc_item_for_task: skipping due to circular sync prevention';
+    return null;
+  end if;
+  
+  -- Get task details
+  select * into v_task
+  from mechanic_job_tasks
+  where id = p_task_id;
+  
+  if not found or not v_task.is_adhoc or v_task.adhoc_price is null then
+    return null;
+  end if;
+  
+  -- Check if item already exists
+  if v_task.adhoc_item_id is not null then
+    return v_task.adhoc_item_id;
+  end if;
+  
+  -- Set sync flag
+  perform pg_catalog.set_config('app.syncing_task_to_item', 'true', true);
+  
+  -- Create mechanic_job_item
+  insert into mechanic_job_items (
+    tenant_id,
+    job_id,
+    product_name,
+    quantity,
+    unit_price,
+    total_price
+  ) values (
+    v_task.tenant_id,
+    v_task.job_id,
+    'Ad-hoc: ' || v_task.task_name,
+    1,
+    v_task.adhoc_price,
+    v_task.adhoc_price
+  )
+  returning id into v_item_id;
+  
+  -- Link task to item
+  update mechanic_job_tasks
+  set adhoc_item_id = v_item_id
+  where id = p_task_id;
+  
+  -- Clear sync flag
+  perform pg_catalog.set_config('app.syncing_task_to_item', '', true);
+  
+  raise notice 'Created ad-hoc item % for task %', v_item_id, p_task_id;
+  return v_item_id;
+end;
+$$;
+
+-- Trigger: Auto-parse description when item/labor is added
+create or replace function public.auto_parse_item_description()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_description text;
+  v_task_count integer;
+  v_product_id uuid;
+  v_service_product_id uuid;
+begin
+  -- CRITICAL: IMMEDIATELY RETURN if not on correct tables
+  -- This prevents ANY field access on wrong table
+  if TG_TABLE_NAME not in ('mechanic_job_items', 'mechanic_job_labor') then
+    raise notice 'auto_parse_item_description: skipping table %, trigger: %', TG_TABLE_NAME, TG_NAME;
+    return null;  -- AFTER trigger, return null is correct
+  end if;
+  
+  -- Use exception handling to safely access fields
+  begin
+    -- Try to get product_id or service_product_id safely
+    if TG_TABLE_NAME = 'mechanic_job_items' then
+      v_product_id := (NEW).product_id;
+    elsif TG_TABLE_NAME = 'mechanic_job_labor' then
+      v_service_product_id := (NEW).service_product_id;
+    end if;
+  exception
+    when undefined_column then
+      raise warning 'auto_parse_item_description: column access error on table %, skipping', TG_TABLE_NAME;
+      return null;
+  end;
+  
+  -- Get product/service description
+  if TG_TABLE_NAME = 'mechanic_job_items' and v_product_id is not null then
+    select description into v_description
+    from products
+    where id = v_product_id;
+    
+    if v_description is not null then
+      v_task_count := public.parse_description_to_tasks(
+        NEW.tenant_id,
+        NEW.job_id,
+        NEW.id,
+        null,
+        v_description
+      );
+      
+      if v_task_count > 0 then
+        raise notice 'Auto-parsed % tasks from product description', v_task_count;
+      end if;
+    end if;
+    
+  elsif TG_TABLE_NAME = 'mechanic_job_labor' and v_service_product_id is not null then
+    select description into v_description
+    from products
+    where id = v_service_product_id;
+    
+    if v_description is not null then
+      v_task_count := public.parse_description_to_tasks(
+        NEW.tenant_id,
+        NEW.job_id,
+        null,
+        NEW.id,
+        v_description
+      );
+      
+      if v_task_count > 0 then
+        raise notice 'Auto-parsed % tasks from service description', v_task_count;
+      end if;
+    end if;
+  end if;
+  
+  return null;  -- AFTER trigger must return null
+end;
+$$;
+
+drop trigger if exists trg_auto_parse_item_description on mechanic_job_items cascade;
+create trigger trg_auto_parse_item_description
+  after insert on mechanic_job_items
+  for each row execute procedure public.auto_parse_item_description();
+
+drop trigger if exists trg_auto_parse_labor_description on mechanic_job_labor cascade;
+create trigger trg_auto_parse_labor_description
+  after insert on mechanic_job_labor
+  for each row execute procedure public.auto_parse_item_description();
+
+-- Trigger: Auto-create item when ad-hoc task gets price
+create or replace function public.sync_adhoc_task_to_item()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if TG_OP = 'INSERT' then
+    -- ✅ UPDATED (Nov 18, 2025): Sub-tasks WITH prices should also create ad-hoc items
+    -- These appear as separate line items in pega forms and invoices
+    if NEW.is_adhoc and NEW.adhoc_price is not null and NEW.adhoc_price > 0 then
+      perform public.create_adhoc_item_for_task(NEW.id);
+    end if;
+    
+  elsif TG_OP = 'UPDATE' then
+    -- Price added or updated on task (parent OR sub-task)
+    if NEW.is_adhoc and NEW.adhoc_price is not null and 
+       (OLD.adhoc_price is null or OLD.adhoc_price != NEW.adhoc_price) then
+      
+      -- If item exists, update it
+      if NEW.adhoc_item_id is not null then
+        update mechanic_job_items
+        set 
+          product_name = 'Ad-hoc: ' || NEW.task_name,
+          unit_price = NEW.adhoc_price,
+          total_price = NEW.adhoc_price
+        where id = NEW.adhoc_item_id;
+      else
+        -- Create new item
+        perform public.create_adhoc_item_for_task(NEW.id);
+      end if;
+    end if;
+    
+    -- Price removed
+    if OLD.adhoc_price is not null and NEW.adhoc_price is null and NEW.adhoc_item_id is not null then
+      delete from mechanic_job_items where id = NEW.adhoc_item_id;
+    end if;
+  end if;
+  
+  return null; -- AFTER trigger must return null
+end;
+$$;
+
+drop trigger if exists trg_sync_adhoc_task_to_item on mechanic_job_tasks cascade;
+create trigger trg_sync_adhoc_task_to_item
+  after insert or update on mechanic_job_tasks
+  for each row execute procedure public.sync_adhoc_task_to_item();
+
+-- Trigger: Set completed_at timestamp when task is completed
+create or replace function public.set_task_completed_at()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if NEW.is_completed and not OLD.is_completed then
+    NEW.completed_at := now();
+    NEW.completed_by_user_id := auth.uid();
+  elsif not NEW.is_completed and OLD.is_completed then
+    NEW.completed_at := null;
+    NEW.completed_by_user_id := null;
+  end if;
+  
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_set_task_completed_at on mechanic_job_tasks cascade;
+create trigger trg_set_task_completed_at
+  before update on mechanic_job_tasks
+  for each row
+  when (OLD.is_completed is distinct from NEW.is_completed)
+  execute procedure public.set_task_completed_at();
+
+-- Trigger: updated_at for tasks
+drop trigger if exists trg_mechanic_job_tasks_updated_at on mechanic_job_tasks cascade;
+create trigger trg_mechanic_job_tasks_updated_at
+  before update on mechanic_job_tasks
+  for each row execute procedure public.set_updated_at();
+
+-- Trigger: Cleanup ad-hoc item when task is deleted
+-- This ensures that when a task with an adhoc_item_id is deleted,
+-- the associated ad-hoc item in mechanic_job_items is also removed
+create or replace function public.cleanup_adhoc_item_on_task_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  raise notice '🗑️ [DB] cleanup_adhoc_item_on_task_delete triggered for task: % (name: %)', OLD.id, OLD.task_name;
+  
+  -- If task had an ad-hoc item linked, delete it
+  if OLD.adhoc_item_id is not null then
+    raise notice '🗑️ [DB] Task has adhoc_item_id: %, deleting item', OLD.adhoc_item_id;
+    delete from mechanic_job_items where id = OLD.adhoc_item_id;
+    raise notice '🗑️ [DB] Ad-hoc item deleted';
+  else
+    raise notice '🗑️ [DB] Task has no adhoc_item_id, nothing to clean up';
+  end if;
+  
+  return OLD;
+end;
+$$;
+
+drop trigger if exists trg_cleanup_adhoc_item_on_task_delete on mechanic_job_tasks cascade;
+create trigger trg_cleanup_adhoc_item_on_task_delete
+  after delete on mechanic_job_tasks
+  for each row execute procedure public.cleanup_adhoc_item_on_task_delete();
 
 -- ============================================================================
 -- HR & ATTENDANCES MODULE
@@ -13424,6 +14321,62 @@ exception
   when undefined_column then raise notice '⚠ Column tenant_id missing in mechanic_job_labor';
   when duplicate_object then raise notice '⚠ Policies already exist for mechanic_job_labor';
 end $$;
+
+-- Mechanic Job Tasks: Tenant isolation (SMART TASKS SYSTEM)
+alter table mechanic_job_tasks enable row level security;
+
+drop policy if exists "mechanic_job_tasks_select" on mechanic_job_tasks;
+drop policy if exists "mechanic_job_tasks_insert" on mechanic_job_tasks;
+drop policy if exists "mechanic_job_tasks_update" on mechanic_job_tasks;
+drop policy if exists "mechanic_job_tasks_delete" on mechanic_job_tasks;
+
+create policy "mechanic_job_tasks_select" on mechanic_job_tasks
+  for select
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "mechanic_job_tasks_insert" on mechanic_job_tasks
+  for insert
+  to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "mechanic_job_tasks_update" on mechanic_job_tasks
+  for update
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "mechanic_job_tasks_delete" on mechanic_job_tasks
+  for delete
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Mechanic Job Task Preferences: User-specific (no tenant check needed, user_id is sufficient)
+alter table mechanic_job_task_preferences enable row level security;
+
+drop policy if exists "task_prefs_select" on mechanic_job_task_preferences;
+drop policy if exists "task_prefs_insert" on mechanic_job_task_preferences;
+drop policy if exists "task_prefs_update" on mechanic_job_task_preferences;
+drop policy if exists "task_prefs_delete" on mechanic_job_task_preferences;
+
+create policy "task_prefs_select" on mechanic_job_task_preferences
+  for select
+  to authenticated
+  using (user_id = auth.uid() and tenant_id = public.user_tenant_id());
+
+create policy "task_prefs_insert" on mechanic_job_task_preferences
+  for insert
+  to authenticated
+  with check (user_id = auth.uid() and tenant_id = public.user_tenant_id());
+
+create policy "task_prefs_update" on mechanic_job_task_preferences
+  for update
+  to authenticated
+  using (user_id = auth.uid() and tenant_id = public.user_tenant_id());
+
+create policy "task_prefs_delete" on mechanic_job_task_preferences
+  for delete
+  to authenticated
+  using (user_id = auth.uid() and tenant_id = public.user_tenant_id());
 
 -- Mechanic Job Timeline: Tenant isolation
 alter table mechanic_job_timeline enable row level security;
@@ -15946,5 +16899,53 @@ create policy "reset_configurations_update" on reset_configurations
 create policy "reset_configurations_delete" on reset_configurations
   for delete to authenticated
   using (tenant_id = public.user_tenant_id());
+
+-- ============================================================
+-- DATA MIGRATION: RECALCULATE EXISTING PEGA COSTS
+-- Run this once to fix pegas that already have items but show $0
+-- ============================================================
+
+do $$
+declare
+  v_job record;
+  v_parts_cost numeric;
+  v_labor_cost numeric;
+  v_updated_count integer := 0;
+begin
+  raise notice 'Starting pega cost recalculation...';
+  
+  for v_job in select id, job_number from mechanic_jobs loop
+    -- Calculate parts cost
+    select coalesce(sum(total_price), 0)
+    into v_parts_cost
+    from mechanic_job_items
+    where job_id = v_job.id;
+    
+    -- Calculate labor cost
+    select coalesce(sum(total_cost), 0)
+    into v_labor_cost
+    from mechanic_job_labor
+    where job_id = v_job.id;
+    
+    -- Update job if costs changed
+    update mechanic_jobs
+    set 
+      parts_cost = v_parts_cost,
+      labor_cost = v_labor_cost,
+      total_cost = v_parts_cost + v_labor_cost,
+      updated_at = now()
+    where id = v_job.id
+      and (parts_cost != v_parts_cost or labor_cost != v_labor_cost or total_cost != (v_parts_cost + v_labor_cost));
+    
+    if found then
+      v_updated_count := v_updated_count + 1;
+      raise notice 'Updated pega %: parts=$%, labor=$%, total=$%', 
+        v_job.job_number, v_parts_cost, v_labor_cost, v_parts_cost + v_labor_cost;
+    end if;
+  end loop;
+  
+  raise notice 'Pega cost recalculation complete! Updated % pegas.', v_updated_count;
+end $$;
+
 
 

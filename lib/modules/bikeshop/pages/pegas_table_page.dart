@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -48,6 +49,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   bool _isLoading = true;
   bool _needsRefresh = false; // Track if we need to refresh on next visibility
+  Timer? _reloadDebounceTimer; // Debounce rapid reload calls
   String _searchTerm = '';
   
   // View mode state
@@ -104,22 +106,30 @@ class _PegasTablePageState extends State<PegasTablePage>
     _loadListPaneWidth();
     _loadData();
     
-    // Listen to realtime changes
-    _bikeshopService.addListener(_onRealtimeUpdate);
+    // ✅ REMOVED: BikeshopService listener - was causing unnecessary full reloads
+    // Old: _bikeshopService.addListener(_onRealtimeUpdate);
+    // Every task/item change → updates job costs → triggers realtime → full reload
+    // Now realtime updates handled at widget level (tasks tab updates itself)
   }
 
   @override
   void dispose() {
+    _reloadDebounceTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
-    _bikeshopService.removeListener(_onRealtimeUpdate);
+    // ✅ REMOVED: _bikeshopService.removeListener(_onRealtimeUpdate);
     super.dispose();
   }
   
   void _onRealtimeUpdate() {
-    // Reload data when realtime event occurs
-    if (mounted) {
-      _loadData();
-    }
+    debugPrint('🟠 [PegasTablePage] _onRealtimeUpdate called by BikeshopService');
+    // Debounce rapid reload calls (prevent race conditions)
+    _reloadDebounceTimer?.cancel();
+    _reloadDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        debugPrint('🟠 [PegasTablePage] Debounce timer fired, calling _loadData()');
+        _loadData();
+      }
+    });
   }
 
   @override
@@ -158,6 +168,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Future<void> _loadData() async {
+    debugPrint('🔴 [PegasTablePage] _loadData() started - FULL PAGE RELOAD');
     setState(() => _isLoading = true);
     try {
       // Load all data in parallel for performance
@@ -339,7 +350,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         final customer = _customers[job.customerId];
         final bike = _bikes[job.bikeId];
 
-        final matchesJob = job.jobNumber.toLowerCase().contains(searchLower);
+        final matchesJob = (job.jobNumber ?? '').toLowerCase().contains(searchLower);
         final matchesCustomer =
             customer?.name.toLowerCase().contains(searchLower) ?? false;
         final matchesPhone =
@@ -391,8 +402,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
         switch (_sortColumn) {
           case 'job_number':
-            comparison = (a.jobNumber.isEmpty ? '~' : a.jobNumber)
-                .compareTo(b.jobNumber.isEmpty ? '~' : b.jobNumber);
+            comparison = (a.jobNumber ?? '~')
+                .compareTo(b.jobNumber ?? '~');
             break;
           case 'customer_quick':
             final customerA = _customers[a.customerId]?.name ?? '';
@@ -582,6 +593,47 @@ class _PegasTablePageState extends State<PegasTablePage>
                       _loadingDetails = true;
                     });
                     await _loadJobDetails(updated);
+                  },
+                  // ✅ Removed onItemAdded - realtime handles updates, prevents tab switch
+                  onItemRemoved: (itemId) async {
+                    try {
+                      await _bikeshopService.deleteJobItem(itemId);
+                      await _loadData();
+                      if (_selectedJob != null) {
+                        await _loadJobDetails(_selectedJob!);
+                      }
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Product removed')),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e')),
+                        );
+                      }
+                    }
+                  },
+                  onLaborRemoved: (laborId) async {
+                    try {
+                      await _bikeshopService.deleteJobLabor(laborId);
+                      // Reload detail only (no full page reload)
+                      if (_selectedJob != null) {
+                        await _loadJobDetails(_selectedJob!);
+                      }
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Service removed')),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e')),
+                        );
+                      }
+                    }
                   },
                 ),
               ),
@@ -1175,7 +1227,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  job.jobNumber.isEmpty ? 'Sin #' : job.jobNumber,
+                  job.jobNumber ?? 'Sin #',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
@@ -1999,9 +2051,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         assignedTo: job.assignedTo,
         deadline: job.deadline,
         estimatedCost: job.estimatedCost,
-        totalCost: job.totalCost,
-        partsCost: job.partsCost,
-        laborCost: job.laborCost,
+        // Don't pass cost fields - they're calculated by database triggers
       );
 
       await _bikeshopService.updateJob(updatedJob);
@@ -2044,9 +2094,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         assignedTo: job.assignedTo,
         deadline: job.deadline,
         estimatedCost: job.estimatedCost,
-        totalCost: job.totalCost,
-        partsCost: job.partsCost,
-        laborCost: job.laborCost,
+        // Don't pass cost fields - they're calculated by database triggers
       );
 
       await _bikeshopService.updateJob(updatedJob);
@@ -3471,7 +3519,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     final bike = _bikes[job.bikeId];
     final statusColor = _getStatusColorForJob(job.status);
     final customerName = customer?.name ?? 'Cliente';
-    final bikeName = bike != null ? '${bike.brand} ${bike.model}' : job.jobNumber;
+    final bikeName = bike != null ? '${bike.brand} ${bike.model}' : (job.jobNumber ?? 'Sin #');
 
     return Card(
       elevation: 2,
@@ -3624,7 +3672,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               Text(
                 bike != null
                     ? '${bike.brand} ${bike.model}'
-                    : job.jobNumber,
+                    : job.jobNumber ?? 'Sin #',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.bold,

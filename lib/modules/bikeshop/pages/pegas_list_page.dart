@@ -121,7 +121,7 @@ class _PegasListPageState extends State<PegasListPage> {
     if (_searchTerm.isNotEmpty) {
       filtered = filtered.where((job) {
         final matchesJobNumber =
-            job.jobNumber.toLowerCase().contains(_searchTerm.toLowerCase());
+            (job.jobNumber ?? '').toLowerCase().contains(_searchTerm.toLowerCase());
         final matchesRequest = job.clientRequest
                 ?.toLowerCase()
                 .contains(_searchTerm.toLowerCase()) ??
@@ -459,6 +459,42 @@ class _PegasListPageState extends State<PegasListPage> {
             onStatusChange: (newStatus) {
               _updateJobStatus(_selectedJob!, newStatus);
             },
+            // ✅ Removed onItemAdded - realtime handles updates
+            onItemRemoved: (itemId) async {
+              try {
+                await _bikeshopService.deleteJobItem(itemId);
+                await _loadData();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Product removed')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error removing product: $e')),
+                  );
+                }
+              }
+            },
+            // ✅ Removed onLaborAdded - realtime handles updates
+            onLaborRemoved: (laborId) async {
+              try {
+                await _bikeshopService.deleteJobLabor(laborId);
+                await _loadData();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Service removed')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error removing service: $e')),
+                  );
+                }
+              }
+            },
           ),
         ),
       ],
@@ -624,7 +660,7 @@ class _PegasListPageState extends State<PegasListPage> {
                         Row(
                           children: [
                             Text(
-                              job.jobNumber,
+                              job.jobNumber ?? 'Sin #úmero',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
