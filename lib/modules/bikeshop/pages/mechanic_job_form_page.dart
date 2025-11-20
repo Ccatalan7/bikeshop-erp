@@ -67,12 +67,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   bool _isWarrantyJob = false;
   TaxTreatment _taxTreatment = TaxTreatment.noTax; // Default: no tax (matches sales invoice)
 
-  // Parts and labor
+  // Parts and services
   final List<_JobPartItem> _partItems = [];
-  final List<_JobLaborItem> _laborItems = [];
+  final List<_JobServiceItem> _serviceItems = [];
 
   // Key to reset autocomplete field after adding product
   int _partAutocompleteKey = 0;
+  final FocusNode _partAutocompleteFocus = FocusNode();
 
   // Data
   List<Customer> _customers = [];
@@ -100,6 +101,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     _technicianNotesController.dispose();
     _discountController.dispose();
     _estimatedDurationController.dispose();
+    _partAutocompleteFocus.dispose();
     super.dispose();
   }
 
@@ -165,7 +167,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Future<void> _loadExistingJob() async {
     try {
       final bikeshopService =
-          Provider.of<BikeshopService>(context, listen: false);
+        Provider.of<BikeshopService>(context, listen: false);
+      final inventoryService =
+        Provider.of<InventoryService>(context, listen: false);
 
       debugPrint('🔍 Loading job with ID: ${widget.jobId}');
       final job = await bikeshopService.getJobById(widget.jobId!);
@@ -190,13 +194,52 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       // Select bike
       final bike = _bikes.firstWhere((b) => b.id == job.bikeId);
 
-      // Load parts and labor
-      final parts = await bikeshopService.getJobItems(job.id!);
-      final labor = await bikeshopService.getJobLabor(job.id!);
+      // Load items (parts + services)
+      final items = await bikeshopService.getJobItems(job.id!);
 
       // Load tax treatment from job itself (primary source)
       TaxTreatment loadedTaxTreatment = job.taxTreatment;
       debugPrint('✅ Tax treatment loaded from job: $loadedTaxTreatment');
+
+      // Prepare part items outside setState to avoid async operations inside
+      final List<_JobPartItem> partItems = [];
+      for (final item in items) {
+        Product? product;
+        if (item.productId != null) {
+          try {
+            product = _products.firstWhere((p) => p.id == item.productId);
+          } catch (_) {
+            // Fetch from catalog if missing in local cache
+            try {
+              product = await inventoryService.getProductById(item.productId!);
+            } catch (e) {
+              debugPrint('⚠️ Could not fetch product ${item.productId}: $e');
+            }
+          }
+
+          product ??= Product(
+            id: item.productId!,
+            name: item.productName,
+            sku: item.productSku ?? 'N/A',
+            price: item.unitPrice,
+            cost: 0,
+            stockQuantity: 0,
+            category: ProductCategory.other,
+            productType: ProductType.product,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+        }
+
+        partItems.add(_JobPartItem(
+          product: product,
+          name: item.productName,
+          isCatalogProduct: item.productId != null,
+          quantity: item.quantity.toInt(),
+          unitPrice: item.unitPrice,
+          notes: item.notes,
+        ));
+      }
 
       if (mounted) {
         setState(() {
@@ -216,54 +259,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _discountController.text = job.discountAmount.toString();
           _estimatedDurationController.text = '';
 
-          // Convert parts to form items
-          _partItems.clear();
-          for (final part in parts) {
-            final product = _products.firstWhere(
-              (p) => p.id == part.productId,
-              orElse: () => Product(
-                id: part.productId ?? '',
-                name: part.productName,
-                sku: 'N/A',
-                price: part.unitPrice,
-                cost: 0,
-                stockQuantity: 0,
-                category: ProductCategory.other,
-                productType: ProductType.product,
-                createdAt: DateTime.now(),
-                updatedAt: DateTime.now(),
-              ),
-            );
-            _partItems.add(_JobPartItem(
-              product: part.productId != null ? product : null,
-              name: part.productName,
-              isCatalogProduct: part.productId != null,
-              quantity: part.quantity.toInt(),
-              unitPrice: part.unitPrice,
-              notes: null, // TODO: Load from database if stored
-            ));
-          }
-
-          // Convert labor to form items
-          _laborItems.clear();
-          for (final l in labor) {
-            Product? serviceProduct;
-            if (l.serviceProductId != null) {
-              try {
-                serviceProduct = _serviceProducts
-                    .firstWhere((p) => p.id == l.serviceProductId);
-              } catch (_) {
-                serviceProduct = null;
-              }
-            }
-            _laborItems.add(_JobLaborItem(
-              serviceProduct: serviceProduct,
-              description: l.description ?? serviceProduct?.name ?? '',
-              hours: l.hoursWorked,
-              hourlyRate: l.hourlyRate,
-              date: l.workDate,
-            ));
-          }
+          _partItems
+            ..clear()
+            ..addAll(partItems);
+          _serviceItems.clear();
         });
       }
     } catch (e) {
@@ -381,27 +380,67 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     });
   }
 
-  void _addLaborItem() {
+  void _addServiceItem() {
     showDialog(
+          context: context,
+          builder: (context) => _ServiceEntryDialog(
+            serviceProducts: _serviceProducts,
+            onServiceAdded: (serviceProduct, description, hours, rate, date) {
+              setState(() {
+                final trimmedDescription = description.trim();
+                _serviceItems.add(_JobServiceItem(
+                  serviceProduct: serviceProduct,
+                  description: trimmedDescription.isNotEmpty
+                      ? trimmedDescription
+                      : serviceProduct?.name ?? '',
+                  hours: hours,
+                  hourlyRate: rate,
+                  date: date,
+                ));
+              });
+            },
+          ),
+    );
+  }
+
+  void _showAddItemPicker() {
+    showModalBottomSheet(
       context: context,
-      builder: (context) => _LaborEntryDialog(
-        serviceProducts: _serviceProducts,
-        onLaborAdded: (serviceProduct, description, hours, rate, date) {
-          setState(() {
-            final trimmedDescription = description.trim();
-            _laborItems.add(_JobLaborItem(
-              serviceProduct: serviceProduct,
-              description: trimmedDescription.isNotEmpty
-                  ? trimmedDescription
-                  : serviceProduct?.name ?? '',
-              hours: hours,
-              hourlyRate: rate,
-              date: date,
-            ));
-          });
-        },
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: const Text('Agregar repuesto o parte'),
+              subtitle: const Text('Busca en catálogo o ingresa uno personalizado'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _focusPartAutocomplete();
+              },
+            ),
+            const Divider(height: 0),
+            ListTile(
+              leading: const Icon(Icons.build_outlined),
+              title: const Text('Agregar servicio / mano de obra'),
+              subtitle: const Text('Registrar trabajos o paquetes de servicio'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                Future.microtask(_addServiceItem);
+              },
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  void _focusPartAutocomplete() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FocusScope.of(context).requestFocus(_partAutocompleteFocus);
+    });
   }
 
   double get _partsCost {
@@ -409,12 +448,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
   }
 
-  double get _laborCost {
-    return _laborItems.fold(0.0, (sum, item) => sum + item.total);
+  double get _serviceCost {
+    return _serviceItems.fold(0.0, (sum, item) => sum + item.total);
   }
 
   double get _subtotal {
-    return _partsCost + _laborCost;
+    return _partsCost + _serviceCost;
   }
 
   double get _discountAmount {
@@ -526,16 +565,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         jobId = createdJob.id!;
       }
 
-      // Save parts
-      // First, delete existing parts if editing
+      // Save items (products + services)
       if (widget.jobId != null) {
-        final existingParts = await bikeshopService.getJobItems(jobId);
-        for (final part in existingParts) {
-          await bikeshopService.deleteJobItem(part.id!);
+        final existingItems = await bikeshopService.getJobItems(jobId);
+        for (final existing in existingItems) {
+          if (existing.id != null) {
+            await bikeshopService.deleteJobItem(existing.id!);
+          }
         }
       }
 
-      // Add new parts
+      // Add new products/parts
       for (final item in _partItems) {
         final quantity = item.quantity.toDouble();
         final unitPrice = item.unitPrice;
@@ -548,38 +588,34 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           quantity: quantity,
           unitPrice: unitPrice,
           totalPrice: quantity * unitPrice,
+          itemType: 'product',
         );
         await bikeshopService.createJobItem(jobItem);
       }
 
-      // Save labor
-      // First, delete existing labor if editing
-      if (widget.jobId != null) {
-        final existingLabor = await bikeshopService.getJobLabor(jobId);
-        for (final labor in existingLabor) {
-          await bikeshopService.deleteJobLabor(labor.id!);
-        }
-      }
+      // Add new services (stored as mechanic_job_items)
+      for (final service in _serviceItems) {
+        final hoursWorked = service.hours;
+        final hourlyRate = service.hourlyRate;
+        final serviceProduct = service.serviceProduct;
+        final name = service.description.isNotEmpty
+            ? service.description
+            : serviceProduct?.name ?? 'Servicio';
 
-      // Add new labor
-      for (final item in _laborItems) {
-        final hoursWorked = item.hours.toDouble();
-        final hourlyRate = item.hourlyRate;
-        final description = item.description.isNotEmpty
-            ? item.description
-            : item.serviceProduct?.name;
-        final jobLabor = MechanicJobLabor(
+        final jobServiceItem = MechanicJobItem(
           jobId: jobId,
           tenantId: tenantId,
-          technicianName: 'Mecánico', // TODO: Get from current user
-          description: description,
-          hoursWorked: hoursWorked,
-          hourlyRate: hourlyRate,
-          totalCost: item.total,
-          workDate: item.date,
-          serviceProductId: item.serviceProduct?.id,
+          productId: serviceProduct?.id,
+          serviceProductId: serviceProduct?.id,
+          productName: name,
+          productSku: serviceProduct?.sku,
+          quantity: hoursWorked,
+          unitPrice: hourlyRate,
+          totalPrice: service.total,
+          notes: 'Labor: ${hoursWorked.toStringAsFixed(1)}h @ \$${hourlyRate.toStringAsFixed(0)}/hr',
         );
-        await bikeshopService.createJobLabor(jobLabor);
+
+        await bikeshopService.createJobItem(jobServiceItem);
       }
 
       // AFTER all items are updated, sync to invoice if it exists
@@ -1642,10 +1678,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                   _buildPartRow(theme, entry.key + 1, entry.value, entry.key)
                                 ),
                               
-                              // Existing labor items (displayed after parts)
-                              if (_laborItems.isNotEmpty)
-                                ..._laborItems.asMap().entries.map((entry) => 
-                                  _buildLaborRow(theme, _partItems.length + entry.key + 1, entry.value, entry.key)
+                              // Existing service items (displayed after parts)
+                              if (_serviceItems.isNotEmpty)
+                                ..._serviceItems.asMap().entries.map((entry) => 
+                                  _buildServiceRow(theme, _partItems.length + entry.key + 1, entry.value, entry.key)
                                 ),
                               
                               // Add new part row (always show)
@@ -1683,6 +1719,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                           ),
                                           child: ProductAutocompleteField(
                                             key: ValueKey(_partAutocompleteKey),
+                                            focusNode: _partAutocompleteFocus,
                                             onProductSelected: (selection) {
                                               if (selection.isCatalogProduct && selection.product != null) {
                                                 _addCatalogPart(selection.product!);
@@ -1734,9 +1771,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             Align(
               alignment: Alignment.centerLeft,
               child: OutlinedButton.icon(
-                onPressed: _addLaborItem,
+                onPressed: _showAddItemPicker,
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('Agregar Servicio'),
+                label: const Text('Agregar ítem'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
@@ -1779,7 +1816,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ),
             ),
             
-            // Product details column
+            // Product details column (MATCHING SALES INVOICE)
             Expanded(
               child: Container(
                 constraints: const BoxConstraints(minWidth: 250),
@@ -1789,109 +1826,143 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
                   ),
                 ),
-                child: Row(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Product image
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: isAdHoc 
-                            ? Colors.orange.shade50 
-                            : theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: theme.colorScheme.outline.withOpacity(0.2),
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(5),
-                        child: item.product?.imageUrl != null
-                            ? Image.network(
-                                item.product!.imageUrl!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Icon(
+                    // Product card (MATCHING SALES INVOICE)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Product image
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceVariant.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: theme.colorScheme.outline.withOpacity(0.15)),
+                          ),
+                          child: item.product?.imageUrl != null && item.product!.imageUrl!.isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Image.network(
+                                    item.product!.imageUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Icon(
+                                      Icons.inventory_2_outlined,
+                                      size: 24,
+                                      color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                                    ),
+                                  ),
+                                )
+                              : Icon(
                                   Icons.inventory_2_outlined,
-                                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
                                   size: 24,
+                                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
                                 ),
-                              )
-                            : Icon(
-                                isAdHoc ? Icons.edit_note : Icons.inventory_2_outlined,
-                                color: isAdHoc 
-                                    ? Colors.orange 
-                                    : theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
-                                size: 24,
-                              ),
-                      ),
-                    ),
-                    
-                    const SizedBox(width: 12),
-                    
-                    // Product name + details
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Product name with badge
-                          Row(
+                        ),
+                        const SizedBox(width: 12),
+                        // Product details
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (isAdHoc)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  margin: const EdgeInsets.only(right: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.shade100,
-                                    borderRadius: BorderRadius.circular(4),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item.displayName,
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 14,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                  child: Text(
-                                    'PERSONALIZADO',
-                                    style: TextStyle(fontSize: 10, color: Colors.orange.shade900, fontWeight: FontWeight.w600),
+                                  const SizedBox(width: 4),
+                                  // 3-dot menu for catalog products
+                                  if (!isAdHoc && item.product != null)
+                                    PopupMenuButton<String>(
+                                      icon: Icon(Icons.more_horiz, size: 20, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6)),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 200),
+                                      onSelected: (value) {
+                                        if (value == 'edit') {
+                                          // TODO: Edit product dialog
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Edit product - TODO')),
+                                          );
+                                        }
+                                      },
+                                      itemBuilder: (context) => [
+                                        PopupMenuItem(
+                                          value: 'edit',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.edit_outlined, size: 18, color: theme.colorScheme.primary),
+                                              const SizedBox(width: 12),
+                                              const Text('Editar artículo'),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  // X button
+                                  InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        _partItems.removeAt(itemIndex);
+                                      });
+                                    },
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      child: Icon(Icons.close, size: 16, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6)),
+                                    ),
                                   ),
-                                ),
-                              Expanded(
-                                child: Text(
-                                  item.displayName,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                ],
                               ),
+                              if (!isAdHoc && item.sku != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    'SKU (Código de artículo): ${item.sku}',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
-                          
-                          // SKU + Stock
-                          if (!isAdHoc && item.sku != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(
-                                'SKU: ${item.sku} | Stock: ${item.product!.stockQuantity.toInt()}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                          
-                          // Notes
-                          if (item.notes != null && item.notes!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                item.notes!,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontSize: 11,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    // Description field (MATCHING SALES INVOICE)
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: TextField(
+                        controller: TextEditingController(text: item.notes ?? ''),
+                        decoration: InputDecoration(
+                          hintText: 'Agregue una descripción a su artículo',
+                          hintStyle: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                            fontSize: 13,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 13),
+                        maxLines: 3,
+                        minLines: 3,
+                        onChanged: (value) {
+                          item.notes = value;
+                        },
                       ),
                     ),
                   ],
@@ -1959,22 +2030,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ),
             ),
             
-            // Actions column
-            SizedBox(
-              width: _colActionsWidth,
-              child: Center(
-                child: IconButton(
-                  icon: Icon(Icons.delete_outline, size: 20, color: theme.colorScheme.error),
-                  onPressed: () {
-                    setState(() {
-                      _partItems.removeAt(itemIndex);
-                    });
-                  },
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ),
-            ),
+            // Actions column (empty - X button is in product card)
+            SizedBox(width: _colActionsWidth),
           ],
         ),
       ),
@@ -2119,16 +2176,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           Column(
                             children: [
                               // Existing labor items
-                              if (_laborItems.isNotEmpty)
-                                ..._laborItems.asMap().entries.map((entry) => 
-                                  _buildLaborRow(theme, entry.key + 1, entry.value, entry.key)
+                              if (_serviceItems.isNotEmpty)
+                                ..._serviceItems.asMap().entries.map((entry) => 
+                                  _buildServiceRow(theme, entry.key + 1, entry.value, entry.key)
                                 ),
                               
                               // Add labor button row (always show)
                               Container(
                                 decoration: BoxDecoration(
                                   border: Border(
-                                    top: _laborItems.isNotEmpty 
+                                    top: _serviceItems.isNotEmpty 
                                         ? BorderSide(color: theme.colorScheme.outline.withOpacity(0.2))
                                         : BorderSide.none,
                                   ),
@@ -2152,7 +2209,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                         child: Container(
                                           padding: const EdgeInsets.all(12),
                                           child: FilledButton.icon(
-                                            onPressed: _addLaborItem,
+                                            onPressed: _addServiceItem,
                                             icon: const Icon(Icons.add, size: 18),
                                             label: const Text('Agregar Mano de Obra'),
                                             style: FilledButton.styleFrom(
@@ -2180,7 +2237,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     );
   }
 
-  Widget _buildLaborRow(ThemeData theme, int index, _JobLaborItem item, int itemIndex) {
+  Widget _buildServiceRow(ThemeData theme, int index, _JobServiceItem item, int itemIndex) {
     return Container(
       decoration: BoxDecoration(
         border: Border(
@@ -2294,7 +2351,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ),
             ),
             
-            // Quantity column (always 1 for services)
+            // Quantity column (represents hours for services)
             Container(
               width: _colQuantityWidth,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -2305,7 +2362,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ),
               child: Center(
                 child: Text(
-                  '1',
+                  item.hours % 1 == 0
+                      ? item.hours.toStringAsFixed(0)
+                      : item.hours.toStringAsFixed(2),
                   style: theme.textTheme.bodyMedium,
                 ),
               ),
@@ -2321,7 +2380,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 ),
               ),
               child: TextFormField(
-                initialValue: item.total.toStringAsFixed(0),
+                initialValue: item.hourlyRate.toStringAsFixed(0),
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium,
@@ -2338,11 +2397,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 onChanged: (value) {
                   final newPrice = double.tryParse(value) ?? 0;
                   setState(() {
-                    // Update hourlyRate to match new total (since hours=1, rate=total)
-                    _laborItems[itemIndex] = _JobLaborItem(
+                    _serviceItems[itemIndex] = _JobServiceItem(
                       serviceProduct: item.serviceProduct,
                       description: item.description,
-                      hours: 1.0,
+                      hours: item.hours,
                       hourlyRate: newPrice,
                       date: item.date,
                     );
@@ -2370,7 +2428,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   icon: Icon(Icons.delete_outline, size: 20, color: theme.colorScheme.error),
                   onPressed: () {
                     setState(() {
-                      _laborItems.removeAt(itemIndex);
+                      _serviceItems.removeAt(itemIndex);
                     });
                   },
                   padding: EdgeInsets.zero,
@@ -2545,7 +2603,7 @@ class _JobPartItem {
   final bool isCatalogProduct;
   final int quantity;
   double unitPrice; // MUTABLE - allow price editing
-  final String? notes; // Additional notes for any part
+  String? notes; // MUTABLE - allow notes editing
 
   _JobPartItem({
     this.product,
@@ -2560,14 +2618,14 @@ class _JobPartItem {
   String? get sku => product?.sku;
 }
 
-class _JobLaborItem {
+class _JobServiceItem {
   final Product? serviceProduct;
   final String description;
   final double hours;
   final double hourlyRate;
   final DateTime date;
 
-  _JobLaborItem({
+  _JobServiceItem({
     this.serviceProduct,
     required this.description,
     required this.hours,
@@ -2932,8 +2990,8 @@ class _ProductSelectorDialogState extends State<_ProductSelectorDialog> {
   }
 }
 
-// Labor entry dialog
-class _LaborEntryDialog extends StatefulWidget {
+// Service entry dialog
+class _ServiceEntryDialog extends StatefulWidget {
   final List<Product> serviceProducts;
   final void Function(
     Product? serviceProduct,
@@ -2941,18 +2999,18 @@ class _LaborEntryDialog extends StatefulWidget {
     double hours,
     double rate,
     DateTime date,
-  ) onLaborAdded;
+  ) onServiceAdded;
 
-  const _LaborEntryDialog({
+  const _ServiceEntryDialog({
     required this.serviceProducts,
-    required this.onLaborAdded,
+    required this.onServiceAdded,
   });
 
   @override
-  State<_LaborEntryDialog> createState() => _LaborEntryDialogState();
+  State<_ServiceEntryDialog> createState() => _ServiceEntryDialogState();
 }
 
-class _LaborEntryDialogState extends State<_LaborEntryDialog> {
+class _ServiceEntryDialogState extends State<_ServiceEntryDialog> {
   late final TextEditingController _descriptionController;
   late final TextEditingController _hoursController;
   late final TextEditingController _rateController;
@@ -3194,7 +3252,7 @@ class _LaborEntryDialogState extends State<_LaborEntryDialog> {
                 ? trimmedDescription
                 : _selectedService?.name ?? '';
 
-            widget.onLaborAdded(
+            widget.onServiceAdded(
               _selectedService,
               description,
               parsedHours,

@@ -19,7 +19,7 @@
 --
 -- Root Cause: Cleanup wasn't dropping triggers on mechanic_job_tasks itself
 -- Some old trigger is calling auto_parse_item_description() which expects
--- NEW.service_product_id (only exists in mechanic_job_labor, not tasks)
+-- product/service fields from mechanic_job_items
 --
 -- Solution: Drop ALL old triggers on mechanic_job_tasks, then recreate only the new ones
 -- ============================================================
@@ -50,25 +50,36 @@ as $$
 declare
   v_description text;
   v_task_count integer;
+  v_product_id uuid;
+  v_service_product_id uuid;
 begin
-  -- CRITICAL: Only process mechanic_job_items and mechanic_job_labor tables
-  if TG_TABLE_NAME not in ('mechanic_job_items', 'mechanic_job_labor') then
+  -- CRITICAL: Only process mechanic_job_items
+  if TG_TABLE_NAME <> 'mechanic_job_items' then
     raise notice 'auto_parse_item_description: skipping table %', TG_TABLE_NAME;
-    return NEW;
+    return null;
   end if;
   
+  -- Safely capture product/service references
+  begin
+    v_product_id := (NEW).product_id;
+    v_service_product_id := (NEW).service_product_id;
+  exception
+    when undefined_column then
+      raise warning 'auto_parse_item_description: column access error on table %, skipping', TG_TABLE_NAME;
+      return null;
+  end;
+  
   -- Get product/service description
-  if TG_TABLE_NAME = 'mechanic_job_items' and NEW.product_id is not null then
+  if v_product_id is not null then
     select description into v_description
     from products
-    where id = NEW.product_id;
+    where id = v_product_id;
     
     if v_description is not null then
       v_task_count := public.parse_description_to_tasks(
         NEW.tenant_id,
         NEW.job_id,
         NEW.id,
-        null,
         v_description
       );
       
@@ -77,16 +88,15 @@ begin
       end if;
     end if;
     
-  elsif TG_TABLE_NAME = 'mechanic_job_labor' and NEW.service_product_id is not null then
+  elsif v_service_product_id is not null then
     select description into v_description
     from products
-    where id = NEW.service_product_id;
+    where id = v_service_product_id;
     
     if v_description is not null then
       v_task_count := public.parse_description_to_tasks(
         NEW.tenant_id,
         NEW.job_id,
-        null,
         NEW.id,
         v_description
       );
@@ -97,7 +107,7 @@ begin
     end if;
   end if;
   
-  return NEW;
+  return null; -- AFTER trigger must return null
 end;
 $$;
 
@@ -279,62 +289,6 @@ begin
 end;
 $$;
 
--- Fix labor DELETE trigger
-create or replace function public.sync_job_labor_to_invoice_statement()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_job_id uuid;
-  v_invoice_id uuid;
-  v_syncing_flag text;
-begin
-  -- Check if we're currently syncing invoice → job (prevent circular sync)
-  v_syncing_flag := current_setting('app.syncing_invoice_to_job', true);
-  if v_syncing_flag = 'true' then
-    raise notice 'sync_job_labor_to_invoice_statement: skipping due to invoice→job sync in progress';
-    return null;
-  end if;
-
-  -- Handle DELETE operations - get job_id from old_table
-  if TG_OP = 'DELETE' then
-    for v_job_id in select distinct job_id from old_table
-    loop
-      -- Recalculate costs first to update job record with new totals
-      perform public.recalculate_mechanic_job_costs(v_job_id);
-      
-      -- Find the linked invoice
-      select invoice_id into v_invoice_id from mechanic_jobs where id = v_job_id;
-      
-      if v_invoice_id is not null then
-        -- Sync this job to its invoice (will remove deleted labor)
-        perform public.sync_job_to_invoice(v_job_id);
-      end if;
-    end loop;
-    return null;
-  end if;
-
-  -- Handle INSERT and UPDATE - sync immediately since we're adding/changing items
-  for v_job_id in select distinct job_id from new_table
-  loop
-    -- Recalculate costs first to update job record with new totals
-    perform public.recalculate_mechanic_job_costs(v_job_id);
-    
-    -- Find the linked invoice
-    select invoice_id into v_invoice_id from mechanic_jobs where id = v_job_id;
-    
-    if v_invoice_id is not null then
-      -- Sync this job to its invoice (will recalculate fresh totals from DB)
-      perform public.sync_job_to_invoice(v_job_id);
-    end if;
-  end loop;
-  
-  return null;
-end;
-$$;
-
 -- ============================================================
 -- VERIFICATION QUERIES
 -- ============================================================
@@ -349,6 +303,3 @@ ORDER BY tgname;
 -- trg_mechanic_job_items_sync_invoice_delete
 -- trg_mechanic_job_items_sync_invoice_insert
 -- trg_mechanic_job_items_sync_invoice_update
--- trg_mechanic_job_labor_sync_invoice_delete
--- trg_mechanic_job_labor_sync_invoice_insert
--- trg_mechanic_job_labor_sync_invoice_update

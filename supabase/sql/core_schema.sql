@@ -7,7 +7,7 @@ create extension if not exists "pgcrypto";
 --------------------------------------------------------------------------------
 -- ⚠️ CLEANUP: Remove old legacy task triggers/functions (Nov 18, 2025)
 --------------------------------------------------------------------------------
--- CRITICAL: Drop ALL triggers on mechanic_job_items, mechanic_job_labor, and mechanic_job_tasks
+-- CRITICAL: Drop ALL triggers on mechanic_job_items and mechanic_job_tasks
 -- that reference old task functions (cascade will remove dependencies)
 do $$
 declare
@@ -34,17 +34,6 @@ begin
     raise notice 'Dropped trigger: %', r.trigger_name;
   end loop;
   
-  -- Drop ALL triggers on mechanic_job_labor that might cause conflicts
-  for r in (
-    select trigger_name 
-    from information_schema.triggers 
-    where event_object_table = 'mechanic_job_labor'
-      and trigger_name like '%task%'
-  ) loop
-    execute format('drop trigger if exists %I on mechanic_job_labor cascade', r.trigger_name);
-    raise notice 'Dropped trigger: %', r.trigger_name;
-  end loop;
-  
   -- Drop ALL triggers on mechanic_jobs related to tasks
   for r in (
     select trigger_name 
@@ -55,6 +44,36 @@ begin
     execute format('drop trigger if exists %I on mechanic_jobs cascade', r.trigger_name);
     raise notice 'Dropped trigger: %', r.trigger_name;
   end loop;
+end $$;
+
+-- Data fix: ensure every mechanic job has a unique job_number and align the sequence
+do $$
+declare
+  v_job_id uuid;
+  v_max_number integer;
+begin
+  -- Backfill missing/blank job numbers
+  for v_job_id in
+    select id
+    from mechanic_jobs
+    where job_number is null or btrim(job_number) = ''
+  loop
+    update mechanic_jobs
+    set job_number = public.generate_mechanic_job_number()
+    where id = v_job_id;
+  end loop;
+
+  -- Align the sequence with the highest PG-##### that currently exists
+  select max((substring(job_number from '[0-9]+$'))::integer)
+  into v_max_number
+  from mechanic_jobs
+  where job_number ~ '^PG-[0-9]+$';
+
+  if v_max_number is null then
+    v_max_number := 0;
+  end if;
+
+  perform setval('public.mechanic_job_number_seq', v_max_number);
 end $$;
 
 -- Drop old functions explicitly
@@ -9181,7 +9200,7 @@ end $$;
 create table if not exists mechanic_jobs (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  job_number text not null unique, -- Auto-generated: PG-00001
+  job_number text not null unique default public.generate_mechanic_job_number(), -- Auto-generated: PG-00001
   customer_id uuid not null references customers(id) on delete cascade,
   bike_id uuid not null references bikes(id) on delete cascade,
   service_package_id uuid references service_packages(id) on delete set null,
@@ -9275,6 +9294,8 @@ begin
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'job_number') then
     alter table mechanic_jobs add column job_number text not null unique;
   end if;
+  -- Ensure job_number always auto-generates even on legacy tables
+  alter table mechanic_jobs alter column job_number set default public.generate_mechanic_job_number();
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'customer_id') then
     alter table mechanic_jobs add column customer_id uuid not null references customers(id) on delete cascade;
   end if;
@@ -9447,64 +9468,32 @@ end $$;
 create index if not exists idx_mechanic_job_items_job_id on mechanic_job_items(job_id);
 create index if not exists idx_mechanic_job_items_product_id on mechanic_job_items(product_id) where product_id is not null;
 
--- Table: mechanic_job_labor
--- Labor hours tracked per job
-create table if not exists mechanic_job_labor (
-  id uuid primary key default gen_random_uuid(),
-  tenant_id uuid references tenants(id) on delete cascade not null,
-  job_id uuid not null references mechanic_jobs(id) on delete cascade,
-  technician_id uuid references customers(id) on delete set null, -- Will be employee_id when HR exists
-  technician_name text not null,
-  description text,
-  service_product_id uuid references products(id) on delete set null,
-  hours_worked numeric(5,2) not null default 0,
-  hourly_rate numeric(12,2) not null default 0,
-  total_cost numeric(12,2) not null default 0,
-  work_date timestamp with time zone not null default now(),
-  created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
-);
-
+-- ✅ PHASE 1: Add columns to unify items and services
+-- item_type: 'product' (from products table), 'service' (from labor/services), 'adhoc' (manual entry)
+-- service_product_id: For services that reference products table (like labor does)
 do $$
 begin
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'job_id') then
-    alter table mechanic_job_labor add column job_id uuid not null references mechanic_jobs(id) on delete cascade;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'item_type') then
+    alter table mechanic_job_items add column item_type text not null default 'product' check (item_type in ('product', 'service', 'adhoc'));
+    raise notice '✅ Added item_type column to mechanic_job_items';
   end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'technician_id') then
-    alter table mechanic_job_labor add column technician_id uuid references customers(id) on delete set null;
+  
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'service_product_id') then
+    alter table mechanic_job_items add column service_product_id uuid references products(id) on delete set null;
+    raise notice '✅ Added service_product_id column to mechanic_job_items';
   end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'technician_name') then
-    alter table mechanic_job_labor add column technician_name text not null;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'description') then
-    alter table mechanic_job_labor add column description text;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'service_product_id') then
-    alter table mechanic_job_labor add column service_product_id uuid references products(id) on delete set null;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'hours_worked') then
-    alter table mechanic_job_labor add column hours_worked numeric(5,2) not null default 0;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'hourly_rate') then
-    alter table mechanic_job_labor add column hourly_rate numeric(12,2) not null default 0;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'total_cost') then
-    alter table mechanic_job_labor add column total_cost numeric(12,2) not null default 0;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'work_date') then
-    alter table mechanic_job_labor add column work_date timestamp with time zone not null default now();
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'created_at') then
-    alter table mechanic_job_labor add column created_at timestamp with time zone not null default now();
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_labor' and column_name = 'updated_at') then
-    alter table mechanic_job_labor add column updated_at timestamp with time zone not null default now();
+  
+  -- Add index for service lookups
+  if not exists (select 1 from pg_indexes where tablename = 'mechanic_job_items' and indexname = 'idx_mechanic_job_items_service_product_id') then
+    create index idx_mechanic_job_items_service_product_id on mechanic_job_items(service_product_id) where service_product_id is not null;
+    raise notice '✅ Added index for service_product_id';
   end if;
 end $$;
 
-create index if not exists idx_mechanic_job_labor_job_id on mechanic_job_labor(job_id);
-create index if not exists idx_mechanic_job_labor_technician_id on mechanic_job_labor(technician_id) where technician_id is not null;
-create index if not exists idx_mechanic_job_labor_service_product on mechanic_job_labor(service_product_id) where service_product_id is not null;
+drop function if exists mirror_labor_to_items_insert cascade;
+drop function if exists mirror_labor_to_items_update cascade;
+drop function if exists mirror_labor_to_items_delete cascade;
+drop table if exists mechanic_job_labor cascade;
 
 -- ============================================================
 -- TABLE: mechanic_job_tasks (SMART TASKS SYSTEM)
@@ -9524,7 +9513,6 @@ create table if not exists mechanic_job_tasks (
   -- Link to parent product/service (PRIMARY KEY BINDING)
   -- NULL = standalone ad-hoc task
   parent_item_id uuid references mechanic_job_items(id) on delete cascade,
-  parent_labor_id uuid references mechanic_job_labor(id) on delete cascade,
   
   -- Task details
   task_name text not null,
@@ -9556,12 +9544,8 @@ create table if not exists mechanic_job_tasks (
   ),
   check (
     -- Must have parent OR be standalone
-    (parent_item_id is not null or parent_labor_id is not null) OR
-    (is_standalone = true)
-  ),
-  check (
-    -- Cannot have both item and labor parent
-    not (parent_item_id is not null and parent_labor_id is not null)
+    parent_item_id is not null OR
+    is_standalone = true
   )
 );
 
@@ -9576,9 +9560,6 @@ begin
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'parent_item_id') then
     alter table mechanic_job_tasks add column parent_item_id uuid references mechanic_job_items(id) on delete cascade;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'parent_labor_id') then
-    alter table mechanic_job_tasks add column parent_labor_id uuid references mechanic_job_labor(id) on delete cascade;
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'task_name') then
     alter table mechanic_job_tasks add column task_name text;
@@ -9676,6 +9657,18 @@ begin
     alter table mechanic_job_tasks drop column job_labor_id cascade;
     raise notice 'Dropped old column: job_labor_id';
   end if;
+
+  if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'parent_labor_id') then
+    update mechanic_job_tasks t
+    set parent_item_id = coalesce(parent_item_id, mi.id)
+    from mechanic_job_items mi
+    where t.parent_labor_id is not null
+      and mi.job_id = t.job_id
+      and mi.item_type = 'service'
+      and mi.notes = 'Mirrored from labor ID: ' || t.parent_labor_id::text;
+    alter table mechanic_job_tasks drop column parent_labor_id cascade;
+    raise notice 'Dropped old column: parent_labor_id';
+  end if;
   
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'priority') then
     alter table mechanic_job_tasks drop column priority cascade;
@@ -9716,7 +9709,6 @@ end $$;
 create index if not exists idx_mechanic_job_tasks_tenant on mechanic_job_tasks(tenant_id);
 create index if not exists idx_mechanic_job_tasks_job on mechanic_job_tasks(job_id);
 create index if not exists idx_mechanic_job_tasks_parent_item on mechanic_job_tasks(parent_item_id) where parent_item_id is not null;
-create index if not exists idx_mechanic_job_tasks_parent_labor on mechanic_job_tasks(parent_labor_id) where parent_labor_id is not null;
 create index if not exists idx_mechanic_job_tasks_completion on mechanic_job_tasks(is_completed, job_id);
 
 -- ============================================================
@@ -9731,7 +9723,6 @@ create table if not exists mechanic_job_task_preferences (
   
   -- Which parent items/labor are collapsed (array of IDs)
   collapsed_item_ids uuid[] not null default '{}',
-  collapsed_labor_ids uuid[] not null default '{}',
   
   updated_at timestamp with time zone not null default now(),
   
@@ -9741,6 +9732,37 @@ create table if not exists mechanic_job_task_preferences (
 create index if not exists idx_task_prefs_user_job on mechanic_job_task_preferences(user_id, job_id);
 create index if not exists idx_task_prefs_tenant on mechanic_job_task_preferences(tenant_id);
 
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'mechanic_job_task_preferences'
+      and column_name = 'collapsed_labor_ids'
+  ) then
+    update mechanic_job_task_preferences prefs
+    set collapsed_item_ids = coalesce(
+      (
+        select array_agg(distinct merged.item_id)
+        from (
+          select unnest(coalesce(prefs.collapsed_item_ids, '{}')) as item_id
+          union
+          select mi.id
+          from mechanic_job_items mi
+          join unnest(coalesce(prefs.collapsed_labor_ids, '{}')) as labor_map(labor_id)
+            on mi.job_id = prefs.job_id
+           and mi.item_type = 'service'
+           and mi.notes = 'Mirrored from labor ID: ' || labor_map.labor_id::text
+        ) merged
+      ),
+      '{}'
+    )
+    where prefs.collapsed_labor_ids is not null
+      and array_length(prefs.collapsed_labor_ids, 1) > 0;
+
+    alter table mechanic_job_task_preferences drop column collapsed_labor_ids cascade;
+    raise notice 'Dropped old column: collapsed_labor_ids';
+  end if;
+end $$;
 -- Table: mechanic_job_timeline
 -- Audit trail / history of status changes and events
 create table if not exists mechanic_job_timeline (
@@ -9837,17 +9859,19 @@ declare
   v_labor_cost numeric;
   v_total_cost numeric;
 begin
-  -- Calculate parts cost
+  -- Calculate parts cost (everything except service-type items)
   select coalesce(sum(total_price), 0)
   into v_parts_cost
   from mechanic_job_items
-  where job_id = coalesce(NEW.job_id, OLD.job_id);
+  where job_id = coalesce(NEW.job_id, OLD.job_id)
+    and coalesce(item_type, 'product') <> 'service';
   
-  -- Calculate labor cost
-  select coalesce(sum(total_cost), 0)
+  -- Calculate labor cost (service-type items)
+  select coalesce(sum(total_price), 0)
   into v_labor_cost
-  from mechanic_job_labor
-  where job_id = coalesce(NEW.job_id, OLD.job_id);
+  from mechanic_job_items
+  where job_id = coalesce(NEW.job_id, OLD.job_id)
+    and coalesce(item_type, 'product') = 'service';
   
   -- Calculate total
   v_total_cost := v_parts_cost + v_labor_cost;
@@ -9882,26 +9906,6 @@ create trigger trg_update_job_costs_on_item_update
 drop trigger if exists trg_update_job_costs_on_item_delete on mechanic_job_items;
 create trigger trg_update_job_costs_on_item_delete
   after delete on mechanic_job_items
-  for each row
-  execute function public.update_mechanic_job_costs();
-
--- Triggers for mechanic_job_labor
-drop trigger if exists trg_update_job_costs_on_labor_insert on mechanic_job_labor;
-create trigger trg_update_job_costs_on_labor_insert
-  after insert on mechanic_job_labor
-  for each row
-  execute function public.update_mechanic_job_costs();
-
-drop trigger if exists trg_update_job_costs_on_labor_update on mechanic_job_labor;
-create trigger trg_update_job_costs_on_labor_update
-  after update on mechanic_job_labor
-  for each row
-  when (OLD.total_cost is distinct from NEW.total_cost)
-  execute function public.update_mechanic_job_costs();
-
-drop trigger if exists trg_update_job_costs_on_labor_delete on mechanic_job_labor;
-create trigger trg_update_job_costs_on_labor_delete
-  after delete on mechanic_job_labor
   for each row
   execute function public.update_mechanic_job_costs();
 
@@ -10090,13 +10094,15 @@ begin
   select coalesce(sum(total_price), 0)
   into v_parts_cost
   from mechanic_job_items
-  where job_id = p_job_id;
+  where job_id = p_job_id
+    and coalesce(item_type, 'product') <> 'service';
 
-  -- Sum labor cost
-  select coalesce(sum(total_cost), 0)
+  -- Sum labor cost (service-type items)
+  select coalesce(sum(total_price), 0)
   into v_labor_cost
-  from mechanic_job_labor
-  where job_id = p_job_id;
+  from mechanic_job_items
+  where job_id = p_job_id
+    and coalesce(item_type, 'product') = 'service';
 
   -- Get current discount from job
   select coalesce(discount_amount, 0)
@@ -10154,7 +10160,6 @@ declare
   v_items jsonb := '[]'::jsonb;
   v_item_counter integer := 0;
   v_job_item record;
-  v_labor_record record;
   v_tenant_id uuid;
 begin
   -- Get job details
@@ -10192,70 +10197,37 @@ begin
   -- This ensures invoice date matches when the job/work actually started
   v_invoice_date := coalesce(v_job.arrival_date, v_job.created_at);
   
-  -- Add parts/items from mechanic_job_items
+  -- Add items (products + services) from mechanic_job_items
   for v_job_item in
     select 
       product_id,
+      service_product_id,
       product_name,
       quantity,
       unit_price,
-      (quantity * unit_price) as line_total,
-      notes
+      total_price,
+      item_type
     from public.mechanic_job_items
     where job_id = p_job_id
     order by created_at
   loop
     v_item_counter := v_item_counter + 1;
-    v_subtotal := v_subtotal + v_job_item.line_total;
-    
+
     v_items := v_items || jsonb_build_object(
       'id', gen_random_uuid()::text,
-      'product_id', COALESCE(v_job_item.product_id::text, ''),
+      'product_id', case when coalesce(v_job_item.item_type, 'product') = 'service'
+                         then coalesce(v_job_item.service_product_id::text, '')
+                         else coalesce(v_job_item.product_id::text, '')
+                    end,
       'product_name', v_job_item.product_name,
       'quantity', v_job_item.quantity,
       'unit_price', v_job_item.unit_price,
       'discount', 0,
-      'line_total', v_job_item.line_total,
-      'cost', 0
-    );
-  end loop;
-  
-  -- Add labor entries individually to preserve service products
-  for v_labor_record in
-    select
-      l.service_product_id,
-      l.description,
-      l.hours_worked,
-      l.hourly_rate,
-      l.total_cost,
-      coalesce(p.name, l.description, 'Mano de obra') as resolved_name
-    from public.mechanic_job_labor l
-    left join public.products p on p.id = l.service_product_id
-    where l.job_id = p_job_id
-    order by l.created_at
-  loop
-    v_item_counter := v_item_counter + 1;
-
-    v_items := v_items || jsonb_build_object(
-      'id', gen_random_uuid()::text,
-      'product_id', coalesce(v_labor_record.service_product_id::text, ''),
-      'product_name', v_labor_record.resolved_name,
-      'quantity', coalesce(nullif(v_labor_record.hours_worked, 0), 1),
-      'unit_price', v_labor_record.hourly_rate,
-      'discount', 0,
-      'line_total', coalesce(
-        v_labor_record.total_cost,
-        v_labor_record.hours_worked * v_labor_record.hourly_rate,
-        0
-      ),
+      'line_total', coalesce(v_job_item.total_price, v_job_item.quantity * v_job_item.unit_price, 0),
       'cost', 0
     );
 
-    v_subtotal := v_subtotal + coalesce(
-      v_labor_record.total_cost,
-      v_labor_record.hours_worked * v_labor_record.hourly_rate,
-      0
-    );
+    v_subtotal := v_subtotal + coalesce(v_job_item.total_price, v_job_item.quantity * v_job_item.unit_price, 0);
   end loop;
   
   -- ✅ CHANGED: Allow invoice creation even with empty items
@@ -10412,6 +10384,12 @@ begin
     return NEW;
   end if;
   
+  -- Skip if this UPDATE was triggered by job → invoice sync
+  if current_setting('app.syncing_job_to_invoice', true) = 'true' then
+    raise notice 'Skipping invoice→job sync (job→invoice sync in progress)';
+    return NEW;
+  end if;
+
   -- Prevent circular triggers (invoice → job → invoice → ...)
   -- Check if we're already inside a job sync operation
   if current_setting('app.syncing_invoice_to_job', true) = 'true' then
@@ -10503,7 +10481,6 @@ begin
   
   -- Delete existing job items (we'll recreate them from invoice)
   delete from mechanic_job_items where job_id = v_job_id;
-  delete from mechanic_job_labor where job_id = v_job_id;
   
   -- Process each invoice item
   for v_item in select * from jsonb_array_elements(v_invoice.items)
@@ -10515,39 +10492,10 @@ begin
     v_product_name := v_item->>'product_name';
 
     -- Check if it's labor (no product_id) or a part
-    if v_product_id is null then
-      -- It's labor
-      v_labor_cost := v_labor_cost + v_line_total;
-
-      insert into mechanic_job_labor (
-        tenant_id,
-        job_id,
-        technician_name,
-        description,
-        hours_worked,
-        hourly_rate,
-        total_cost,
-        service_product_id,
-        work_date,
-        created_at,
-        updated_at
-      ) values (
-        v_tenant_id,
-        v_job_id,
-        'Factura',
-        v_product_name,
-        case when v_quantity is null or v_quantity = 0 then 1 else v_quantity end,
-        v_unit_price,
-        v_line_total,
-        null,
-        now(),
-        now(),
-        now()
-      );
-    else
-      -- Determine product type
-      v_product_type := null;
-      v_product_name := null;
+    -- Determine product info (if exists)
+    v_product_type := null;
+    v_product_name := null;
+    if v_product_id is not null then
       select product_type, name
       into v_product_type, v_product_name
       from products
@@ -10556,64 +10504,41 @@ begin
         v_product_type := null;
         v_product_name := null;
       end if;
-
-      if v_product_type = 'service' then
-        -- Service products are treated as labor
-        v_labor_cost := v_labor_cost + v_line_total;
-
-        insert into mechanic_job_labor (
-          tenant_id,
-          job_id,
-          technician_name,
-          description,
-          hours_worked,
-          hourly_rate,
-          total_cost,
-          service_product_id,
-          work_date,
-          created_at,
-          updated_at
-        ) values (
-          v_tenant_id,
-          v_job_id,
-          'Factura',
-          coalesce(v_product_name, v_item->>'product_name'),
-          case when v_quantity is null or v_quantity = 0 then 1 else v_quantity end,
-          v_unit_price,
-          v_line_total,
-          v_product_id,
-          now(),
-          now(),
-          now()
-        );
-      else
-        -- It's a part/product
-        v_parts_cost := v_parts_cost + v_line_total;
-      
-        -- Insert into job items
-        insert into mechanic_job_items (
-          tenant_id,
-          job_id,
-          product_id,
-          product_name,
-          quantity,
-          unit_price,
-          notes,
-          created_at,
-          updated_at
-        ) values (
-          v_tenant_id,
-          v_job_id,
-          v_product_id,
-          v_item->>'product_name',
-          v_quantity,
-          v_unit_price,
-          'Synced from invoice',
-          now(),
-          now()
-        );
-      end if;
     end if;
+
+    if v_product_id is null or v_product_type = 'service' then
+      v_labor_cost := v_labor_cost + v_line_total;
+    else
+      v_parts_cost := v_parts_cost + v_line_total;
+    end if;
+
+    insert into mechanic_job_items (
+      tenant_id,
+      job_id,
+      product_id,
+      product_name,
+      quantity,
+      unit_price,
+      total_price,
+      notes,
+      item_type,
+      service_product_id,
+      created_at,
+      updated_at
+    ) values (
+      v_tenant_id,
+      v_job_id,
+      case when v_product_type = 'service' then null else v_product_id end,
+      coalesce(v_product_name, v_item->>'product_name'),
+      case when v_quantity is null or v_quantity = 0 then 1 else v_quantity end,
+      v_unit_price,
+      v_line_total,
+      'Synced from invoice',
+      case when v_product_id is null or v_product_type = 'service' then 'service' else 'product' end,
+      case when v_product_id is null or v_product_type = 'service' then v_product_id else null end,
+      now(),
+      now()
+    );
   end loop;
   
   v_subtotal := v_parts_cost + v_labor_cost;
@@ -10699,8 +10624,7 @@ $$;
 -- REVERSE SYNC: Job → Invoice
 -- ============================================================
 
--- Function: Sync job items back to invoice
--- Called when mechanic_job_items or mechanic_job_labor change
+-- Called when mechanic_job_items change
 create or replace function public.sync_job_to_invoice(p_job_id uuid)
 returns void
 language plpgsql
@@ -10712,7 +10636,6 @@ declare
   v_job record;
   v_items jsonb := '[]'::jsonb;
   v_item record;
-  v_labor record;
   v_parts_cost numeric(12,2) := 0;
   v_labor_cost numeric(12,2) := 0;
   v_subtotal numeric(12,2) := 0;
@@ -10749,55 +10672,31 @@ begin
     return;
   end if;
   
-  -- FRESH CALCULATION: Sum current parts and labor from database (not stale job record)
-  select coalesce(sum(total_price), 0)
-  into v_parts_cost
-  from mechanic_job_items
-  where job_id = p_job_id;
-  
-  select coalesce(sum(total_cost), 0)
-  into v_labor_cost
-  from mechanic_job_labor
-  where job_id = p_job_id;
-  
   select coalesce(discount_amount, 0)
   into v_discount
   from mechanic_jobs
   where id = p_job_id;
   
-  -- Build invoice items array from job items
+  -- Build invoice items array from mechanic_job_items (products + services)
   for v_item in 
     select * from mechanic_job_items where job_id = p_job_id
   loop
     v_items := v_items || jsonb_build_object(
-      'product_id', v_item.product_id::text,
+      'product_id', case when coalesce(v_item.item_type, 'product') = 'service'
+                         then coalesce(v_item.service_product_id::text, '')
+                         else v_item.product_id::text
+                    end,
       'product_name', v_item.product_name,
       'quantity', v_item.quantity,
       'unit_price', v_item.unit_price,
       'line_total', coalesce(v_item.total_price, v_item.quantity * v_item.unit_price, 0)
     );
-  end loop;
-  
-  -- Add labor items, preserving linked service products
-  for v_labor in
-    select 
-      l.service_product_id,
-      l.description,
-      l.hours_worked,
-      l.hourly_rate,
-      l.total_cost,
-      coalesce(p.name, l.description, 'Mano de obra') as service_name
-    from mechanic_job_labor l
-    left join products p on p.id = l.service_product_id
-    where l.job_id = p_job_id
-  loop
-    v_items := v_items || jsonb_build_object(
-      'product_id', coalesce(v_labor.service_product_id::text, ''),
-      'product_name', v_labor.service_name,
-      'quantity', coalesce(nullif(v_labor.hours_worked, 0), 1),
-      'unit_price', v_labor.hourly_rate,
-      'line_total', coalesce(v_labor.total_cost, v_labor.hours_worked * v_labor.hourly_rate, 0)
-    );
+
+    if coalesce(v_item.item_type, 'product') in ('service', 'adhoc') then
+      v_labor_cost := v_labor_cost + coalesce(v_item.total_price, v_item.quantity * v_item.unit_price, 0);
+    else
+      v_parts_cost := v_parts_cost + coalesce(v_item.total_price, v_item.quantity * v_item.unit_price, 0);
+    end if;
   end loop;
   
   -- Calculate totals with FRESH data (not using stale v_job record)
@@ -10815,6 +10714,8 @@ begin
   v_total := v_subtotal;  -- Total is always the subtotal (what customer pays)
   
   -- Update the invoice with fresh calculations
+  perform set_config('app.syncing_job_to_invoice', 'true', true);
+
   update sales_invoices
   set
     items = v_items,
@@ -10832,6 +10733,9 @@ begin
   
   -- Let the payment recalculation function handle balance and status
   perform public.recalculate_sales_invoice_payments(v_invoice_id);
+
+  -- Clear job → invoice flag now that invoice update is done
+  perform set_config('app.syncing_job_to_invoice', '', true);
   
   raise notice 'Synced job % to invoice % (% items, subtotal: $%, total: $%)', p_job_id, v_invoice_id, jsonb_array_length(v_items), v_subtotal, v_total;
 end;
@@ -11600,153 +11504,6 @@ create trigger trg_mechanic_job_items_sync_invoice_delete
   referencing old table as old_table
   for each statement execute procedure public.sync_job_items_to_invoice_statement();
 
--- Trigger function: Handle mechanic job labor changes
--- BEFORE trigger to calculate labor total_cost
-create or replace function public.calculate_mechanic_job_labor_total()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  -- Calculate total_cost = hours_worked × hourly_rate
-  NEW.total_cost := coalesce(NEW.hours_worked, 0) * coalesce(NEW.hourly_rate, 0);
-  return NEW;
-end;
-$$;
-
-drop trigger if exists trg_calculate_mechanic_job_labor_total on mechanic_job_labor cascade;
-create trigger trg_calculate_mechanic_job_labor_total
-  before insert or update on mechanic_job_labor
-  for each row execute procedure public.calculate_mechanic_job_labor_total();
-
--- AFTER trigger to update job costs and sync to invoice
-create or replace function public.handle_mechanic_job_labor_change()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if TG_OP = 'INSERT' then
-    -- Recalculate job costs
-    perform public.recalculate_mechanic_job_costs(NEW.job_id);
-    
-    -- Note: Sync to invoice is handled by statement-level trigger
-    
-    -- Log event
-    perform public.log_mechanic_job_timeline(
-      NEW.job_id,
-      'labor_added',
-      null,
-      NEW.technician_name,
-      'Added labor: ' || NEW.hours_worked || ' hours by ' || NEW.technician_name
-    );
-    
-    return NEW;
-
-  elsif TG_OP = 'UPDATE' then
-    -- Recalculate job costs
-    perform public.recalculate_mechanic_job_costs(NEW.job_id);
-    
-    -- Note: Sync to invoice is handled by statement-level trigger
-    
-    return NEW;
-
-  elsif TG_OP = 'DELETE' then
-    -- Recalculate job costs
-    perform public.recalculate_mechanic_job_costs(OLD.job_id);
-    
-    -- Note: Sync to invoice is handled by statement-level trigger
-    
-    return OLD;
-  end if;
-
-  return NULL;
-end;
-$$;
-
--- Create trigger for mechanic job labor
-drop trigger if exists trg_mechanic_job_labor_change on mechanic_job_labor cascade;
-create trigger trg_mechanic_job_labor_change
-  after insert or update or delete on mechanic_job_labor
-  for each row execute procedure public.handle_mechanic_job_labor_change();
-
--- Statement-level triggers to sync job to invoice AFTER all labor operations complete
-drop trigger if exists trg_mechanic_job_labor_sync_invoice_insert on mechanic_job_labor cascade;
-drop trigger if exists trg_mechanic_job_labor_sync_invoice_update on mechanic_job_labor cascade;
-drop trigger if exists trg_mechanic_job_labor_sync_invoice_delete on mechanic_job_labor cascade;
-
-create or replace function public.sync_job_labor_to_invoice_statement()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_job_id uuid;
-  v_invoice_id uuid;
-  v_syncing_flag text;
-begin
-  -- Check if we're currently syncing invoice → job (prevent circular sync)
-  v_syncing_flag := current_setting('app.syncing_invoice_to_job', true);
-  if v_syncing_flag = 'true' then
-    raise notice 'sync_job_labor_to_invoice_statement: skipping due to invoice→job sync in progress';
-    return null;
-  end if;
-
-  -- Handle DELETE operations - get job_id from old_table
-  if TG_OP = 'DELETE' then
-    for v_job_id in select distinct job_id from old_table
-    loop
-      -- Recalculate costs first to update job record with new totals
-      perform public.recalculate_mechanic_job_costs(v_job_id);
-      
-      -- Find the linked invoice
-      select invoice_id into v_invoice_id from mechanic_jobs where id = v_job_id;
-      
-      if v_invoice_id is not null then
-        -- Sync this job to its invoice (will remove deleted labor)
-        perform public.sync_job_to_invoice(v_job_id);
-      end if;
-    end loop;
-    return null;
-  end if;
-
-  -- Handle INSERT and UPDATE - sync immediately since we're adding/changing items
-  for v_job_id in select distinct job_id from new_table
-  loop
-    -- Recalculate costs first to update job record with new totals
-    perform public.recalculate_mechanic_job_costs(v_job_id);
-    
-    -- Find the linked invoice
-    select invoice_id into v_invoice_id from mechanic_jobs where id = v_job_id;
-    
-    if v_invoice_id is not null then
-      -- Sync this job to its invoice (will recalculate fresh totals from DB)
-      perform public.sync_job_to_invoice(v_job_id);
-    end if;
-  end loop;
-  
-  return null;
-end;
-$$;
-
-create trigger trg_mechanic_job_labor_sync_invoice_insert
-  after insert on mechanic_job_labor
-  referencing new table as new_table
-  for each statement execute procedure public.sync_job_labor_to_invoice_statement();
-
-create trigger trg_mechanic_job_labor_sync_invoice_update
-  after update on mechanic_job_labor
-  referencing new table as new_table
-  for each statement execute procedure public.sync_job_labor_to_invoice_statement();
-
-create trigger trg_mechanic_job_labor_sync_invoice_delete
-  after delete on mechanic_job_labor
-  referencing old table as old_table
-  for each statement execute procedure public.sync_job_labor_to_invoice_statement();
-
 -- Trigger: Auto-update updated_at timestamp
 create or replace function public.set_updated_at()
 returns trigger
@@ -11778,11 +11535,6 @@ create trigger trg_mechanic_job_items_updated_at
   before update on mechanic_job_items
   for each row execute procedure public.set_updated_at();
 
-drop trigger if exists trg_mechanic_job_labor_updated_at on mechanic_job_labor cascade;
-create trigger trg_mechanic_job_labor_updated_at
-  before update on mechanic_job_labor
-  for each row execute procedure public.set_updated_at();
-
 -- ============================================================================
 -- SMART TASKS SYSTEM - Functions & Triggers
 -- ============================================================================
@@ -11800,7 +11552,6 @@ create or replace function public.parse_description_to_tasks(
   p_tenant_id uuid,
   p_job_id uuid,
   p_parent_item_id uuid default null,
-  p_parent_labor_id uuid default null,
   p_description text default null
 )
 returns integer
@@ -11839,7 +11590,6 @@ begin
           tenant_id,
           job_id,
           parent_item_id,
-          parent_labor_id,
           task_name,
           parsed_from_description,
           is_standalone,
@@ -11848,7 +11598,6 @@ begin
           p_tenant_id,
           p_job_id,
           p_parent_item_id,
-          p_parent_labor_id,
           v_task_name,
           true,
           false,
@@ -11934,7 +11683,7 @@ begin
 end;
 $$;
 
--- Trigger: Auto-parse description when item/labor is added
+-- Trigger: Auto-parse description when mechanic_job_item is added
 create or replace function public.auto_parse_item_description()
 returns trigger
 language plpgsql
@@ -11949,7 +11698,7 @@ declare
 begin
   -- CRITICAL: IMMEDIATELY RETURN if not on correct tables
   -- This prevents ANY field access on wrong table
-  if TG_TABLE_NAME not in ('mechanic_job_items', 'mechanic_job_labor') then
+  if TG_TABLE_NAME <> 'mechanic_job_items' then
     raise notice 'auto_parse_item_description: skipping table %, trigger: %', TG_TABLE_NAME, TG_NAME;
     return null;  -- AFTER trigger, return null is correct
   end if;
@@ -11957,11 +11706,8 @@ begin
   -- Use exception handling to safely access fields
   begin
     -- Try to get product_id or service_product_id safely
-    if TG_TABLE_NAME = 'mechanic_job_items' then
-      v_product_id := (NEW).product_id;
-    elsif TG_TABLE_NAME = 'mechanic_job_labor' then
-      v_service_product_id := (NEW).service_product_id;
-    end if;
+    v_product_id := (NEW).product_id;
+    v_service_product_id := (NEW).service_product_id;
   exception
     when undefined_column then
       raise warning 'auto_parse_item_description: column access error on table %, skipping', TG_TABLE_NAME;
@@ -11969,7 +11715,7 @@ begin
   end;
   
   -- Get product/service description
-  if TG_TABLE_NAME = 'mechanic_job_items' and v_product_id is not null then
+  if v_product_id is not null then
     select description into v_description
     from products
     where id = v_product_id;
@@ -11979,7 +11725,6 @@ begin
         NEW.tenant_id,
         NEW.job_id,
         NEW.id,
-        null,
         v_description
       );
       
@@ -11988,7 +11733,7 @@ begin
       end if;
     end if;
     
-  elsif TG_TABLE_NAME = 'mechanic_job_labor' and v_service_product_id is not null then
+  elsif v_service_product_id is not null then
     select description into v_description
     from products
     where id = v_service_product_id;
@@ -11997,7 +11742,6 @@ begin
       v_task_count := public.parse_description_to_tasks(
         NEW.tenant_id,
         NEW.job_id,
-        null,
         NEW.id,
         v_description
       );
@@ -12015,11 +11759,6 @@ $$;
 drop trigger if exists trg_auto_parse_item_description on mechanic_job_items cascade;
 create trigger trg_auto_parse_item_description
   after insert on mechanic_job_items
-  for each row execute procedure public.auto_parse_item_description();
-
-drop trigger if exists trg_auto_parse_labor_description on mechanic_job_labor cascade;
-create trigger trg_auto_parse_labor_description
-  after insert on mechanic_job_labor
   for each row execute procedure public.auto_parse_item_description();
 
 -- Trigger: Auto-create item when ad-hoc task gets price
@@ -14309,19 +14048,6 @@ exception
   when duplicate_object then raise notice '⚠ Policies already exist for mechanic_job_items';
 end $$;
 
--- Mechanic Job Labor: Tenant isolation
-do $$ begin
-  create policy "mechanic_job_labor_select" on mechanic_job_labor for select using (tenant_id = public.user_tenant_id());
-  create policy "mechanic_job_labor_insert" on mechanic_job_labor for insert with check (tenant_id = public.user_tenant_id());
-  create policy "mechanic_job_labor_update" on mechanic_job_labor for update using (tenant_id = public.user_tenant_id());
-  create policy "mechanic_job_labor_delete" on mechanic_job_labor for delete using (tenant_id = public.user_tenant_id());
-  raise notice '✓ Created RLS policies for mechanic_job_labor';
-exception
-  when undefined_table then raise notice '⚠ Table mechanic_job_labor does not exist yet';
-  when undefined_column then raise notice '⚠ Column tenant_id missing in mechanic_job_labor';
-  when duplicate_object then raise notice '⚠ Policies already exist for mechanic_job_labor';
-end $$;
-
 -- Mechanic Job Tasks: Tenant isolation (SMART TASKS SYSTEM)
 alter table mechanic_job_tasks enable row level security;
 
@@ -16325,7 +16051,6 @@ begin
     'bikes', (select jsonb_agg(to_jsonb(t.*)) from bikes t where tenant_id = p_tenant_id),
     'mechanic_jobs', (select jsonb_agg(to_jsonb(t.*)) from mechanic_jobs t where tenant_id = p_tenant_id),
     'mechanic_job_items', (select jsonb_agg(to_jsonb(t.*)) from mechanic_job_items t where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id)),
-    'mechanic_job_labor', (select jsonb_agg(to_jsonb(t.*)) from mechanic_job_labor t where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id)),
     'mechanic_job_timeline', (select jsonb_agg(to_jsonb(t.*)) from mechanic_job_timeline t where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id)),
     'product_brands', (select jsonb_agg(to_jsonb(t.*)) from product_brands t where tenant_id = p_tenant_id),
     'bike_brands', (select jsonb_agg(to_jsonb(t.*)) from bike_brands t where tenant_id = p_tenant_id),
@@ -16432,7 +16157,6 @@ begin
   -- Level 5: Deepest children first
   delete from journal_lines where entry_id in (select id from journal_entries where tenant_id = p_tenant_id);
   delete from mechanic_job_items where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id);
-  delete from mechanic_job_labor where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id);
   delete from mechanic_job_timeline where job_id in (select id from mechanic_jobs where tenant_id = p_tenant_id);
   delete from online_order_items where order_id in (select id from online_orders where tenant_id = p_tenant_id);
   delete from employee_contracts where tenant_id = p_tenant_id;
@@ -16598,12 +16322,6 @@ begin
   -- Mechanic Job Items
   if v_backup_data ? 'mechanic_job_items' and v_backup_data->'mechanic_job_items' is not null and jsonb_typeof(v_backup_data->'mechanic_job_items') = 'array' then
     insert into mechanic_job_items select * from jsonb_populate_recordset(null::mechanic_job_items, v_backup_data->'mechanic_job_items');
-    v_tables_restored := v_tables_restored + 1;
-  end if;
-  
-  -- Mechanic Job Labor
-  if v_backup_data ? 'mechanic_job_labor' and v_backup_data->'mechanic_job_labor' is not null and jsonb_typeof(v_backup_data->'mechanic_job_labor') = 'array' then
-    insert into mechanic_job_labor select * from jsonb_populate_recordset(null::mechanic_job_labor, v_backup_data->'mechanic_job_labor');
     v_tables_restored := v_tables_restored + 1;
   end if;
   
@@ -16915,17 +16633,19 @@ begin
   raise notice 'Starting pega cost recalculation...';
   
   for v_job in select id, job_number from mechanic_jobs loop
-    -- Calculate parts cost
+    -- Calculate parts cost (products only)
     select coalesce(sum(total_price), 0)
     into v_parts_cost
     from mechanic_job_items
-    where job_id = v_job.id;
+    where job_id = v_job.id
+      and coalesce(item_type, 'product') not in ('service', 'adhoc');
     
-    -- Calculate labor cost
-    select coalesce(sum(total_cost), 0)
+    -- Calculate labor cost (services + ad-hoc tasks)
+    select coalesce(sum(total_price), 0)
     into v_labor_cost
-    from mechanic_job_labor
-    where job_id = v_job.id;
+    from mechanic_job_items
+    where job_id = v_job.id
+      and coalesce(item_type, 'product') in ('service', 'adhoc');
     
     -- Update job if costs changed
     update mechanic_jobs

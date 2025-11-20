@@ -94,7 +94,6 @@ class SmartTaskService extends ChangeNotifier {
   Future<List<MechanicJobTask>> getTasksForJob(
     String jobId, {
     String? parentItemId,
-    String? parentLaborId,
     bool? isStandalone,
   }) async {
     try {
@@ -102,9 +101,6 @@ class SmartTaskService extends ChangeNotifier {
       
       if (parentItemId != null) {
         query = query.eq('parent_item_id', parentItemId);
-      }
-      if (parentLaborId != null) {
-        query = query.eq('parent_labor_id', parentLaborId);
       }
       if (isStandalone != null) {
         query = query.eq('is_standalone', isStandalone);
@@ -129,8 +125,6 @@ class SmartTaskService extends ChangeNotifier {
           grouped.putIfAbsent('standalone', () => []).add(task);
         } else if (task.parentItemId != null) {
           grouped.putIfAbsent('item_${task.parentItemId}', () => []).add(task);
-        } else if (task.parentLaborId != null) {
-          grouped.putIfAbsent('labor_${task.parentLaborId}', () => []).add(task);
         }
       }
       
@@ -272,13 +266,11 @@ class SmartTaskService extends ChangeNotifier {
   Future<ParentCompletionStatus> getParentCompletionStatus(
     String jobId,
     String? parentItemId,
-    String? parentLaborId,
   ) async {
     try {
       final tasks = await getTasksForJob(
         jobId,
         parentItemId: parentItemId,
-        parentLaborId: parentLaborId,
       );
       
       final total = tasks.length;

@@ -6,6 +6,9 @@ import '../services/smart_task_service.dart';
 import '../services/bikeshop_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
+import '../../../shared/models/product.dart';
+import '../../../shared/widgets/product_autocomplete_field.dart';
+import '../../../shared/models/product.dart';
 
 /// Smart Tasks Tab - Collapsible hierarchical checklist with three-way sync
 /// 
@@ -21,8 +24,7 @@ class TasksTabView extends StatefulWidget {
   final bool readOnly;
   final Function(MechanicJobItem)? onItemAdded;
   final Function(String itemId)? onItemRemoved;
-  final Function(MechanicJobLabor)? onLaborAdded;
-  final Function(String laborId)? onLaborRemoved;
+  final VoidCallback? onAddItemPressed; // NEW: Callback to trigger parent's add item dialog
 
   const TasksTabView({
     Key? key,
@@ -30,8 +32,7 @@ class TasksTabView extends StatefulWidget {
     this.readOnly = false,
     this.onItemAdded,
     this.onItemRemoved,
-    this.onLaborAdded,
-    this.onLaborRemoved,
+    this.onAddItemPressed, // NEW
   }) : super(key: key);
 
   @override
@@ -44,9 +45,10 @@ class _TasksTabViewState extends State<TasksTabView> {
   TenantService? _tenantService;
   Map<String, List<MechanicJobTask>> _groupedTasks = {};
   List<MechanicJobItem> _items = [];
-  List<MechanicJobLabor> _labor = [];
   TaskProgress? _progress;
   bool _isLoading = true;
+  final Set<String> _collapsedItems = {}; // Track collapsed parent items
+  String? _editingTaskId; // Track which task is being edited inline
 
   @override
   void initState() {
@@ -71,13 +73,12 @@ class _TasksTabViewState extends State<TasksTabView> {
     setState(() => _isLoading = true);
     
     try {
-      // Fetch tasks, items, and labor in parallel
+      // Fetch tasks, grouped tasks, progress, and items in parallel
       final results = await Future.wait([
         _taskService!.getTasksForJob(widget.jobId),
         _taskService!.getTasksGroupedByParent(widget.jobId),
         _taskService!.calculateProgress(widget.jobId),
         _fetchItems(),
-        _fetchLabor(),
       ]);
       
       if (mounted) {
@@ -85,7 +86,6 @@ class _TasksTabViewState extends State<TasksTabView> {
           _groupedTasks = results[1] as Map<String, List<MechanicJobTask>>;
           _progress = results[2] as TaskProgress?;
           _items = results[3] as List<MechanicJobItem>;
-          _labor = results[4] as List<MechanicJobLabor>;
           _isLoading = false;
         });
       }
@@ -108,21 +108,6 @@ class _TasksTabViewState extends State<TasksTabView> {
       return (data as List).map((json) => MechanicJobItem.fromJson(json)).toList();
     } catch (e) {
       debugPrint('❌ Failed to fetch items: $e');
-      return [];
-    }
-  }
-
-  Future<List<MechanicJobLabor>> _fetchLabor() async {
-    try {
-      final data = await Supabase.instance.client
-          .from('mechanic_job_labor')
-          .select()
-          .eq('job_id', widget.jobId)
-          .order('created_at', ascending: true);
-      
-      return (data as List).map((json) => MechanicJobLabor.fromJson(json)).toList();
-    } catch (e) {
-      debugPrint('❌ Failed to fetch labor: $e');
       return [];
     }
   }
@@ -188,17 +173,12 @@ class _TasksTabViewState extends State<TasksTabView> {
           if (!widget.readOnly) ...[
             const SizedBox(width: 8),
             IconButton(
-              icon: const Icon(Icons.inventory_2_outlined),
-              tooltip: 'Add Product',
-              onPressed: _showAddProductDialog,
+              icon: const Icon(Icons.add),
+              tooltip: 'Add Item',
+              onPressed: _showAddItemDialog,
               iconSize: 20,
             ),
-            IconButton(
-              icon: const Icon(Icons.build_outlined),
-              tooltip: 'Add Service',
-              onPressed: _showAddServiceDialog,
-              iconSize: 20,
-            ),
+            const SizedBox(width: 4),
             IconButton(
               icon: const Icon(Icons.add_task),
               tooltip: 'Add standalone task',
@@ -212,7 +192,7 @@ class _TasksTabViewState extends State<TasksTabView> {
   }
 
   Widget _buildTaskList() {
-    if (_items.isEmpty && _labor.isEmpty) {
+    if (_items.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -246,15 +226,10 @@ class _TasksTabViewState extends State<TasksTabView> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Show items (products) - EXCLUDE ad-hoc items auto-created from tasks
         ..._items
             .where((item) => !item.productName.startsWith('Ad-hoc: '))
             .map((item) => _buildItemGroup(item)),
         
-        // Show labor (services)
-        ..._labor.map((labor) => _buildLaborGroup(labor)),
-        
-        // Show standalone tasks (if any)
         if (_groupedTasks.containsKey('standalone'))
           _buildStandaloneTasksGroup(_groupedTasks['standalone']!),
       ],
@@ -265,6 +240,7 @@ class _TasksTabViewState extends State<TasksTabView> {
   Widget _buildItemGroup(MechanicJobItem item) {
     final subTasks = _groupedTasks['item_${item.id}'] ?? [];
     final completionStatus = _getCompletionStatus(subTasks);
+    final isCollapsed = _collapsedItems.contains('item_${item.id}');
     
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -275,50 +251,20 @@ class _TasksTabViewState extends State<TasksTabView> {
           // Parent item header
           _buildItemHeader(item, subTasks, completionStatus),
           
-          // Sub-tasks (if any)
-          if (subTasks.isNotEmpty)
+          // Sub-tasks (if any and not collapsed)
+          if (subTasks.isNotEmpty && !isCollapsed)
             ...subTasks.map((task) => Padding(
               padding: const EdgeInsets.only(left: 32),
               child: _buildTaskItem(task),
             )),
           
           // Add sub-task button
-          if (!widget.readOnly)
+          if (!widget.readOnly && item.id != null && !isCollapsed)
             Padding(
               padding: const EdgeInsets.only(left: 32, bottom: 8),
-              child: _buildAddSubTaskButton('item_${item.id}', 'item'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  /// Build labor (service) group with parent checkbox and sub-tasks
-  Widget _buildLaborGroup(MechanicJobLabor labor) {
-    final subTasks = _groupedTasks['labor_${labor.id}'] ?? [];
-    final completionStatus = _getCompletionStatus(subTasks);
-    
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: _getGroupBackgroundColor(completionStatus),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Parent labor header
-          _buildLaborHeader(labor, subTasks, completionStatus),
-          
-          // Sub-tasks (if any)
-          if (subTasks.isNotEmpty)
-            ...subTasks.map((task) => Padding(
-              padding: const EdgeInsets.only(left: 32),
-              child: _buildTaskItem(task),
-            )),
-          
-          // Add sub-task button
-          if (!widget.readOnly)
-            Padding(
-              padding: const EdgeInsets.only(left: 32, bottom: 8),
-              child: _buildAddSubTaskButton('labor_${labor.id}', 'labor'),
+              child: _buildAddSubTaskButton(
+                parentId: item.id!,
+              ),
             ),
         ],
       ),
@@ -366,33 +312,58 @@ class _TasksTabViewState extends State<TasksTabView> {
   ) {
     final completed = subTasks.where((t) => t.isCompleted).length;
     final total = subTasks.length;
+    final isCollapsed = _collapsedItems.contains('item_${item.id}');
     
-    return InkWell(
-      onTap: () {
-        // TODO: Toggle collapse state
-      },
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: Theme.of(context).dividerColor.withOpacity(0.3),
-            ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).dividerColor.withOpacity(0.3),
           ),
         ),
-        child: Row(
-          children: [
-            // Product icon
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          // Collapse/Expand toggle (only if has subtasks)
+          if (total > 0)
+            IconButton(
+              icon: Icon(
+                isCollapsed ? Icons.chevron_right : Icons.expand_more,
+                size: 20,
               ),
-              child: const Icon(Icons.inventory_2, size: 18),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () {
+                setState(() {
+                  if (isCollapsed) {
+                    _collapsedItems.remove('item_${item.id}');
+                  } else {
+                    _collapsedItems.add('item_${item.id}');
+                  }
+                });
+              },
+            )
+          else
+            const SizedBox(width: 20),
+          
+          const SizedBox(width: 8),
+          
+          // Item icon
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(6),
             ),
-            const SizedBox(width: 12),
-            Expanded(
+            child: const Icon(Icons.shopping_cart, size: 18),
+          ),
+          const SizedBox(width: 12),
+          
+          // Product name (clickable for inline edit)
+          Expanded(
+            child: InkWell(
+              onTap: widget.readOnly ? null : () => _showEditProductDialog(item),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -405,7 +376,7 @@ class _TasksTabViewState extends State<TasksTabView> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Qty: ${item.quantity.toStringAsFixed(0)} • \$${item.unitPrice.toStringAsFixed(0)}',
+                    'Qty: ${item.quantity.toStringAsFixed(0)} • \$${item.unitPrice.toStringAsFixed(0)} • Total \$${item.totalPrice.toStringAsFixed(0)}',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey.shade600,
@@ -413,132 +384,91 @@ class _TasksTabViewState extends State<TasksTabView> {
                   ),
                 ],
               ),
-            ),
-            if (total > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _getStatusBadgeColor(status),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  status?.isAllCompleted == true
-                      ? '\u2713 $completed/$total'
-                      : '\u23f3 $completed/$total',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            if (!widget.readOnly) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 18),
-                tooltip: 'Remove product',
-                onPressed: () => _confirmRemoveItem(item),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Build labor (service) header with checkbox
-  Widget _buildLaborHeader(
-    MechanicJobLabor labor,
-    List<MechanicJobTask> subTasks,
-    ParentCompletionStatus? status,
-  ) {
-    final completed = subTasks.where((t) => t.isCompleted).length;
-    final total = subTasks.length;
-    
-    return InkWell(
-      onTap: () {
-        // TODO: Toggle collapse state
-      },
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: Theme.of(context).dividerColor.withOpacity(0.3),
             ),
           ),
-        ),
-        child: Row(
-          children: [
-            // Service icon
+          if (total > 0)
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(6),
+                color: _getStatusBadgeColor(status),
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.build, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    labor.description ?? 'Service/Labor',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${labor.hoursWorked}h • \$${labor.hourlyRate.toStringAsFixed(0)}/h',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (total > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _getStatusBadgeColor(status),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  status?.isAllCompleted == true
-                      ? '\u2713 $completed/$total'
-                      : '\u23f3 $completed/$total',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
+              child: Text(
+                status?.isAllCompleted == true
+                    ? '\u2713 $completed/$total'
+                    : '\u23f3 $completed/$total',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
                 ),
               ),
-            if (!widget.readOnly) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 18),
-                tooltip: 'Remove service',
-                onPressed: () => _confirmRemoveLabor(labor),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
+            ),
+          if (!widget.readOnly) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 18),
+              tooltip: 'Remove product',
+              onPressed: () => _confirmRemoveItem(item),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
+  /// Build service header with pricing summary
   Widget _buildTaskItem(MechanicJobTask task) {
+    final isEditing = _editingTaskId == task.id;
+    
+    if (isEditing) {
+      // Inline edit mode
+      final controller = TextEditingController(text: task.taskName);
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            // Checkbox (disabled during edit)
+            Checkbox(
+              value: task.isCompleted,
+              onChanged: null,
+            ),
+            const SizedBox(width: 12),
+            
+            // Inline text field
+            Expanded(
+              child: TextField(
+                controller: controller,
+                autofocus: true,
+                style: const TextStyle(fontSize: 14),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (newName) async {
+                  if (newName.trim().isNotEmpty && newName != task.taskName) {
+                    await _updateTaskName(task, newName.trim());
+                  }
+                  setState(() => _editingTaskId = null);
+                },
+              ),
+            ),
+            
+            // Cancel button
+            IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () => setState(() => _editingTaskId = null),
+              tooltip: 'Cancel',
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // Normal display mode
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
@@ -552,18 +482,23 @@ class _TasksTabViewState extends State<TasksTabView> {
           ),
           const SizedBox(width: 12),
           
-          // Task name
+          // Task name (clickable for inline edit)
           Expanded(
-            child: Text(
-              task.taskName,
-              style: TextStyle(
-                fontSize: 14,
-                decoration: task.isCompleted
-                    ? TextDecoration.lineThrough
-                    : null,
-                color: task.isCompleted
-                    ? Colors.grey.shade600
-                    : null,
+            child: InkWell(
+              onTap: widget.readOnly ? null : () {
+                setState(() => _editingTaskId = task.id);
+              },
+              child: Text(
+                task.taskName,
+                style: TextStyle(
+                  fontSize: 14,
+                  decoration: task.isCompleted
+                      ? TextDecoration.lineThrough
+                      : null,
+                  color: task.isCompleted
+                      ? Colors.grey.shade600
+                      : null,
+                ),
               ),
             ),
           ),
@@ -600,9 +535,13 @@ class _TasksTabViewState extends State<TasksTabView> {
     );
   }
 
-  Widget _buildAddSubTaskButton(String groupKey, String parentType) {
+  Widget _buildAddSubTaskButton({
+    required String parentId,
+  }) {
     return TextButton.icon(
-      onPressed: () => _showAddSubTaskDialog(groupKey, parentType),
+      onPressed: () => _showAddSubTaskDialog(
+        parentId: parentId,
+      ),
       icon: const Icon(Icons.add, size: 16),
       label: const Text('Add sub-task'),
       style: TextButton.styleFrom(
@@ -710,18 +649,109 @@ class _TasksTabViewState extends State<TasksTabView> {
     }
   }
 
-  String _getGroupTitle(String groupKey) {
-    if (groupKey == 'standalone') return 'Ad-hoc Tasks';
+  // Actions
+  void _showAddItemDialog() async {
+    if (widget.onAddItemPressed != null) {
+      // If parent provides a callback, use it
+      widget.onAddItemPressed!();
+      return;
+    }
     
-    // TODO: Fetch actual product/service name from parent
-    if (groupKey.startsWith('item_')) {
-      return 'Product Item';
-    } else {
-      return 'Service/Labor';
+    // Otherwise, show our own dialog
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Item'),
+        content: SizedBox(
+          width: 500,
+          child: ProductAutocompleteField(
+            onProductSelected: (selection) async {
+              Navigator.pop(context);
+              if (!selection.isCatalogProduct || selection.product == null) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Solo se pueden agregar artículos del catálogo desde esta vista'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+                return;
+              }
+
+              await _addCatalogItem(selection.product!);
+            },
+            allowCustomItems: false,
+            labelText: 'Product or Service',
+            hintText: 'Buscar en el catálogo por nombre o SKU',
+            autoFocus: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Future<void> _addCatalogItem(Product product) async {
+    try {
+      if (_tenantService == null || _bikeshopService == null) {
+        throw Exception('Services not initialized');
+      }
+      final tenantId = await _tenantService!.getTenantId();
+      if (tenantId == null) throw Exception('No tenant ID');
+      
+      // ⚠️ CRITICAL: Verify product has ID
+      if (product.id == null || product.id!.isEmpty) {
+        throw Exception('Product must have an ID to link to catalog');
+      }
+      
+      debugPrint('📦 Adding catalog item: ${product.name} (ID: ${product.id})');
+      
+      final item = MechanicJobItem(
+        tenantId: tenantId,
+        jobId: widget.jobId,
+        productId: product.id,
+        productName: product.name,
+        productSku: product.sku,
+        quantity: 1,
+        unitPrice: product.price,
+        totalPrice: product.price,
+      );
+      
+      final created = await _bikeshopService!.createJobItem(item);
+      
+      if (widget.onItemAdded != null) {
+        widget.onItemAdded!(created);
+      }
+      
+      await _loadTasks();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Added: ${created.productName}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
-
-  // Actions
+  
   Future<void> _toggleTaskCompletion(MechanicJobTask task, bool isCompleted) async {
     if (_taskService == null) return;
     try {
@@ -775,213 +805,6 @@ class _TasksTabViewState extends State<TasksTabView> {
   // ADD/REMOVE PRODUCTS AND SERVICES
   // ============================================================
 
-  void _showAddProductDialog() async {
-    ProductSelection? selectedProduct;
-    double quantity = 1;
-    
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Product'),
-        content: SizedBox(
-          width: 500,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ProductAutocompleteField(
-                onProductSelected: (selection) {
-                  selectedProduct = selection;
-                },
-                allowCustomItems: true,
-                labelText: 'Product',
-                hintText: 'Search or enter custom item',
-                autoFocus: true,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                decoration: const InputDecoration(
-                  labelText: 'Quantity',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-                onChanged: (value) {
-                  quantity = double.tryParse(value) ?? 1;
-                },
-                controller: TextEditingController(text: '1'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-    
-    if (result == true && selectedProduct != null) {
-      try {
-        if (_tenantService == null || _bikeshopService == null) {
-          throw Exception('Services not initialized');
-        }
-        final tenantId = await _tenantService!.getTenantId();
-        if (tenantId == null) throw Exception('No tenant ID');
-        
-        final product = selectedProduct!.product;
-        final item = MechanicJobItem(
-          tenantId: tenantId,
-          jobId: widget.jobId,
-          productId: product?.id,
-          productName: selectedProduct!.displayText,
-          productSku: product?.sku,
-          quantity: quantity,
-          unitPrice: product?.price ?? 0,
-          totalPrice: (product?.price ?? 0) * quantity,
-          notes: selectedProduct!.customDescription,
-        );
-        
-        final created = await _bikeshopService!.createJobItem(item);
-        
-        if (widget.onItemAdded != null) {
-          widget.onItemAdded!(created);
-        }
-        
-        await _loadTasks();
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Product added')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error adding product: $e')),
-          );
-        }
-      }
-    }
-  }
-
-  void _showAddServiceDialog() async {
-    final descriptionController = TextEditingController();
-    final hoursController = TextEditingController(text: '1');
-    final rateController = TextEditingController(text: '10000');
-    
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Service/Labor'),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                  hintText: 'e.g., Brake adjustment, Chain cleaning',
-                ),
-                autofocus: true,
-                maxLines: 2,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: hoursController,
-                      decoration: const InputDecoration(
-                        labelText: 'Hours',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: rateController,
-                      decoration: const InputDecoration(
-                        labelText: 'Rate/Hour',
-                        border: OutlineInputBorder(),
-                        prefixText: '\$',
-                      ),
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-    
-    if (result == true && descriptionController.text.isNotEmpty) {
-      try {
-        if (_tenantService == null || _bikeshopService == null) {
-          throw Exception('Services not initialized');
-        }
-        final tenantId = await _tenantService!.getTenantId();
-        if (tenantId == null) throw Exception('No tenant ID');
-        
-        final hours = double.tryParse(hoursController.text) ?? 1;
-        final rate = double.tryParse(rateController.text) ?? 10000;
-        
-        final labor = MechanicJobLabor(
-          tenantId: tenantId,
-          jobId: widget.jobId,
-          technicianId: null,
-          technicianName: 'Manual Entry',
-          description: descriptionController.text,
-          hoursWorked: hours,
-          hourlyRate: rate,
-          totalCost: hours * rate,
-          workDate: DateTime.now(),
-        );
-        
-        final created = await _bikeshopService!.createJobLabor(labor);
-        
-        if (widget.onLaborAdded != null) {
-          widget.onLaborAdded!(created);
-        }
-        
-        await _loadTasks();
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Service added')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error adding service: $e')),
-          );
-        }
-      }
-    }
-  }
-
   Future<void> _confirmRemoveItem(MechanicJobItem item) async {
     if (widget.onItemRemoved == null) return;
     
@@ -1007,38 +830,6 @@ class _TasksTabViewState extends State<TasksTabView> {
     if (confirmed == true && item.id != null) {
       widget.onItemRemoved!(item.id!);
       _loadTasks(); // Refresh view
-    }
-  }
-
-  Future<void> _confirmRemoveLabor(MechanicJobLabor labor) async {
-    debugPrint('🗑️ [TasksTabView] _confirmRemoveLabor called for: ${labor.description}');
-    if (widget.onLaborRemoved == null) return;
-    
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove Service'),
-        content: Text('Remove "${labor.description ?? 'service'}" from this job?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-    
-    if (confirmed == true && labor.id != null) {
-      debugPrint('🗑️ [TasksTabView] User confirmed, calling onLaborRemoved callback');
-      widget.onLaborRemoved!(labor.id!);
-      debugPrint('🗑️ [TasksTabView] onLaborRemoved callback completed, calling _loadTasks()');
-      _loadTasks(); // Refresh view
-      debugPrint('🗑️ [TasksTabView] _loadTasks() called');
     }
   }
 
@@ -1141,18 +932,17 @@ class _TasksTabViewState extends State<TasksTabView> {
     }
   }
 
-  void _showAddSubTaskDialog(String groupKey, String parentType) async {
+  void _showAddSubTaskDialog({
+    required String parentId,
+  }) async {
     final nameController = TextEditingController();
     final descriptionController = TextEditingController();
     final priceController = TextEditingController(text: '0');
     
-    // Extract parent ID from groupKey (e.g., "item_abc123" -> "abc123")
-    final parentId = groupKey.replaceFirst('${parentType}_', '');
-    
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Add Sub-Task to ${parentType == 'item' ? 'Product' : 'Service'}'),
+        title: const Text('Add Sub-Task'),
         content: SizedBox(
           width: 400,
           child: Column(
@@ -1219,8 +1009,7 @@ class _TasksTabViewState extends State<TasksTabView> {
           taskName: nameController.text,
           taskDescription: descriptionController.text.isNotEmpty ? descriptionController.text : null,
           isStandalone: false,
-          parentItemId: parentType == 'item' ? parentId : null,
-          parentLaborId: parentType == 'labor' ? parentId : null,
+          parentItemId: parentId,
           displayOrder: 0,
           isCompleted: false,
           isAdhoc: price > 0,
@@ -1247,4 +1036,140 @@ class _TasksTabViewState extends State<TasksTabView> {
       }
     }
   }
+  
+  // ============================================================
+  // INLINE EDITING
+  // ============================================================
+  
+  Future<void> _updateTaskName(MechanicJobTask task, String newName) async {
+    if (_taskService == null || task.id == null) return;
+    
+    try {
+      await Supabase.instance.client
+          .from('mechanic_job_tasks')
+          .update({'task_name': newName})
+          .eq('id', task.id!);
+      
+      await _loadTasks();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task updated')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update task: $e')),
+        );
+      }
+    }
+  }
+  
+  void _showEditProductDialog(MechanicJobItem item) async {
+    ProductSelection? selectedProduct = ProductSelection(
+      isCatalogProduct: item.productId != null,
+      product: null,
+      displayText: item.productName,
+      customDescription: item.notes,
+    );
+    double quantity = item.quantity;
+    
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Product'),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ProductAutocompleteField(
+                onProductSelected: (selection) {
+                  selectedProduct = selection;
+                },
+                allowCustomItems: true,
+                labelText: 'Product',
+                hintText: 'Search or enter custom item',
+                autoFocus: true,
+                initialValue: item.productName,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                decoration: const InputDecoration(
+                  labelText: 'Quantity',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                onChanged: (value) {
+                  quantity = double.tryParse(value) ?? item.quantity;
+                },
+                controller: TextEditingController(text: item.quantity.toString()),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    
+    if (result == true && selectedProduct != null && item.id != null) {
+      try {
+        final product = selectedProduct!.product;
+        final updates = {
+          'product_id': product?.id,
+          'product_name': selectedProduct!.displayText,
+          'product_sku': product?.sku,
+          'quantity': quantity,
+          'unit_price': product?.price ?? item.unitPrice,
+          'total_price': (product?.price ?? item.unitPrice) * quantity,
+          'notes': selectedProduct!.customDescription,
+        };
+        
+        await Supabase.instance.client
+            .from('mechanic_job_items')
+            .update(updates)
+            .eq('id', item.id!);
+        
+        await _loadTasks();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Product updated')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update product: $e')),
+          );
+        }
+      }
+    }
+  }
+}
+
+class ParentCompletionStatus {
+  final int totalTasks;
+  final int completedTasks;
+  final bool isAllCompleted;
+  final bool isInProgress;
+  final bool isNotStarted;
+
+  ParentCompletionStatus({
+    required this.totalTasks,
+    required this.completedTasks,
+    required this.isAllCompleted,
+    required this.isInProgress,
+    required this.isNotStarted,
+  });
 }

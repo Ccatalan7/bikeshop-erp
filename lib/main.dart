@@ -50,6 +50,8 @@ import 'shared/routes/app_router.dart';
 import 'shared/services/error_reporting_service.dart';
 import 'shared/services/tenant_detection_service.dart';
 import 'shared/services/backup_service.dart';
+import 'shared/services/window_zoom_service.dart';
+import 'shared/widgets/window_zoom_scope.dart';
 
 // Custom scroll behavior to prevent browser navigation gestures on trackpad
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -128,6 +130,7 @@ class VinabikeApp extends StatelessWidget {
         }),
         ChangeNotifierProvider(create: (_) => PaymentMethodService()),
         ChangeNotifierProvider(create: (_) => AppearanceService()),
+        ChangeNotifierProvider(create: (_) => WindowZoomService()),
         ChangeNotifierProvider(create: (_) {
           final navigationService = NavigationService();
           navigationService.initialize();
@@ -339,6 +342,8 @@ class VinabikeApp extends StatelessWidget {
                 Locale('en', ''),
               ],
               locale: const Locale('es', ''),
+              builder: (context, child) =>
+                  WindowZoomScope(child: child ?? const SizedBox.shrink()),
             );
           }
 
@@ -362,6 +367,8 @@ class VinabikeApp extends StatelessWidget {
               Locale('en', ''),
             ],
             locale: const Locale('es', ''),
+            builder: (context, child) =>
+                WindowZoomScope(child: child ?? const SizedBox.shrink()),
             home: Consumer<WorkspaceManager>(
               builder: (context, workspaceManager, _) {
                 // Ensure workspaces are initialized before rendering

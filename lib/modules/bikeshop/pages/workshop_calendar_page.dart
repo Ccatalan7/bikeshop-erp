@@ -25,7 +25,6 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
   bool _isLoading = true;
   MechanicJob? _selectedJob;
   List<MechanicJobItem> _selectedJobItems = [];
-  List<MechanicJobLabor> _selectedJobLabor = [];
   String? _customerName;
   String? _bikeBrand;
   String? _bikeModel;
@@ -87,11 +86,8 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
       final bikeshopService = context.read<BikeshopService>();
       final customerService = context.read<CustomerService>();
       
-      // Load job items (parts/products)
+      // Load job items (parts + services)
       final items = await bikeshopService.getJobItems(job.id!);
-      
-      // Load labor entries
-      final labor = await bikeshopService.getJobLabor(job.id!);
       
       // Load customer name
       String? customerName;
@@ -143,7 +139,6 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
       
       setState(() {
         _selectedJobItems = items;
-        _selectedJobLabor = labor;
         _customerName = customerName;
         _bikeBrand = bikeBrand;
         _bikeModel = bikeModel;
@@ -612,6 +607,8 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
   }
 
   Widget _buildJobDetails(MechanicJob job) {
+    // All items treated uniformly now
+
     Color statusColor;
     String statusText;
     switch (job.status) {
@@ -837,7 +834,7 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
             const SizedBox(height: 12),
           ],
           
-          // Parts/Products Section
+          // All Items Section (uniform treatment)
           if (_selectedJobItems.isNotEmpty) ...[
             const SizedBox(height: 20),
             const Divider(),
@@ -845,13 +842,13 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
             Row(
               children: [
                 Icon(
-                  Icons.build_circle,
+                  Icons.shopping_cart,
                   size: 20,
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Repuestos y Productos',
+                  'Repuestos y Servicios',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -892,67 +889,6 @@ class _WorkshopCalendarPageState extends State<WorkshopCalendarPage> {
                         ),
                         Text(
                           'Cantidad: ${item.quantity.toStringAsFixed(0)} × \$${item.unitPrice.toStringAsFixed(0)} = \$${item.totalPrice.toStringAsFixed(0)}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withOpacity(0.6),
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )),
-          ],
-          
-          // Labor/Services Section
-          if (_selectedJobLabor.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            const Divider(),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(
-                  Icons.handyman,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Mano de Obra y Servicios',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ..._selectedJobLabor.map((labor) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '• ',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          labor.description ?? 'Servicio',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
-                        ),
-                        Text(
-                          'Horas: ${labor.hoursWorked.toStringAsFixed(1)} × \$${labor.hourlyRate.toStringAsFixed(0)}/hr = \$${labor.totalCost.toStringAsFixed(0)}',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: Theme.of(context)
                                     .colorScheme

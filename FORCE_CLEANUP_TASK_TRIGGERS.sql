@@ -63,6 +63,6 @@ SELECT
   tgname as trigger_name
 FROM pg_trigger t
 JOIN pg_class c ON t.tgrelid = c.oid
-WHERE c.relname IN ('mechanic_job_items', 'mechanic_job_labor', 'mechanic_jobs')
+WHERE c.relname IN ('mechanic_job_items', 'mechanic_jobs')
   AND not t.tgisinternal
 ORDER BY c.relname, tgname;

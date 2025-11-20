@@ -866,12 +866,14 @@ class MechanicJobItem {
   final String tenantId;
   final String jobId;
   final String? productId;
+  final String? serviceProductId; // ✅ NEW: Links services to product catalog
   final String productName;
   final String? productSku;
   final double quantity;
   final double unitPrice;
   final double totalPrice;
   final String? notes;
+  final String itemType; // ✅ NEW: 'product' | 'service' | 'adhoc'
   final DateTime createdAt;
 
   MechanicJobItem({
@@ -879,12 +881,14 @@ class MechanicJobItem {
     required this.tenantId,
     required this.jobId,
     this.productId,
+    this.serviceProductId, // ✅ NEW
     required this.productName,
     this.productSku,
     this.quantity = 1,
     this.unitPrice = 0,
     this.totalPrice = 0,
     this.notes,
+    this.itemType = 'product', // ✅ NEW: Default to product for backward compat
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -894,12 +898,14 @@ class MechanicJobItem {
       tenantId: json['tenant_id']?.toString() ?? '',
       jobId: json['job_id']?.toString() ?? '',
       productId: json['product_id']?.toString(),
+      serviceProductId: json['service_product_id']?.toString(), // ✅ NEW
       productName: json['product_name']?.toString() ?? '',
       productSku: json['product_sku'] as String?,
       quantity: double.tryParse(json['quantity']?.toString() ?? '1') ?? 1,
       unitPrice: double.tryParse(json['unit_price']?.toString() ?? '0') ?? 0,
       totalPrice: double.tryParse(json['total_price']?.toString() ?? '0') ?? 0,
       notes: json['notes'] as String?,
+      itemType: 'product', // ✅ ALWAYS use 'product' - ignore DB value
       createdAt: _parseDate(json['created_at']),
     );
   }
@@ -910,85 +916,21 @@ class MechanicJobItem {
       'tenant_id': tenantId,
       'job_id': jobId,
       'product_id': productId,
+      'service_product_id': serviceProductId, // ✅ NEW
       'product_name': productName,
       'product_sku': productSku,
       'quantity': quantity,
       'unit_price': unitPrice,
       'total_price': totalPrice,
       'notes': notes,
+      'item_type': 'product', // ✅ ALWAYS write 'product' to DB
       'created_at': createdAt.toIso8601String(),
     };
   }
-}
 
-// ============================================================
-// MECHANIC JOB LABOR MODEL
-// ============================================================
-
-class MechanicJobLabor {
-  final String? id;
-  final String tenantId;
-  final String jobId;
-  final String? technicianId;
-  final String technicianName;
-  final String? description;
-  final double hoursWorked;
-  final double hourlyRate;
-  final double totalCost;
-  final DateTime workDate;
-  final DateTime createdAt;
-  final String? serviceProductId;
-
-  MechanicJobLabor({
-    this.id,
-    required this.tenantId,
-    required this.jobId,
-    this.technicianId,
-    required this.technicianName,
-    this.description,
-    this.hoursWorked = 0,
-    this.hourlyRate = 0,
-    this.totalCost = 0,
-    DateTime? workDate,
-    DateTime? createdAt,
-    this.serviceProductId,
-  })  : workDate = workDate ?? DateTime.now(),
-        createdAt = createdAt ?? DateTime.now();
-
-  factory MechanicJobLabor.fromJson(Map<String, dynamic> json) {
-    return MechanicJobLabor(
-      id: json['id']?.toString(),
-      tenantId: json['tenant_id']?.toString() ?? '',
-      jobId: json['job_id']?.toString() ?? '',
-      technicianId: json['technician_id']?.toString(),
-      technicianName: json['technician_name']?.toString() ?? '',
-      description: json['description'] as String?,
-      hoursWorked:
-          double.tryParse(json['hours_worked']?.toString() ?? '0') ?? 0,
-      hourlyRate: double.tryParse(json['hourly_rate']?.toString() ?? '0') ?? 0,
-      totalCost: double.tryParse(json['total_cost']?.toString() ?? '0') ?? 0,
-      workDate: _parseDate(json['work_date']),
-      createdAt: _parseDate(json['created_at']),
-      serviceProductId: json['service_product_id']?.toString(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      if (id != null) 'id': id,
-      'tenant_id': tenantId,
-      'job_id': jobId,
-      'technician_id': technicianId,
-      'technician_name': technicianName,
-      'description': description,
-      'hours_worked': hoursWorked,
-      'hourly_rate': hourlyRate,
-      'total_cost': totalCost,
-      'service_product_id': serviceProductId,
-      'work_date': workDate.toIso8601String(),
-      'created_at': createdAt.toIso8601String(),
-    };
-  }
+  // All items treated uniformly - no service/product distinction
+  bool get isAdhoc => itemType == 'adhoc';
+  double get lineTotal => totalPrice != 0 ? totalPrice : quantity * unitPrice;
 }
 
 // ============================================================
@@ -1193,9 +1135,8 @@ class MechanicJobTask {
   final String tenantId;
   final String jobId;
   
-  // Hierarchy: linked to parent item or labor
+  // Hierarchy: linked to parent mechanic_job_item (products or services)
   final String? parentItemId;
-  final String? parentLaborId;
   
   // Task details
   final String taskName;
@@ -1224,7 +1165,6 @@ class MechanicJobTask {
     required this.tenantId,
     required this.jobId,
     this.parentItemId,
-    this.parentLaborId,
     required this.taskName,
     this.taskDescription,
     this.isCompleted = false,
@@ -1247,7 +1187,6 @@ class MechanicJobTask {
       tenantId: json['tenant_id']?.toString() ?? '',
       jobId: json['job_id']?.toString() ?? '',
       parentItemId: json['parent_item_id']?.toString(),
-      parentLaborId: json['parent_labor_id']?.toString(),
       taskName: json['task_name']?.toString() ?? '',
       taskDescription: json['task_description']?.toString(),
       isCompleted: json['is_completed'] as bool? ?? false,
@@ -1270,7 +1209,6 @@ class MechanicJobTask {
       'tenant_id': tenantId,
       'job_id': jobId,
       'parent_item_id': parentItemId,
-      'parent_labor_id': parentLaborId,
       'task_name': taskName,
       'task_description': taskDescription,
       'is_completed': isCompleted,
@@ -1292,7 +1230,6 @@ class MechanicJobTask {
     String? tenantId,
     String? jobId,
     String? parentItemId,
-    String? parentLaborId,
     String? taskName,
     String? taskDescription,
     bool? isCompleted,
@@ -1312,7 +1249,6 @@ class MechanicJobTask {
       tenantId: tenantId ?? this.tenantId,
       jobId: jobId ?? this.jobId,
       parentItemId: parentItemId ?? this.parentItemId,
-      parentLaborId: parentLaborId ?? this.parentLaborId,
       taskName: taskName ?? this.taskName,
       taskDescription: taskDescription ?? this.taskDescription,
       isCompleted: isCompleted ?? this.isCompleted,

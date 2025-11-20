@@ -1,3 +1,14 @@
+-- Deprecated (Nov 19, 2025)
+-- mechanic_job_labor no longer exists and the smart task schema has been
+-- fully migrated inside supabase/sql/core_schema.sql. Running this helper
+-- would attempt to resurrect legacy columns, so it now raises an exception.
+
+DO $$
+BEGIN
+  RAISE EXCEPTION 'FIX_TASK_SCHEMA_CONFLICT.sql is obsolete: mechanic_job_labor no longer exists. Use supabase/sql/core_schema.sql.';
+END $$;
+
+-- LEGACY REFERENCE BELOW ----------------------------------------------------
 -- =================================================================
 -- FIX: Remove Old Legacy Task System Conflicts (Nov 18, 2025)
 -- =================================================================

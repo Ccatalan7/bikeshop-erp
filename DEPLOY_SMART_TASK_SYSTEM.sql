@@ -1,3 +1,14 @@
+-- Deprecated (Nov 19, 2025)
+-- The mechanic_job_labor table has been removed and the smart task system
+-- now lives entirely inside supabase/sql/core_schema.sql. This helper is kept
+-- for historical reference but will raise an exception if executed.
+
+DO $$
+BEGIN
+  RAISE EXCEPTION 'DEPLOY_SMART_TASK_SYSTEM.sql is obsolete: mechanic_job_labor no longer exists. Use supabase/sql/core_schema.sql instead.';
+END $$;
+
+-- LEGACY REFERENCE BELOW ----------------------------------------------------
 -- ============================================================
 -- SMART TASK SYSTEM FOR MECHANIC JOBS (PEGAS)
 -- Deploy this SQL to Supabase SQL Editor

@@ -60,7 +60,6 @@ class _PegasTablePageState extends State<PegasTablePage>
   // Selected job for detail view (calendar sidebar)
   MechanicJob? _selectedJob;
   List<MechanicJobItem> _selectedJobItems = [];
-  List<MechanicJobLabor> _selectedJobLabor = [];
   bool _loadingDetails = false;
 
   // Split-pane state for table view
@@ -247,9 +246,6 @@ class _PegasTablePageState extends State<PegasTablePage>
       // Load job items (parts/products)
       final items = await _bikeshopService.getJobItems(job.id!);
       
-      // Load labor entries
-      final labor = await _bikeshopService.getJobLabor(job.id!);
-      
       // Load product images
       final Map<String, String> productImages = {};
       try {
@@ -279,7 +275,6 @@ class _PegasTablePageState extends State<PegasTablePage>
       if (mounted) {
         setState(() {
           _selectedJobItems = items;
-          _selectedJobLabor = labor;
           _productImages = productImages;
           _loadingDetails = false;
         });
@@ -499,51 +494,76 @@ class _PegasTablePageState extends State<PegasTablePage>
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
         
+        final clampedListWidth = _listPaneWidth.clamp(
+          _minListPaneWidth,
+          availableWidth - _minDetailPaneWidth - 1,
+        );
+
         return Row(
           children: [
-            // Left: Jobs list (with horizontal scroll)
+            // Left: Jobs list with persistent border just like MainLayout
             SizedBox(
-              width: _listPaneWidth.clamp(
-                _minListPaneWidth,
-                availableWidth - _minDetailPaneWidth - 1, // Leave space for detail + divider
-              ),
-              child: Column(
+              width: clampedListWidth,
+              child: Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  _buildHeader(),
-                  _buildSmartToolbar(),
-                  Expanded(
-                    child: _buildViewContent(),
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        // Close detail pane when clicking anywhere on left pane
+                        setState(() {
+                          _selectedJob = null;
+                          _selectedJobItems = [];
+                          _productImages = {};
+                        });
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            right: BorderSide(
+                              color: Theme.of(context).dividerColor,
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            _buildHeader(),
+                            _buildSmartToolbar(),
+                            Expanded(
+                              child: _buildViewContent(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: -6,
+                    top: 0,
+                    bottom: 0,
+                    width: 12,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.resizeColumn,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onHorizontalDragUpdate: (details) {
+                          setState(() {
+                            final maxWidth = availableWidth - _minDetailPaneWidth - 1;
+                            _listPaneWidth = (_listPaneWidth + details.delta.dx)
+                                .clamp(_minListPaneWidth, maxWidth);
+                          });
+                          _saveListPaneWidth(_listPaneWidth);
+                        },
+                        child: Container(color: Colors.transparent),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            
-            // Resize handle (1px border acts as visual divider + drag area)
-            Container(
-              width: 1,
-              decoration: BoxDecoration(
-                color: Theme.of(context).dividerColor,
-              ),
-              child: MouseRegion(
-                cursor: SystemMouseCursors.resizeColumn,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onHorizontalDragUpdate: (details) {
-                    setState(() {
-                      final maxWidth = availableWidth - _minDetailPaneWidth - 1;
-                      _listPaneWidth = (_listPaneWidth + details.delta.dx)
-                          .clamp(_minListPaneWidth, maxWidth);
-                    });
-                    _saveListPaneWidth(_listPaneWidth);
-                  },
-                  child: Container(
-                    width: 8, // Wider hit area for easier dragging
-                    color: Colors.transparent,
-                  ),
-                ),
-              ),
-            ),
-            
+
             // Right: Detail view (takes remaining space)
             Expanded(
               child: Container(
@@ -555,13 +575,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                   customer: _customers[_selectedJob!.customerId],
                   bike: _bikes[_selectedJob!.bikeId],
                   items: _selectedJobItems,
-                  labor: _selectedJobLabor,
                   productImages: _productImages,
                   onClose: () {
                     setState(() {
                       _selectedJob = null;
                       _selectedJobItems = [];
-                      _selectedJobLabor = [];
                       _productImages = {};
                     });
                   },
@@ -598,33 +616,14 @@ class _PegasTablePageState extends State<PegasTablePage>
                   onItemRemoved: (itemId) async {
                     try {
                       await _bikeshopService.deleteJobItem(itemId);
-                      await _loadData();
+                      // ✅ Removed _loadData() - realtime handles updates automatically
+                      // Only reload detail view to update totals
                       if (_selectedJob != null) {
                         await _loadJobDetails(_selectedJob!);
                       }
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Product removed')),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e')),
-                        );
-                      }
-                    }
-                  },
-                  onLaborRemoved: (laborId) async {
-                    try {
-                      await _bikeshopService.deleteJobLabor(laborId);
-                      // Reload detail only (no full page reload)
-                      if (_selectedJob != null) {
-                        await _loadJobDetails(_selectedJob!);
-                      }
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Service removed')),
                         );
                       }
                     } catch (e) {
@@ -3809,7 +3808,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             const SizedBox(height: 12),
           ],
           
-          // Parts/Products Section
+          // All Items Section (uniform treatment)
           if (_selectedJobItems.isNotEmpty) ...[
             const SizedBox(height: 20),
             const Divider(),
@@ -3817,13 +3816,13 @@ class _PegasTablePageState extends State<PegasTablePage>
             Row(
               children: [
                 Icon(
-                  Icons.build_circle,
+                  Icons.shopping_cart,
                   size: 20,
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Repuestos y Productos',
+                  'Repuestos y Servicios',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -3863,68 +3862,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                               ),
                         ),
                         Text(
-                          'Cantidad: ${item.quantity.toStringAsFixed(0)} × \$${item.unitPrice.toStringAsFixed(0)} = \$${item.totalPrice.toStringAsFixed(0)}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withOpacity(0.6),
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )),
-          ],
-          
-          // Labor/Services Section
-          if (_selectedJobLabor.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            const Divider(),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(
-                  Icons.handyman,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Mano de Obra y Servicios',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ..._selectedJobLabor.map((labor) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '• ',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          labor.description ?? 'Servicio',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
-                        ),
-                        Text(
-                          'Horas: ${labor.hoursWorked.toStringAsFixed(1)} × \$${labor.hourlyRate.toStringAsFixed(0)}/hr = \$${labor.totalCost.toStringAsFixed(0)}',
+                          'Cantidad: ${item.quantity.toStringAsFixed(0)} × \$${item.unitPrice.toStringAsFixed(0)} = \$${item.lineTotal.toStringAsFixed(0)}',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: Theme.of(context)
                                     .colorScheme

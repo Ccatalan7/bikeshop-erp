@@ -6,6 +6,21 @@ import '../../../shared/services/tenant_service.dart';
 import '../models/bikeshop_models.dart';
 import '../../sales/models/sales_models.dart'; // ✅ UNIFIED ARCHITECTURE (Nov 18, 2025)
 
+// Helper to parse dates from JSON
+DateTime _parseDateTime(dynamic value) {
+  if (value is DateTime) return value;
+  if (value is String) {
+    return DateTime.tryParse(value) ?? DateTime.now();
+  }
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+  if (value is double) {
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+  }
+  return DateTime.now();
+}
+
 class BikeshopService extends ChangeNotifier {
   final DatabaseService _db;
   final TenantService _tenantService = TenantService();
@@ -513,65 +528,6 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  // ============================================================
-  // PEGA LABOR OPERATIONS (Service/Labor Items)
-  // ✅ Uses mechanic_job_labor table
-  // ============================================================
-
-  Future<List<MechanicJobLabor>> getJobLabor(String jobId) async {
-    try {
-      final data = await Supabase.instance.client
-          .from('mechanic_job_labor')
-          .select()
-          .eq('job_id', jobId);
-      
-      return (data as List)
-          .map((json) => MechanicJobLabor.fromJson(json))
-          .toList();
-    } catch (e) {
-      if (kDebugMode) print('Error fetching job labor: $e');
-      rethrow;
-    }
-  }
-
-  Future<MechanicJobLabor> createJobLabor(MechanicJobLabor labor) async {
-    try {
-      final data = await _db.insert('mechanic_job_labor', labor.toJson());
-      notifyListeners();
-      return MechanicJobLabor.fromJson(data);
-    } catch (e) {
-      if (kDebugMode) print('Error creating job labor: $e');
-      rethrow;
-    }
-  }
-
-  Future<MechanicJobLabor> updateJobLabor(MechanicJobLabor labor) async {
-    try {
-      if (labor.id == null || labor.id!.isEmpty) {
-        throw Exception('ID de mano de obra inválido');
-      }
-      
-      final data = await _db.update('mechanic_job_labor', labor.id!, labor.toJson());
-      notifyListeners();
-      return MechanicJobLabor.fromJson(data);
-    } catch (e) {
-      if (kDebugMode) print('Error updating job labor: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> deleteJobLabor(String id) async {
-    try {
-      if (id.isEmpty) throw Exception('ID de labor inválido');
-      debugPrint('🗑️ [BikeshopService] deleteJobLabor called: $id');
-      await _db.delete('mechanic_job_labor', id);
-      debugPrint('🗑️ [BikeshopService] Labor deleted from DB, notifying listeners');
-      notifyListeners();
-    } catch (e) {
-      if (kDebugMode) print('Error deleting job labor: $e');
-      rethrow;
-    }
-  }
 
   // ============================================================
   // TIMELINE OPERATIONS
@@ -687,20 +643,18 @@ class BikeshopService extends ChangeNotifier {
   // COMPOSITE/HELPER OPERATIONS
   // ============================================================
 
-  /// Get complete job details with items, labor, and timeline
+  /// Get complete job details with items and timeline
   Future<Map<String, dynamic>> getJobDetails(String jobId) async {
     try {
       final job = await getJobById(jobId);
       if (job == null) throw Exception('Trabajo no encontrado');
 
       final items = await getJobItems(jobId);
-      final labor = await getJobLabor(jobId);
       final timeline = await getJobTimeline(jobId);
 
       return {
         'job': job,
         'items': items,
-        'labor': labor,
         'timeline': timeline,
       };
     } catch (e) {
@@ -736,7 +690,7 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  /// Apply a service package to a job (creates items and labor entries)
+  /// Apply a service package to a job (creates product + service items)
   Future<void> applyServicePackage(String jobId, String packageId) async {
     try {
       final package = await getServicePackageById(packageId);
@@ -774,18 +728,25 @@ class BikeshopService extends ChangeNotifier {
         }
       }
 
-      // Create labor entry
+      // Create labor-as-item entry so services live in mechanic_job_items
       if (package.baseLaborCost > 0) {
-        final labor = MechanicJobLabor(
-          jobId: jobId,
+        final hours = package.estimatedDurationHours <= 0
+            ? 1.0
+            : package.estimatedDurationHours;
+        final hourlyRate = package.baseLaborCost / hours;
+
+        final laborItem = MechanicJobItem(
           tenantId: tenantId,
-          technicianName: 'Sin asignar',
-          description: package.name,
-          hoursWorked: package.estimatedDurationHours,
-          hourlyRate: package.baseLaborCost / package.estimatedDurationHours,
-          totalCost: package.baseLaborCost,
+          jobId: jobId,
+          productName: package.name,
+          productSku: null,
+          quantity: hours,
+          unitPrice: hourlyRate,
+          totalPrice: package.baseLaborCost,
+          notes: '${package.description} - ${hours}h labor',
         );
-        await createJobLabor(labor);
+
+        await createJobItem(laborItem);
       }
 
       notifyListeners();

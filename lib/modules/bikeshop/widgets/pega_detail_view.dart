@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 
 import '../../crm/models/crm_models.dart';
 import '../models/bikeshop_models.dart';
@@ -11,15 +10,13 @@ class PegaDetailView extends StatefulWidget {
   final Customer? customer;
   final Bike? bike;
   final List<MechanicJobItem> items;
-  final List<MechanicJobLabor> labor;
   final Map<String, String> productImages;
   final VoidCallback onClose;
   final VoidCallback onEdit;
   final Function(JobStatus) onStatusChange;
   final Function(MechanicJobItem)? onItemAdded;
   final Function(String itemId)? onItemRemoved;
-  final Function(MechanicJobLabor)? onLaborAdded;
-  final Function(String laborId)? onLaborRemoved;
+  final VoidCallback? onAddItemPressed; // NEW: Trigger parent's add item dialog
 
   const PegaDetailView({
     super.key,
@@ -27,15 +24,13 @@ class PegaDetailView extends StatefulWidget {
     this.customer,
     this.bike,
     this.items = const [],
-    this.labor = const [],
     this.productImages = const {},
     required this.onClose,
     required this.onEdit,
     required this.onStatusChange,
     this.onItemAdded,
     this.onItemRemoved,
-    this.onLaborAdded,
-    this.onLaborRemoved,
+    this.onAddItemPressed, // NEW
   });
 
   @override
@@ -49,6 +44,13 @@ class _PegaDetailViewState extends State<PegaDetailView> with SingleTickerProvid
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void didUpdateWidget(PegaDetailView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Preserve tab index when widget rebuilds (e.g., after deleting item)
+    // This prevents jumping back to Details tab when on Tasks tab
   }
 
   @override
@@ -137,6 +139,8 @@ class _PegaDetailViewState extends State<PegaDetailView> with SingleTickerProvid
   }
 
   Widget _buildDetailsTab() {
+    // All items are treated uniformly now
+    final allItems = widget.items;
     return SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -236,19 +240,12 @@ class _PegaDetailViewState extends State<PegaDetailView> with SingleTickerProvid
                   ],
 
                   // Products and Services
-                  if (widget.items.isNotEmpty || widget.labor.isNotEmpty) ...[
+                  if (widget.items.isNotEmpty) ...[
                     _buildSectionHeader('Repuestos y Servicios'),
                     const SizedBox(height: 12),
                     
-                    // Products/Parts
-                    if (widget.items.isNotEmpty) ...[
-                      ...widget.items.map((item) => _buildProductItem(item)),
-                    ],
-                    
-                    // Labor/Services
-                    if (widget.labor.isNotEmpty) ...[
-                      ...widget.labor.map((laborItem) => _buildLaborItem(laborItem)),
-                    ],
+                    // All items treated uniformly
+                    ...widget.items.map((item) => _buildProductItem(item)),
                     
                     const SizedBox(height: 24),
                   ],
@@ -628,82 +625,6 @@ class _PegaDetailViewState extends State<PegaDetailView> with SingleTickerProvid
     );
   }
 
-  Widget _buildLaborItem(MechanicJobLabor laborItem) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.shade200),
-      ),
-      child: Row(
-        children: [
-          // Labor icon
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.blue.shade100,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(Icons.handyman, color: Colors.blue.shade700),
-          ),
-          const SizedBox(width: 12),
-          
-          // Labor details
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  laborItem.description ?? 'Mano de obra',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      '${laborItem.hoursWorked.toStringAsFixed(1)} hrs',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    if (laborItem.hourlyRate > 0) ...[
-                      const SizedBox(width: 16),
-                      Text(
-                        '\$${laborItem.hourlyRate.toStringAsFixed(0)}/hr',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-          
-          // Cost
-          Text(
-            '\$${laborItem.totalCost.toStringAsFixed(0)}',
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Color _getStatusColor(JobStatus status) {
     switch (status) {
       case JobStatus.pendiente:
@@ -744,13 +665,14 @@ class _PegaDetailViewState extends State<PegaDetailView> with SingleTickerProvid
 
   Widget _buildTasksTab() {
     // Use new TasksTabView with SmartTaskService
+    // Key forces rebuild when job details change (e.g., after item deletion)
     return TasksTabView(
+      key: ValueKey('tasks_${widget.job.id}_${widget.job.updatedAt.millisecondsSinceEpoch}'),
       jobId: widget.job.id!,
       readOnly: false,
       onItemAdded: widget.onItemAdded,
       onItemRemoved: widget.onItemRemoved,
-      onLaborAdded: widget.onLaborAdded,
-      onLaborRemoved: widget.onLaborRemoved,
+      onAddItemPressed: widget.onAddItemPressed, // NEW: Pass callback
     );
   }
 }

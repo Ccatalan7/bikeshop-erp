@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
@@ -37,6 +38,9 @@ class _PegasListPageState extends State<PegasListPage> {
 
   // Split-pane state
   MechanicJob? _selectedJob;
+  List<MechanicJobItem> _selectedJobItems = [];
+  Map<String, String> _productImages = {};
+  bool _loadingDetails = false;
   double _listPaneWidth = 500.0;
   static const double _minListPaneWidth = 350.0;
   static const double _maxListPaneWidth = 800.0;
@@ -85,15 +89,36 @@ class _PegasListPageState extends State<PegasListPage> {
         }
       }
 
+      MechanicJob? updatedSelection;
+      if (_selectedJob != null) {
+        try {
+          updatedSelection = jobs.firstWhere((job) => job.id == _selectedJob!.id);
+        } catch (_) {
+          updatedSelection = null;
+        }
+      }
+
       setState(() {
         _jobs = jobs;
         _filteredJobs = jobs;
         _customers = customerMap;
         _bikes = bikeMap;
         _isLoading = false;
+        if (updatedSelection != null) {
+          _selectedJob = updatedSelection;
+        }
       });
 
       _applyFiltersAndSort();
+
+      if (updatedSelection != null) {
+        setState(() {
+          _loadingDetails = true;
+          _selectedJobItems = [];
+          _productImages = {};
+        });
+        await _loadJobDetails(updatedSelection);
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
@@ -104,6 +129,53 @@ class _PegasListPageState extends State<PegasListPage> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _loadJobDetails(MechanicJob job) async {
+    try {
+      final items = await _bikeshopService.getJobItems(job.id!);
+
+      final Map<String, String> productImages = {};
+      try {
+        final productIds = items
+            .where((item) => item.productId != null)
+            .map((item) => item.productId!)
+            .toSet();
+
+        if (productIds.isNotEmpty) {
+          final response = await Supabase.instance.client
+              .from('products')
+              .select('id, image_url')
+              .inFilter('id', productIds.toList());
+
+          for (final product in response) {
+            final id = product['id'] as String;
+            final imageUrl = product['image_url'] as String?;
+            if (imageUrl != null && imageUrl.isNotEmpty) {
+              productImages[id] = imageUrl;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error loading product images: $e');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _selectedJobItems = items;
+        _productImages = productImages;
+        _loadingDetails = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingDetails = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error cargando detalles: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -442,59 +514,61 @@ class _PegasListPageState extends State<PegasListPage> {
 
         // Right pane - Detail view
         Expanded(
-          child: PegaDetailView(
-            job: _selectedJob!,
-            customer: _customers[_selectedJob!.customerId],
-            bike: _bikes[_selectedJob!.bikeId],
-            onClose: () {
-              setState(() {
-                _selectedJob = null;
-              });
-            },
-            onEdit: () {
-              context
-                  .push('/taller/pegas/${_selectedJob!.id}')
-                  .then((_) => _loadData());
-            },
-            onStatusChange: (newStatus) {
-              _updateJobStatus(_selectedJob!, newStatus);
-            },
-            // ✅ Removed onItemAdded - realtime handles updates
-            onItemRemoved: (itemId) async {
-              try {
-                await _bikeshopService.deleteJobItem(itemId);
-                await _loadData();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Product removed')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error removing product: $e')),
-                  );
-                }
-              }
-            },
-            // ✅ Removed onLaborAdded - realtime handles updates
-            onLaborRemoved: (laborId) async {
-              try {
-                await _bikeshopService.deleteJobLabor(laborId);
-                await _loadData();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Service removed')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error removing service: $e')),
-                  );
-                }
-              }
-            },
+          child: Stack(
+            children: [
+              PegaDetailView(
+                job: _selectedJob!,
+                customer: _customers[_selectedJob!.customerId],
+                bike: _bikes[_selectedJob!.bikeId],
+                items: _selectedJobItems,
+                productImages: _productImages,
+                onClose: () {
+                  setState(() {
+                    _selectedJob = null;
+                    _selectedJobItems = [];
+                    _productImages = {};
+                  });
+                },
+                onEdit: () {
+                  context
+                      .push('/taller/pegas/${_selectedJob!.id}')
+                      .then((_) => _loadData());
+                },
+                onStatusChange: (newStatus) {
+                  _updateJobStatus(_selectedJob!, newStatus);
+                },
+                onItemRemoved: (itemId) async {
+                  try {
+                    await _bikeshopService.deleteJobItem(itemId);
+                    if (_selectedJob != null) {
+                      setState(() => _loadingDetails = true);
+                      await _loadJobDetails(_selectedJob!);
+                    }
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Producto o servicio eliminado')),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error eliminando ítem: $e')),
+                      );
+                    }
+                  }
+                },
+              ),
+              if (_loadingDetails)
+                const Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: true,
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: LinearProgressIndicator(minHeight: 2),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ],
@@ -640,8 +714,12 @@ class _PegasListPageState extends State<PegasListPage> {
           print('🔵 DEBUG: Pega card tapped! Job: ${job.jobNumber}');
           setState(() {
             _selectedJob = job;
+            _loadingDetails = true;
+            _selectedJobItems = [];
+            _productImages = {};
             print('🔵 DEBUG: _selectedJob set to: ${_selectedJob?.jobNumber}');
           });
+          _loadJobDetails(job);
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(

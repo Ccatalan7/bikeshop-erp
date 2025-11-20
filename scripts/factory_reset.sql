@@ -103,9 +103,6 @@ BEGIN
   DELETE FROM mechanic_job_items WHERE tenant_id = v_tenant_id;
   RAISE NOTICE '   ✅ Deleted mechanic_job_items';
   
-  DELETE FROM mechanic_job_labor WHERE tenant_id = v_tenant_id;
-  RAISE NOTICE '   ✅ Deleted mechanic_job_labor';
-  
   DELETE FROM mechanic_job_timeline WHERE tenant_id = v_tenant_id;
   RAISE NOTICE '   ✅ Deleted mechanic_job_timeline';
   

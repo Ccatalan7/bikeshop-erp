@@ -49,6 +49,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   List<Product> _allProducts = [];
   Product? _selectedProduct;
   bool _isLoading = false;
+  bool _isTapInProgress = false; // Track tap events to prevent premature overlay removal
   late shared_inventory.InventoryService _inventoryService;
   OverlayEntry? _overlayEntry;
 
@@ -67,7 +68,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       } else {
         // Add small delay to allow tap events to register
         Future.delayed(const Duration(milliseconds: 200), () {
-          if (!_focusNode.hasFocus && mounted) {
+          if (!_focusNode.hasFocus && mounted && !_isTapInProgress) {
             _removeOverlay();
           }
         });
@@ -240,10 +241,22 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         return MouseRegion(
           onEnter: (_) => setHoverState(() => isHovered = true),
           onExit: (_) => setHoverState(() => isHovered = false),
-          child: InkWell(
+          child: GestureDetector(
+            onTapDown: (_) {
+              // Prevent focus loss during tap
+              _isTapInProgress = true;
+            },
             onTap: () {
               _selectProduct(product);
               _removeOverlay();
+              // Reset flag after overlay removed
+              Future.delayed(const Duration(milliseconds: 50), () {
+                if (mounted) _isTapInProgress = false;
+              });
+            },
+            onTapCancel: () {
+              // Reset flag if tap is cancelled
+              _isTapInProgress = false;
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
