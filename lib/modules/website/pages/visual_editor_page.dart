@@ -454,21 +454,32 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
       Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.blue.shade50,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? theme.colorScheme.primaryContainer.withOpacity(0.2)
+              : Colors.blue.shade50,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.blue.shade200),
+          border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? theme.colorScheme.primary.withOpacity(0.3)
+                  : Colors.blue.shade200),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.lightbulb, color: Colors.blue.shade700, size: 20),
+            Icon(Icons.lightbulb,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? theme.colorScheme.primary
+                    : Colors.blue.shade700,
+                size: 20),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 '💡 Tip: Usa títulos cortos y llamativos. El subtítulo debe explicar tu propuesta de valor.',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.blue.shade900,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? theme.colorScheme.onSurface
+                      : Colors.blue.shade900,
                 ),
               ),
             ),
@@ -578,19 +589,24 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
             decoration: BoxDecoration(
               color: color,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: Theme.of(context).dividerColor),
             ),
             child: Center(
               child: Text(
                 '#${color.value.toRadixString(16).substring(2).toUpperCase()}',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: ThemeData.estimateBrightnessForColor(color) ==
+                          Brightness.dark
+                      ? Colors.white
+                      : Colors.black87,
                   fontWeight: FontWeight.bold,
                   shadows: [
-                    Shadow(
-                      color: Colors.black45,
-                      blurRadius: 2,
-                    ),
+                    if (ThemeData.estimateBrightnessForColor(color) ==
+                        Brightness.dark)
+                      const Shadow(
+                        color: Colors.black45,
+                        blurRadius: 2,
+                      ),
                   ],
                 ),
               ),
@@ -620,7 +636,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
           height: 60,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade300),
+            border: Border.all(color: Theme.of(context).dividerColor),
           ),
           child: Column(
             children: [
@@ -706,7 +722,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Theme.of(context).shadowColor.withOpacity(0.1),
             blurRadius: 10,
           ),
         ],

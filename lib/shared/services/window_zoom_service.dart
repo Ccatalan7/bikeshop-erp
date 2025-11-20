@@ -7,8 +7,8 @@ class WindowZoomService extends ChangeNotifier {
   WindowZoomService();
 
   static const double _defaultScale = 1.0;
-  static const double _minScale = 0.8;
-  static const double _maxScale = 1.4;
+  static const double _minScale = 0.5;
+  static const double _maxScale = 3.0;
   static const double _step = 0.1;
 
   double _scale = _defaultScale;

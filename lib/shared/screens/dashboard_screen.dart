@@ -41,7 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 child: Stack(
                   children: [
-                    const Column(
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
@@ -49,7 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         ),
                         SizedBox(height: 8),
@@ -57,7 +57,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           'Sistema completo de gestión para tu tienda de bicicletas',
                           style: TextStyle(
                             fontSize: 16,
-                            color: Colors.white70,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimary
+                                .withOpacity(0.8),
                           ),
                         ),
                       ],
@@ -66,7 +69,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       top: -8,
                       right: -8,
                       child: IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white),
+                        icon: Icon(Icons.close,
+                            color: Theme.of(context).colorScheme.onPrimary),
                         tooltip: 'Cerrar',
                         onPressed: () {
                           setState(() {

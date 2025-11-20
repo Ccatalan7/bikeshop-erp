@@ -85,9 +85,11 @@ class _ZoomContent extends StatelessWidget {
 
     final mediaQuery = MediaQuery.of(context);
     
-    // Adjust MediaQuery so widgets render at logical size but scale visually
+    // "Safe Zoom": We only scale the text.
+    // This keeps the layout bounds intact but makes content readable.
+    // Flutter's widgets are designed to handle text scaling gracefully.
     final scaledMedia = mediaQuery.copyWith(
-      textScaleFactor: mediaQuery.textScaleFactor * scale,
+      textScaler: TextScaler.linear(scale),
     );
 
     return MediaQuery(

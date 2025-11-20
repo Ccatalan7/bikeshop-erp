@@ -502,6 +502,8 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
   }
 
   PreferredSizeWidget _buildAppBar(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+
     return AppBar(
       title: Row(
         children: [
@@ -511,24 +513,35 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.orange.shade100,
+                color: isDark
+                    ? theme.colorScheme.errorContainer.withOpacity(0.2)
+                    : Colors.orange.shade100,
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: const Text(
+              child: Text(
                 'Sin guardar',
-                style: TextStyle(fontSize: 11, color: Colors.orange),
+                style: TextStyle(
+                    fontSize: 11,
+                    color: isDark
+                        ? theme.colorScheme.error
+                        : Colors.orange.shade800),
               ),
             ),
           if (_autoSaveEnabled && !_hasChanges)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.green.shade100,
+                color: isDark
+                    ? Colors.green.withOpacity(0.2)
+                    : Colors.green.shade100,
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: const Text(
+              child: Text(
                 'Auto-guardado activo',
-                style: TextStyle(fontSize: 11, color: Colors.green),
+                style: TextStyle(
+                    fontSize: 11,
+                    color:
+                        isDark ? Colors.green.shade300 : Colors.green.shade800),
               ),
             ),
         ],
@@ -593,18 +606,18 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         ElevatedButton.icon(
           onPressed: _hasChanges && !_isSaving ? () => _saveChanges() : null,
           icon: _isSaving
-              ? const SizedBox(
+              ? SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
+                      strokeWidth: 2, color: theme.colorScheme.onPrimary),
                 )
               : const Icon(Icons.save),
           label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
           style: ElevatedButton.styleFrom(
             backgroundColor:
-                _hasChanges ? theme.colorScheme.primary : Colors.grey,
-            foregroundColor: Colors.white,
+                _hasChanges ? theme.colorScheme.primary : theme.disabledColor,
+            foregroundColor: theme.colorScheme.onPrimary,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           ),
         ),
@@ -753,70 +766,25 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
   }
 
   Widget _buildLivePreview(BuildContext context) {
+    // Return a scrollable preview of the website sections
     return SingleChildScrollView(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Mock Header
-          _buildPreviewHeader(),
+          // Hero section
+          _buildPreviewHero(),
 
-          // Hero Section
-          if (_selectedSection == 'hero' ||
-              _searchQuery.isEmpty ||
-              'hero banner principal'.contains(_searchQuery))
-            _buildPreviewHero(),
+          // Products section
+          _buildPreviewProducts(),
 
-          // Products Section
-          if (_showProductsSection &&
-              (_selectedSection == 'products' ||
-                  _searchQuery.isEmpty ||
-                  'productos'.contains(_searchQuery)))
-            _buildPreviewProducts(),
+          // Services section
+          _buildPreviewServices(),
 
-          // Services Section
-          if (_showServicesSection &&
-              (_selectedSection == 'services' ||
-                  _searchQuery.isEmpty ||
-                  'servicios'.contains(_searchQuery)))
-            _buildPreviewServices(),
+          // About section
+          _buildPreviewAbout(),
 
-          // About Section
-          if (_showAboutSection &&
-              (_selectedSection == 'about' ||
-                  _searchQuery.isEmpty ||
-                  'nosotros sobre'.contains(_searchQuery)))
-            _buildPreviewAbout(),
-
-          // Mock Footer
+          // Footer
           _buildPreviewFooter(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPreviewHeader() {
-    return Container(
-      padding: EdgeInsets.all(_containerPadding),
-      color: _primaryColor,
-      child: Row(
-        children: [
-          Text(
-            'VINABIKE',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              fontFamily: _headingFont,
-            ),
-          ),
-          const Spacer(),
-          if (_previewMode != 'mobile')
-            Text(
-              'Menú  Productos  Servicios',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.9),
-                fontFamily: _bodyFont,
-              ),
-            ),
         ],
       ),
     );
@@ -1091,6 +1059,14 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
   }
 
   Widget _buildPreviewFooter() {
+    final footerBrightness = ThemeData.estimateBrightnessForColor(_footerColor);
+    final footerTextColor =
+        footerBrightness == Brightness.dark ? Colors.white : Colors.black87;
+    final footerTextSecondaryColor =
+        footerBrightness == Brightness.dark ? Colors.white70 : Colors.black54;
+    final footerDividerColor =
+        footerBrightness == Brightness.dark ? Colors.white24 : Colors.black12;
+
     return Container(
       padding: EdgeInsets.all(_containerPadding * 1.5),
       color: _footerColor,
@@ -1107,7 +1083,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                       Text(
                         'VINABIKE',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: footerTextColor,
                           fontSize: _bodySize * 1.25,
                           fontWeight: FontWeight.bold,
                           fontFamily: _headingFont,
@@ -1117,7 +1093,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                       Text(
                         'Tu tienda de confianza',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
+                          color: footerTextSecondaryColor,
                           fontFamily: _bodyFont,
                         ),
                       ),
@@ -1131,7 +1107,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                       Text(
                         'CONTACTO',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: footerTextColor,
                           fontWeight: FontWeight.bold,
                           fontFamily: _headingFont,
                         ),
@@ -1142,7 +1118,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                             ? 'Teléfono'
                             : _contactPhoneController.text,
                         style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
+                            color: footerTextSecondaryColor,
                             fontFamily: _bodyFont),
                       ),
                       Text(
@@ -1150,7 +1126,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                             ? 'Email'
                             : _contactEmailController.text,
                         style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
+                            color: footerTextSecondaryColor,
                             fontFamily: _bodyFont),
                       ),
                       Text(
@@ -1158,7 +1134,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                             ? 'Dirección'
                             : _contactAddressController.text,
                         style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
+                            color: footerTextSecondaryColor,
                             fontFamily: _bodyFont),
                         maxLines: 2,
                       ),
@@ -1173,7 +1149,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                         Text(
                           'SÍGUENOS',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: footerTextColor,
                             fontWeight: FontWeight.bold,
                             fontFamily: _headingFont,
                           ),
@@ -1183,20 +1159,20 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                           children: [
                             if (_contactWhatsappController.text.isNotEmpty)
                               IconButton(
-                                icon: const Icon(Icons.phone,
-                                    color: Colors.white70),
+                                icon: Icon(Icons.phone,
+                                    color: footerTextSecondaryColor),
                                 onPressed: () {},
                               ),
                             if (_contactInstagramController.text.isNotEmpty)
                               IconButton(
-                                icon: const Icon(Icons.camera_alt,
-                                    color: Colors.white70),
+                                icon: Icon(Icons.camera_alt,
+                                    color: footerTextSecondaryColor),
                                 onPressed: () {},
                               ),
                             if (_contactFacebookController.text.isNotEmpty)
                               IconButton(
-                                icon: const Icon(Icons.facebook,
-                                    color: Colors.white70),
+                                icon: Icon(Icons.facebook,
+                                    color: footerTextSecondaryColor),
                                 onPressed: () {},
                               ),
                           ],
@@ -1207,12 +1183,12 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
               ],
             ),
           const SizedBox(height: 24),
-          const Divider(color: Colors.white24),
+          Divider(color: footerDividerColor),
           const SizedBox(height: 16),
           Text(
             '© 2025 Vinabike. Todos los derechos reservados.',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
+              color: footerTextSecondaryColor.withOpacity(0.5),
               fontSize: _bodySize * 0.875,
               fontFamily: _bodyFont,
             ),
@@ -2228,6 +2204,10 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
     required Color color,
     required Function(Color) onChanged,
   }) {
+    final isDark = theme.brightness == Brightness.dark;
+    final colorBrightness = ThemeData.estimateBrightnessForColor(color);
+    final isColorDark = colorBrightness == Brightness.dark;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2243,24 +2223,26 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
             decoration: BoxDecoration(
               color: color,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300, width: 2),
+              border: Border.all(color: theme.dividerColor, width: 2),
             ),
             child: Row(
               children: [
                 const SizedBox(width: 16),
-                const Icon(Icons.palette, color: Colors.white),
+                Icon(Icons.palette,
+                    color: isColorDark ? Colors.white : Colors.black87),
                 const SizedBox(width: 12),
                 Text(
                   '#${color.value.toRadixString(16).substring(2).toUpperCase()}',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: isColorDark ? Colors.white : Colors.black87,
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                     shadows: [
-                      Shadow(
-                        color: Colors.black45,
-                        blurRadius: 2,
-                      ),
+                      if (isColorDark)
+                        const Shadow(
+                          color: Colors.black45,
+                          blurRadius: 2,
+                        ),
                     ],
                   ),
                 ),
@@ -2269,13 +2251,14 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: (isColorDark ? Colors.white : Colors.black)
+                        .withOpacity(0.2),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Cambiar',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: isColorDark ? Colors.white : Colors.black87,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -2314,7 +2297,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           height: 80,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade300),
+            border: Border.all(color: Theme.of(context).dividerColor),
           ),
           child: Column(
             children: [
@@ -2329,25 +2312,39 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
   }
 
   Widget _buildTipBox(String text) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Use theme colors or specific shades that work in both modes
+    final bgColor = isDark
+        ? theme.colorScheme.primaryContainer.withOpacity(0.2)
+        : Colors.blue.shade50;
+    final borderColor = isDark
+        ? theme.colorScheme.primary.withOpacity(0.3)
+        : Colors.blue.shade200;
+    final iconColor = isDark ? theme.colorScheme.primary : Colors.blue.shade700;
+    final textColor =
+        isDark ? theme.colorScheme.onSurface : Colors.blue.shade900;
+
     return Container(
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+        color: bgColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.shade200),
+        border: Border.all(color: borderColor),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.lightbulb, color: Colors.blue.shade700, size: 20),
+          Icon(Icons.lightbulb, color: iconColor, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.blue.shade900,
+                color: textColor,
               ),
             ),
           ),

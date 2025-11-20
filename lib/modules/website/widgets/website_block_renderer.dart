@@ -2007,7 +2007,7 @@ class WebsiteBlockRenderer {
               aspectRatio: 1,
               child: Container(
                 decoration: BoxDecoration(
-                  color: PublicStoreTheme.surface,
+                  color: theme.colorScheme.surfaceContainerHighest,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(12),
                   ),
@@ -2021,21 +2021,21 @@ class WebsiteBlockRenderer {
                           product.imageUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
-                            return const Center(
+                            return Center(
                               child: Icon(
                                 Icons.image_not_supported,
                                 size: 48,
-                                color: PublicStoreTheme.textMuted,
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             );
                           },
                         ),
                       )
-                    : const Center(
+                    : Center(
                         child: Icon(
                           Icons.pedal_bike,
                           size: 64,
-                          color: PublicStoreTheme.textMuted,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
               ),
@@ -2069,8 +2069,8 @@ class WebsiteBlockRenderer {
                     style: theme.textTheme.bodySmall?.copyWith(
                       fontFamily: bodyFont,
                       color: product.stockQuantity > 0
-                          ? PublicStoreTheme.success
-                          : PublicStoreTheme.error,
+                          ? Colors.green
+                          : theme.colorScheme.error,
                     ),
                   ),
                   const SizedBox(height: 12),

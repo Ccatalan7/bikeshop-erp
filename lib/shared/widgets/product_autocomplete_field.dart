@@ -163,7 +163,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
           border: Border.all(color: theme.colorScheme.outline),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Theme.of(context).shadowColor.withOpacity(0.1),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -262,7 +262,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: isHovered 
-                    ? const Color(0xFF2196F3).withOpacity(0.12) // Zoho-like blue hover
+                    ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
                     : Colors.transparent,
               ),
               child: Row(

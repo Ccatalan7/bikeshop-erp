@@ -51,12 +51,12 @@ class _PegasTablePageState extends State<PegasTablePage>
   bool _needsRefresh = false; // Track if we need to refresh on next visibility
   Timer? _reloadDebounceTimer; // Debounce rapid reload calls
   String _searchTerm = '';
-  
+
   // View mode state
   PegasViewMode _viewMode = PegasViewMode.table;
   DateTime _focusedMonth = DateTime.now();
   DateTime _selectedDate = DateTime.now();
-  
+
   // Selected job for detail view (calendar sidebar)
   MechanicJob? _selectedJob;
   List<MechanicJobItem> _selectedJobItems = [];
@@ -65,7 +65,8 @@ class _PegasTablePageState extends State<PegasTablePage>
   // Split-pane state for table view
   static const double _minListPaneWidth = 400.0;
   static const double _minDetailPaneWidth = 300.0; // Minimum for detail view
-  static const double _defaultListPaneWidth = 1000.0; // Default: list takes more space, detail narrower
+  static const double _defaultListPaneWidth =
+      1000.0; // Default: list takes more space, detail narrower
   double _listPaneWidth = _defaultListPaneWidth;
 
   // Column visibility and sorting
@@ -104,7 +105,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     _customerService = Provider.of<CustomerService>(context, listen: false);
     _loadListPaneWidth();
     _loadData();
-    
+
     // ✅ REMOVED: BikeshopService listener - was causing unnecessary full reloads
     // Old: _bikeshopService.addListener(_onRealtimeUpdate);
     // Every task/item change → updates job costs → triggers realtime → full reload
@@ -118,14 +119,16 @@ class _PegasTablePageState extends State<PegasTablePage>
     // ✅ REMOVED: _bikeshopService.removeListener(_onRealtimeUpdate);
     super.dispose();
   }
-  
+
   void _onRealtimeUpdate() {
-    debugPrint('🟠 [PegasTablePage] _onRealtimeUpdate called by BikeshopService');
+    debugPrint(
+        '🟠 [PegasTablePage] _onRealtimeUpdate called by BikeshopService');
     // Debounce rapid reload calls (prevent race conditions)
     _reloadDebounceTimer?.cancel();
     _reloadDebounceTimer = Timer(const Duration(milliseconds: 300), () {
       if (mounted) {
-        debugPrint('🟠 [PegasTablePage] Debounce timer fired, calling _loadData()');
+        debugPrint(
+            '🟠 [PegasTablePage] Debounce timer fired, calling _loadData()');
         _loadData();
       }
     });
@@ -159,7 +162,8 @@ class _PegasTablePageState extends State<PegasTablePage>
   Future<void> _openInvoice(String invoiceId) async {
     _markNeedsRefresh();
     // Navigate to invoice form page with returnTo parameter
-    await context.push('/sales/invoices/$invoiceId/edit?returnTo=/taller/pegas');
+    await context
+        .push('/sales/invoices/$invoiceId/edit?returnTo=/taller/pegas');
     if (!mounted) return;
     debugPrint('🔄 Reloading data after invoice edit...');
     await _loadData();
@@ -245,7 +249,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     try {
       // Load job items (parts/products)
       final items = await _bikeshopService.getJobItems(job.id!);
-      
+
       // Load product images
       final Map<String, String> productImages = {};
       try {
@@ -253,13 +257,13 @@ class _PegasTablePageState extends State<PegasTablePage>
             .where((item) => item.productId != null)
             .map((item) => item.productId!)
             .toSet();
-        
+
         if (productIds.isNotEmpty) {
           final response = await Supabase.instance.client
               .from('products')
               .select('id, image_url')
               .inFilter('id', productIds.toList());
-          
+
           for (final product in response) {
             final id = product['id'] as String;
             final imageUrl = product['image_url'] as String?;
@@ -271,7 +275,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       } catch (e) {
         debugPrint('Error loading product images: $e');
       }
-      
+
       if (mounted) {
         setState(() {
           _selectedJobItems = items;
@@ -345,7 +349,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         final customer = _customers[job.customerId];
         final bike = _bikes[job.bikeId];
 
-        final matchesJob = (job.jobNumber ?? '').toLowerCase().contains(searchLower);
+        final matchesJob =
+            (job.jobNumber ?? '').toLowerCase().contains(searchLower);
         final matchesCustomer =
             customer?.name.toLowerCase().contains(searchLower) ?? false;
         final matchesPhone =
@@ -397,8 +402,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
         switch (_sortColumn) {
           case 'job_number':
-            comparison = (a.jobNumber ?? '~')
-                .compareTo(b.jobNumber ?? '~');
+            comparison = (a.jobNumber ?? '~').compareTo(b.jobNumber ?? '~');
             break;
           case 'customer_quick':
             final customerA = _customers[a.customerId]?.name ?? '';
@@ -493,7 +497,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
-        
+
         final clampedListWidth = _listPaneWidth.clamp(
           _minListPaneWidth,
           availableWidth - _minDetailPaneWidth - 1,
@@ -550,7 +554,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                         behavior: HitTestBehavior.translucent,
                         onHorizontalDragUpdate: (details) {
                           setState(() {
-                            final maxWidth = availableWidth - _minDetailPaneWidth - 1;
+                            final maxWidth =
+                                availableWidth - _minDetailPaneWidth - 1;
                             _listPaneWidth = (_listPaneWidth + details.delta.dx)
                                 .clamp(_minListPaneWidth, maxWidth);
                           });
@@ -596,7 +601,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   },
                   onStatusChange: (newStatus) async {
                     // Update job status
-                    final updatedJob = _selectedJob!.copyWith(status: newStatus);
+                    final updatedJob =
+                        _selectedJob!.copyWith(status: newStatus);
                     await _databaseService.update(
                       'mechanic_jobs',
                       updatedJob.id!,
@@ -605,7 +611,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                     if (!mounted) return;
                     await _loadData();
                     // Reload the selected job with updated data
-                    final updated = _jobs.firstWhere((j) => j.id == _selectedJob!.id);
+                    final updated =
+                        _jobs.firstWhere((j) => j.id == _selectedJob!.id);
                     setState(() {
                       _selectedJob = updated;
                       _loadingDetails = true;
@@ -668,10 +675,10 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: Colors.grey.shade300,
+            color: Theme.of(context).dividerColor,
             width: 1,
           ),
         ),
@@ -693,12 +700,12 @@ class _PegasTablePageState extends State<PegasTablePage>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Gestión de clientes',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: Theme.of(context).textTheme.headlineMedium?.color,
                     ),
                   ),
                   Row(
@@ -711,14 +718,15 @@ class _PegasTablePageState extends State<PegasTablePage>
                       const SizedBox(width: 4),
                       Text(
                         '${_filteredJobs.length} trabajos mostrados',
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                        style: TextStyle(
+                            color: Colors.grey.shade600, fontSize: 14),
                       ),
                     ],
                   ),
                 ],
               ),
               const Spacer(),
-              
+
               // View mode switchers (Notion-style)
               _buildViewSwitcher(
                 icon: Icons.table_chart,
@@ -743,8 +751,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                 icon: const Icon(Icons.add),
                 label: const Text('New'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 18),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
                 ),
               ),
             ],
@@ -784,9 +792,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300, width: 1),
+        border: Border.all(color: Theme.of(context).dividerColor, width: 1),
       ),
       child: Row(
         children: [
@@ -811,8 +819,8 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
               Text(
                 count.toString(),
-                style: const TextStyle(
-                  color: Colors.black87,
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
@@ -845,10 +853,10 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: Colors.grey.shade300,
+            color: Theme.of(context).dividerColor,
             width: 1,
           ),
         ),
@@ -899,15 +907,17 @@ class _PegasTablePageState extends State<PegasTablePage>
               Expanded(
                 flex: 4,
                 child: TextField(
-                  style: const TextStyle(color: Colors.black87),
+                  style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyLarge?.color),
                   decoration: InputDecoration(
-                    hintText:
-                        'Buscar: N° trabajo, cliente, teléfono, bici...',
-                    hintStyle: TextStyle(color: Colors.grey.shade500),
-                    prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
+                    hintText: 'Buscar: N° trabajo, cliente, teléfono, bici...',
+                    hintStyle: TextStyle(color: Theme.of(context).hintColor),
+                    prefixIcon: Icon(Icons.search,
+                        color: Theme.of(context).iconTheme.color),
                     suffixIcon: _searchTerm.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Icons.clear, color: Colors.grey.shade600),
+                            icon: Icon(Icons.clear,
+                                color: Theme.of(context).iconTheme.color),
                             onPressed: () {
                               setState(() => _searchTerm = '');
                               _applyFiltersAndSort();
@@ -916,21 +926,26 @@ class _PegasTablePageState extends State<PegasTablePage>
                         : null,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
+                      borderSide:
+                          BorderSide(color: Theme.of(context).dividerColor),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
+                      borderSide:
+                          BorderSide(color: Theme.of(context).dividerColor),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide:
-                          BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
+                      borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2),
                     ),
                     filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    fillColor:
+                        Theme.of(context).inputDecorationTheme.fillColor ??
+                            Theme.of(context).cardColor,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     isDense: true,
                   ),
                   onChanged: (value) {
@@ -1162,7 +1177,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         selected: isSelected,
         color: WidgetStateProperty.resolveWith<Color?>((states) {
           if (isSelected) {
-            return Colors.grey.withOpacity(0.2); // Light grey highlight for selected row
+            return Colors.grey
+                .withOpacity(0.2); // Light grey highlight for selected row
           }
           return null; // Default row color
         }),
@@ -1600,7 +1616,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                   style: TextStyle(
                     fontWeight: isEstimate ? FontWeight.w600 : FontWeight.bold,
                     fontSize: isEstimate ? 14 : 15,
-                    color: isEstimate ? Colors.grey[700] : Colors.black,
+                    color: isEstimate
+                        ? Theme.of(context).colorScheme.onSurfaceVariant
+                        : Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 if (job.status == JobStatus.enCurso)
@@ -1610,7 +1628,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     width: 40,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(1),
-                      color: Colors.grey[300],
+                      color: Theme.of(context).dividerColor,
                     ),
                     child: FractionallySizedBox(
                       alignment: Alignment.centerLeft,
@@ -1759,25 +1777,27 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Get invoice details if available
     final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
-    
+
     // Debug output
     if (job.invoiceId != null && invoice != null) {
-      debugPrint('📄 Job ${job.jobNumber}: invoice total=${invoice.total}, balance=${invoice.balance}, status=${invoice.status}');
+      debugPrint(
+          '📄 Job ${job.jobNumber}: invoice total=${invoice.total}, balance=${invoice.balance}, status=${invoice.status}');
     } else if (job.invoiceId != null && invoice == null) {
-      debugPrint('⚠️ Job ${job.jobNumber}: has invoiceId=${job.invoiceId} but invoice NOT found in map!');
+      debugPrint(
+          '⚠️ Job ${job.jobNumber}: has invoiceId=${job.invoiceId} but invoice NOT found in map!');
     }
-    
+
     final isPaid = invoice?.status == 'paid' || job.isPaid;
     final balance = invoice?.balance ?? job.totalCost;
     final total = invoice?.total ?? job.totalCost;
-    
+
     // Get invoice status label (Spanish)
     String statusLabel = 'PENDIENTE';
     Color statusColor = Colors.orange[900]!;
     Color bgColor = Colors.orange[100]!;
     Color borderColor = Colors.orange[300]!;
     IconData statusIcon = Icons.attach_money;
-    
+
     if (invoice != null) {
       final status = invoice.status.name.toLowerCase();
       if (status == 'paid' || status == 'pagado' || status == 'pagada') {
@@ -1786,7 +1806,9 @@ class _PegasTablePageState extends State<PegasTablePage>
         bgColor = Colors.green[100]!;
         borderColor = Colors.green[300]!;
         statusIcon = Icons.check_circle;
-      } else if (status == 'confirmed' || status == 'confirmado' || status == 'confirmada') {
+      } else if (status == 'confirmed' ||
+          status == 'confirmado' ||
+          status == 'confirmada') {
         statusLabel = 'CONFIRMADO';
         statusColor = Colors.green[700]!;
         bgColor = Colors.green[50]!;
@@ -1798,19 +1820,30 @@ class _PegasTablePageState extends State<PegasTablePage>
         bgColor = Colors.grey[100]!;
         borderColor = Colors.grey[300]!;
         statusIcon = Icons.edit_document;
-      } else if (status == 'sent' || status == 'enviado' || status == 'enviada' || status == 'emitido' || status == 'emitida' || status == 'issued') {
+      } else if (status == 'sent' ||
+          status == 'enviado' ||
+          status == 'enviada' ||
+          status == 'emitido' ||
+          status == 'emitida' ||
+          status == 'issued') {
         statusLabel = 'ENVIADO';
         statusColor = Colors.blue[900]!;
         bgColor = Colors.blue[100]!;
         borderColor = Colors.blue[300]!;
         statusIcon = Icons.send;
-      } else if (status == 'overdue' || status == 'vencido' || status == 'vencida') {
+      } else if (status == 'overdue' ||
+          status == 'vencido' ||
+          status == 'vencida') {
         statusLabel = 'VENCIDO';
         statusColor = Colors.red[900]!;
         bgColor = Colors.red[100]!;
         borderColor = Colors.red[300]!;
         statusIcon = Icons.warning;
-      } else if (status == 'cancelled' || status == 'cancelado' || status == 'cancelada' || status == 'anulado' || status == 'anulada') {
+      } else if (status == 'cancelled' ||
+          status == 'cancelado' ||
+          status == 'cancelada' ||
+          status == 'anulado' ||
+          status == 'anulada') {
         statusLabel = 'CANCELADO';
         statusColor = Colors.grey[700]!;
         bgColor = Colors.grey[100]!;
@@ -1863,7 +1896,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[900],
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ],
@@ -2410,15 +2443,10 @@ class _PegasTablePageState extends State<PegasTablePage>
       initialDate: job.deadline ?? DateTime.now(),
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      // Removed locale to avoid freeze issues - will use system locale
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Colors.blue,
-              onPrimary: Colors.white,
-              onSurface: Colors.grey[900]!,
-            ),
+            colorScheme: Theme.of(context).colorScheme,
           ),
           child: child!,
         );
@@ -2623,10 +2651,14 @@ class _PegasTablePageState extends State<PegasTablePage>
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           border: Border.all(
-            color: hasCustomSelection ? Colors.orange[400]! : Colors.grey[300]!,
+            color: hasCustomSelection
+                ? Colors.orange[400]!
+                : Theme.of(context).dividerColor,
           ),
           borderRadius: BorderRadius.circular(8),
-          color: hasCustomSelection ? Colors.orange[50] : Colors.white,
+          color: hasCustomSelection
+              ? Colors.orange[50]
+              : Theme.of(context).cardColor,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -2634,7 +2666,9 @@ class _PegasTablePageState extends State<PegasTablePage>
             Icon(
               Icons.radio_button_checked,
               size: 16,
-              color: hasCustomSelection ? Colors.orange[700] : Colors.grey[600],
+              color: hasCustomSelection
+                  ? Colors.orange[700]
+                  : Theme.of(context).iconTheme.color,
             ),
             const SizedBox(width: 8),
             Text(
@@ -2642,8 +2676,9 @@ class _PegasTablePageState extends State<PegasTablePage>
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color:
-                    hasCustomSelection ? Colors.orange[700] : Colors.grey[700],
+                color: hasCustomSelection
+                    ? Colors.orange[700]
+                    : Theme.of(context).textTheme.bodyMedium?.color,
               ),
             ),
             if (hasCustomSelection) ...[
@@ -2668,7 +2703,9 @@ class _PegasTablePageState extends State<PegasTablePage>
             Icon(
               Icons.arrow_drop_down,
               size: 20,
-              color: hasCustomSelection ? Colors.orange[700] : Colors.grey[500],
+              color: hasCustomSelection
+                  ? Colors.orange[700]
+                  : Theme.of(context).iconTheme.color,
             ),
           ],
         ),
@@ -2692,7 +2729,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           Icon(
             checked ? Icons.check_box : Icons.check_box_outline_blank,
             size: 18,
-            color: checked ? activeColor : Colors.grey[500],
+            color: checked ? activeColor : Theme.of(context).disabledColor,
           ),
           const SizedBox(width: 8),
           if (indicatorColor != null) ...[
@@ -2734,10 +2771,12 @@ class _PegasTablePageState extends State<PegasTablePage>
         decoration: BoxDecoration(
           border: Border.all(
               color: selectedValues.isEmpty
-                  ? Colors.grey[300]!
+                  ? Theme.of(context).dividerColor
                   : Colors.orange[400]!),
           borderRadius: BorderRadius.circular(8),
-          color: selectedValues.isEmpty ? Colors.white : Colors.orange[50],
+          color: selectedValues.isEmpty
+              ? Theme.of(context).cardColor
+              : Colors.orange[50],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -2745,7 +2784,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             Icon(icon,
                 size: 16,
                 color: selectedValues.isEmpty
-                    ? Colors.grey[600]
+                    ? Theme.of(context).iconTheme.color
                     : Colors.orange[700]),
             const SizedBox(width: 8),
             Text(
@@ -2753,7 +2792,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               style: TextStyle(
                 fontSize: 13,
                 color: selectedValues.isEmpty
-                    ? Colors.grey[700]
+                    ? Theme.of(context).textTheme.bodyMedium?.color
                     : Colors.orange[700],
                 fontWeight: selectedValues.isEmpty
                     ? FontWeight.normal
@@ -2783,7 +2822,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               Icons.arrow_drop_down,
               size: 20,
               color: selectedValues.isEmpty
-                  ? Colors.grey[500]
+                  ? Theme.of(context).iconTheme.color
                   : Colors.orange[700],
             ),
           ],
@@ -2905,60 +2944,70 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Map<String, dynamic> _getStatusConfig(JobStatus status) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     switch (status) {
       case JobStatus.pendiente:
         return {
-          'color': Colors.grey[200],
-          'textColor': Colors.grey[800],
+          'color': isDark ? Colors.grey[800] : Colors.grey[200],
+          'textColor': isDark ? Colors.grey[300] : Colors.grey[800],
           'label': 'Pendiente',
           'indicatorColor': Colors.grey[400],
         };
       case JobStatus.diagnostico:
         return {
-          'color': Colors.blue[100],
-          'textColor': Colors.blue[900],
+          'color':
+              isDark ? Colors.blue[900]!.withOpacity(0.5) : Colors.blue[100],
+          'textColor': isDark ? Colors.blue[100] : Colors.blue[900],
           'label': 'Diagnóstico',
           'indicatorColor': Colors.blue[500],
         };
       case JobStatus.esperandoAprobacion:
         return {
-          'color': Colors.amber[100],
-          'textColor': Colors.amber[900],
+          'color':
+              isDark ? Colors.amber[900]!.withOpacity(0.5) : Colors.amber[100],
+          'textColor': isDark ? Colors.amber[100] : Colors.amber[900],
           'label': 'Esperando Aprobación',
           'indicatorColor': Colors.amber[600],
         };
       case JobStatus.enCurso:
         return {
-          'color': Colors.orange[100],
-          'textColor': Colors.orange[900],
+          'color': isDark
+              ? Colors.orange[900]!.withOpacity(0.5)
+              : Colors.orange[100],
+          'textColor': isDark ? Colors.orange[100] : Colors.orange[900],
           'label': 'En Curso',
           'indicatorColor': Colors.orange[500],
         };
       case JobStatus.esperandoRepuestos:
         return {
-          'color': Colors.purple[100],
-          'textColor': Colors.purple[900],
+          'color': isDark
+              ? Colors.purple[900]!.withOpacity(0.5)
+              : Colors.purple[100],
+          'textColor': isDark ? Colors.purple[100] : Colors.purple[900],
           'label': 'Esperando Repuestos',
           'indicatorColor': Colors.purple[500],
         };
       case JobStatus.finalizado:
         return {
-          'color': Colors.green[100],
-          'textColor': Colors.green[900],
+          'color':
+              isDark ? Colors.green[900]!.withOpacity(0.5) : Colors.green[100],
+          'textColor': isDark ? Colors.green[100] : Colors.green[900],
           'label': 'Finalizado',
           'indicatorColor': Colors.green[500],
         };
       case JobStatus.entregado:
         return {
-          'color': Colors.teal[100],
-          'textColor': Colors.teal[900],
+          'color':
+              isDark ? Colors.teal[900]!.withOpacity(0.5) : Colors.teal[100],
+          'textColor': isDark ? Colors.teal[100] : Colors.teal[900],
           'label': 'Entregado',
           'indicatorColor': Colors.teal[500],
         };
       case JobStatus.cancelado:
         return {
-          'color': Colors.red[100],
-          'textColor': Colors.red[900],
+          'color': isDark ? Colors.red[900]!.withOpacity(0.5) : Colors.red[100],
+          'textColor': isDark ? Colors.red[100] : Colors.red[900],
           'label': 'Cancelado',
           'indicatorColor': Colors.red[500],
         };
@@ -2987,15 +3036,29 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Map<String, dynamic> _getPriorityConfig(JobPriority priority) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     switch (priority) {
       case JobPriority.baja:
-        return {'color': Colors.grey[600], 'label': 'Baja'};
+        return {
+          'color': isDark ? Colors.grey[400] : Colors.grey[600],
+          'label': 'Baja'
+        };
       case JobPriority.normal:
-        return {'color': Colors.blue[600], 'label': 'Normal'};
+        return {
+          'color': isDark ? Colors.blue[300] : Colors.blue[600],
+          'label': 'Normal'
+        };
       case JobPriority.alta:
-        return {'color': Colors.orange[600], 'label': 'Alta'};
+        return {
+          'color': isDark ? Colors.orange[300] : Colors.orange[600],
+          'label': 'Alta'
+        };
       case JobPriority.urgente:
-        return {'color': Colors.red[600], 'label': 'Urgente'};
+        return {
+          'color': isDark ? Colors.red[300] : Colors.red[600],
+          'label': 'Urgente'
+        };
     }
   }
 
@@ -3006,7 +3069,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   }) {
     final isSelected = _viewMode == mode;
     final theme = Theme.of(context);
-    
+
     return InkWell(
       onTap: () {
         setState(() {
@@ -3049,11 +3112,11 @@ class _PegasTablePageState extends State<PegasTablePage>
   Widget _buildBoardView() {
     // Group jobs by status
     final Map<JobStatus, List<MechanicJob>> jobsByStatus = {};
-    
+
     for (final job in _filteredJobs) {
       jobsByStatus.putIfAbsent(job.status, () => []).add(job);
     }
-    
+
     final statuses = [
       JobStatus.pendiente,
       JobStatus.diagnostico,
@@ -3062,7 +3125,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       JobStatus.esperandoRepuestos,
       JobStatus.finalizado,
     ];
-    
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.all(16),
@@ -3071,7 +3134,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         children: statuses.map((status) {
           final jobs = jobsByStatus[status] ?? [];
           final statusConfig = _getStatusConfig(status);
-          
+
           return Container(
             width: 300,
             margin: const EdgeInsets.symmetric(horizontal: 8),
@@ -3113,12 +3176,14 @@ class _PegasTablePageState extends State<PegasTablePage>
                       final job = jobs[index];
                       final customer = _customers[job.customerId];
                       final bike = _bikes[job.bikeId];
-                      
+
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
                         child: InkWell(
                           onTap: () {
-                            context.push('/taller/pegas/${job.id}').then((_) => _loadData());
+                            context
+                                .push('/taller/pegas/${job.id}')
+                                .then((_) => _loadData());
                           },
                           child: Padding(
                             padding: const EdgeInsets.all(12),
@@ -3143,7 +3208,10 @@ class _PegasTablePageState extends State<PegasTablePage>
                                   'Pega: ${job.jobNumber}',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withOpacity(0.6),
                                   ),
                                 ),
                                 if (bike != null) ...[
@@ -3156,7 +3224,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                                 if (job.totalCost > 0) ...[
                                   const SizedBox(height: 8),
                                   Text(
-                                    NumberFormat.currency(locale: 'es_CL', symbol: '\$').format(job.totalCost),
+                                    NumberFormat.currency(
+                                            locale: 'es_CL', symbol: '\$')
+                                        .format(job.totalCost),
                                     style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.bold,
@@ -3232,7 +3302,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Widget _buildCalendarHeader() {
     final monthFormat = DateFormat('MMMM yyyy', 'es');
-    
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -3240,7 +3310,8 @@ class _PegasTablePageState extends State<PegasTablePage>
           icon: const Icon(Icons.chevron_left),
           onPressed: () {
             setState(() {
-              _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+              _focusedMonth =
+                  DateTime(_focusedMonth.year, _focusedMonth.month - 1);
             });
           },
         ),
@@ -3266,7 +3337,8 @@ class _PegasTablePageState extends State<PegasTablePage>
               icon: const Icon(Icons.chevron_right),
               onPressed: () {
                 setState(() {
-                  _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+                  _focusedMonth =
+                      DateTime(_focusedMonth.year, _focusedMonth.month + 1);
                 });
               },
             ),
@@ -3277,8 +3349,10 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _buildCalendarGrid() {
-    final firstDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
-    final lastDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
+    final firstDayOfMonth =
+        DateTime(_focusedMonth.year, _focusedMonth.month, 1);
+    final lastDayOfMonth =
+        DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
     final daysInMonth = lastDayOfMonth.day;
     // Monday = 1, Sunday = 7 in DateTime.weekday
     // We want Monday = 0, so subtract 1
@@ -3295,7 +3369,10 @@ class _PegasTablePageState extends State<PegasTablePage>
                         day,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.6),
                         ),
                       ),
                     ),
@@ -3306,16 +3383,19 @@ class _PegasTablePageState extends State<PegasTablePage>
         // Calendar days
         Expanded(
           child: Column(
-            children: List.generate((daysInMonth + firstWeekday + 6) ~/ 7, (weekIndex) {
+            children: List.generate((daysInMonth + firstWeekday + 6) ~/ 7,
+                (weekIndex) {
               return Expanded(
                 child: Row(
                   children: List.generate(7, (dayIndex) {
-                    final dayNumber = weekIndex * 7 + dayIndex - firstWeekday + 1;
+                    final dayNumber =
+                        weekIndex * 7 + dayIndex - firstWeekday + 1;
                     if (dayNumber < 1 || dayNumber > daysInMonth) {
                       return const Expanded(child: SizedBox());
                     }
 
-                    final date = DateTime(_focusedMonth.year, _focusedMonth.month, dayNumber);
+                    final date = DateTime(
+                        _focusedMonth.year, _focusedMonth.month, dayNumber);
                     final isSelected = _selectedDate.year == date.year &&
                         _selectedDate.month == date.month &&
                         _selectedDate.day == date.day;
@@ -3335,7 +3415,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                           margin: const EdgeInsets.all(2),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? Theme.of(context).primaryColor.withOpacity(0.1)
+                                ? Theme.of(context)
+                                    .primaryColor
+                                    .withOpacity(0.1)
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
                             border: isToday
@@ -3359,10 +3441,14 @@ class _PegasTablePageState extends State<PegasTablePage>
                                   '$dayNumber',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                                    fontWeight: isToday
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
                                     color: isSelected
                                         ? Theme.of(context).primaryColor
-                                        : Theme.of(context).colorScheme.onSurface,
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
                                   ),
                                 ),
                               ),
@@ -3370,14 +3456,18 @@ class _PegasTablePageState extends State<PegasTablePage>
                               if (jobsOnDay.isNotEmpty)
                                 Expanded(
                                   child: ListView.builder(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4),
                                     itemCount: jobsOnDay.length,
                                     itemBuilder: (context, index) {
                                       final job = jobsOnDay[index];
-                                      final customer = _customers[job.customerId];
-                                      final customerName = customer?.name ?? 'Unknown';
-                                      final statusColor = _getStatusColorForJob(job.status);
-                                      
+                                      final customer =
+                                          _customers[job.customerId];
+                                      final customerName =
+                                          customer?.name ?? 'Unknown';
+                                      final statusColor =
+                                          _getStatusColorForJob(job.status);
+
                                       return InkWell(
                                         onTap: () async {
                                           setState(() {
@@ -3389,20 +3479,23 @@ class _PegasTablePageState extends State<PegasTablePage>
                                         },
                                         borderRadius: BorderRadius.circular(4),
                                         child: Container(
-                                          margin: const EdgeInsets.only(bottom: 2),
+                                          margin:
+                                              const EdgeInsets.only(bottom: 2),
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 4,
                                             vertical: 2,
                                           ),
                                           decoration: BoxDecoration(
                                             color: statusColor.withOpacity(0.2),
-                                            borderRadius: BorderRadius.circular(4),
+                                            borderRadius:
+                                                BorderRadius.circular(4),
                                           ),
                                           child: Text(
                                             customerName,
                                             style: TextStyle(
                                               fontSize: 10,
-                                              color: statusColor.withOpacity(0.9),
+                                              color:
+                                                  statusColor.withOpacity(0.9),
                                             ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
@@ -3459,7 +3552,9 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
             Expanded(
               child: Text(
-                _selectedJob != null ? 'Detalles de la Pega' : dateFormat.format(_selectedDate),
+                _selectedJob != null
+                    ? 'Detalles de la Pega'
+                    : dateFormat.format(_selectedDate),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -3518,7 +3613,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     final bike = _bikes[job.bikeId];
     final statusColor = _getStatusColorForJob(job.status);
     final customerName = customer?.name ?? 'Cliente';
-    final bikeName = bike != null ? '${bike.brand} ${bike.model}' : (job.jobNumber ?? 'Sin #');
+    final bikeName = bike != null
+        ? '${bike.brand} ${bike.model}'
+        : (job.jobNumber ?? 'Sin #');
 
     return Card(
       elevation: 2,
@@ -3637,7 +3734,8 @@ class _PegasTablePageState extends State<PegasTablePage>
             children: [
               // Status Badge
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: statusColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
@@ -3681,7 +3779,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             ],
           ),
           const SizedBox(height: 16),
-          
+
           // Customer Name (prominent)
           if (customer != null) ...[
             Row(
@@ -3704,7 +3802,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
             const SizedBox(height: 8),
           ],
-          
+
           // Bike Info (compact)
           if (bike != null) ...[
             Row(
@@ -3712,7 +3810,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                 Icon(
                   Icons.pedal_bike,
                   size: 18,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -3723,7 +3822,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
             const SizedBox(height: 8),
           ],
-          
+
           // Deadline (compact and prominent) - EDITABLE
           if (job.deadline != null) ...[
             InkWell(
@@ -3735,13 +3834,13 @@ class _PegasTablePageState extends State<PegasTablePage>
                   lastDate: DateTime.now().add(const Duration(days: 365)),
                   locale: const Locale('es', 'CL'),
                 );
-                
+
                 if (date != null && mounted) {
                   final time = await showTimePicker(
                     context: context,
                     initialTime: TimeOfDay.fromDateTime(job.deadline!),
                   );
-                  
+
                   if (time != null && mounted) {
                     final newDeadline = DateTime(
                       date.year,
@@ -3750,20 +3849,21 @@ class _PegasTablePageState extends State<PegasTablePage>
                       time.hour,
                       time.minute,
                     );
-                    
+
                     try {
                       final updatedJob = job.copyWith(deadline: newDeadline);
                       await _bikeshopService.updateJob(updatedJob);
-                      
+
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Fecha de entrega actualizada')),
+                          const SnackBar(
+                              content: Text('Fecha de entrega actualizada')),
                         );
                       }
-                      
+
                       // Reload data to update calendar and detail view
                       await _loadData();
-                      
+
                       // Reload job details
                       setState(() {
                         _selectedJob = updatedJob;
@@ -3807,7 +3907,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
             const SizedBox(height: 12),
           ],
-          
+
           // All Items Section (uniform treatment)
           if (_selectedJobItems.isNotEmpty) ...[
             const SizedBox(height: 20),
@@ -3831,53 +3931,60 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
             const SizedBox(height: 12),
             ..._selectedJobItems.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Product image with hover zoom
-                  if (item.productId != null && _productImages.containsKey(item.productId))
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _HoverImageWidget(
-                        imageUrl: _productImages[item.productId]!,
-                        size: 40,
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Product image with hover zoom
+                      if (item.productId != null &&
+                          _productImages.containsKey(item.productId))
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _HoverImageWidget(
+                            imageUrl: _productImages[item.productId]!,
+                            size: 40,
+                          ),
+                        ),
+                      Text(
+                        '• ',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                  Text(
-                    '• ',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.productName,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.productName,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                            ),
+                            Text(
+                              'Cantidad: ${item.quantity.toStringAsFixed(0)} × \$${item.unitPrice.toStringAsFixed(0)} = \$${item.lineTotal.toStringAsFixed(0)}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withOpacity(0.6),
+                                  ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          'Cantidad: ${item.quantity.toStringAsFixed(0)} × \$${item.unitPrice.toStringAsFixed(0)} = \$${item.lineTotal.toStringAsFixed(0)}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withOpacity(0.6),
-                              ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            )),
+                )),
           ],
-          
+
           // Show loading indicator while loading details
           if (_loadingDetails) ...[
             const SizedBox(height: 12),
@@ -3888,12 +3995,13 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
             ),
           ],
-          
+
           // Client Request, Diagnosis, Work Performed, Notes
-          if (job.clientRequest != null || job.diagnosis != null || 
-              job.workPerformed != null || (job.notes != null && job.notes!.isNotEmpty)) ...[
+          if (job.clientRequest != null ||
+              job.diagnosis != null ||
+              job.workPerformed != null ||
+              (job.notes != null && job.notes!.isNotEmpty)) ...[
             const Divider(height: 24),
-            
             if (job.clientRequest != null) ...[
               _buildDetailRow(
                 icon: Icons.description,
@@ -3903,7 +4011,6 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
               const SizedBox(height: 12),
             ],
-            
             if (job.diagnosis != null) ...[
               _buildDetailRow(
                 icon: Icons.medical_services,
@@ -3913,7 +4020,6 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
               const SizedBox(height: 12),
             ],
-            
             if (job.workPerformed != null) ...[
               _buildDetailRow(
                 icon: Icons.build,
@@ -3923,7 +4029,6 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
               const SizedBox(height: 12),
             ],
-            
             if (job.notes != null && job.notes!.isNotEmpty) ...[
               _buildDetailRow(
                 icon: Icons.note,
@@ -4002,7 +4107,7 @@ class _HoverImageWidgetState extends State<_HoverImageWidget> {
   void _showZoomedImage(BuildContext context) {
     final RenderBox renderBox = context.findRenderObject() as RenderBox;
     final offset = renderBox.localToGlobal(Offset.zero);
-    
+
     _overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
         left: offset.dx + widget.size + 8,
@@ -4033,7 +4138,7 @@ class _HoverImageWidgetState extends State<_HoverImageWidget> {
         ),
       ),
     );
-    
+
     Overlay.of(context).insert(_overlayEntry!);
   }
 
@@ -4059,7 +4164,9 @@ class _HoverImageWidgetState extends State<_HoverImageWidget> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: _isHovered ? Theme.of(context).colorScheme.primary : Colors.grey[300]!,
+            color: _isHovered
+                ? Theme.of(context).colorScheme.primary
+                : Colors.grey[300]!,
             width: _isHovered ? 2 : 1,
           ),
           color: Colors.grey[100],
