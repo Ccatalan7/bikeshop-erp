@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -36,17 +37,32 @@ class NavigationService extends ChangeNotifier {
   }
 
   /// Update drawer width (for resizing)
-  Future<void> updateDrawerWidth(double newWidth) async {
+  /// Updates immediately for smooth dragging, saves to SharedPreferences async
+  void updateDrawerWidth(double newWidth) {
     // Clamp width between min and max
-    _drawerWidth = newWidth.clamp(_minDrawerWidth, _maxDrawerWidth);
+    final clampedWidth = newWidth.clamp(_minDrawerWidth, _maxDrawerWidth);
+    
+    // Only update if changed significantly (avoid unnecessary rebuilds)
+    if ((_drawerWidth - clampedWidth).abs() < 0.5) return;
+    
+    _drawerWidth = clampedWidth;
     notifyListeners();
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setDouble(_drawerWidthKey, _drawerWidth);
-    } catch (e) {
-      debugPrint('Error saving drawer width: $e');
-    }
+    // Save asynchronously without blocking the drag gesture
+    _saveDrawerWidthDebounced();
+  }
+
+  Timer? _saveTimer;
+  void _saveDrawerWidthDebounced() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setDouble(_drawerWidthKey, _drawerWidth);
+      } catch (e) {
+        debugPrint('Error saving drawer width: $e');
+      }
+    });
   }
 
   /// Toggle drawer visibility and persist the state

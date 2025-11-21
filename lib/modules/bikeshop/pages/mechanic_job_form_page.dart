@@ -1018,7 +1018,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   Widget _buildHeader(ThemeData theme) {
     final isEditing = widget.jobId != null;
-    final title = isEditing ? 'Editar Pega' : 'Nueva Pega';
+    final title = isEditing ? 'Editar Trabajo' : 'Nuevo Trabajo';
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),

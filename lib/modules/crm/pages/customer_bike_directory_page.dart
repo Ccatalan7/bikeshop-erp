@@ -304,7 +304,7 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
               onPressed: () => context.push(
                   '/taller/pegas/nueva?customer_id=${bike.customerId}&bike_id=${bike.id ?? ''}'),
               icon: const Icon(Icons.build),
-              label: const Text('Nueva pega'),
+              label: const Text('Nuevo trabajo'),
             ),
           ],
         ),

@@ -301,7 +301,7 @@ class _PegasListPageState extends State<PegasListPage> {
                   ),
                 ),
                 AppButton(
-                  text: 'Nueva Pega',
+                  text: 'Nuevo Trabajo',
                   icon: Icons.add_circle,
                   onPressed: () {
                     context.push('/taller/pegas/new').then((_) => _loadData());

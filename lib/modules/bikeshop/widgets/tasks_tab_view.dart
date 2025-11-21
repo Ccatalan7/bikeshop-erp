@@ -161,7 +161,7 @@ class _TasksTabViewState extends State<TasksTabView> {
           const Icon(Icons.checklist, size: 24),
           const SizedBox(width: 12),
           const Text(
-            'Smart Tasks',
+            'Tareas',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -192,14 +192,14 @@ class _TasksTabViewState extends State<TasksTabView> {
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.add),
-              tooltip: 'Add Item',
+              tooltip: 'Agregar artículo',
               onPressed: _showAddItemDialog,
               iconSize: 20,
             ),
             const SizedBox(width: 4),
             IconButton(
               icon: const Icon(Icons.add_task),
-              tooltip: 'Add standalone task',
+              tooltip: 'Agregar tarea independiente',
               onPressed: _showAddStandaloneTaskDialog,
               iconSize: 20,
             ),
@@ -440,7 +440,7 @@ class _TasksTabViewState extends State<TasksTabView> {
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.delete_outline, size: 18),
-              tooltip: 'Remove product',
+              tooltip: 'Eliminar producto',
               onPressed: () => _confirmRemoveItem(item),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
@@ -495,7 +495,7 @@ class _TasksTabViewState extends State<TasksTabView> {
             IconButton(
               icon: const Icon(Icons.close, size: 18),
               onPressed: () => setState(() => _editingTaskId = null),
-              tooltip: 'Cancel',
+              tooltip: 'Cancelar',
             ),
           ],
         ),
@@ -574,7 +574,7 @@ class _TasksTabViewState extends State<TasksTabView> {
             IconButton(
               icon: const Icon(Icons.delete_outline, size: 18),
               iconSize: 18,
-              tooltip: 'Delete task',
+              tooltip: 'Eliminar tarea',
               onPressed: () => _deleteTask(task),
             ),
         ],
@@ -590,7 +590,7 @@ class _TasksTabViewState extends State<TasksTabView> {
         parentId: parentId,
       ),
       icon: const Icon(Icons.add, size: 16),
-      label: const Text('Add sub-task'),
+      label: const Text('Agregar subtarea'),
       style: TextButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),

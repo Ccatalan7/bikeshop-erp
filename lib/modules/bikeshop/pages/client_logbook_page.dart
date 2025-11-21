@@ -620,7 +620,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
                   onPressed: () => context
                       .push('/taller/pegas/nueva?customer_id=${_customer!.id}'),
                   icon: const Icon(Icons.add),
-                  label: const Text('Nueva Pega'),
+                  label: const Text('Nuevo Trabajo'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(

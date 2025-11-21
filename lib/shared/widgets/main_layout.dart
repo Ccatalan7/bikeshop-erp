@@ -77,12 +77,12 @@ const String _customersSectionKey = 'customers';
 const List<MenuSubItem> _workshopMenuItems = [
   MenuSubItem(
     icon: Icons.build_outlined,
-    title: 'Pegas',
+    title: 'Trabajos',
     route: '/taller/pegas',
   ),
   MenuSubItem(
     icon: Icons.add_circle_outline,
-    title: 'Nueva pega',
+    title: 'Nuevo trabajo',
     route: '/taller/pegas/nueva',
   ),
   MenuSubItem(
@@ -271,7 +271,7 @@ String _getTitleFromRoute(String route) {
     '/accounting/journal-entries': 'Asientos',
     '/tax-reports/f29': 'Declaraciones F29',
     '/clientes': 'Clientes',
-    '/taller/pegas': 'Pegas',
+    '/taller/pegas': 'Trabajos',
     '/taller/bicicletas': 'Bicicletas',
     '/taller/marcas-modelos': 'Marcas y Modelos',
     '/taller/wheel-builder': 'Wheel Builder',
@@ -283,7 +283,7 @@ String _getTitleFromRoute(String route) {
     '/sales/invoices': 'Ventas',
     '/purchases/suppliers': 'Compras',
     '/pos': 'POS',
-    '/hr/employees': 'Empleados',
+    '/hr/employees': 'Trabajadores',
     '/website': 'Sitio Web',
     '/settings': 'Configuración',
   };
@@ -301,7 +301,7 @@ extension StringExtension on String {
 const List<MenuSubItem> _hrMenuItems = [
   MenuSubItem(
     icon: Icons.people_outlined,
-    title: 'Empleados',
+    title: 'Trabajadores',
     route: '/hr/employees',
   ),
   MenuSubItem(
@@ -754,8 +754,8 @@ class _AppSidebarState extends State<AppSidebar> {
                 ),
 
                 ExpandableMenuItem(
-                  icon: Icons.two_wheeler_outlined,
-                  activeIcon: Icons.two_wheeler,
+                  icon: Icons.pedal_bike_outlined,
+                  activeIcon: Icons.pedal_bike,
                   title: 'Taller',
                   currentLocation: currentLocation,
                   subItems: _workshopMenuItems,
@@ -1212,7 +1212,7 @@ class AppDrawer extends StatelessWidget {
 
           _buildDrawerExpandableItem(
             context,
-            icon: Icons.two_wheeler,
+            icon: Icons.pedal_bike,
             title: 'Taller',
             subItems: _workshopMenuItems,
             currentLocation: currentLocation,
