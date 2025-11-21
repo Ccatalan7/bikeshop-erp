@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -866,27 +867,26 @@ class _PegasTablePageState extends State<PegasTablePage>
         
         return Column(
           children: [
-            // Table header
-            SingleChildScrollView(
-              controller: _horizontalScrollController,
-              scrollDirection: Axis.horizontal,
-              physics: const NeverScrollableScrollPhysics(),
-              child: SizedBox(
-                width: tableWidth,
-                child: _buildTableHeader(tableWidth),
-              ),
-            ),
-            // Table body
+            // Table header and body wrapped in single horizontal scroll
             Expanded(
               child: SingleChildScrollView(
                 controller: _horizontalScrollController,
                 scrollDirection: Axis.horizontal,
                 child: SizedBox(
                   width: tableWidth,
-                  child: ListView.builder(
-                    itemCount: _filteredJobs.length,
-                    itemBuilder: (context, index) => 
-                        _buildTableRow(_filteredJobs[index], tableWidth),
+                  child: Column(
+                    children: [
+                      // Table header
+                      _buildTableHeader(tableWidth),
+                      // Table body
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: _filteredJobs.length,
+                          itemBuilder: (context, index) => 
+                              _buildTableRow(_filteredJobs[index], tableWidth),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1184,11 +1184,17 @@ class _PegasTablePageState extends State<PegasTablePage>
           onTap: () => _showBikeSelectorDialog(job, customer),
           child: Row(
             children: [
-              // Bike icon (always show)
-              Icon(
-                Icons.pedal_bike_outlined,
-                size: 18,
+              // MTB bike icon from local asset
+              Image.asset(
+                'assets/icons/mtb_bike.png',
+                width: 18,
+                height: 18,
                 color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                errorBuilder: (context, error, stackTrace) => Icon(
+                  Icons.pedal_bike,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                ),
               ),
               const SizedBox(width: 6),
               // Bike image thumbnail if available

@@ -49,6 +49,7 @@ dependencies:
   flutter_colorpicker: ^1.1.0
   fl_chart: ^0.66.2
   flutter_typeahead: ^5.0.1
+  flutter_svg: ^2.0.10+1
   
   # Utilities
   uuid: ^4.4.0

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" fill="currentColor">
+  <!-- Rear wheel with thick tire (MTB style) -->
+  <circle cx="120" cy="280" r="95" fill="currentColor"/>
+  <circle cx="120" cy="280" r="80" fill="white"/>
+  <circle cx="120" cy="280" r="65" fill="currentColor"/>
+  <circle cx="120" cy="280" r="50" fill="white"/>
+  <circle cx="120" cy="280" r="35" fill="currentColor"/>
+  
+  <!-- Front wheel with thick tire (MTB style) -->
+  <circle cx="480" cy="280" r="95" fill="currentColor"/>
+  <circle cx="480" cy="280" r="80" fill="white"/>
+  <circle cx="480" cy="280" r="65" fill="currentColor"/>
+  <circle cx="480" cy="280" r="50" fill="white"/>
+  <circle cx="480" cy="280" r="35" fill="currentColor"/>
+  
+  <!-- Main frame triangle -->
+  <path d="M 140 120 L 300 240 L 120 280 Z" fill="none" stroke="currentColor" stroke-width="22" stroke-linejoin="round"/>
+  
+  <!-- Top tube and down tube -->
+  <path d="M 140 120 L 380 180" fill="none" stroke="currentColor" stroke-width="22" stroke-linecap="round"/>
+  
+  <!-- Seat tube -->
+  <path d="M 140 120 L 120 70" fill="none" stroke="currentColor" stroke-width="20" stroke-linecap="round"/>
+  
+  <!-- Seat -->
+  <ellipse cx="120" cy="55" rx="40" ry="18" fill="currentColor"/>
+  
+  <!-- Rear triangle -->
+  <path d="M 300 240 L 120 280" fill="none" stroke="currentColor" stroke-width="20" stroke-linecap="round"/>
+  
+  <!-- Front fork -->
+  <path d="M 380 180 L 480 280" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round"/>
+  
+  <!-- Head tube to handlebar -->
+  <path d="M 380 180 L 420 130" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round"/>
+  
+  <!-- Handlebar -->
+  <path d="M 390 115 Q 420 110 450 130" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round"/>
+  
+  <!-- Bottom bracket and crank -->
+  <circle cx="300" cy="240" r="28" fill="currentColor"/>
+  <circle cx="300" cy="240" r="18" fill="white"/>
+  <path d="M 280 240 L 240 270" fill="none" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+</svg>
