@@ -68,6 +68,17 @@ class _PegasTablePageState extends State<PegasTablePage>
   bool _showOnlyOverdue = false;
   bool _showOnlyUnpaid = false;
 
+  // Pagination
+  int _currentPage = 0;
+  int _rowsPerPage = 25;
+
+  // Bulk selection
+  final Set<String> _selectedJobIds = {};
+  bool get _isAnySelected => _selectedJobIds.isNotEmpty;
+
+  // Column visibility panel
+  bool _showColumnPanel = false;
+
   @override
   void initState() {
     super.initState();
@@ -91,6 +102,17 @@ class _PegasTablePageState extends State<PegasTablePage>
   void _initializeColumns() {
     _columns = [
       ColumnConfig(
+        id: 'checkbox',
+        label: '',
+        width: 48,
+        minWidth: 48,
+        maxWidth: 48,
+        visible: true,
+        sortable: false,
+        resizable: false,
+        reorderable: false,
+      ),
+      ColumnConfig(
         id: 'status',
         label: '',
         width: 40,
@@ -99,6 +121,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         visible: true,
         sortable: false,
         resizable: false,
+        reorderable: false,
       ),
       ColumnConfig(
         id: 'job_number',
@@ -458,6 +481,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                   children: [
                     _buildModernHeader(),
                     _buildToolbar(),
+                    if (_showColumnPanel) _buildColumnVisibilityPanel(),
                     Expanded(child: _buildDataTable()),
                   ],
                 ),
@@ -608,7 +632,9 @@ class _PegasTablePageState extends State<PegasTablePage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Gestión de Trabajos',
+                  _isAnySelected
+                      ? '${_selectedJobIds.length} seleccionado${_selectedJobIds.length != 1 ? 's' : ''}'
+                      : 'Gestión de Trabajos',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w600,
                         letterSpacing: -0.5,
@@ -625,22 +651,58 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
           ),
 
-          // Action buttons
-          const SizedBox(width: 16),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-            tooltip: 'Actualizar',
-          ),
-          const SizedBox(width: 8),
-          FilledButton.tonalIcon(
-            onPressed: () {
-              _markNeedsRefresh();
-              context.push('/taller/pegas/nueva');
-            },
-            icon: const Icon(Icons.add, size: 20),
-            label: const Text('Nuevo Trabajo'),
-          ),
+          // Bulk action buttons (shown when items selected)
+          if (_isAnySelected) ...[
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => setState(() => _selectedJobIds.clear()),
+              tooltip: 'Deseleccionar todo',
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonalIcon(
+              onPressed: _exportSelectedToCSV,
+              icon: const Icon(Icons.file_download, size: 20),
+              label: const Text('Exportar'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: _bulkUpdateStatus,
+              icon: const Icon(Icons.edit, size: 20),
+              label: const Text('Cambiar Estado'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ] else ...[
+            // Regular action buttons
+            IconButton(
+              icon: Icon(_showColumnPanel ? Icons.view_column : Icons.view_column_outlined),
+              onPressed: () => setState(() => _showColumnPanel = !_showColumnPanel),
+              tooltip: 'Columnas',
+              isSelected: _showColumnPanel,
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.file_download),
+              onPressed: _exportAllToCSV,
+              tooltip: 'Exportar Todo',
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _loadData,
+              tooltip: 'Actualizar',
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonalIcon(
+              onPressed: () {
+                _markNeedsRefresh();
+                context.push('/taller/pegas/nueva');
+              },
+              icon: const Icon(Icons.add, size: 20),
+              label: const Text('Nuevo Trabajo'),
+            ),
+          ],
         ],
       ),
     );
@@ -863,6 +925,11 @@ class _PegasTablePageState extends State<PegasTablePage>
       );
     }
 
+    // Calculate pagination
+    final startIndex = _currentPage * _rowsPerPage;
+    final endIndex = (startIndex + _rowsPerPage).clamp(0, _filteredJobs.length);
+    final paginatedJobs = _filteredJobs.sublist(startIndex, endIndex);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         // Calculate total width of all visible columns
@@ -891,9 +958,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                       // Table body
                       Expanded(
                         child: ListView.builder(
-                          itemCount: _filteredJobs.length,
+                          itemCount: paginatedJobs.length,
                           itemBuilder: (context, index) =>
-                              _buildTableRow(_filteredJobs[index], tableWidth),
+                              _buildTableRow(paginatedJobs[index], tableWidth),
                         ),
                       ),
                     ],
@@ -901,13 +968,83 @@ class _PegasTablePageState extends State<PegasTablePage>
                 ),
               ),
             ),
+            // Pagination controls
+            _buildPaginationControls(startIndex, endIndex),
           ],
         );
       },
     );
   }
 
+  Widget _buildPaginationControls(int startIndex, int endIndex) {
+    final theme = Theme.of(context);
+    final totalPages = (_filteredJobs.length / _rowsPerPage).ceil();
+
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border(
+          top: BorderSide(color: theme.dividerColor),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            'Filas por página:',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(width: 8),
+          DropdownButton<int>(
+            value: _rowsPerPage,
+            items: const [
+              DropdownMenuItem(value: 10, child: Text('10')),
+              DropdownMenuItem(value: 25, child: Text('25')),
+              DropdownMenuItem(value: 50, child: Text('50')),
+              DropdownMenuItem(value: 100, child: Text('100')),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _rowsPerPage = value!;
+                _currentPage = 0;
+              });
+            },
+            underline: const SizedBox(),
+          ),
+          const Spacer(),
+          Text(
+            '${startIndex + 1}-$endIndex de ${_filteredJobs.length}',
+            style: theme.textTheme.bodySmall,
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            onPressed: _currentPage > 0
+                ? () {
+                    setState(() => _currentPage--);
+                  }
+                : null,
+          ),
+          Text(
+            'Página ${_currentPage + 1} de $totalPages',
+            style: theme.textTheme.bodySmall,
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            onPressed: endIndex < _filteredJobs.length
+                ? () {
+                    setState(() => _currentPage++);
+                  }
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTableHeader(double tableWidth) {
+    final visibleColumns = _columns.where((col) => col.visible).toList();
+
     return Container(
       width: tableWidth,
       height: 48,
@@ -923,16 +1060,98 @@ class _PegasTablePageState extends State<PegasTablePage>
         ),
       ),
       child: Row(
-        children: _columns.where((col) => col.visible).map((col) {
-          return _buildHeaderCell(col);
-        }).toList(),
+        children: visibleColumns.map(_buildHeaderCell).toList(),
       ),
     );
   }
 
   Widget _buildHeaderCell(ColumnConfig col) {
-    // Use Expanded for flexible columns, Container with fixed width for non-resizable
-    final child = Row(
+    final theme = Theme.of(context);
+
+    if (col.id == 'checkbox') {
+      bool? checkboxValue;
+      if (_filteredJobs.isEmpty || _selectedJobIds.isEmpty) {
+        checkboxValue = false;
+      } else if (_selectedJobIds.length == _filteredJobs.length) {
+        checkboxValue = true;
+      } else {
+        checkboxValue = null;
+      }
+
+      return Container(
+        width: col.width,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Checkbox(
+          value: checkboxValue,
+          onChanged: (checked) {
+            setState(() {
+              if (checked == true) {
+                _selectedJobIds
+                  ..clear()
+                  ..addAll(_filteredJobs
+                      .map((j) => j.id)
+                      .whereType<String>());
+              } else {
+                _selectedJobIds.clear();
+              }
+            });
+          },
+          tristate: true,
+        ),
+      );
+    }
+
+    Widget buildContent() => _buildHeaderContent(col);
+    Widget baseContent;
+
+    if (col.reorderable) {
+      baseContent = DragTarget<String>(
+        onWillAccept: (sourceId) => sourceId != null && sourceId != col.id,
+        onAccept: (sourceId) => _reorderColumns(sourceId, col.id),
+        builder: (context, candidateData, rejectedData) {
+          final isActive = candidateData.isNotEmpty;
+          final decoratedChild = DecoratedBox(
+            decoration: BoxDecoration(
+              color: isActive
+                  ? theme.colorScheme.primary.withOpacity(0.08)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: buildContent(),
+          );
+
+          return LongPressDraggable<String>(
+            data: col.id,
+            axis: Axis.horizontal,
+            feedback: _buildHeaderDragFeedback(col),
+            child: decoratedChild,
+          );
+        },
+      );
+    } else {
+      baseContent = buildContent();
+    }
+
+    if (col.maxWidth != null && col.maxWidth == col.width) {
+      return Container(
+        width: col.width,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: baseContent,
+      );
+    } else {
+      return Expanded(
+        flex: (col.width ~/ 10).clamp(1, 100),
+        child: Container(
+          constraints: BoxConstraints(minWidth: col.minWidth),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: baseContent,
+        ),
+      );
+    }
+  }
+
+  Widget _buildHeaderContent(ColumnConfig col) {
+    return Row(
       children: [
         Expanded(
           child: GestureDetector(
@@ -984,25 +1203,61 @@ class _PegasTablePageState extends State<PegasTablePage>
           ),
       ],
     );
+  }
 
-    if (col.maxWidth != null && col.maxWidth == col.width) {
-      // Fixed width column
-      return Container(
+  Widget _buildHeaderDragFeedback(ColumnConfig col) {
+    return Material(
+      elevation: 6,
+      color: Colors.transparent,
+      child: Container(
         width: col.width,
+        height: 48,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: child,
-      );
-    } else {
-      // Flexible column
-      return Expanded(
-        flex: (col.width ~/ 10).clamp(1, 100), // Use width as flex ratio
-        child: Container(
-          constraints: BoxConstraints(minWidth: col.minWidth),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: child,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Theme.of(context).colorScheme.primary, width: 1),
         ),
-      );
-    }
+        child: DefaultTextStyle(
+          style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(fontWeight: FontWeight.w600) ??
+              const TextStyle(fontWeight: FontWeight.w600),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(col.label, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _reorderColumns(String sourceId, String targetId) {
+    if (sourceId == targetId) return;
+    final sourceIndex = _columns.indexWhere((c) => c.id == sourceId);
+    final targetIndex = _columns.indexWhere((c) => c.id == targetId);
+    if (sourceIndex == -1 || targetIndex == -1) return;
+
+    setState(() {
+      final column = _columns.removeAt(sourceIndex);
+
+      // After removal, target index may shift if source was before target
+      var adjustedTargetIndex = targetIndex;
+      if (sourceIndex < targetIndex) {
+        adjustedTargetIndex -= 1;
+      }
+
+      if (sourceIndex < targetIndex) {
+        // Moving to the right → insert AFTER target column
+        final insertIndex = (adjustedTargetIndex + 1).clamp(0, _columns.length);
+        _columns.insert(insertIndex, column);
+      } else {
+        // Moving to the left → insert BEFORE target column
+        final insertIndex = adjustedTargetIndex.clamp(0, _columns.length);
+        _columns.insert(insertIndex, column);
+      }
+    });
   }
 
   Widget _buildTableRow(MechanicJob job, double tableWidth) {
@@ -1066,6 +1321,20 @@ class _PegasTablePageState extends State<PegasTablePage>
   Widget _getCellContent(
       String columnId, MechanicJob job, Customer? customer, Bike? bike) {
     switch (columnId) {
+      case 'checkbox':
+        return Checkbox(
+          value: _selectedJobIds.contains(job.id),
+          onChanged: (checked) {
+            setState(() {
+              if (checked == true) {
+                _selectedJobIds.add(job.id!);
+              } else {
+                _selectedJobIds.remove(job.id);
+              }
+            });
+          },
+        );
+        
       case 'status':
         // Clickable status indicator with color
         return InkWell(
@@ -1202,6 +1471,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       case 'bike':
         // Clickable bike with optional image preview
         final bikeName = bike?.displayName ?? 'N/A';
+        final bikeImageUrl = bike?.imageUrl;
         return InkWell(
           onTap: () => _showBikeSelectorDialog(job, customer),
           child: Row(
@@ -1219,16 +1489,16 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
               const SizedBox(width: 6),
               // Bike image thumbnail if available
-              if (bike?.imageUrl != null) ...[
+              if (bikeImageUrl != null) ...[
                 GestureDetector(
-                  onTap: () => _showBikeImageModal(bike!.imageUrl!),
+                  onTap: () => _showBikeImageModal(bikeImageUrl),
                   child: Container(
                     width: 28,
                     height: 28,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(4),
                       image: DecorationImage(
-                        image: NetworkImage(bike!.imageUrl!),
+                        image: NetworkImage(bikeImageUrl),
                         fit: BoxFit.cover,
                       ),
                       border: Border.all(
@@ -2118,6 +2388,129 @@ class _PegasTablePageState extends State<PegasTablePage>
         return Colors.red.shade600;
     }
   }
+
+  // Column visibility panel
+  Widget _buildColumnVisibilityPanel() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).dividerColor),
+        ),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _columns.where((col) => col.id != 'checkbox' && col.id != 'status').map((col) {
+          return FilterChip(
+            label: Text(col.label),
+            selected: col.visible,
+            onSelected: (selected) {
+              setState(() {
+                col.visible = selected;
+              });
+            },
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  // Export all to CSV
+  void _exportAllToCSV() {
+    _exportToCSV(_filteredJobs);
+  }
+
+  // Export selected to CSV
+  void _exportSelectedToCSV() {
+    final selectedJobs = _filteredJobs.where((job) => _selectedJobIds.contains(job.id)).toList();
+    _exportToCSV(selectedJobs);
+  }
+
+  void _exportToCSV(List<MechanicJob> jobs) {
+    final csv = StringBuffer();
+    // Header
+    csv.writeln('N° Trabajo,Cliente,Bicicleta,Ingreso,Plazo,Estado,Prioridad,Total');
+    // Rows
+    for (var job in jobs) {
+      final customer = _customers[job.customerId];
+      final bike = _bikes[job.bikeId];
+      csv.writeln([
+        job.jobNumber,
+        customer?.name ?? 'Sin cliente',
+        bike?.displayName ?? 'Sin bicicleta',
+        DateFormat('dd/MM/yyyy').format(job.arrivalDate),
+        job.deadline != null ? DateFormat('dd/MM/yyyy').format(job.deadline!) : 'Sin plazo',
+        job.status.displayName,
+        job.priority.displayName,
+        '\$${NumberFormat('#,###').format(job.totalCost)}',
+      ].join(',')); 
+    }
+    
+    // Download logic (copy to clipboard for web)
+    Clipboard.setData(ClipboardData(text: csv.toString()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${jobs.length} trabajos copiados al portapapeles (formato CSV)'),
+        action: SnackBarAction(
+          label: 'OK',
+          onPressed: () {},
+        ),
+      ),
+    );
+  }
+
+  // Bulk update status
+  Future<void> _bulkUpdateStatus() async {
+    final selectedJobs = _filteredJobs.where((job) => _selectedJobIds.contains(job.id)).toList();
+    if (selectedJobs.isEmpty) return;
+
+    final newStatus = await showDialog<JobStatus>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cambiar Estado'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: JobStatus.values.map((status) {
+            return ListTile(
+              title: Text(status.displayName),
+              onTap: () => Navigator.pop(context, status),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+
+    if (newStatus == null) return;
+
+    try {
+      for (var job in selectedJobs) {
+        await _bikeshopService.updateJobStatus(job.id!, newStatus);
+      }
+      setState(() {
+        _selectedJobIds.clear();
+      });
+      _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${selectedJobs.length} trabajos actualizados'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 }
 
 class ColumnConfig {
@@ -2129,6 +2522,7 @@ class ColumnConfig {
   bool visible;
   final bool sortable;
   final bool resizable;
+  final bool reorderable;
 
   ColumnConfig({
     required this.id,
@@ -2139,5 +2533,6 @@ class ColumnConfig {
     this.visible = true,
     this.sortable = true,
     this.resizable = true,
+    this.reorderable = true,
   });
 }
