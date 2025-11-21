@@ -16,7 +16,7 @@ import '../models/bikeshop_models.dart';
 class SmartTaskService extends ChangeNotifier {
   final DatabaseService _db;
   final TenantService _tenantService = TenantService();
-  
+
   RealtimeChannel? _tasksChannel;
   Timer? _notifyDebounceTimer;
   bool _isDisposed = false;
@@ -97,16 +97,22 @@ class SmartTaskService extends ChangeNotifier {
     bool? isStandalone,
   }) async {
     try {
-      var query = Supabase.instance.client.from('mechanic_job_tasks').select().eq('job_id', jobId);
-      
+      var query = Supabase.instance.client
+          .from('mechanic_job_tasks')
+          .select()
+          .eq('job_id', jobId);
+
       if (parentItemId != null) {
         query = query.eq('parent_item_id', parentItemId);
       }
       if (isStandalone != null) {
         query = query.eq('is_standalone', isStandalone);
-      }      final data = await query.order('display_order', ascending: true);
+      }
+      final data = await query.order('display_order', ascending: true);
 
-      return (data as List).map((json) => MechanicJobTask.fromJson(json)).toList();
+      return (data as List)
+          .map((json) => MechanicJobTask.fromJson(json))
+          .toList();
     } catch (e) {
       if (kDebugMode) print('❌ Error fetching tasks: $e');
       rethrow;
@@ -114,12 +120,13 @@ class SmartTaskService extends ChangeNotifier {
   }
 
   /// Get tasks grouped by parent (for UI rendering)
-  Future<Map<String, List<MechanicJobTask>>> getTasksGroupedByParent(String jobId) async {
+  Future<Map<String, List<MechanicJobTask>>> getTasksGroupedByParent(
+      String jobId) async {
     try {
       final allTasks = await getTasksForJob(jobId);
-      
+
       final grouped = <String, List<MechanicJobTask>>{};
-      
+
       for (final task in allTasks) {
         if (task.isStandalone) {
           grouped.putIfAbsent('standalone', () => []).add(task);
@@ -127,7 +134,7 @@ class SmartTaskService extends ChangeNotifier {
           grouped.putIfAbsent('item_${task.parentItemId}', () => []).add(task);
         }
       }
-      
+
       return grouped;
     } catch (e) {
       if (kDebugMode) print('❌ Error grouping tasks: $e');
@@ -146,6 +153,60 @@ class SmartTaskService extends ChangeNotifier {
       return MechanicJobTask.fromJson(data);
     } catch (e) {
       if (kDebugMode) print('❌ Error creating task: $e');
+      rethrow;
+    }
+  }
+
+  /// Generate auto-tasks from product description
+  /// Parses description by newlines and creates a task for each non-empty line
+  Future<List<MechanicJobTask>> generateAutoTasksFromDescription({
+    required String jobId,
+    required String parentItemId,
+    required String description,
+  }) async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) throw Exception('No tenant ID');
+
+      // Split description by newlines and filter empty lines
+      final lines = description
+          .split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList();
+
+      if (kDebugMode) {
+        print(
+            '🤖 [SmartTaskService] Generating ${lines.length} auto-tasks from description');
+      }
+
+      final tasks = <MechanicJobTask>[];
+
+      for (int i = 0; i < lines.length; i++) {
+        final task = MechanicJobTask(
+          tenantId: tenantId,
+          jobId: jobId,
+          parentItemId: parentItemId,
+          taskName: lines[i],
+          taskDescription: null,
+          isCompleted: false,
+          isStandalone: false,
+          isAdhoc: false,
+          parsedFromDescription: true, // Mark as auto-generated
+          displayOrder: i, // Auto-tasks get lower order numbers
+        );
+
+        final created = await createTask(task);
+        tasks.add(created);
+      }
+
+      if (kDebugMode) {
+        print('✅ [SmartTaskService] Created ${tasks.length} auto-tasks');
+      }
+
+      return tasks;
+    } catch (e) {
+      if (kDebugMode) print('❌ Error generating auto-tasks: $e');
       rethrow;
     }
   }
@@ -225,7 +286,9 @@ class SmartTaskService extends ChangeNotifier {
   /// Save collapse state
   Future<void> savePreferences(TaskPreferences prefs) async {
     try {
-      await Supabase.instance.client.from('mechanic_job_task_preferences').upsert(prefs.toJson());
+      await Supabase.instance.client
+          .from('mechanic_job_task_preferences')
+          .upsert(prefs.toJson());
     } catch (e) {
       if (kDebugMode) print('❌ Error saving preferences: $e');
       rethrow;
@@ -240,16 +303,17 @@ class SmartTaskService extends ChangeNotifier {
   Future<TaskProgress> calculateProgress(String jobId) async {
     try {
       final tasks = await getTasksForJob(jobId);
-      
+
       final totalTasks = tasks.length;
       final completedTasks = tasks.where((t) => t.isCompleted).length;
-      final percentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0.0;
-      
+      final percentage =
+          totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0.0;
+
       // Calculate total with ad-hocs
       final totalPrice = tasks
           .where((t) => t.isAdhoc && t.adhocPrice != null)
           .fold(0.0, (sum, task) => sum + task.adhocPrice!);
-      
+
       return TaskProgress(
         totalTasks: totalTasks,
         completedTasks: completedTasks,
@@ -272,10 +336,10 @@ class SmartTaskService extends ChangeNotifier {
         jobId,
         parentItemId: parentItemId,
       );
-      
+
       final total = tasks.length;
       final completed = tasks.where((t) => t.isCompleted).length;
-      
+
       return ParentCompletionStatus(
         totalTasks: total,
         completedTasks: completed,

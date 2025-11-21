@@ -18,6 +18,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/whatsapp_service.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
+import '../services/smart_task_service.dart';
 import '../models/bikeshop_models.dart';
 import 'bike_form_dialog.dart';
 
@@ -576,6 +577,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       }
 
       // Add new products/parts
+      final taskService = Provider.of<SmartTaskService>(context, listen: false);
+      
       for (final item in _partItems) {
         final quantity = item.quantity.toDouble();
         final unitPrice = item.unitPrice;
@@ -590,7 +593,24 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           totalPrice: quantity * unitPrice,
           itemType: 'product',
         );
-        await bikeshopService.createJobItem(jobItem);
+        final created = await bikeshopService.createJobItem(jobItem);
+        
+        // 🤖 Auto-generate tasks from product description if available
+        if (item.product != null && 
+            item.product!.description != null && 
+            item.product!.description!.isNotEmpty &&
+            created.id != null) {
+          try {
+            await taskService.generateAutoTasksFromDescription(
+              jobId: jobId,
+              parentItemId: created.id!,
+              description: item.product!.description!,
+            );
+            debugPrint('✅ Auto-tasks generated for ${item.name}');
+          } catch (e) {
+            debugPrint('⚠️ Failed to generate auto-tasks for ${item.name}: $e');
+          }
+        }
       }
 
       // Add new services (stored as mechanic_job_items)
@@ -615,7 +635,24 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           notes: 'Labor: ${hoursWorked.toStringAsFixed(1)}h @ \$${hourlyRate.toStringAsFixed(0)}/hr',
         );
 
-        await bikeshopService.createJobItem(jobServiceItem);
+        final created = await bikeshopService.createJobItem(jobServiceItem);
+        
+        // 🤖 Auto-generate tasks from service product description if available
+        if (serviceProduct != null && 
+            serviceProduct.description != null && 
+            serviceProduct.description!.isNotEmpty &&
+            created.id != null) {
+          try {
+            await taskService.generateAutoTasksFromDescription(
+              jobId: jobId,
+              parentItemId: created.id!,
+              description: serviceProduct.description!,
+            );
+            debugPrint('✅ Auto-tasks generated for service ${name}');
+          } catch (e) {
+            debugPrint('⚠️ Failed to generate auto-tasks for service ${name}: $e');
+          }
+        }
       }
 
       // AFTER all items are updated, sync to invoice if it exists

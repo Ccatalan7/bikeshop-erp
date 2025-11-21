@@ -11,7 +11,7 @@ import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/models/product.dart';
 
 /// Smart Tasks Tab - Collapsible hierarchical checklist with three-way sync
-/// 
+///
 /// Features:
 /// - Auto-parsed sub-tasks from product/service descriptions
 /// - Ad-hoc tasks with optional pricing
@@ -24,7 +24,8 @@ class TasksTabView extends StatefulWidget {
   final bool readOnly;
   final Function(MechanicJobItem)? onItemAdded;
   final Function(String itemId)? onItemRemoved;
-  final VoidCallback? onAddItemPressed; // NEW: Callback to trigger parent's add item dialog
+  final VoidCallback?
+      onAddItemPressed; // NEW: Callback to trigger parent's add item dialog
 
   const TasksTabView({
     Key? key,
@@ -63,15 +64,30 @@ class _TasksTabViewState extends State<TasksTabView> {
       _taskService = context.read<SmartTaskService>();
       _bikeshopService = context.read<BikeshopService>();
       _tenantService = context.read<TenantService>();
+      
+      // Listen to task service changes for realtime updates
+      _taskService!.addListener(_onTasksChanged);
+      
       _loadTasks();
     }
   }
 
+  @override
+  void dispose() {
+    _taskService?.removeListener(_onTasksChanged);
+    super.dispose();
+  }
+
+  void _onTasksChanged() {
+    // Don't reload on every change - only reload if we need to sync external changes
+    // For checkbox toggles, we use optimistic updates instead
+  }
+
   Future<void> _loadTasks() async {
     if (!mounted || _taskService == null) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
       // Fetch tasks, grouped tasks, progress, and items in parallel
       final results = await Future.wait([
@@ -80,7 +96,7 @@ class _TasksTabViewState extends State<TasksTabView> {
         _taskService!.calculateProgress(widget.jobId),
         _fetchItems(),
       ]);
-      
+
       if (mounted) {
         setState(() {
           _groupedTasks = results[1] as Map<String, List<MechanicJobTask>>;
@@ -104,8 +120,10 @@ class _TasksTabViewState extends State<TasksTabView> {
           .select()
           .eq('job_id', widget.jobId)
           .order('created_at', ascending: true);
-      
-      return (data as List).map((json) => MechanicJobItem.fromJson(json)).toList();
+
+      return (data as List)
+          .map((json) => MechanicJobItem.fromJson(json))
+          .toList();
     } catch (e) {
       debugPrint('❌ Failed to fetch items: $e');
       return [];
@@ -118,16 +136,16 @@ class _TasksTabViewState extends State<TasksTabView> {
       children: [
         // Header with progress
         _buildHeader(),
-        
+
         const Divider(height: 1),
-        
+
         // Task list
         Expanded(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _buildTaskList(),
         ),
-        
+
         // Footer with overall progress
         if (_progress != null && _progress!.totalTasks > 0)
           _buildProgressFooter(),
@@ -229,7 +247,6 @@ class _TasksTabViewState extends State<TasksTabView> {
         ..._items
             .where((item) => !item.productName.startsWith('Ad-hoc: '))
             .map((item) => _buildItemGroup(item)),
-        
         if (_groupedTasks.containsKey('standalone'))
           _buildStandaloneTasksGroup(_groupedTasks['standalone']!),
       ],
@@ -239,9 +256,20 @@ class _TasksTabViewState extends State<TasksTabView> {
   /// Build item (product) group with parent checkbox and sub-tasks
   Widget _buildItemGroup(MechanicJobItem item) {
     final subTasks = _groupedTasks['item_${item.id}'] ?? [];
-    final completionStatus = _getCompletionStatus(subTasks);
+
+    // Sort tasks: auto-generated first, then manual tasks
+    final sortedTasks = List<MechanicJobTask>.from(subTasks)
+      ..sort((a, b) {
+        // Auto-generated tasks come first
+        if (a.parsedFromDescription && !b.parsedFromDescription) return -1;
+        if (!a.parsedFromDescription && b.parsedFromDescription) return 1;
+        // Within each group, sort by displayOrder
+        return a.displayOrder.compareTo(b.displayOrder);
+      });
+
+    final completionStatus = _getCompletionStatus(sortedTasks);
     final isCollapsed = _collapsedItems.contains('item_${item.id}');
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: _getGroupBackgroundColor(completionStatus),
@@ -249,15 +277,15 @@ class _TasksTabViewState extends State<TasksTabView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Parent item header
-          _buildItemHeader(item, subTasks, completionStatus),
-          
+          _buildItemHeader(item, sortedTasks, completionStatus),
+
           // Sub-tasks (if any and not collapsed)
-          if (subTasks.isNotEmpty && !isCollapsed)
-            ...subTasks.map((task) => Padding(
-              padding: const EdgeInsets.only(left: 32),
-              child: _buildTaskItem(task),
-            )),
-          
+          if (sortedTasks.isNotEmpty && !isCollapsed)
+            ...sortedTasks.map((task) => Padding(
+                  padding: const EdgeInsets.only(left: 32),
+                  child: _buildTaskItem(task),
+                )),
+
           // Add sub-task button
           if (!widget.readOnly && item.id != null && !isCollapsed)
             Padding(
@@ -274,7 +302,7 @@ class _TasksTabViewState extends State<TasksTabView> {
   /// Build standalone tasks group
   Widget _buildStandaloneTasksGroup(List<MechanicJobTask> tasks) {
     if (tasks.isEmpty) return const SizedBox.shrink();
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -313,7 +341,7 @@ class _TasksTabViewState extends State<TasksTabView> {
     final completed = subTasks.where((t) => t.isCompleted).length;
     final total = subTasks.length;
     final isCollapsed = _collapsedItems.contains('item_${item.id}');
-    
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -346,24 +374,28 @@ class _TasksTabViewState extends State<TasksTabView> {
             )
           else
             const SizedBox(width: 20),
-          
+
           const SizedBox(width: 8),
-          
+
           // Item icon
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+              color: Theme.of(context)
+                  .colorScheme
+                  .primaryContainer
+                  .withOpacity(0.5),
               borderRadius: BorderRadius.circular(6),
             ),
             child: const Icon(Icons.shopping_cart, size: 18),
           ),
           const SizedBox(width: 12),
-          
+
           // Product name (clickable for inline edit)
           Expanded(
             child: InkWell(
-              onTap: widget.readOnly ? null : () => _showEditProductDialog(item),
+              onTap:
+                  widget.readOnly ? null : () => _showEditProductDialog(item),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -422,7 +454,8 @@ class _TasksTabViewState extends State<TasksTabView> {
   /// Build service header with pricing summary
   Widget _buildTaskItem(MechanicJobTask task) {
     final isEditing = _editingTaskId == task.id;
-    
+    final isAutoGenerated = task.parsedFromDescription;
+
     if (isEditing) {
       // Inline edit mode
       final controller = TextEditingController(text: task.taskName);
@@ -436,7 +469,7 @@ class _TasksTabViewState extends State<TasksTabView> {
               onChanged: null,
             ),
             const SizedBox(width: 12),
-            
+
             // Inline text field
             Expanded(
               child: TextField(
@@ -445,7 +478,8 @@ class _TasksTabViewState extends State<TasksTabView> {
                 style: const TextStyle(fontSize: 14),
                 decoration: const InputDecoration(
                   isDense: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   border: OutlineInputBorder(),
                 ),
                 onSubmitted: (newName) async {
@@ -456,7 +490,7 @@ class _TasksTabViewState extends State<TasksTabView> {
                 },
               ),
             ),
-            
+
             // Cancel button
             IconButton(
               icon: const Icon(Icons.close, size: 18),
@@ -467,11 +501,24 @@ class _TasksTabViewState extends State<TasksTabView> {
         ),
       );
     }
-    
+
     // Normal display mode
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      constraints: const BoxConstraints(minHeight: 48),
+      decoration: isAutoGenerated
+          ? BoxDecoration(
+              color: Colors.blue.shade50.withOpacity(0.3),
+              border: Border(
+                left: BorderSide(
+                  color: Colors.blue.shade300,
+                  width: 3,
+                ),
+              ),
+            )
+          : null,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Checkbox
           Checkbox(
@@ -481,28 +528,28 @@ class _TasksTabViewState extends State<TasksTabView> {
                 : (value) => _toggleTaskCompletion(task, value ?? false),
           ),
           const SizedBox(width: 12),
-          
-          // Task name (clickable for inline edit)
+
+          // Task name (clickable for inline edit if not auto-generated)
           Expanded(
             child: InkWell(
-              onTap: widget.readOnly ? null : () {
-                setState(() => _editingTaskId = task.id);
-              },
+              onTap: widget.readOnly || isAutoGenerated
+                  ? null
+                  : () {
+                      setState(() => _editingTaskId = task.id);
+                    },
               child: Text(
                 task.taskName,
                 style: TextStyle(
                   fontSize: 14,
-                  decoration: task.isCompleted
-                      ? TextDecoration.lineThrough
-                      : null,
-                  color: task.isCompleted
-                      ? Colors.grey.shade600
-                      : null,
+                  decoration:
+                      task.isCompleted ? TextDecoration.lineThrough : null,
+                  color: task.isCompleted ? Colors.grey.shade600 : null,
+                  fontWeight: isAutoGenerated ? FontWeight.w500 : null,
                 ),
               ),
             ),
           ),
-          
+
           // Ad-hoc price badge
           if (task.isAdhoc && task.adhocPrice != null)
             Container(
@@ -521,9 +568,9 @@ class _TasksTabViewState extends State<TasksTabView> {
                 ),
               ),
             ),
-          
-          // Delete button
-          if (!widget.readOnly)
+
+          // Delete button (only for manual tasks)
+          if (!widget.readOnly && !isAutoGenerated)
             IconButton(
               icon: const Icon(Icons.delete_outline, size: 18),
               iconSize: 18,
@@ -552,7 +599,7 @@ class _TasksTabViewState extends State<TasksTabView> {
 
   Widget _buildProgressFooter() {
     final percentage = _progress!.percentage;
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -615,7 +662,7 @@ class _TasksTabViewState extends State<TasksTabView> {
   ParentCompletionStatus _getCompletionStatus(List<MechanicJobTask> tasks) {
     final completed = tasks.where((t) => t.isCompleted).length;
     final total = tasks.length;
-    
+
     return ParentCompletionStatus(
       totalTasks: total,
       completedTasks: completed,
@@ -627,7 +674,7 @@ class _TasksTabViewState extends State<TasksTabView> {
 
   Color _getGroupBackgroundColor(ParentCompletionStatus? status) {
     if (status == null) return Colors.white;
-    
+
     if (status.isAllCompleted) {
       return Colors.green.shade50;
     } else if (status.isInProgress) {
@@ -639,7 +686,7 @@ class _TasksTabViewState extends State<TasksTabView> {
 
   Color _getStatusBadgeColor(ParentCompletionStatus? status) {
     if (status == null) return Colors.grey;
-    
+
     if (status.isAllCompleted) {
       return Colors.green;
     } else if (status.isInProgress) {
@@ -656,7 +703,7 @@ class _TasksTabViewState extends State<TasksTabView> {
       widget.onAddItemPressed!();
       return;
     }
-    
+
     // Otherwise, show our own dialog
     await showDialog(
       context: context,
@@ -671,7 +718,8 @@ class _TasksTabViewState extends State<TasksTabView> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Solo se pueden agregar artículos del catálogo desde esta vista'),
+                      content: Text(
+                          'Solo se pueden agregar artículos del catálogo desde esta vista'),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -696,7 +744,7 @@ class _TasksTabViewState extends State<TasksTabView> {
       ),
     );
   }
-  
+
   Future<void> _addCatalogItem(Product product) async {
     try {
       if (_tenantService == null || _bikeshopService == null) {
@@ -704,14 +752,21 @@ class _TasksTabViewState extends State<TasksTabView> {
       }
       final tenantId = await _tenantService!.getTenantId();
       if (tenantId == null) throw Exception('No tenant ID');
-      
+
       // ⚠️ CRITICAL: Verify product has ID
       if (product.id == null || product.id!.isEmpty) {
         throw Exception('Product must have an ID to link to catalog');
       }
-      
+
       debugPrint('📦 Adding catalog item: ${product.name} (ID: ${product.id})');
-      
+      debugPrint('📦 FULL PRODUCT DATA:');
+      debugPrint('  - ID: ${product.id}');
+      debugPrint('  - Name: ${product.name}');
+      debugPrint('  - SKU: ${product.sku}');
+      debugPrint('  - Description: "${product.description}"');
+      debugPrint('  - Description null?: ${product.description == null}');
+      debugPrint('  - Description empty?: ${product.description?.isEmpty ?? true}');
+
       final item = MechanicJobItem(
         tenantId: tenantId,
         jobId: widget.jobId,
@@ -722,15 +777,52 @@ class _TasksTabViewState extends State<TasksTabView> {
         unitPrice: product.price,
         totalPrice: product.price,
       );
-      
+
       final created = await _bikeshopService!.createJobItem(item);
+
+      // 🤖 Auto-generate tasks from product description if available
+      debugPrint('🔍 Product description check:');
+      debugPrint('  - Has description: ${product.description != null}');
+      debugPrint('  - Description length: ${product.description?.length ?? 0}');
+      debugPrint('  - Description content: "${product.description}"');
+      debugPrint('  - TaskService available: ${_taskService != null}');
+      debugPrint('  - Created item ID: ${created.id}');
       
+      if (product.description != null &&
+          product.description!.isNotEmpty &&
+          _taskService != null &&
+          created.id != null) {
+        debugPrint('🤖 Generating auto-tasks from product description');
+        try {
+          final generatedTasks = await _taskService!.generateAutoTasksFromDescription(
+            jobId: widget.jobId,
+            parentItemId: created.id!,
+            description: product.description!,
+          );
+          debugPrint('✅ Auto-tasks generated successfully: ${generatedTasks.length} tasks');
+        } catch (e) {
+          debugPrint('⚠️ Failed to generate auto-tasks: $e');
+          // Don't fail the whole operation if auto-task generation fails
+        }
+      } else {
+        debugPrint('⚠️ Skipping auto-task generation:');
+        if (product.description == null || product.description!.isEmpty) {
+          debugPrint('  - Product has no description');
+        }
+        if (_taskService == null) {
+          debugPrint('  - TaskService is null');
+        }
+        if (created.id == null) {
+          debugPrint('  - Created item has no ID');
+        }
+      }
+
       if (widget.onItemAdded != null) {
         widget.onItemAdded!(created);
       }
-      
+
       await _loadTasks();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -751,13 +843,38 @@ class _TasksTabViewState extends State<TasksTabView> {
       }
     }
   }
-  
-  Future<void> _toggleTaskCompletion(MechanicJobTask task, bool isCompleted) async {
+
+  Future<void> _toggleTaskCompletion(
+      MechanicJobTask task, bool isCompleted) async {
     if (_taskService == null) return;
+    
+    // Optimistic update - update UI immediately
+    setState(() {
+      // Find and update the task in our local state
+      for (var group in _groupedTasks.values) {
+        final index = group.indexWhere((t) => t.id == task.id);
+        if (index != -1) {
+          group[index] = task.copyWith(isCompleted: isCompleted);
+          break;
+        }
+      }
+    });
+    
     try {
+      // Update in database (SmartTaskService will handle notifyListeners)
       await _taskService!.toggleTaskCompletion(task.id!, isCompleted);
-      _loadTasks(); // Refresh
     } catch (e) {
+      // Revert on error
+      setState(() {
+        for (var group in _groupedTasks.values) {
+          final index = group.indexWhere((t) => t.id == task.id);
+          if (index != -1) {
+            group[index] = task.copyWith(isCompleted: !isCompleted);
+            break;
+          }
+        }
+      });
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to update task: $e')),
@@ -767,6 +884,20 @@ class _TasksTabViewState extends State<TasksTabView> {
   }
 
   Future<void> _deleteTask(MechanicJobTask task) async {
+    // Prevent deletion of auto-generated tasks
+    if (task.parsedFromDescription) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Cannot delete auto-generated tasks'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -807,7 +938,7 @@ class _TasksTabViewState extends State<TasksTabView> {
 
   Future<void> _confirmRemoveItem(MechanicJobItem item) async {
     if (widget.onItemRemoved == null) return;
-    
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -826,7 +957,7 @@ class _TasksTabViewState extends State<TasksTabView> {
         ],
       ),
     );
-    
+
     if (confirmed == true && item.id != null) {
       widget.onItemRemoved!(item.id!);
       _loadTasks(); // Refresh view
@@ -837,7 +968,7 @@ class _TasksTabViewState extends State<TasksTabView> {
     final nameController = TextEditingController();
     final descriptionController = TextEditingController();
     final priceController = TextEditingController(text: '0');
-    
+
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -891,7 +1022,7 @@ class _TasksTabViewState extends State<TasksTabView> {
         ],
       ),
     );
-    
+
     if (result == true && nameController.text.isNotEmpty) {
       try {
         if (_tenantService == null || _taskService == null) {
@@ -899,24 +1030,26 @@ class _TasksTabViewState extends State<TasksTabView> {
         }
         final tenantId = await _tenantService!.getTenantId();
         if (tenantId == null) throw Exception('No tenant ID');
-        
+
         final price = double.tryParse(priceController.text) ?? 0;
-        
+
         final task = MechanicJobTask(
           tenantId: tenantId,
           jobId: widget.jobId,
           taskName: nameController.text,
-          taskDescription: descriptionController.text.isNotEmpty ? descriptionController.text : null,
+          taskDescription: descriptionController.text.isNotEmpty
+              ? descriptionController.text
+              : null,
           isStandalone: true,
           displayOrder: 0,
           isCompleted: false,
           isAdhoc: price > 0,
           adhocPrice: price > 0 ? price : null,
         );
-        
+
         await _taskService!.createTask(task);
         await _loadTasks();
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Task added')),
@@ -938,7 +1071,7 @@ class _TasksTabViewState extends State<TasksTabView> {
     final nameController = TextEditingController();
     final descriptionController = TextEditingController();
     final priceController = TextEditingController(text: '0');
-    
+
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -992,7 +1125,7 @@ class _TasksTabViewState extends State<TasksTabView> {
         ],
       ),
     );
-    
+
     if (result == true && nameController.text.isNotEmpty) {
       try {
         if (_tenantService == null || _taskService == null) {
@@ -1000,14 +1133,16 @@ class _TasksTabViewState extends State<TasksTabView> {
         }
         final tenantId = await _tenantService!.getTenantId();
         if (tenantId == null) throw Exception('No tenant ID');
-        
+
         final price = double.tryParse(priceController.text) ?? 0;
-        
+
         final task = MechanicJobTask(
           tenantId: tenantId,
           jobId: widget.jobId,
           taskName: nameController.text,
-          taskDescription: descriptionController.text.isNotEmpty ? descriptionController.text : null,
+          taskDescription: descriptionController.text.isNotEmpty
+              ? descriptionController.text
+              : null,
           isStandalone: false,
           parentItemId: parentId,
           displayOrder: 0,
@@ -1015,13 +1150,13 @@ class _TasksTabViewState extends State<TasksTabView> {
           isAdhoc: price > 0,
           adhocPrice: price > 0 ? price : null,
         );
-        
+
         debugPrint('🔵 [TasksTabView] Creating subtask: ${task.taskName}');
         await _taskService!.createTask(task);
         debugPrint('🔵 [TasksTabView] Subtask created, calling _loadTasks()');
         await _loadTasks();
         debugPrint('🔵 [TasksTabView] _loadTasks() completed');
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Sub-task added')),
@@ -1036,22 +1171,21 @@ class _TasksTabViewState extends State<TasksTabView> {
       }
     }
   }
-  
+
   // ============================================================
   // INLINE EDITING
   // ============================================================
-  
+
   Future<void> _updateTaskName(MechanicJobTask task, String newName) async {
     if (_taskService == null || task.id == null) return;
-    
+
     try {
       await Supabase.instance.client
           .from('mechanic_job_tasks')
-          .update({'task_name': newName})
-          .eq('id', task.id!);
-      
+          .update({'task_name': newName}).eq('id', task.id!);
+
       await _loadTasks();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Task updated')),
@@ -1065,7 +1199,7 @@ class _TasksTabViewState extends State<TasksTabView> {
       }
     }
   }
-  
+
   void _showEditProductDialog(MechanicJobItem item) async {
     ProductSelection? selectedProduct = ProductSelection(
       isCatalogProduct: item.productId != null,
@@ -1074,7 +1208,7 @@ class _TasksTabViewState extends State<TasksTabView> {
       customDescription: item.notes,
     );
     double quantity = item.quantity;
-    
+
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1104,7 +1238,8 @@ class _TasksTabViewState extends State<TasksTabView> {
                 onChanged: (value) {
                   quantity = double.tryParse(value) ?? item.quantity;
                 },
-                controller: TextEditingController(text: item.quantity.toString()),
+                controller:
+                    TextEditingController(text: item.quantity.toString()),
               ),
             ],
           ),
@@ -1121,7 +1256,7 @@ class _TasksTabViewState extends State<TasksTabView> {
         ],
       ),
     );
-    
+
     if (result == true && selectedProduct != null && item.id != null) {
       try {
         final product = selectedProduct!.product;
@@ -1134,14 +1269,14 @@ class _TasksTabViewState extends State<TasksTabView> {
           'total_price': (product?.price ?? item.unitPrice) * quantity,
           'notes': selectedProduct!.customDescription,
         };
-        
+
         await Supabase.instance.client
             .from('mechanic_job_items')
             .update(updates)
             .eq('id', item.id!);
-        
+
         await _loadTasks();
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Product updated')),

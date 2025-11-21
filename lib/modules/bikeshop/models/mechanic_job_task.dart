@@ -306,7 +306,8 @@ class TaskSummary {
       inProgress: json['in_progress'] as int? ?? 0,
       pending: json['pending'] as int? ?? 0,
       blocked: json['blocked'] as int? ?? 0,
-      completionPercentage: (json['completion_percentage'] as num?)?.toDouble() ?? 0.0,
+      completionPercentage:
+          (json['completion_percentage'] as num?)?.toDouble() ?? 0.0,
     );
   }
 

@@ -42,7 +42,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   bool _needsRefresh = false;
   Timer? _reloadDebounceTimer;
   String _searchTerm = '';
-  
+
   // Scroll controller for synchronized horizontal scrolling
   final ScrollController _horizontalScrollController = ScrollController();
 
@@ -278,7 +278,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     try {
       final items = await _bikeshopService.getJobItems(job.id!);
       final Map<String, String> productImages = {};
-      
+
       try {
         final productIds = items
             .where((item) => item.productId != null)
@@ -712,7 +712,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                               },
                             )
                           : null,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -738,7 +739,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   children: [
                     if (_showOnlyOverdue)
                       Chip(
-                        label: const Text('Vencidos', style: TextStyle(fontSize: 12)),
+                        label: const Text('Vencidos',
+                            style: TextStyle(fontSize: 12)),
                         deleteIcon: const Icon(Icons.close, size: 16),
                         onDeleted: () {
                           setState(() => _showOnlyOverdue = false);
@@ -749,7 +751,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                       ),
                     if (_showOnlyUnpaid)
                       Chip(
-                        label: const Text('Sin Pagar', style: TextStyle(fontSize: 12)),
+                        label: const Text('Sin Pagar',
+                            style: TextStyle(fontSize: 12)),
                         deleteIcon: const Icon(Icons.close, size: 16),
                         onDeleted: () {
                           setState(() => _showOnlyUnpaid = false);
@@ -770,7 +773,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                 itemBuilder: (context) => <PopupMenuEntry<String>>[
                   const PopupMenuItem(
                     enabled: false,
-                    child: Text('Filtros', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text('Filtros',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   const PopupMenuDivider(),
                   CheckedPopupMenuItem(
@@ -809,7 +813,8 @@ class _PegasTablePageState extends State<PegasTablePage>
               if (_filteredJobs.isNotEmpty)
                 Text(
                   'Valor total: ${NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(_filteredJobs.fold<double>(0, (sum, job) {
-                    final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
+                    final invoice =
+                        job.invoiceId != null ? _invoices[job.invoiceId] : null;
                     return sum + (invoice?.total ?? job.totalCost);
                   }))}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -832,11 +837,16 @@ class _PegasTablePageState extends State<PegasTablePage>
             Icon(
               Icons.search_off,
               size: 64,
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.3),
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurfaceVariant
+                  .withOpacity(0.3),
             ),
             const SizedBox(height: 16),
             Text(
-              _searchTerm.isEmpty ? 'No hay trabajos' : 'No se encontraron resultados',
+              _searchTerm.isEmpty
+                  ? 'No hay trabajos'
+                  : 'No se encontraron resultados',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
@@ -859,12 +869,12 @@ class _PegasTablePageState extends State<PegasTablePage>
         final totalColumnsWidth = _columns
             .where((col) => col.visible)
             .fold<double>(0, (sum, col) => sum + col.width);
-        
+
         // Use the larger of constraints.maxWidth or totalColumnsWidth
-        final tableWidth = totalColumnsWidth > constraints.maxWidth 
-            ? totalColumnsWidth 
+        final tableWidth = totalColumnsWidth > constraints.maxWidth
+            ? totalColumnsWidth
             : constraints.maxWidth;
-        
+
         return Column(
           children: [
             // Table header and body wrapped in single horizontal scroll
@@ -882,7 +892,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                       Expanded(
                         child: ListView.builder(
                           itemCount: _filteredJobs.length,
-                          itemBuilder: (context, index) => 
+                          itemBuilder: (context, index) =>
                               _buildTableRow(_filteredJobs[index], tableWidth),
                         ),
                       ),
@@ -902,7 +912,10 @@ class _PegasTablePageState extends State<PegasTablePage>
       width: tableWidth,
       height: 48,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest
+            .withOpacity(0.3),
         border: Border(
           bottom: BorderSide(
             color: Theme.of(context).dividerColor,
@@ -1029,7 +1042,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   Widget _buildDataCell(
       ColumnConfig col, MechanicJob job, Customer? customer, Bike? bike) {
     final content = _getCellContent(col.id, job, customer, bike);
-    
+
     if (col.maxWidth != null && col.maxWidth == col.width) {
       // Fixed width column
       return Container(
@@ -1050,7 +1063,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
   }
 
-  Widget _getCellContent(String columnId, MechanicJob job, Customer? customer, Bike? bike) {
+  Widget _getCellContent(
+      String columnId, MechanicJob job, Customer? customer, Bike? bike) {
     switch (columnId) {
       case 'status':
         // Clickable status indicator with color
@@ -1115,8 +1129,10 @@ class _PegasTablePageState extends State<PegasTablePage>
                         decoration: customer?.id != null
                             ? TextDecoration.underline
                             : null,
-                        decorationColor:
-                            Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                        decorationColor: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withOpacity(0.3),
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1124,7 +1140,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                       Text(
                         customer!.phone!,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                             ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1137,7 +1155,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   icon: Icon(
                     Icons.more_vert,
                     size: 16,
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.6),
+                    color:
+                        Theme.of(context).colorScheme.primary.withOpacity(0.6),
                   ),
                   tooltip: 'Acciones rápidas',
                   padding: EdgeInsets.zero,
@@ -1147,9 +1166,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                         value: 'call',
                         child: Row(
                           children: [
-                            Icon(Icons.phone, size: 16, color: Colors.green.shade700),
+                            Icon(Icons.phone,
+                                size: 16, color: Colors.green.shade700),
                             const SizedBox(width: 8),
-                            const Text('Llamar', style: TextStyle(fontSize: 13)),
+                            const Text('Llamar',
+                                style: TextStyle(fontSize: 13)),
                           ],
                         ),
                       ),
@@ -1158,7 +1179,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                         value: 'email',
                         child: Row(
                           children: [
-                            Icon(Icons.email, size: 16, color: Colors.blue.shade700),
+                            Icon(Icons.email,
+                                size: 16, color: Colors.blue.shade700),
                             const SizedBox(width: 8),
                             const Text('Email', style: TextStyle(fontSize: 13)),
                           ],
@@ -1186,13 +1208,12 @@ class _PegasTablePageState extends State<PegasTablePage>
             children: [
               // MTB bike icon from local asset
               Image.asset(
-                'assets/icons/mtb_bike.png',
-                width: 18,
-                height: 18,
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                'assets/icons/mtb_bike_v3.png',
+                width: 35,
+                height: 35,
                 errorBuilder: (context, error, stackTrace) => Icon(
                   Icons.pedal_bike,
-                  size: 18,
+                  size: 35,
                   color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
                 ),
               ),
@@ -1285,9 +1306,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                         ? Icons.calendar_today
                         : Icons.event_busy,
                 size: 14,
-                color: isOverdue
-                    ? Colors.red.shade700
-                    : Colors.grey.shade600,
+                color: isOverdue ? Colors.red.shade700 : Colors.grey.shade600,
               ),
               const SizedBox(width: 4),
               Text(
@@ -1435,7 +1454,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         final isPartial = invoice != null &&
             invoice.status.toString().toLowerCase() == 'partiallypaid';
         return InkWell(
-          onTap: job.invoiceId != null ? () => _openInvoice(job.invoiceId!) : null,
+          onTap:
+              job.invoiceId != null ? () => _openInvoice(job.invoiceId!) : null,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
@@ -1485,9 +1505,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                         : isPartial
                             ? Colors.orange.shade800
                             : Colors.red.shade800,
-                    decoration: job.invoiceId != null
-                        ? TextDecoration.underline
-                        : null,
+                    decoration:
+                        job.invoiceId != null ? TextDecoration.underline : null,
                     decorationColor: isPaid
                         ? Colors.green.shade800.withOpacity(0.3)
                         : isPartial
@@ -1595,13 +1614,14 @@ class _PegasTablePageState extends State<PegasTablePage>
                   ],
                 ),
                 value: col.visible,
-                onChanged: col.id == 'job_number' // Always keep job number visible
-                    ? null
-                    : (value) {
-                        setState(() => col.visible = value ?? true);
-                        Navigator.pop(context);
-                        _showColumnCustomizer();
-                      },
+                onChanged:
+                    col.id == 'job_number' // Always keep job number visible
+                        ? null
+                        : (value) {
+                            setState(() => col.visible = value ?? true);
+                            Navigator.pop(context);
+                            _showColumnCustomizer();
+                          },
               );
             }).toList(),
           ),
@@ -1664,7 +1684,8 @@ class _PegasTablePageState extends State<PegasTablePage>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar Trabajo'),
-        content: Text('¿Eliminar ${job.jobNumber}? Esta acción no se puede deshacer.'),
+        content: Text(
+            '¿Eliminar ${job.jobNumber}? Esta acción no se puede deshacer.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -1739,7 +1760,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Estado actualizado a ${status.displayName}'),
+                        content:
+                            Text('Estado actualizado a ${status.displayName}'),
                       ),
                     );
                   }
@@ -1808,7 +1830,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
 
     // Load customer's bikes
-    final bikes = _bikes.values.where((b) => b.customerId == customer.id).toList();
+    final bikes =
+        _bikes.values.where((b) => b.customerId == customer.id).toList();
 
     if (!mounted) return;
 
@@ -1824,7 +1847,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.pedal_bike_outlined, size: 48, color: Colors.grey),
+                      Icon(Icons.pedal_bike_outlined,
+                          size: 48, color: Colors.grey),
                       SizedBox(height: 16),
                       Text(
                         'Este cliente no tiene bicicletas registradas',
@@ -1837,7 +1861,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   mainAxisSize: MainAxisSize.min,
                   children: bikes.map((bike) {
                     final isSelected = bike.id == job.bikeId;
-                    final bikeName = '${bike.brand ?? ''} ${bike.model ?? ''}'.trim();
+                    final bikeName =
+                        '${bike.brand ?? ''} ${bike.model ?? ''}'.trim();
                     return ListTile(
                       leading: bike.imageUrl != null
                           ? Container(
@@ -1865,7 +1890,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                           ? Text('N° Serie: ${bike.serialNumber}')
                           : null,
                       trailing: isSelected
-                          ? Icon(Icons.check_circle, color: Colors.green.shade700)
+                          ? Icon(Icons.check_circle,
+                              color: Colors.green.shade700)
                           : null,
                       selected: isSelected,
                       onTap: isSelected
@@ -1901,7 +1927,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Bicicleta cambiada a: $bikeName'),
+                                      content: Text(
+                                          'Bicicleta cambiada a: $bikeName'),
                                     ),
                                   );
                                 }
@@ -1949,7 +1976,8 @@ class _PegasTablePageState extends State<PegasTablePage>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                constraints: const BoxConstraints(maxWidth: 600, maxHeight: 600),
+                constraints:
+                    const BoxConstraints(maxWidth: 600, maxHeight: 600),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
@@ -1970,7 +1998,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                       child: const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.broken_image, size: 64, color: Colors.white54),
+                          Icon(Icons.broken_image,
+                              size: 64, color: Colors.white54),
                           SizedBox(height: 16),
                           Text(
                             'Error al cargar imagen',

@@ -24,7 +24,7 @@ DateTime _parseDateTime(dynamic value) {
 class BikeshopService extends ChangeNotifier {
   final DatabaseService _db;
   final TenantService _tenantService = TenantService();
-  
+
   RealtimeChannel? _mechanicJobsChannel;
   Timer? _notifyDebounceTimer;
 
@@ -59,7 +59,8 @@ class BikeshopService extends ChangeNotifier {
           return ids.add(id);
         }).toList();
       } else if (customerId != null && customerId.isNotEmpty) {
-        data = await _db.select('bikes', where: 'customer_id=$customerId', fetchAll: true);
+        data = await _db.select('bikes',
+            where: 'customer_id=$customerId', fetchAll: true);
       } else {
         data = await _db.select('bikes', fetchAll: true);
       }
@@ -193,17 +194,19 @@ class BikeshopService extends ChangeNotifier {
     try {
       final client = Supabase.instance.client;
       dynamic query = client.from('bike_models').select();
-      
+
       if (brandId != null && brandId.isNotEmpty) {
         query = query.eq('brand_id', brandId);
       }
-      
+
       if (activeOnly) {
         query = query.eq('is_active', true);
       }
-      
+
       final data = await query as List;
-      return data.map((json) => BikeModel.fromJson(json as Map<String, dynamic>)).toList()
+      return data
+          .map((json) => BikeModel.fromJson(json as Map<String, dynamic>))
+          .toList()
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     } catch (e) {
       if (kDebugMode) print('Error fetching bike models: $e');
@@ -262,7 +265,7 @@ class BikeshopService extends ChangeNotifier {
   // PEGA (MECHANIC JOB) OPERATIONS
   // ✅ UNIFIED ARCHITECTURE (Nov 18, 2025): Now queries sales_invoices
   // ============================================================
-  
+
   /// Convert Invoice to MechanicJob for backward compatibility
   MechanicJob _invoiceToMechanicJob(Invoice invoice) {
     return MechanicJob(
@@ -285,7 +288,7 @@ class BikeshopService extends ChangeNotifier {
       updatedAt: invoice.updatedAt,
     );
   }
-  
+
   JobStatus _invoiceStatusToJobStatus(InvoiceStatus status) {
     switch (status) {
       case InvoiceStatus.draft:
@@ -300,7 +303,7 @@ class BikeshopService extends ChangeNotifier {
         return JobStatus.pendiente;
     }
   }
-  
+
   InvoiceStatus _jobStatusToInvoiceStatus(JobStatus status) {
     switch (status) {
       case JobStatus.pendiente:
@@ -326,28 +329,26 @@ class BikeshopService extends ChangeNotifier {
     bool includeCompleted = true,
   }) async {
     try {
-      var query = Supabase.instance.client
-          .from('mechanic_jobs')
-          .select();
+      var query = Supabase.instance.client.from('mechanic_jobs').select();
 
       if (customerId != null && customerId.isNotEmpty) {
         query = query.eq('customer_id', customerId);
       }
-      
+
       if (bikeId != null && bikeId.isNotEmpty) {
         query = query.eq('bike_id', bikeId);
       }
-      
+
       if (status != null) {
         query = query.eq('status', status.name);
       }
-      
+
       if (!includeCompleted) {
         query = query.not('status', 'in', '(FINALIZADO,ENTREGADO,CANCELADO)');
       }
 
       final data = await query as List<dynamic>;
-      
+
       var jobs = data
           .map((json) => MechanicJob.fromJson(json as Map<String, dynamic>))
           .toList();
@@ -374,13 +375,13 @@ class BikeshopService extends ChangeNotifier {
   Future<MechanicJob?> getJobById(String id) async {
     try {
       if (id.isEmpty) return null;
-      
+
       final data = await Supabase.instance.client
           .from('mechanic_jobs')
           .select()
           .eq('id', id)
           .maybeSingle();
-      
+
       return data != null ? MechanicJob.fromJson(data) : null;
     } catch (e) {
       if (kDebugMode) print('Error fetching job: $e');
@@ -391,20 +392,22 @@ class BikeshopService extends ChangeNotifier {
   Future<MechanicJob> createJob(MechanicJob job) async {
     try {
       final jobData = job.toJson();
-      
+
       // 🔍 DEBUG: Log what we're sending to database
       if (kDebugMode) {
         print('📤 [CREATE JOB] Sending data to database:');
-        print('   job_number in data: ${jobData.containsKey('job_number') ? jobData['job_number'] : 'NOT INCLUDED (DB will generate)'}');
+        print(
+            '   job_number in data: ${jobData.containsKey('job_number') ? jobData['job_number'] : 'NOT INCLUDED (DB will generate)'}');
         print('   Full data: $jobData');
       }
-      
+
       final data = await _db.insert('mechanic_jobs', jobData);
-      
+
       if (kDebugMode) {
-        print('✅ [CREATE JOB] Database returned: job_number=${data['job_number']}');
+        print(
+            '✅ [CREATE JOB] Database returned: job_number=${data['job_number']}');
       }
-      
+
       notifyListeners();
       return MechanicJob.fromJson(data);
     } catch (e) {
@@ -423,7 +426,7 @@ class BikeshopService extends ChangeNotifier {
       if (job.id == null || job.id!.isEmpty) {
         throw Exception('ID de trabajo inválido');
       }
-      
+
       final data = await _db.update('mechanic_jobs', job.id!, job.toJson());
       notifyListeners();
       return MechanicJob.fromJson(data);
@@ -449,20 +452,22 @@ class BikeshopService extends ChangeNotifier {
       if (kDebugMode) {
         print('🔄 [STATUS CHANGE] Job $jobId → ${newStatus.displayName}');
       }
-      
+
       final job = await getJobById(jobId);
       if (job == null) throw Exception('Trabajo no encontrado');
 
       if (kDebugMode) {
-        print('🔍 [FETCHED JOB] Costs: parts=${job.partsCost}, labor=${job.laborCost}, total=${job.totalCost}');
+        print(
+            '🔍 [FETCHED JOB] Costs: parts=${job.partsCost}, labor=${job.laborCost}, total=${job.totalCost}');
       }
 
       final updatedJob = job.copyWith(status: newStatus);
-      
+
       if (kDebugMode) {
-        print('🔍 [AFTER COPYWITH] Costs: parts=${updatedJob.partsCost}, labor=${updatedJob.laborCost}, total=${updatedJob.totalCost}');
+        print(
+            '🔍 [AFTER COPYWITH] Costs: parts=${updatedJob.partsCost}, labor=${updatedJob.laborCost}, total=${updatedJob.totalCost}');
       }
-      
+
       return await updateJob(updatedJob);
     } catch (e) {
       if (kDebugMode) print('Error updating job status: $e');
@@ -474,14 +479,14 @@ class BikeshopService extends ChangeNotifier {
   // PEGA LINE ITEMS OPERATIONS (Parts & Labor)
   // ✅ Uses mechanic_job_items table
   // ============================================================
-  
+
   Future<List<MechanicJobItem>> getJobItems(String jobId) async {
     try {
       final data = await Supabase.instance.client
           .from('mechanic_job_items')
           .select()
           .eq('job_id', jobId);
-      
+
       return (data as List)
           .map((json) => MechanicJobItem.fromJson(json))
           .toList();
@@ -507,8 +512,9 @@ class BikeshopService extends ChangeNotifier {
       if (item.id == null || item.id!.isEmpty) {
         throw Exception('ID de ítem inválido');
       }
-      
-      final data = await _db.update('mechanic_job_items', item.id!, item.toJson());
+
+      final data =
+          await _db.update('mechanic_job_items', item.id!, item.toJson());
       notifyListeners();
       return MechanicJobItem.fromJson(data);
     } catch (e) {
@@ -528,7 +534,6 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-
   // ============================================================
   // TIMELINE OPERATIONS
   // ============================================================
@@ -541,11 +546,12 @@ class BikeshopService extends ChangeNotifier {
           .select()
           .eq('job_id', jobId)
           .order('created_at', ascending: false);
-      
+
       if (kDebugMode) {
-        print('📋 Timeline query result for job $jobId: ${response.length} events');
+        print(
+            '📋 Timeline query result for job $jobId: ${response.length} events');
       }
-      
+
       return (response as List)
           .map((json) => MechanicJobTimeline.fromJson(json))
           .toList();
@@ -857,7 +863,8 @@ class BikeshopService extends ChangeNotifier {
               value: tenantId,
             ),
             callback: (payload) {
-              debugPrint('🔔 [BikeshopService] Mechanic job changed: ${payload.eventType}');
+              debugPrint(
+                  '🔔 [BikeshopService] Mechanic job changed: ${payload.eventType}');
               debugPrint('🔔 [BikeshopService] Calling _debouncedNotify()');
               _debouncedNotify(); // Debounced to prevent spam
             },
@@ -872,7 +879,8 @@ class BikeshopService extends ChangeNotifier {
 
   /// Debounced notifyListeners - prevents excessive reloads
   void _debouncedNotify() {
-    debugPrint('🟡 [BikeshopService] _debouncedNotify() called, setting 500ms timer');
+    debugPrint(
+        '🟡 [BikeshopService] _debouncedNotify() called, setting 500ms timer');
     _notifyDebounceTimer?.cancel();
     _notifyDebounceTimer = Timer(const Duration(milliseconds: 500), () {
       if (!mounted) return; // Don't notify if disposed
