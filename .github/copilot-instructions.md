@@ -6,6 +6,88 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 ---
 
+# 🏗️ SUPABASE PROJECT ARCHITECTURE (Staging vs Production)
+
+**CRITICAL: Each Supabase project is a completely isolated database instance.**
+
+## Core Concept: Projects are Independent Containers
+
+Think of Supabase projects like **separate computers**:
+- Production: `xzdvtzdqjeyqxnkqprtf` (Vinabike-Project)
+- Staging: `kyvgmapifacpzuyreasy` (vinabike-staging)
+
+**Zero data sharing:**
+- ✅ Same table names (`products`, `sales_invoices`) = **different physical storage**
+- ✅ Same schema definitions = **different database instances**
+- ✅ Your Flutter app connects to **ONE project at a time** via URL
+
+## How Flutter Apps Connect (The USB Cable Analogy)
+
+Your app is like a **USB cable** - plug it into different projects by changing the URL:
+
+```dart
+// Plugged into PRODUCTION
+await Supabase.initialize(
+  url: 'https://xzdvtzdqjeyqxnkqprtf.supabase.co',  // 🔌 Production
+  anonKey: 'production-key',
+);
+
+// Plugged into STAGING  
+await Supabase.initialize(
+  url: 'https://kyvgmapifacpzuyreasy.supabase.co',  // 🔌 Staging
+  anonKey: 'staging-key',
+);
+```
+
+**Same code, different data source.** Change one line → switch environments.
+
+## What's Isolated Per Project
+
+Each project has its own:
+1. **Database Server** (PostgreSQL instance with separate disk storage)
+2. **API Endpoints** (`https://{project-ref}.supabase.co/rest/v1/`)
+3. **Auth System** (independent `auth.users` tables, no user sync)
+4. **Storage Buckets** (`https://{project-ref}.supabase.co/storage/v1/`)
+5. **Connection Credentials** (different passwords, API keys, JWT secrets)
+
+## Staging Workflow (Safe Schema Testing)
+
+**Purpose:** Test database changes before touching production.
+
+**File Strategy:**
+- **Production schema:** `supabase/sql/core_schema.sql` (master file, always stable)
+- **Staging/development schema:** `supabase/sql/core_schema_compat.sql` (working copy for new features)
+
+**Flow:**
+1. Edit `core_schema_compat.sql` → Add compatibility engine tables/functions
+2. Deploy `core_schema_compat.sql` to staging → Test in isolated environment
+3. Validate with test data → Queries, inserts, RLS policies work
+4. Merge changes into `core_schema.sql` → Update master file
+5. Deploy `core_schema.sql` to production → Only after staging validation
+
+**⚠️ CRITICAL:** Deploying to staging **CANNOT** affect production because:
+- Different database server (isolated PostgreSQL instance)
+- Different connection URL (app doesn't know staging exists unless you change the URL)
+- Different API keys
+- Different storage backend
+- Using separate schema file (`core_schema_compat.sql`) prevents accidental production deployments
+
+## Quick Reference
+
+| Aspect | Production | Staging |
+|--------|-----------|---------|
+| **Project Ref** | `xzdvtzdqjeyqxnkqprtf` | `kyvgmapifacpzuyreasy` |
+| **Dashboard** | https://supabase.com/dashboard/project/xzdvtzdqjeyqxnkqprtf | https://supabase.com/dashboard/project/kyvgmapifacpzuyreasy |
+| **API URL** | `https://xzdvtzdqjeyqxnkqprtf.supabase.co` | `https://kyvgmapifacpzuyreasy.supabase.co` |
+| **Purpose** | Live customer data | Test schema changes |
+| **Risk** | High (affects users) | Zero (sandbox) |
+
+**Use staging for:** Major schema changes (990+ line migrations), compatibility engine rollouts, multi-table refactors.
+
+**Skip staging for:** Minor bug fixes, single-function updates, UI-only changes.
+
+---
+
 # 🚨 CRITICAL: MULTI-TENANT ARCHITECTURE
 
 **THIS IS A MULTI-TENANT SaaS APPLICATION - EVERY TABLE MUST HAVE `tenant_id`**
@@ -291,26 +373,59 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 
 # 🚨 CRITICAL RULE: DATABASE SCHEMA FILES
 
-**⚠️ SCHEMA IS SPLIT INTO 3 FILES FOR DEPLOYMENT!**
+**⚠️ TWO SCHEMA FILES: Production vs Staging!**
 
-**The database schema exists in TWO forms:**
+## File Roles
 
-1. **`supabase/sql/core_schema.sql`** (MASTER FILE - 9630 lines)
-   - ✅ **EDIT THIS FILE** when making schema changes
-   - ✅ This is the SINGLE SOURCE OF TRUTH
-   - ✅ All changes go here FIRST
+1. **`supabase/sql/core_schema.sql`** (PRODUCTION MASTER - 17,303 lines)
+   - ✅ Stable, deployed to production
+   - ✅ Single source of truth for live database
+   - ❌ **DO NOT** edit directly when developing new features
+   - ✅ Only update after staging validation
 
-2. **Split files for deployment** (generated from master):
-   - `supabase/sql/1_core_tables.sql` (Tables + seed data)
-   - `supabase/sql/2_business_logic.sql` (Functions + triggers)
-   - `supabase/sql/3_analytics_views.sql` (Dashboard RPCs + views)
-   - ⚠️ These are GENERATED from `core_schema.sql` - don't edit directly!
+2. **`supabase/sql/core_schema_compat.sql`** (STAGING/DEVELOPMENT COPY)
+   - ✅ **EDIT THIS FILE** when building new features (compatibility engine, etc.)
+   - ✅ Working copy for testing schema changes
+   - ✅ Deploy to staging project for validation
+   - ✅ Merge into `core_schema.sql` only after testing
 
-**When making database changes:**
-- ✅ Edit `core_schema.sql` (master file)
-- ✅ After editing, tell user: "Deploy the updated `supabase/sql/core_schema.sql` OR regenerate the 3-file split"
-- ✅ Be EXPLICIT: "I modified `core_schema.sql` at line X" or "I updated function Y in `core_schema.sql`"
-- ❌ NEVER create new SQL files (`FIX_*.sql`, `DEPLOY_*.sql`, etc.)
+## Development Workflow
+
+**When adding new features (e.g., compatibility engine):**
+
+1. **Edit `core_schema_compat.sql`**
+   - Add new tables, functions, triggers
+   - Keep all existing schema intact (use `IF NOT EXISTS`)
+   - Document line numbers for changes
+
+2. **Deploy to staging**
+   - Open: https://supabase.com/dashboard/project/kyvgmapifacpzuyreasy/sql
+   - Paste `core_schema_compat.sql` → Run
+   - Test with Flutter app pointing to staging URL
+
+3. **Validate changes**
+   - Create test data, verify queries work
+   - Check RLS policies, test multi-tenant isolation
+   - Ensure no errors in Supabase logs
+
+4. **Merge to production master**
+   - Copy validated changes from `core_schema_compat.sql` to `core_schema.sql`
+   - Update line number references in comments
+   - Commit to git with clear description
+
+5. **Deploy to production**
+   - Open: https://supabase.com/dashboard/project/xzdvtzdqjeyqxnkqprtf/sql
+   - Paste updated `core_schema.sql` → Run
+   - Monitor production for errors
+
+## Critical Rules
+
+- ❌ **NEVER** edit `core_schema.sql` directly when developing
+- ✅ **ALWAYS** work on `core_schema_compat.sql` first
+- ✅ **ALWAYS** test on staging before production
+- ❌ **NEVER** create standalone migration files (`FIX_*.sql`, `DEPLOY_*.sql`)
+- ✅ **BE EXPLICIT:** "I modified `core_schema_compat.sql` at line X"
+- ✅ After staging validation: "Merge these changes into `core_schema.sql` for production"
 
 **⚠️ CRITICAL: NEVER CREATE UNNECESSARY COLUMNS OR FUNCTIONS!**
 
