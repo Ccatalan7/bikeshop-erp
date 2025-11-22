@@ -14,10 +14,12 @@ class NavigationService extends ChangeNotifier {
   bool _isDrawerVisible = true;
   bool _isInitialized = false;
   double _drawerWidth = _defaultDrawerWidth;
+  bool _isResizing = false;
 
   bool get isDrawerVisible => _isDrawerVisible;
   bool get isInitialized => _isInitialized;
   double get drawerWidth => _drawerWidth;
+  bool get isResizing => _isResizing;
 
   /// Initialize the service and load saved state
   Future<void> initialize() async {
@@ -41,10 +43,10 @@ class NavigationService extends ChangeNotifier {
   void updateDrawerWidth(double newWidth) {
     // Clamp width between min and max
     final clampedWidth = newWidth.clamp(_minDrawerWidth, _maxDrawerWidth);
-    
-    // Only update if changed significantly (avoid unnecessary rebuilds)
-    if ((_drawerWidth - clampedWidth).abs() < 0.5) return;
-    
+
+    // Update immediately for smooth tracking (no threshold check)
+    if (_drawerWidth == clampedWidth) return;
+
     _drawerWidth = clampedWidth;
     notifyListeners();
 
@@ -63,6 +65,20 @@ class NavigationService extends ChangeNotifier {
         debugPrint('Error saving drawer width: $e');
       }
     });
+  }
+
+  /// Start resizing (disable animation for smooth tracking)
+  void startResizing() {
+    if (_isResizing) return;
+    _isResizing = true;
+    notifyListeners();
+  }
+
+  /// Stop resizing (re-enable animation)
+  void stopResizing() {
+    if (!_isResizing) return;
+    _isResizing = false;
+    notifyListeners();
   }
 
   /// Toggle drawer visibility and persist the state

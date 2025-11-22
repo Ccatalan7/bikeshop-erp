@@ -237,13 +237,16 @@ const String _posSectionKey = 'pos';
 /// Helper function to open a route in a new workspace tab
 /// If workspace system is not available (e.g., not authenticated), falls back to regular navigation
 void _openInWorkspace(BuildContext context, String route, String title) {
-  debugPrint('🚀 [MainLayout] _openInWorkspace called: route=$route, title=$title');
+  debugPrint(
+      '🚀 [MainLayout] _openInWorkspace called: route=$route, title=$title');
   try {
     final workspaceManager = context.read<WorkspaceManager>();
-    debugPrint('✅ [MainLayout] WorkspaceManager found, current workspaces: ${workspaceManager.workspaces.length}');
-    
+    debugPrint(
+        '✅ [MainLayout] WorkspaceManager found, current workspaces: ${workspaceManager.workspaces.length}');
+
     // Try to switch to existing workspace with this route first
-    final existingFound = workspaceManager.switchToExistingWorkspaceWithRoute(route);
+    final existingFound =
+        workspaceManager.switchToExistingWorkspaceWithRoute(route);
     if (!existingFound) {
       debugPrint('📝 [MainLayout] Creating new workspace for $route');
       // If not found, create new workspace
@@ -251,12 +254,14 @@ void _openInWorkspace(BuildContext context, String route, String title) {
         title: title,
         initialRoute: route,
       );
-      debugPrint('✅ [MainLayout] New workspace created, total: ${workspaceManager.workspaces.length}');
+      debugPrint(
+          '✅ [MainLayout] New workspace created, total: ${workspaceManager.workspaces.length}');
     } else {
       debugPrint('🔄 [MainLayout] Switched to existing workspace for $route');
     }
   } catch (e) {
-    debugPrint('❌ [MainLayout] WorkspaceManager error: $e, falling back to context.go()');
+    debugPrint(
+        '❌ [MainLayout] WorkspaceManager error: $e, falling back to context.go()');
     // WorkspaceManager not available, fall back to regular navigation
     context.go(route);
   }
@@ -287,7 +292,7 @@ String _getTitleFromRoute(String route) {
     '/website': 'Sitio Web',
     '/settings': 'Configuración',
   };
-  
+
   return routeTitles[route] ?? route.split('/').last.capitalize();
 }
 
@@ -384,11 +389,17 @@ class MainLayout extends StatelessWidget {
       return Scaffold(
         body: Row(
           children: [
-            // Collapsible Sidebar
+            // Collapsible Sidebar with smart animation
+            // No animation during resize for instant tracking
+            // Animation only for collapse/expand
             AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
+              duration: navigationService.isResizing
+                  ? Duration.zero
+                  : const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
-              width: navigationService.isDrawerVisible ? navigationService.drawerWidth : 0,
+              width: navigationService.isDrawerVisible
+                  ? navigationService.drawerWidth
+                  : 0,
               child: navigationService.isDrawerVisible
                   ? Container(
                       decoration: BoxDecoration(
@@ -427,10 +438,16 @@ class MainLayout extends StatelessWidget {
                         cursor: SystemMouseCursors.resizeColumn,
                         child: GestureDetector(
                           behavior: HitTestBehavior.translucent,
+                          onHorizontalDragStart: (details) {
+                            navigationService.startResizing();
+                          },
                           onHorizontalDragUpdate: (details) {
                             navigationService.updateDrawerWidth(
                               navigationService.drawerWidth + details.delta.dx,
                             );
+                          },
+                          onHorizontalDragEnd: (details) {
+                            navigationService.stopResizing();
                           },
                           child: Container(
                             color: Colors.transparent,
@@ -534,12 +551,12 @@ class _AppSidebarState extends State<AppSidebar> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    
+
     // Defer GoRouter access to avoid blocking Navigator.push navigation
     // This is critical - accessing GoRouter synchronously blocks the UI thread
     Future.microtask(() {
       if (!mounted) return;
-      
+
       try {
         // Check if GoRouter is available first
         final router = GoRouter.maybeOf(context);
@@ -547,7 +564,7 @@ class _AppSidebarState extends State<AppSidebar> {
           debugPrint('⚠️ AppSidebar: GoRouter not available (Navigator.push?)');
           return;
         }
-        
+
         final routerState = GoRouterState.of(context);
         final currentLocation = routerState.uri.path;
         if (currentLocation != _lastLocation) {
@@ -906,17 +923,19 @@ class _AppSidebarState extends State<AppSidebar> {
                   currentLocation: currentLocation,
                   enabled: true,
                 ),
-                
+
                 // Logout
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
                       borderRadius: BorderRadius.circular(8),
                       onTap: () => _handleLogout(context),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -925,14 +944,16 @@ class _AppSidebarState extends State<AppSidebar> {
                             Icon(
                               Icons.logout_outlined,
                               size: 20,
-                              color: theme.colorScheme.onSurface.withOpacity(0.7),
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.7),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
                                 'Cerrar Sesión',
                                 style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.colorScheme.onSurface.withOpacity(0.7),
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.7),
                                 ),
                               ),
                             ),
@@ -942,7 +963,7 @@ class _AppSidebarState extends State<AppSidebar> {
                     ),
                   ),
                 ),
-                
+
                 // Hide navigation button (bottom-right, small like Zoho)
                 Container(
                   alignment: Alignment.centerRight,
@@ -957,12 +978,14 @@ class _AppSidebarState extends State<AppSidebar> {
                     ),
                     tooltip: 'Ocultar menú',
                     onPressed: () {
-                      final navigationService = context.read<NavigationService>();
+                      final navigationService =
+                          context.read<NavigationService>();
                       navigationService.hideDrawer();
                     },
                     style: IconButton.styleFrom(
                       backgroundColor: theme.colorScheme.surface,
-                      foregroundColor: theme.colorScheme.onSurface.withOpacity(0.6),
+                      foregroundColor:
+                          theme.colorScheme.onSurface.withOpacity(0.6),
                     ),
                   ),
                 ),
@@ -1005,11 +1028,15 @@ class _AppSidebarState extends State<AppSidebar> {
                   if (!isSelected) {
                     // Dashboard, Website, and Settings navigate directly within current workspace
                     // All other modules can open in new workspace tabs if needed
-                    if (route == '/dashboard' || route == '/website' || route == '/settings') {
-                      debugPrint('🔀 [MainLayout] Navigating to $route in current workspace');
+                    if (route == '/dashboard' ||
+                        route == '/website' ||
+                        route == '/settings') {
+                      debugPrint(
+                          '🔀 [MainLayout] Navigating to $route in current workspace');
                       context.go(route);
                     } else {
-                      _openInWorkspace(context, route, _getTitleFromRoute(route));
+                      _openInWorkspace(
+                          context, route, _getTitleFromRoute(route));
                     }
                   }
                 }

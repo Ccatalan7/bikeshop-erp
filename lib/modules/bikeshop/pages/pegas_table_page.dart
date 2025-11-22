@@ -87,6 +87,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
     _customerService = Provider.of<CustomerService>(context, listen: false);
     _initializeColumns();
+    _loadColumnOrder(); // Load saved column order
     _loadListPaneWidth();
     _loadData();
   }
@@ -354,6 +355,49 @@ class _PegasTablePageState extends State<PegasTablePage>
     await prefs.setDouble('pegas_list_pane_width', width);
   }
 
+  Future<void> _loadColumnOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedOrder = prefs.getStringList('pegas_column_order');
+
+      if (savedOrder != null && savedOrder.isNotEmpty && mounted) {
+        setState(() {
+          // Create a map of current columns by ID for quick lookup
+          final columnMap = <String, ColumnConfig>{};
+          for (final col in _columns) {
+            columnMap[col.id] = col;
+          }
+
+          // Rebuild columns list in saved order
+          final reorderedColumns = <ColumnConfig>[];
+          for (final id in savedOrder) {
+            if (columnMap.containsKey(id)) {
+              reorderedColumns.add(columnMap[id]!);
+              columnMap.remove(id);
+            }
+          }
+
+          // Add any new columns that weren't in the saved order (at the end)
+          reorderedColumns.addAll(columnMap.values);
+
+          _columns = reorderedColumns;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading column order: $e');
+    }
+  }
+
+  Future<void> _saveColumnOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final columnIds = _columns.map((col) => col.id).toList();
+      await prefs.setStringList('pegas_column_order', columnIds);
+    } catch (e) {
+      debugPrint('Error saving column order: $e');
+    }
+  }
+
   void _applyFiltersAndSort() {
     final hasCustomStatusFilter = _customStatusFilter.isNotEmpty;
 
@@ -499,27 +543,38 @@ class _PegasTablePageState extends State<PegasTablePage>
 
         return Row(
           children: [
-            // Left: Jobs list
+            // Left: Jobs list (tap anywhere to close detail view)
             SizedBox(
               width: clampedListWidth,
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        right: BorderSide(
-                          color: Theme.of(context).dividerColor,
-                          width: 1,
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      // Close the detail view when clicking on the table area
+                      setState(() {
+                        _selectedJob = null;
+                        _selectedJobItems = [];
+                        _productImages = {};
+                      });
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          right: BorderSide(
+                            color: Theme.of(context).dividerColor,
+                            width: 1,
+                          ),
                         ),
                       ),
-                    ),
-                    child: Column(
-                      children: [
-                        _buildModernHeader(),
-                        _buildToolbar(),
-                        Expanded(child: _buildDataTable()),
-                      ],
+                      child: Column(
+                        children: [
+                          _buildModernHeader(),
+                          _buildToolbar(),
+                          Expanded(child: _buildDataTable()),
+                        ],
+                      ),
                     ),
                   ),
                   // Resize handle
@@ -676,8 +731,11 @@ class _PegasTablePageState extends State<PegasTablePage>
           ] else ...[
             // Regular action buttons
             IconButton(
-              icon: Icon(_showColumnPanel ? Icons.view_column : Icons.view_column_outlined),
-              onPressed: () => setState(() => _showColumnPanel = !_showColumnPanel),
+              icon: Icon(_showColumnPanel
+                  ? Icons.view_column
+                  : Icons.view_column_outlined),
+              onPressed: () =>
+                  setState(() => _showColumnPanel = !_showColumnPanel),
               tooltip: 'Columnas',
               isSelected: _showColumnPanel,
             ),
@@ -1088,9 +1146,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               if (checked == true) {
                 _selectedJobIds
                   ..clear()
-                  ..addAll(_filteredJobs
-                      .map((j) => j.id)
-                      .whereType<String>());
+                  ..addAll(_filteredJobs.map((j) => j.id).whereType<String>());
               } else {
                 _selectedJobIds.clear();
               }
@@ -1216,7 +1272,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.primaryContainer,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Theme.of(context).colorScheme.primary, width: 1),
+          border: Border.all(
+              color: Theme.of(context).colorScheme.primary, width: 1),
         ),
         child: DefaultTextStyle(
           style: Theme.of(context)
@@ -1258,6 +1315,9 @@ class _PegasTablePageState extends State<PegasTablePage>
         _columns.insert(insertIndex, column);
       }
     });
+
+    // Save the new column order
+    _saveColumnOrder();
   }
 
   Widget _buildTableRow(MechanicJob job, double tableWidth) {
@@ -1334,7 +1394,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             });
           },
         );
-        
+
       case 'status':
         // Clickable status indicator with color
         return InkWell(
@@ -1684,7 +1744,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'invoice':
-        // Clickable invoice with payment status
+        // Clickable invoice with full status display
         if (job.invoiceId == null && !job.isInvoiced) {
           return InkWell(
             onTap: () => _createInvoiceForJob(job),
@@ -1717,30 +1777,72 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
           );
         }
+
         final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
-        final isPaid = (invoice != null &&
-                invoice.status.toString().toLowerCase() == 'paid') ||
-            job.isPaid;
-        final isPartial = invoice != null &&
-            invoice.status.toString().toLowerCase() == 'partiallypaid';
+        final status = invoice?.status ?? InvoiceStatus.draft;
+
+        // Define colors and labels for each status
+        Color bgColor;
+        Color borderColor;
+        Color textColor;
+        IconData icon;
+        String label;
+
+        switch (status) {
+          case InvoiceStatus.draft:
+            bgColor = Colors.grey.shade100;
+            borderColor = Colors.grey.shade300;
+            textColor = Colors.grey.shade700;
+            icon = Icons.edit_note;
+            label = 'BORRADOR';
+            break;
+          case InvoiceStatus.sent:
+            bgColor = Colors.blue.shade50;
+            borderColor = Colors.blue.shade300;
+            textColor = Colors.blue.shade800;
+            icon = Icons.send;
+            label = 'ENVIADO';
+            break;
+          case InvoiceStatus.confirmed:
+            bgColor = Colors.purple.shade50;
+            borderColor = Colors.purple.shade300;
+            textColor = Colors.purple.shade800;
+            icon = Icons.check_circle_outline;
+            label = 'CONFIRMADO';
+            break;
+          case InvoiceStatus.paid:
+            bgColor = Colors.green.shade50;
+            borderColor = Colors.green.shade300;
+            textColor = Colors.green.shade800;
+            icon = Icons.check_circle;
+            label = 'PAGADO';
+            break;
+          case InvoiceStatus.overdue:
+            bgColor = Colors.orange.shade50;
+            borderColor = Colors.orange.shade300;
+            textColor = Colors.orange.shade800;
+            icon = Icons.schedule;
+            label = 'VENCIDO';
+            break;
+          case InvoiceStatus.cancelled:
+            bgColor = Colors.red.shade50;
+            borderColor = Colors.red.shade300;
+            textColor = Colors.red.shade800;
+            icon = Icons.cancel;
+            label = 'CANCELADO';
+            break;
+        }
+
         return InkWell(
           onTap:
               job.invoiceId != null ? () => _openInvoice(job.invoiceId!) : null,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: isPaid
-                  ? Colors.green.shade50
-                  : isPartial
-                      ? Colors.orange.shade50
-                      : Colors.red.shade50.withOpacity(0.5),
+              color: bgColor,
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: isPaid
-                    ? Colors.green.shade300
-                    : isPartial
-                        ? Colors.orange.shade300
-                        : Colors.red.shade200,
+                color: borderColor,
                 width: 1,
               ),
             ),
@@ -1748,40 +1850,20 @@ class _PegasTablePageState extends State<PegasTablePage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  isPaid
-                      ? Icons.check_circle
-                      : isPartial
-                          ? Icons.schedule
-                          : Icons.payment,
+                  icon,
                   size: 14,
-                  color: isPaid
-                      ? Colors.green.shade700
-                      : isPartial
-                          ? Colors.orange.shade700
-                          : Colors.red.shade700,
+                  color: textColor,
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  isPaid
-                      ? 'PAGADO'
-                      : isPartial
-                          ? 'PARCIAL'
-                          : 'PENDIENTE',
+                  label,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: isPaid
-                        ? Colors.green.shade800
-                        : isPartial
-                            ? Colors.orange.shade800
-                            : Colors.red.shade800,
+                    color: textColor,
                     decoration:
                         job.invoiceId != null ? TextDecoration.underline : null,
-                    decorationColor: isPaid
-                        ? Colors.green.shade800.withOpacity(0.3)
-                        : isPartial
-                            ? Colors.orange.shade800.withOpacity(0.3)
-                            : Colors.red.shade800.withOpacity(0.3),
+                    decorationColor: textColor.withValues(alpha: 0.3),
                   ),
                 ),
               ],
@@ -1872,6 +1954,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 final item = _columns.removeAt(oldIndex);
                 _columns.insert(newIndex, item);
               });
+              _saveColumnOrder(); // Save the new column order
             },
             children: _columns.map((col) {
               return CheckboxListTile(
@@ -2402,7 +2485,9 @@ class _PegasTablePageState extends State<PegasTablePage>
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
-        children: _columns.where((col) => col.id != 'checkbox' && col.id != 'status').map((col) {
+        children: _columns
+            .where((col) => col.id != 'checkbox' && col.id != 'status')
+            .map((col) {
           return FilterChip(
             label: Text(col.label),
             selected: col.visible,
@@ -2424,14 +2509,16 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   // Export selected to CSV
   void _exportSelectedToCSV() {
-    final selectedJobs = _filteredJobs.where((job) => _selectedJobIds.contains(job.id)).toList();
+    final selectedJobs =
+        _filteredJobs.where((job) => _selectedJobIds.contains(job.id)).toList();
     _exportToCSV(selectedJobs);
   }
 
   void _exportToCSV(List<MechanicJob> jobs) {
     final csv = StringBuffer();
     // Header
-    csv.writeln('N° Trabajo,Cliente,Bicicleta,Ingreso,Plazo,Estado,Prioridad,Total');
+    csv.writeln(
+        'N° Trabajo,Cliente,Bicicleta,Ingreso,Plazo,Estado,Prioridad,Total');
     // Rows
     for (var job in jobs) {
       final customer = _customers[job.customerId];
@@ -2441,18 +2528,21 @@ class _PegasTablePageState extends State<PegasTablePage>
         customer?.name ?? 'Sin cliente',
         bike?.displayName ?? 'Sin bicicleta',
         DateFormat('dd/MM/yyyy').format(job.arrivalDate),
-        job.deadline != null ? DateFormat('dd/MM/yyyy').format(job.deadline!) : 'Sin plazo',
+        job.deadline != null
+            ? DateFormat('dd/MM/yyyy').format(job.deadline!)
+            : 'Sin plazo',
         job.status.displayName,
         job.priority.displayName,
         '\$${NumberFormat('#,###').format(job.totalCost)}',
-      ].join(',')); 
+      ].join(','));
     }
-    
+
     // Download logic (copy to clipboard for web)
     Clipboard.setData(ClipboardData(text: csv.toString()));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${jobs.length} trabajos copiados al portapapeles (formato CSV)'),
+        content: Text(
+            '${jobs.length} trabajos copiados al portapapeles (formato CSV)'),
         action: SnackBarAction(
           label: 'OK',
           onPressed: () {},
@@ -2463,7 +2553,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   // Bulk update status
   Future<void> _bulkUpdateStatus() async {
-    final selectedJobs = _filteredJobs.where((job) => _selectedJobIds.contains(job.id)).toList();
+    final selectedJobs =
+        _filteredJobs.where((job) => _selectedJobIds.contains(job.id)).toList();
     if (selectedJobs.isEmpty) return;
 
     final newStatus = await showDialog<JobStatus>(
