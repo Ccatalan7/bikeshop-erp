@@ -6,9 +6,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../models/financial_report.dart';
 import '../models/balance_sheet.dart';
 import '../services/financial_reports_service.dart';
-import '../widgets/report_header_widget.dart';
 import '../widgets/report_line_widget.dart';
-import '../widgets/date_range_selector_widget.dart';
 
 /// Balance Sheet Page (Balance General)
 /// Displays company financial position at a point in time
@@ -94,48 +92,102 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Balance General'),
-          actions: [
-            // Refresh button
-            IconButton(
-              onPressed: _isLoading ? null : _loadBalanceSheet,
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Actualizar',
-            ),
-
-            // Export button
-            IconButton(
-              onPressed: _balanceSheet != null ? _showExportMenu : null,
-              icon: const Icon(Icons.download),
-              tooltip: 'Exportar',
-            ),
-
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: Column(
-          children: [
-            // Date selector
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: DateRangeSelectorWidget(
-                initialRange: DateRange(_asOfDate, _asOfDate),
-                initialPeriod: _selectedPeriod,
-                onRangeChanged: _onDateRangeChanged,
-                showEndDate: false, // Only show single date for balance sheet
+      child: Column(
+        children: [
+          // Minimal header - single compact row
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(
+                bottom: BorderSide(color: Theme.of(context).dividerColor),
               ),
             ),
-
-            // Report content
-            Expanded(
-              child: _buildContent(),
+            child: Row(
+              children: [
+                // Title
+                Text(
+                  'Balance General',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(width: 24),
+                // Period dropdown (compact, inline)
+                SizedBox(
+                  width: 200,
+                  child: DropdownButtonFormField<ReportPeriod>(
+                    value: _selectedPeriod,
+                    isDense: true,
+                    decoration: InputDecoration(
+                      labelText: 'Período',
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      prefixIcon: const Icon(Icons.calendar_today, size: 18),
+                    ),
+                    items: ReportPeriod.values.map((period) {
+                      return DropdownMenuItem(
+                        value: period,
+                        child: Text(
+                          period.displayName,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (period) {
+                      if (period != null && period != ReportPeriod.custom) {
+                        final range = period.getDateRange();
+                        _onDateRangeChanged(range, period);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Date display
+                Text(
+                  'Al ${_formatDate(_asOfDate)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
+                ),
+                const Spacer(),
+                // Refresh button
+                IconButton(
+                  onPressed: _isLoading ? null : _loadBalanceSheet,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  tooltip: 'Actualizar',
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+                const SizedBox(width: 4),
+                // Export button
+                IconButton(
+                  onPressed: _balanceSheet != null ? _showExportMenu : null,
+                  icon: const Icon(Icons.download, size: 18),
+                  tooltip: 'Exportar',
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          // Report content
+          Expanded(
+            child: _buildContent(),
+          ),
+        ],
       ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
   Widget _buildContent() {
@@ -190,38 +242,31 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
     return SingleChildScrollView(
       child: Column(
         children: [
-          // Report header
-          ReportHeaderWidget(
-            companyName: _balanceSheet!.companyName,
-            reportTitle: _balanceSheet!.title,
-            subtitle: _balanceSheet!.subtitle,
-            generatedAt: _balanceSheet!.generatedAt,
-          ),
-
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
 
           // Accounting equation validation
           _buildAccountingEquationCard(),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
 
           // Financial ratios
           _buildFinancialRatiosCards(),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
 
           // Report lines with horizontal scroll if needed
           LayoutBuilder(
             builder: (context, constraints) {
               final contentWidth =
-                  constraints.maxWidth > 1200 ? 1200.0 : constraints.maxWidth;
+                  constraints.maxWidth > 1000 ? 1000.0 : constraints.maxWidth;
               return SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Container(
                   width: contentWidth,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Card(
-                    elevation: 2,
+                    elevation: 1,
+                    margin: EdgeInsets.zero,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: _balanceSheet!.allLines.map((line) {
@@ -238,7 +283,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
             },
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -251,14 +296,14 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
     final difference = _balanceSheet!.accountingEquationDifference;
 
     return Container(
-      constraints: const BoxConstraints(maxWidth: 1200),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      constraints: const BoxConstraints(maxWidth: 1000),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Card(
         color: isBalanced
             ? Colors.green.withOpacity(0.1)
             : Colors.red.withOpacity(0.1),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Row(
             children: [
               Icon(
@@ -309,8 +354,8 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
     if (_balanceSheet == null) return const SizedBox.shrink();
 
     return Container(
-      constraints: const BoxConstraints(maxWidth: 1200),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      constraints: const BoxConstraints(maxWidth: 1000),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -320,7 +365,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                   fontWeight: FontWeight.bold,
                 ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // Liquidity ratios
           Row(
@@ -335,7 +380,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                   'Activos Circulantes / Pasivos Circulantes',
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 child: _buildRatioCard(
                   'Capital de Trabajo',
@@ -349,7 +394,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // Leverage ratios
           Row(
@@ -364,7 +409,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                   'Pasivos / Activos',
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 child: _buildRatioCard(
                   'Deuda/Patrimonio',
@@ -379,7 +424,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
           ),
 
           if (_balanceSheet!.periodNetIncome != 0) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
             // Profitability ratios
             Row(
@@ -394,7 +439,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                     'Utilidad Neta / Patrimonio',
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 Expanded(
                   child: _buildRatioCard(
                     'ROA',
@@ -424,14 +469,14 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
     return Card(
       elevation: 1,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(width: 8),
+                Icon(icon, color: color, size: 18),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     title,
@@ -443,19 +488,19 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: color,
                   ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               formula,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 10,
+                    fontSize: 9,
                     fontStyle: FontStyle.italic,
                   ),
             ),

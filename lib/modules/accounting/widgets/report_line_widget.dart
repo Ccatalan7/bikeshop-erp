@@ -5,6 +5,7 @@ import '../models/report_line.dart';
 
 /// Widget to display a single line in a financial report
 /// Handles indentation, formatting, and styling based on line type
+/// Redesigned for compact, space-efficient layout
 class ReportLineWidget extends StatelessWidget {
   final ReportLine line;
   final NumberFormat currencyFormat;
@@ -21,10 +22,10 @@ class ReportLineWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     // Don't render blank lines with visible content
     if (!line.showAmount && line.name.isEmpty) {
-      return const SizedBox(height: 8);
+      return const SizedBox(height: 4);
     }
 
-    // Determine indentation based on level
+    // Determine indentation based on level (reduced from 24px to 16px per level)
     final indent = _getIndentation(line.level);
 
     // Determine text style
@@ -34,20 +35,25 @@ class ReportLineWidget extends StatelessWidget {
     final backgroundColor = _getBackgroundColor(context, line);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+          horizontal: 12, vertical: 4), // Reduced from 16px/8px
       decoration: BoxDecoration(
         color: backgroundColor,
         border: line.isTotal
             ? Border(
-                top:
-                    BorderSide(color: Theme.of(context).dividerColor, width: 2),
+                top: BorderSide(
+                    color: Theme.of(context).dividerColor,
+                    width: 1), // Reduced from 2px
                 bottom:
-                    BorderSide(color: Theme.of(context).dividerColor, width: 2),
+                    BorderSide(color: Theme.of(context).dividerColor, width: 1),
               )
             : line.isSubtotal
                 ? Border(
                     bottom: BorderSide(
-                        color: Theme.of(context).dividerColor, width: 1),
+                        color: Theme.of(context)
+                            .dividerColor
+                            .withValues(alpha: 0.5),
+                        width: 1),
                   )
                 : null,
       ),
@@ -57,20 +63,22 @@ class ReportLineWidget extends StatelessWidget {
           // Indentation
           SizedBox(width: indent),
 
-          // Account code (if showing)
+          // Account code (flexible width instead of fixed)
           if (showCode &&
               line.code.isNotEmpty &&
               !line.isTotal &&
               !line.isSubtotal)
             Container(
-              width: 80,
               margin: const EdgeInsets.only(right: 8),
               child: Text(
                 line.code,
                 style: textStyle.copyWith(
                   fontFamily: 'Courier', // Monospace for alignment
-                  fontSize: textStyle.fontSize! * 0.9,
-                  color: Theme.of(context).colorScheme.secondary,
+                  fontSize: textStyle.fontSize! * 0.85,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .secondary
+                      .withValues(alpha: 0.7),
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -83,11 +91,11 @@ class ReportLineWidget extends StatelessWidget {
               line.name,
               style: textStyle,
               overflow: TextOverflow.ellipsis,
-              maxLines: 2,
+              maxLines: 1, // Reduced from 2 for compactness
             ),
           ),
 
-          const SizedBox(width: 16),
+          const SizedBox(width: 12), // Reduced from 16
 
           // Amount
           if (line.showAmount)
@@ -107,7 +115,7 @@ class ReportLineWidget extends StatelessWidget {
     );
   }
 
-  /// Get indentation in pixels based on hierarchical level
+  /// Get indentation in pixels based on hierarchical level (reduced spacing)
   double _getIndentation(int level) {
     switch (level) {
       case 0:
@@ -115,11 +123,11 @@ class ReportLineWidget extends StatelessWidget {
       case 1:
         return 0.0; // Subtotal
       case 2:
-        return 24.0; // Account
+        return 16.0; // Account (reduced from 24px)
       case 3:
-        return 48.0; // Subaccount
+        return 32.0; // Subaccount (reduced from 48px)
       default:
-        return (24 * level).toDouble();
+        return (16 * level).toDouble(); // Reduced from 24px per level
     }
   }
 
@@ -130,28 +138,34 @@ class ReportLineWidget extends StatelessWidget {
     if (line.isTotal) {
       return baseStyle.copyWith(
         fontWeight: FontWeight.bold,
-        fontSize: 16,
+        fontSize: 15, // Slightly reduced from 16
       );
     }
 
     if (line.isSubtotal || line.isBold) {
       return baseStyle.copyWith(
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w600, // Slightly lighter than bold
         fontSize: 14,
       );
     }
 
-    return baseStyle;
+    return baseStyle.copyWith(fontSize: 13); // Slightly smaller for compactness
   }
 
-  /// Get background color based on line type
+  /// Get background color based on line type (more subtle)
   Color? _getBackgroundColor(BuildContext context, ReportLine line) {
     if (line.isTotal) {
-      return Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5);
+      return Theme.of(context)
+          .colorScheme
+          .surfaceContainerHighest
+          .withValues(alpha: 0.3);
     }
 
     if (line.isSubtotal) {
-      return Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.2);
+      return Theme.of(context)
+          .colorScheme
+          .surfaceContainerHighest
+          .withValues(alpha: 0.15);
     }
 
     return null;

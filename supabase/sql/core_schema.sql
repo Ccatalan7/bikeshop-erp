@@ -3592,14 +3592,16 @@ begin
   v_count := v_count + (case when found then 1 else 0 end);
   
   -- TAX ACCOUNTS (Critical for Chilean IVA)
+  -- IVA Débito = LIABILITY (tax we owe to government from sales)
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
-  select p_tenant_id, '2150', 'IVA Débito Fiscal', 'tax', 'taxPayable',
+  select p_tenant_id, '2150', 'IVA Débito Fiscal', 'liability', 'currentLiability',
     'IVA recaudado en ventas (19%)', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2150');
   v_count := v_count + (case when found then 1 else 0 end);
   
+  -- IVA Crédito = ASSET (tax refund we're owed from purchases)
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
-  select p_tenant_id, '2120', 'IVA Crédito Fiscal', 'tax', 'taxReceivable',
+  select p_tenant_id, '2120', 'IVA Crédito Fiscal', 'asset', 'currentAsset',
     'IVA pagado en compras (19%)', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2120');
   v_count := v_count + (case when found then 1 else 0 end);
@@ -4996,8 +4998,8 @@ begin
   v_iva_account_id := public.ensure_account(
     v_iva_account_code,
     v_iva_account_name,
-    'tax',
-    'taxPayable',
+    'liability',
+    'currentLiability',
     'IVA generado en ventas',
     null
   );
@@ -7886,8 +7888,8 @@ begin
     p_invoice.tenant_id,
     '2120',
     'IVA Crédito Fiscal',
-    'tax',
-    'taxReceivable',
+    'asset',
+    'currentAsset',
     'IVA pagado en compras, recuperable',
     null
   );

@@ -61,15 +61,19 @@ class BalanceSheet extends FinancialReport {
   String get subtitle => 'Al ${_formatDate(endDate)}';
 
   /// Check if accounting equation is balanced
-  /// Assets = Liabilities + Equity
+  /// Assets = Liabilities + Equity + Period Net Income
   bool get isBalanced {
-    final difference = (totalAssets - (totalLiabilities + totalEquity)).abs();
+    final totalEquityWithIncome = totalEquity + periodNetIncome;
+    final difference =
+        (totalAssets - (totalLiabilities + totalEquityWithIncome)).abs();
     return difference < 1.00; // Tolerance of 1 peso for rounding
   }
 
   /// Difference between assets and liabilities + equity
-  double get accountingEquationDifference =>
-      totalAssets - (totalLiabilities + totalEquity);
+  double get accountingEquationDifference {
+    final totalEquityWithIncome = totalEquity + periodNetIncome;
+    return totalAssets - (totalLiabilities + totalEquityWithIncome);
+  }
 
   /// Current ratio (liquidity metric)
   /// Current Assets / Current Liabilities
@@ -221,13 +225,24 @@ class BalanceSheet extends FinancialReport {
 
     if (equity.isNotEmpty) {
       lines.addAll(equity);
-      lines.add(ReportLine.blank());
     }
 
-    // TOTAL PATRIMONIO
+    // Add period net income as retained earnings
+    if (periodNetIncome != 0) {
+      lines.add(ReportLine.account(
+        code: '',
+        name: 'Utilidades del Ejercicio',
+        amount: periodNetIncome,
+        category: 'retainedEarnings',
+      ));
+    }
+
+    lines.add(ReportLine.blank());
+
+    // TOTAL PATRIMONIO (including net income)
     lines.add(ReportLine.total(
       name: 'TOTAL PATRIMONIO',
-      amount: totalEquity,
+      amount: totalEquity + periodNetIncome,
     ));
     lines.add(ReportLine.blank());
     lines.add(ReportLine.blank());
@@ -235,7 +250,7 @@ class BalanceSheet extends FinancialReport {
     // ========== TOTAL PASIVOS + PATRIMONIO ==========
     lines.add(ReportLine.total(
       name: 'TOTAL PASIVOS + PATRIMONIO',
-      amount: totalLiabilities + totalEquity,
+      amount: totalLiabilities + totalEquity + periodNetIncome,
     ));
 
     return lines;

@@ -6,12 +6,11 @@ import '../../../shared/widgets/main_layout.dart';
 import '../models/financial_report.dart';
 import '../models/income_statement.dart';
 import '../services/financial_reports_service.dart';
-import '../widgets/report_header_widget.dart';
 import '../widgets/report_line_widget.dart';
-import '../widgets/date_range_selector_widget.dart';
 
 /// Income Statement Page (Estado de Resultados)
 /// Displays company profitability over a period
+/// Redesigned for compact, space-efficient layout
 class IncomeStatementPage extends StatefulWidget {
   const IncomeStatementPage({super.key});
 
@@ -89,48 +88,102 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Estado de Resultados'),
-          actions: [
-            // Refresh button
-            IconButton(
-              onPressed: _isLoading ? null : _loadStatement,
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Actualizar',
-            ),
-
-            // Export button (future feature)
-            IconButton(
-              onPressed: _statement != null ? _showExportMenu : null,
-              icon: const Icon(Icons.download),
-              tooltip: 'Exportar',
-            ),
-
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: Column(
-          children: [
-            // Date range selector
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: DateRangeSelectorWidget(
-                initialRange: _dateRange,
-                initialPeriod: _selectedPeriod,
-                onRangeChanged: _onDateRangeChanged,
-                showEndDate: true,
+      child: Column(
+        children: [
+          // Minimal header like Zoho - single compact row
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(
+                bottom: BorderSide(color: Theme.of(context).dividerColor),
               ),
             ),
-
-            // Report content
-            Expanded(
-              child: _buildContent(),
+            child: Row(
+              children: [
+                // Title
+                Text(
+                  'Estado de Resultados',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(width: 24),
+                // Period dropdown (compact, inline)
+                SizedBox(
+                  width: 200,
+                  child: DropdownButtonFormField<ReportPeriod>(
+                    value: _selectedPeriod,
+                    isDense: true,
+                    decoration: InputDecoration(
+                      labelText: 'Período',
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      prefixIcon: const Icon(Icons.calendar_today, size: 18),
+                    ),
+                    items: ReportPeriod.values.map((period) {
+                      return DropdownMenuItem(
+                        value: period,
+                        child: Text(
+                          period.displayName,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (period) {
+                      if (period != null && period != ReportPeriod.custom) {
+                        final range = period.getDateRange();
+                        _onDateRangeChanged(range, period);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Date range display
+                Text(
+                  '${_formatDate(_dateRange.start)} - ${_formatDate(_dateRange.end)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
+                ),
+                const Spacer(),
+                // Refresh button
+                IconButton(
+                  onPressed: _isLoading ? null : _loadStatement,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  tooltip: 'Actualizar',
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+                const SizedBox(width: 4),
+                // Export button
+                IconButton(
+                  onPressed: _statement != null ? _showExportMenu : null,
+                  icon: const Icon(Icons.download, size: 18),
+                  tooltip: 'Exportar',
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          // Report content
+          Expanded(
+            child: _buildContent(),
+          ),
+        ],
       ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
   Widget _buildContent() {
@@ -140,7 +193,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             CircularProgressIndicator(),
-            SizedBox(height: 16),
+            SizedBox(height: 12),
             Text('Generando reporte...'),
           ],
         ),
@@ -157,7 +210,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
               size: 48,
               color: Theme.of(context).colorScheme.error,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
               _errorMessage!,
               style: TextStyle(
@@ -165,7 +218,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             ElevatedButton.icon(
               onPressed: _loadStatement,
               icon: const Icon(Icons.refresh),
@@ -185,33 +238,26 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
     return SingleChildScrollView(
       child: Column(
         children: [
-          // Report header
-          ReportHeaderWidget(
-            companyName: _statement!.companyName,
-            reportTitle: _statement!.title,
-            subtitle: _statement!.subtitle,
-            generatedAt: _statement!.generatedAt,
-          ),
+          const SizedBox(height: 12),
 
-          const SizedBox(height: 24),
-
-          // Key metrics cards
+          // Key metrics cards (more compact)
           _buildMetricsCards(),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
 
           // Report lines with horizontal scroll if needed
           LayoutBuilder(
             builder: (context, constraints) {
               final contentWidth =
-                  constraints.maxWidth > 1200 ? 1200.0 : constraints.maxWidth;
+                  constraints.maxWidth > 1000 ? 1000.0 : constraints.maxWidth;
               return SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Container(
                   width: contentWidth,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Card(
-                    elevation: 2,
+                    elevation: 1,
+                    margin: EdgeInsets.zero,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: _statement!.allLines.map((line) {
@@ -228,7 +274,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
             },
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -238,8 +284,8 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
     if (_statement == null) return const SizedBox.shrink();
 
     return Container(
-      constraints: const BoxConstraints(maxWidth: 1200),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      constraints: const BoxConstraints(maxWidth: 1000),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
           Expanded(
@@ -251,7 +297,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
               Colors.blue,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: _buildMetricCard(
               'Utilidad Operacional',
@@ -261,7 +307,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
               Colors.orange,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: _buildMetricCard(
               'Utilidad Neta',
@@ -286,36 +332,39 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
     return Card(
       elevation: 1,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(10), // Reduced from 16
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(width: 8),
+                Icon(icon, color: color, size: 18),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     title,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.secondary,
+                          fontSize: 11,
                         ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               amount,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: color,
                   ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               'Margen: $percentage',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                  ),
             ),
           ],
         ),
