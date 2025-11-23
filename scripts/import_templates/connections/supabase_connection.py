@@ -28,7 +28,7 @@ class SupabaseConnection:
     def __init__(self):
         """Initialize with permanent credentials from config.py"""
         self.url = config.SUPABASE_URL
-        self.key = config.SUPABASE_KEY
+        self.key = config.SUPABASE_SERVICE_ROLE_KEY
         self.tenant_id = config.TENANT_ID
         
         # Initialize client
@@ -146,6 +146,40 @@ class SupabaseConnection:
         
         print(f"   ✅ Total: {len(all_suppliers)} suppliers")
         return all_suppliers
+    
+    def fetch_all_categories(self) -> List[Dict]:
+        """
+        Fetch all product categories from Supabase with pagination
+        
+        Returns:
+            List of category dictionaries
+        """
+        print("\n📥 Fetching categories from Flutter/Supabase...")
+        
+        all_categories = []
+        page_size = 1000
+        offset = 0
+        
+        while True:
+            response = self.client.table('product_categories') \
+                .select('*') \
+                .eq('tenant_id', self.tenant_id) \
+                .range(offset, offset + page_size - 1) \
+                .execute()
+            
+            if not response.data:
+                break
+            
+            all_categories.extend(response.data)
+            print(f"   Page {offset // page_size + 1}: {len(response.data)} categories")
+            
+            if len(response.data) < page_size:
+                break
+            
+            offset += page_size
+        
+        print(f"   ✅ Total: {len(all_categories)} categories")
+        return all_categories
     
     def update_product(self, product_id: str, updates: Dict) -> bool:
         """

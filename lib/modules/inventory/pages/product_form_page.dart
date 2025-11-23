@@ -8,13 +8,13 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/constants/storage_constants.dart';
+import '../../../shared/models/supplier.dart';
+import '../../../shared/services/error_reporting_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/tenant_service.dart';
-import '../../../shared/services/error_reporting_service.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
-import '../../../shared/models/supplier.dart';
 import '../../purchases/services/purchase_service.dart';
 import '../models/category_models.dart' as category_models;
 import '../models/brand_models.dart';
@@ -75,6 +75,10 @@ class _ProductFormPageState extends State<ProductFormPage> {
   bool _isSaving = false;
   Product? _existingProduct;
 
+  // Phase 1: Compatibility specs (stored in product.compatibility_specs JSONB)
+  Map<String, dynamic> _specifications = {};
+  final Map<String, TextEditingController> _specControllers = {};
+
   // Debug error tracking
   String? _lastError;
   String? _lastStackTrace;
@@ -86,6 +90,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
     _categoryService = Provider.of<CategoryService>(context, listen: false);
     _purchaseService = Provider.of<PurchaseService>(context, listen: false);
     _brandService = Provider.of<BrandService>(context, listen: false);
+    _specifications = {};
 
     _inventoryQtyController.text = '0';
     _minStockController.text = '1';
@@ -117,6 +122,10 @@ class _ProductFormPageState extends State<ProductFormPage> {
       ..dispose();
     _inventoryQtyController.dispose();
     _minStockController.dispose();
+    for (final controller in _specControllers.values) {
+      controller.dispose();
+    }
+    _specControllers.clear();
     super.dispose();
   }
 
@@ -165,6 +174,59 @@ class _ProductFormPageState extends State<ProductFormPage> {
       setState(() => _selectedCategoryId = result.id);
     }
   }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  Map<String, dynamic> _buildSpecificationsPayload() {
+    // Phase 1: Build compatibility specs from form controllers
+    final payload = <String, dynamic>{};
+    
+    // Convert all controller values to proper types
+    _specControllers.forEach((key, controller) {
+      final text = controller.text.trim();
+      if (text.isEmpty) return;
+      
+      // Try to parse as number first
+      final numValue = double.tryParse(text);
+      if (numValue != null) {
+        payload[key.replaceFirst('compat_', '')] = numValue;
+      } else {
+        payload[key.replaceFirst('compat_', '')] = text;
+      }
+    });
+    
+    // Add dropdown/enum values from _specifications
+    _specifications.forEach((key, value) {
+      if (value != null) {
+        payload[key] = value;
+      }
+    });
+    
+    return payload;
+  }
+
+
+
+
+
+
+
+
+
+
 
   Future<void> _loadSuppliers() async {
     try {
@@ -467,6 +529,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
         _additionalImages
           ..clear()
           ..addAll(product.additionalImages);
+        _specifications = Map<String, dynamic>.from(product.specifications);
+        // Phase 1: Specifications are pre-populated from product.compatibility_specs
+        // Controllers will be created dynamically in _buildCompatibilityFields
         _syncBrandSelection();
       }
     } catch (e) {
@@ -676,6 +741,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
           int.tryParse(_inventoryQtyController.text.trim()) ?? 0;
       final minStockLevel = int.tryParse(_minStockController.text.trim()) ?? 1;
       final maxStockLevel = _existingProduct?.maxStockLevel ?? 100;
+      final productSpecs = _buildSpecificationsPayload();
 
       String? selectedCategoryName;
       for (final category in _categories) {
@@ -717,6 +783,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
             isActive: _isActive,
             isPublished: _isPublished,
             productType: _selectedProductType,
+            specifications: productSpecs,
           );
 
       final product = baseProduct.copyWith(
@@ -742,6 +809,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         isActive: _isActive,
         isPublished: _isPublished,
         productType: _selectedProductType,
+        specifications: productSpecs,
         updatedAt: DateTime.now(),
       );
 
@@ -946,6 +1014,13 @@ class _ProductFormPageState extends State<ProductFormPage> {
                       const SizedBox(height: 16),
                       _buildSectionCard(
                         theme,
+                        icon: Icons.tune_outlined,
+                        title: 'Especificaciones avanzadas',
+                        children: _buildCompatibilityFields(theme),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildSectionCard(
+                        theme,
                         icon: Icons.attach_money_outlined,
                         title: 'Precios y márgenes',
                         children: _buildPricingFields(theme),
@@ -1000,6 +1075,13 @@ class _ProductFormPageState extends State<ProductFormPage> {
                 icon: Icons.description_outlined,
                 title: 'Información básica',
                 children: _buildBasicInfoFields(theme),
+              ),
+              const SizedBox(height: 16),
+              _buildSectionCard(
+                theme,
+                icon: Icons.tune_outlined,
+                title: 'Especificaciones avanzadas',
+                children: _buildCompatibilityFields(theme),
               ),
               const SizedBox(height: 16),
               _buildSectionCard(
@@ -1458,6 +1540,305 @@ class _ProductFormPageState extends State<ProductFormPage> {
         maxLines: 6,
       ),
     ];
+  }
+
+  List<Widget> _buildCompatibilityFields(ThemeData theme) {
+    // Phase 1: Check if selected category has compatibility metadata
+    category_models.Category? selectedCategory;
+    if (_selectedCategoryId != null) {
+      try {
+        selectedCategory = _categories.firstWhere((c) => c.id == _selectedCategoryId);
+      } catch (e) {
+        selectedCategory = null;
+      }
+    }
+    
+    final hasMetadata = selectedCategory?.hasCompatibilityMetadata ?? false;
+    
+    if (!hasMetadata) {
+      return [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.dividerColor),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                color: theme.colorScheme.onSurfaceVariant,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Esta categoría no tiene especificaciones técnicas definidas. '
+                  'Selecciona una categoría de componentes (cassette, horquilla, maza, etc.) '
+                  'para habilitar especificaciones avanzadas.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ];
+    }
+    
+    // Category has metadata - show Advanced Specs fields
+    final widgets = <Widget>[
+      // Header with component info
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              theme.colorScheme.primaryContainer.withOpacity(0.3),
+              theme.colorScheme.primaryContainer.withOpacity(0.1),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: theme.colorScheme.primary.withOpacity(0.2),
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  _getIconForComponent(selectedCategory!.iconName),
+                  color: theme.colorScheme.primary,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        selectedCategory.name,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Componente: ${selectedCategory.componentCode ?? 'N/A'}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (selectedCategory.disciplineScope?.isNotEmpty ?? false)
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: selectedCategory.disciplineScope!
+                        .take(3)
+                        .map(
+                          (scope) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              scope.toUpperCase(),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Completa las especificaciones técnicas para habilitar compatibilidad inteligente',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 20),
+    ];
+    
+    // Build fields from attributes
+    final attributes = selectedCategory.compatibilityAttributes;
+    for (var i = 0; i < attributes.length; i++) {
+      final attr = attributes[i];
+      widgets.add(_buildCompatibilityAttribute(attr, theme));
+      if (i < attributes.length - 1) {
+        widgets.add(const SizedBox(height: 16));
+      }
+    }
+    
+    return widgets;
+  }
+  
+  IconData _getIconForComponent(String? iconName) {
+    switch (iconName) {
+      case 'cassette': return Icons.settings;
+      case 'chain': return Icons.link;
+      case 'hub': return Icons.hub;
+      case 'rim': return Icons.circle_outlined;
+      case 'tire': return Icons.trip_origin;
+      case 'fork': return Icons.trending_down;
+      case 'handlebar': return Icons.minimize;
+      case 'stem': return Icons.architecture;
+      case 'brake_caliper': return Icons.stop_circle_outlined;
+      case 'brake_lever': return Icons.pan_tool;
+      case 'rotor': return Icons.album;
+      case 'crankset': return Icons.refresh;
+      default: return Icons.hub_outlined;
+    }
+  }
+  
+  Widget _buildCompatibilityAttribute(
+    Map<String, dynamic> attr,
+    ThemeData theme,
+  ) {
+    final name = attr['name'] as String;
+    final type = attr['type'] as String;
+    final required = attr['required'] as bool? ?? false;
+    final label = attr['label'] as String? ?? name;
+    final unit = attr['unit'] as String?;
+    
+    // Get or create controller for this attribute
+    final key = 'compat_$name';
+    if (!_specControllers.containsKey(key)) {
+      _specControllers[key] = TextEditingController();
+      // Load existing value if editing product
+      if (_specifications.containsKey(name)) {
+        _specControllers[key]!.text = _specifications[name].toString();
+      }
+    }
+    
+    Widget field;
+    
+    switch (type) {
+      case 'enum':
+        final enumValues = attr['enum_values'] as List?;
+        field = DropdownButtonFormField<String>(
+          value: _specifications[name] as String?,
+          decoration: InputDecoration(
+            labelText: label + (required ? ' *' : ''),
+            helperText: unit != null ? 'Unidad: $unit' : null,
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            const DropdownMenuItem<String>(
+              value: null,
+              child: Text('Seleccione...'),
+            ),
+            if (enumValues != null)
+              ...enumValues.map(
+                (val) => DropdownMenuItem<String>(
+                  value: val.toString(),
+                  child: Text(_formatEnumValue(val.toString())),
+                ),
+              ),
+          ],
+          validator: required
+              ? (value) => value == null ? 'Campo requerido' : null
+              : null,
+          onChanged: (value) {
+            setState(() {
+              _specifications[name] = value;
+            });
+          },
+        );
+        break;
+        
+      case 'number':
+        field = TextFormField(
+          controller: _specControllers[key],
+          decoration: InputDecoration(
+            labelText: label + (required ? ' *' : ''),
+            helperText: unit != null ? 'Unidad: $unit' : null,
+            suffixText: unit,
+            border: const OutlineInputBorder(),
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+          ],
+          validator: required
+              ? (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Campo requerido';
+                  }
+                  if (double.tryParse(value) == null) {
+                    return 'Ingrese un número válido';
+                  }
+                  return null;
+                }
+              : null,
+          onChanged: (value) {
+            final parsed = double.tryParse(value);
+            if (parsed != null) {
+              setState(() {
+                _specifications[name] = parsed;
+              });
+            }
+          },
+        );
+        break;
+        
+      case 'text':
+      default:
+        field = TextFormField(
+          controller: _specControllers[key],
+          decoration: InputDecoration(
+            labelText: label + (required ? ' *' : ''),
+            helperText: unit != null ? 'Unidad: $unit' : null,
+            border: const OutlineInputBorder(),
+          ),
+          validator: required
+              ? (value) =>
+                  value == null || value.trim().isEmpty
+                      ? 'Campo requerido'
+                      : null
+              : null,
+          onChanged: (value) {
+            setState(() {
+              _specifications[name] = value;
+            });
+          },
+        );
+    }
+    
+    return field;
+  }
+  
+  String _formatEnumValue(String value) {
+    // Convert underscores to spaces and title case
+    return value
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((word) => word.isEmpty
+            ? ''
+            : word[0].toUpperCase() + word.substring(1).toLowerCase())
+        .join(' ');
   }
 
   List<Widget> _buildMediaFields(ThemeData theme) {

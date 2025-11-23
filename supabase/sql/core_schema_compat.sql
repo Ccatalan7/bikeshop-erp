@@ -829,6 +829,9 @@ begin
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'image_urls') then
     alter table products add column image_urls text[] not null default array[]::text[];
   end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'additional_images') then
+    alter table products add column additional_images text[] not null default array[]::text[];
+  end if;
 
   -- Description & categorization
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'description') then
@@ -842,6 +845,9 @@ begin
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'category_name') then
     alter table products add column category_name text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'supplier_name') then
+    alter table products add column supplier_name text;
   end if;
 
   -- Brand linkage
@@ -2003,6 +2009,64 @@ create table if not exists product_categories (
   unique(tenant_id, full_path) -- Each tenant can have same category paths
 );
 
+-- ============================================================================
+-- COMPATIBILITY SYSTEM INTEGRATION (Nov 22, 2025)
+-- ============================================================================
+-- Instead of creating separate compat_component_types table (redundant!),
+-- we store compatibility metadata directly in product_categories.
+-- Categories WITH compatibility_metadata become "component types" for matching.
+--
+-- USAGE:
+-- 1. Create category: "Mazas Traseras" (Rear Hubs)
+-- 2. Add compatibility_metadata JSON with component_code, attributes, rules
+-- 3. Flutter app detects category has metadata → shows compatibility fields
+-- 4. Products in that category inherit compatibility attribute schema
+--
+-- EXAMPLE METADATA:
+-- {
+--   "component_code": "rear_hub",
+--   "attributes": [
+--     {"key": "hub_spacing_mm", "label": "Espaciado", "type": "enum",
+--      "required": true, "enum_values": ["130", "135", "142", "148"]},
+--     {"key": "axle_type", "label": "Tipo de Eje", "type": "enum",
+--      "required": true, "enum_values": ["QR", "thru_12", "thru_15"]}
+--   ],
+--   "rules": {
+--     "mtb": {"typical_spacing": "148"},
+--     "road": {"typical_spacing": "130"}
+--   }
+-- }
+--
+-- BENEFITS vs old compat_component_types system:
+-- ✅ No redundancy (one picker instead of "category" + "component type")
+-- ✅ Better UX (category picker auto-detects compatibility mode)
+-- ✅ Faster queries (one table instead of 6 with JOINs)
+-- ✅ Flexible (JSON schema, no ALTER TABLE needed for new attributes)
+-- ============================================================================
+
+-- Add compatibility columns to product_categories
+alter table product_categories 
+  add column if not exists compatibility_metadata jsonb not null default '{}'::jsonb;
+
+alter table product_categories 
+  add column if not exists discipline_scope text[] default array[]::text[];
+
+alter table product_categories 
+  add column if not exists icon_name text;
+
+comment on column product_categories.compatibility_metadata is 
+  'Stores compatibility spec: {component_code: "rear_hub", attributes: [{key, label, type, enum_values, ...}], rules: {...}}';
+
+comment on column product_categories.discipline_scope is 
+  'Bike disciplines (road, mtb, gravel) - filters which products apply to which bike types';
+
+-- Indexes for compatibility queries
+create index if not exists idx_product_categories_compat_metadata 
+  on product_categories using gin (compatibility_metadata);
+
+create index if not exists idx_product_categories_discipline 
+  on product_categories using gin (discipline_scope);
+
 -- Step 2: Create indexes for product_categories
 create index if not exists idx_product_categories_parent_id on product_categories(parent_id);
 create index if not exists idx_product_categories_full_path on product_categories(full_path);
@@ -2121,6 +2185,209 @@ begin
 end $$;
 
 create index if not exists idx_products_category_id on products(category_id);
+
+-- ============================================================================
+-- FLEXIBLE COMPATIBILITY SYSTEM (Nov 22, 2025)
+-- ============================================================================
+-- GOAL: Allow users to manually map their categories to predefined component types
+-- 
+-- ARCHITECTURE:
+-- 1. compat_component_library: GLOBAL catalog of component types (shared, not tenant-specific)
+-- 2. product_categories.component_type_code: Simple FK reference (nullable, user maps manually)
+-- 3. Flutter Category Form: Dropdown to select component type or "None"
+-- 4. Flutter Product Form: Reads category.component_type_code → fetches metadata → builds fields
+--
+-- BENEFITS:
+-- ✅ Flexible: Add/edit component types without touching tenant data
+-- ✅ Simple: Just one dropdown in category form
+-- ✅ No scripts needed: User maps directly in UI
+-- ✅ Open to change: Modify attributes, add types, update metadata anytime
+-- ============================================================================
+
+-- GLOBAL COMPONENT TYPE LIBRARY (Shared catalog, no tenant_id)
+create table if not exists compat_component_library (
+  code text primary key, -- e.g., 'rear_hub', 'rim', 'cassette', 'frame'
+  display_name text not null, -- e.g., 'Maza Trasera', 'Aro / Rin'
+  parent_code text references compat_component_library(code) on delete cascade, -- Hierarchy (optional)
+  discipline_scope text[] default array[]::text[], -- ['road', 'mtb', 'gravel']
+  description text,
+  icon_name text, -- Material Icons name for Flutter
+  metadata jsonb not null default '{}'::jsonb, -- Flexible JSON for attributes, rules, etc.
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_compat_library_parent on compat_component_library(parent_code);
+create index if not exists idx_compat_library_active on compat_component_library(is_active);
+create index if not exists idx_compat_library_metadata on compat_component_library using gin(metadata);
+
+-- No RLS needed - this is a global reference table (read-only for users)
+alter table compat_component_library enable row level security;
+
+drop policy if exists "component_library_select_all" on compat_component_library;
+create policy "component_library_select_all" on compat_component_library
+  for select to authenticated
+  using (true);
+
+-- Add component type reference to categories
+alter table product_categories 
+  add column if not exists component_type_code text references compat_component_library(code) on delete set null;
+
+create index if not exists idx_product_categories_component_type 
+  on product_categories(component_type_code) where component_type_code is not null;
+
+comment on column product_categories.component_type_code is 
+  'User-mapped reference to compat_component_library. When set, products in this category inherit compatibility fields from the component type metadata.';
+
+-- Helper view for Flutter dropdown
+create or replace view v_component_type_catalog as
+select 
+  code,
+  display_name,
+  parent_code,
+  discipline_scope,
+  description,
+  icon_name,
+  metadata,
+  is_active,
+  jsonb_array_length(coalesce(metadata->'attributes', '[]'::jsonb)) as attribute_count
+from compat_component_library
+where is_active = true
+order by 
+  case when parent_code is null then 0 else 1 end,
+  display_name;
+
+grant select on v_component_type_catalog to authenticated;
+
+-- Helper function to get category with component metadata
+create or replace function public.get_category_with_component_metadata(p_category_id uuid)
+returns table (
+  category_id uuid,
+  category_name text,
+  category_full_path text,
+  component_type_code text,
+  component_display_name text,
+  component_icon text,
+  component_metadata jsonb,
+  discipline_scope text[]
+)
+language plpgsql
+security definer
+as $$
+begin
+  return query
+  select 
+    pc.id,
+    pc.name,
+    pc.full_path,
+    cl.code,
+    cl.display_name,
+    cl.icon_name,
+    cl.metadata,
+    cl.discipline_scope
+  from product_categories pc
+  left join compat_component_library cl on pc.component_type_code = cl.code
+  where pc.id = p_category_id
+    and pc.tenant_id = public.user_tenant_id();
+end;
+$$;
+
+grant execute on function public.get_category_with_component_metadata(uuid) to authenticated;
+
+-- Seed function for component library (run once globally, not per tenant)
+create or replace function public.seed_component_library()
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  -- Parent groups
+  insert into compat_component_library (code, display_name, parent_code, discipline_scope, description, icon_name, metadata) values
+    ('wheel_system', 'Sistema de Rueda', null, '{road,mtb,gravel}', 'Componentes relacionados con ruedas', 'settings_input_component', '{}'),
+    ('frame_system', 'Sistema de Cuadro', null, '{road,mtb,gravel}', 'Componentes estructurales del cuadro y horquilla', 'directions_bike', '{}'),
+    ('drivetrain_system', 'Tren Motriz', null, '{road,mtb,gravel}', 'Componentes de transmisión', 'settings', '{}'),
+    ('brake_system', 'Sistema de Freno', null, '{road,mtb,gravel}', 'Componentes de frenado', 'gpp_maybe', '{}')
+  on conflict (code) do update set
+    display_name = excluded.display_name,
+    discipline_scope = excluded.discipline_scope,
+    description = excluded.description,
+    icon_name = excluded.icon_name,
+    updated_at = now();
+
+  -- Wheel components
+  insert into compat_component_library (code, display_name, parent_code, discipline_scope, description, icon_name, metadata) values
+    ('hub', 'Maza', 'wheel_system', '{road,mtb,gravel}', 'Mazas delanteras o traseras', 'hub', '{"attributes": [{"key": "spoke_holes", "label": "Número de Rayos", "type": "enum", "required": true, "enum_values": ["16", "20", "24", "28", "32", "36", "40", "48"]}, {"key": "hub_spacing_mm", "label": "Ancho OLD (mm)", "type": "enum", "required": true, "enum_values": ["100", "110", "130", "135", "142", "148", "157"]}, {"key": "axle_type", "label": "Tipo de Eje", "type": "enum", "required": true, "enum_values": ["QR 9mm", "QR 10mm", "Thru 12mm", "Thru 15mm", "Thru 20mm"]}, {"key": "brake_interface", "label": "Interface de Freno", "type": "enum", "required": false, "enum_values": ["Disco 6-Bolt", "Disco Centerlock", "Freno Rin"]}, {"key": "freehub_body", "label": "Cuerpo de Cassette", "type": "enum", "required": false, "enum_values": ["Shimano HG", "Shimano MicroSpline", "SRAM XD", "SRAM XDR", "Campagnolo", "T-Type"]}]}'),
+    ('rim', 'Aro / Rin', 'wheel_system', '{road,mtb,gravel}', 'Aros y llantas para armado de ruedas', 'donut_large', '{"attributes": [{"key": "spoke_holes", "label": "Número de Rayos", "type": "enum", "required": true, "enum_values": ["16", "20", "24", "28", "32", "36", "40", "48"]}, {"key": "erd_mm", "label": "ERD (mm)", "type": "number", "required": true, "min": 250, "max": 700}, {"key": "rim_internal_width_mm", "label": "Ancho Interno (mm)", "type": "number", "required": true, "min": 13, "max": 45}, {"key": "wheel_size", "label": "Tamaño de Rueda", "type": "enum", "required": true, "enum_values": ["700c", "650b (27.5)", "29er", "27.5+", "26\"", "24\"", "20\""]}, {"key": "brake_interface", "label": "Interface de Freno", "type": "enum", "required": false, "enum_values": ["Disco 6-Bolt", "Disco Centerlock", "Freno Rin"]}]}'),
+    ('spoke', 'Rayo', 'wheel_system', '{road,mtb,gravel}', 'Rayos tradicionales o especiales', 'timeline', '{"attributes": [{"key": "spoke_length_mm", "label": "Largo de Rayo (mm)", "type": "number", "required": true, "min": 180, "max": 320}, {"key": "spoke_gauge", "label": "Calibre", "type": "enum", "required": true, "enum_values": ["13g", "14g", "15g", "Bladed"]}, {"key": "spoke_material", "label": "Material", "type": "enum", "required": false, "enum_values": ["Acero Inoxidable", "Aluminio", "Titanio", "Carbono"]}]}'),
+    ('tire', 'Neumático', 'wheel_system', '{road,mtb,gravel}', 'Neumáticos o cubiertas', 'radio_button_checked', '{"attributes": [{"key": "wheel_size", "label": "Tamaño de Rueda", "type": "enum", "required": true, "enum_values": ["700c", "650b (27.5)", "29er", "27.5+", "26\"", "24\"", "20\""]}, {"key": "tire_width_mm", "label": "Ancho (mm)", "type": "number", "required": true, "min": 23, "max": 85}]}'),
+    ('tube', 'Cámara', 'wheel_system', '{road,mtb,gravel}', 'Cámaras de aire', 'trip_origin', '{"attributes": [{"key": "wheel_size", "label": "Tamaño de Rueda", "type": "enum", "required": true, "enum_values": ["700c", "650b (27.5)", "29er", "27.5+", "26\"", "24\"", "20\""]}, {"key": "valve_type", "label": "Tipo de Válvula", "type": "enum", "required": true, "enum_values": ["Presta", "Schrader", "Dunlop"]}]}')
+  on conflict (code) do update set
+    display_name = excluded.display_name,
+    parent_code = excluded.parent_code,
+    discipline_scope = excluded.discipline_scope,
+    description = excluded.description,
+    icon_name = excluded.icon_name,
+    metadata = excluded.metadata,
+    updated_at = now();
+
+  -- Frame system components
+  insert into compat_component_library (code, display_name, parent_code, discipline_scope, description, icon_name, metadata) values
+    ('frame', 'Cuadro', 'frame_system', '{road,mtb,gravel}', 'Cuadros completos', 'bike_scooter', '{"attributes": [{"key": "wheel_size", "label": "Tamaño de Rueda", "type": "enum", "required": true, "enum_values": ["700c", "650b (27.5)", "29er", "27.5+", "26\"", "24\"", "20\""]}, {"key": "frame_tire_max_width_mm", "label": "Ancho Máx Neumático (mm)", "type": "number", "required": false, "min": 25, "max": 85}, {"key": "seatpost_diameter_mm", "label": "Diámetro Tubo Asiento (mm)", "type": "enum", "required": false, "enum_values": ["27.2", "30.9", "31.6", "34.9"]}, {"key": "headset_standard", "label": "Norma Dirección", "type": "enum", "required": false, "enum_values": ["IS41/IS52", "ZS44/EC44", "EC34", "EC44/EC44", "ZS44/ZS56", "EC49"]}, {"key": "bb_type", "label": "Norma Caja Centro", "type": "enum", "required": false, "enum_values": ["BSA 68mm", "BSA 73mm", "ITA", "PF30", "BB30", "BB86", "BB92", "BB386", "T47"]}, {"key": "bb_shell_width_mm", "label": "Ancho Caja Centro (mm)", "type": "enum", "required": false, "enum_values": ["68", "73", "86", "92"]}, {"key": "rear_spacing_mm", "label": "Espaciado Trasero (mm)", "type": "enum", "required": false, "enum_values": ["130", "135", "142", "148", "157"]}, {"key": "chainline_mm", "label": "Chainline (mm)", "type": "number", "required": false, "min": 42, "max": 58}]}'),
+    ('fork', 'Horquilla', 'frame_system', '{road,mtb,gravel}', 'Horquillas rígidas y con suspensión', 'hiking', '{"attributes": [{"key": "wheel_size", "label": "Tamaño de Rueda", "type": "enum", "required": true, "enum_values": ["700c", "650b (27.5)", "29er", "27.5+", "26\"", "24\"", "20\""]}, {"key": "fork_travel_mm", "label": "Recorrido (mm)", "type": "number", "required": false, "min": 0, "max": 220}, {"key": "steerer_diameter_mm", "label": "Diámetro Tubo Dirección (mm)", "type": "enum", "required": true, "enum_values": ["1\" (25.4mm)", "1-1/8\" (28.6mm)", "1.5\" (38.1mm)"]}, {"key": "axle_type", "label": "Tipo de Eje", "type": "enum", "required": true, "enum_values": ["QR 9mm", "Thru 12mm", "Thru 15mm", "Thru 20mm"]}, {"key": "brake_mount_type", "label": "Montaje Freno", "type": "enum", "required": false, "enum_values": ["Post Mount", "Flat Mount", "IS Mount", "V-Brake", "Canti"]}]}'),
+    ('headset', 'Juego de Dirección', 'frame_system', '{road,mtb,gravel}', 'Normas y rodamientos de dirección', 'donut_small', '{"attributes": [{"key": "headset_standard", "label": "Norma", "type": "enum", "required": true, "enum_values": ["IS41/IS52", "ZS44/EC44", "EC34", "EC44/EC44", "ZS44/ZS56", "EC49", "Roscado 1-1/8\""]}, {"key": "steerer_diameter_mm", "label": "Diámetro Compatible", "type": "enum", "required": true, "enum_values": ["1\" (25.4mm)", "1-1/8\" (28.6mm)", "1.5\" (38.1mm)"]}]}'),
+    ('seatpost', 'Tubo de Asiento', 'frame_system', '{road,mtb,gravel}', 'Seatposts rígidos y telescópicos', 'straighten', '{"attributes": [{"key": "seatpost_diameter_mm", "label": "Diámetro (mm)", "type": "enum", "required": true, "enum_values": ["27.2", "30.9", "31.6", "34.9"]}, {"key": "seatpost_length_mm", "label": "Largo (mm)", "type": "number", "required": false, "min": 200, "max": 500}, {"key": "seatpost_travel_mm", "label": "Recorrido Dropper (mm)", "type": "number", "required": false, "min": 0, "max": 250}]}'),
+    ('handlebar', 'Manubrio', 'frame_system', '{road,mtb,gravel}', 'Barras, drops y risers', 'pan_tool_alt', '{"attributes": [{"key": "handlebar_width_mm", "label": "Ancho (mm)", "type": "number", "required": true, "min": 360, "max": 820}, {"key": "handlebar_clamp_diameter_mm", "label": "Diámetro Abrazadera (mm)", "type": "enum", "required": true, "enum_values": ["25.4", "31.8", "35"]}, {"key": "handlebar_type", "label": "Tipo", "type": "enum", "required": true, "enum_values": ["Drop", "Flat", "Riser", "BMX", "Aero"]}]}'),
+    ('stem', 'Stem / Tee', 'frame_system', '{road,mtb,gravel}', 'Potencias y tees', 'call_split', '{"attributes": [{"key": "stem_length_mm", "label": "Largo (mm)", "type": "number", "required": true, "min": 30, "max": 140}, {"key": "handlebar_clamp_diameter_mm", "label": "Diámetro Abrazadera Manubrio (mm)", "type": "enum", "required": true, "enum_values": ["25.4", "31.8", "35"]}, {"key": "steerer_diameter_mm", "label": "Diámetro Tubo Dirección (mm)", "type": "enum", "required": true, "enum_values": ["1\" (25.4mm)", "1-1/8\" (28.6mm)", "1.5\" (38.1mm)"]}, {"key": "stem_rise_deg", "label": "Ángulo (°)", "type": "number", "required": false, "min": -20, "max": 60}]}'),
+    ('saddle', 'Asiento', 'frame_system', '{road,mtb,gravel}', 'Sillines y asientos', 'event_seat', '{"attributes": [{"key": "saddle_width_mm", "label": "Ancho (mm)", "type": "number", "required": false, "min": 120, "max": 180}, {"key": "rail_material", "label": "Material Rieles", "type": "enum", "required": false, "enum_values": ["Acero", "Titanio", "Carbono"]}]}')
+  on conflict (code) do update set
+    display_name = excluded.display_name,
+    parent_code = excluded.parent_code,
+    discipline_scope = excluded.discipline_scope,
+    description = excluded.description,
+    icon_name = excluded.icon_name,
+    metadata = excluded.metadata,
+    updated_at = now();
+
+  -- Drivetrain components
+  insert into compat_component_library (code, display_name, parent_code, discipline_scope, description, icon_name, metadata) values
+    ('crankset', 'Bielas', 'drivetrain_system', '{road,mtb,gravel}', 'Cranksets completos', 'pedal_bike', '{"attributes": [{"key": "bb_type", "label": "Compatibilidad Caja Centro", "type": "enum", "required": true, "enum_values": ["BSA 68mm", "BSA 73mm", "ITA", "PF30", "BB30", "BB86", "BB92", "BB386", "T47"]}, {"key": "crank_arm_length_mm", "label": "Largo Biela (mm)", "type": "enum", "required": true, "enum_values": ["165", "170", "172.5", "175", "177.5", "180"]}, {"key": "chainring_bcd_mm", "label": "BCD Plato (mm)", "type": "enum", "required": false, "enum_values": ["64", "96", "104", "110", "130"]}, {"key": "chainline_mm", "label": "Chainline (mm)", "type": "number", "required": false, "min": 42, "max": 58}]}'),
+    ('chainring', 'Plato', 'drivetrain_system', '{road,mtb,gravel}', 'Platos individuales o dobles', 'adjust', '{"attributes": [{"key": "chainring_teeth", "label": "Número de Dientes", "type": "number", "required": true, "min": 20, "max": 60}, {"key": "chainring_bcd_mm", "label": "BCD (mm)", "type": "enum", "required": true, "enum_values": ["64", "96", "104", "110", "130"]}]}'),
+    ('bottom_bracket', 'Caja Centro', 'drivetrain_system', '{road,mtb,gravel}', 'Bottom brackets y rodamientos', 'sync_alt', '{"attributes": [{"key": "bb_type", "label": "Norma", "type": "enum", "required": true, "enum_values": ["BSA 68mm", "BSA 73mm", "ITA", "PF30", "BB30", "BB86", "BB92", "BB386", "T47"]}, {"key": "bb_shell_width_mm", "label": "Ancho Shell (mm)", "type": "enum", "required": true, "enum_values": ["68", "73", "86", "92"]}]}'),
+    ('cassette', 'Cassette', 'drivetrain_system', '{road,mtb,gravel}', 'Cassettes y piñoneras', 'view_column', '{"attributes": [{"key": "freehub_body", "label": "Tipo de Cuerpo", "type": "enum", "required": true, "enum_values": ["Shimano HG", "Shimano MicroSpline", "SRAM XD", "SRAM XDR", "Campagnolo", "T-Type"]}, {"key": "cassette_speeds", "label": "Velocidades", "type": "enum", "required": true, "enum_values": ["7", "8", "9", "10", "11", "12", "13"]}, {"key": "cassette_min_tooth", "label": "Diente Mínimo", "type": "number", "required": true, "min": 9, "max": 18}, {"key": "cassette_max_tooth", "label": "Diente Máximo", "type": "number", "required": true, "min": 28, "max": 60}]}'),
+    ('chain', 'Cadena', 'drivetrain_system', '{road,mtb,gravel}', 'Cadenas y eslabones', 'link', '{"attributes": [{"key": "chain_speeds", "label": "Velocidades", "type": "enum", "required": true, "enum_values": ["7/8", "9", "10", "11", "12", "13"]}, {"key": "chain_width_mm", "label": "Ancho (mm)", "type": "number", "required": false, "min": 5, "max": 8}]}'),
+    ('rear_derailleur', 'Cambio Trasero', 'drivetrain_system', '{road,mtb,gravel}', 'Derailleurs traseros', 'settings_ethernet', '{"attributes": [{"key": "derailleur_speeds", "label": "Velocidades", "type": "enum", "required": true, "enum_values": ["7", "8", "9", "10", "11", "12", "13"]}, {"key": "derailleur_cage_length", "label": "Tamaño Jaula", "type": "enum", "required": true, "enum_values": ["Short", "Medium", "Long", "DH"]}, {"key": "derailleur_capacity_teeth", "label": "Capacidad (dientes)", "type": "number", "required": false, "min": 20, "max": 50}, {"key": "derailleur_mount", "label": "Tipo de Montaje", "type": "enum", "required": false, "enum_values": ["Direct Mount", "Hanger", "Clamp 31.8", "Clamp 34.9"]}]}'),
+    ('pedal', 'Pedales', 'drivetrain_system', '{road,mtb,gravel}', 'Pedales planos o de fijación', 'directions_run', '{"attributes": [{"key": "pedal_type", "label": "Tipo", "type": "enum", "required": true, "enum_values": ["Plano", "Clipless SPD", "Clipless SPD-SL", "Clipless Look Keo", "Mixto"]}, {"key": "thread_size", "label": "Rosca", "type": "enum", "required": true, "enum_values": ["9/16\" (estándar)", "1/2\" (infantil)"]}]}')
+  on conflict (code) do update set
+    display_name = excluded.display_name,
+    parent_code = excluded.parent_code,
+    discipline_scope = excluded.discipline_scope,
+    description = excluded.description,
+    icon_name = excluded.icon_name,
+    metadata = excluded.metadata,
+    updated_at = now();
+
+  -- Brake system components
+  insert into compat_component_library (code, display_name, parent_code, discipline_scope, description, icon_name, metadata) values
+    ('brake_caliper', 'Caliper', 'brake_system', '{road,mtb,gravel}', 'Pinzas / calipers de freno', 'pattern', '{"attributes": [{"key": "brake_mount_type", "label": "Tipo de Montaje", "type": "enum", "required": true, "enum_values": ["Post Mount", "Flat Mount", "IS Mount", "Direct Mount", "V-Brake", "Canti"]}, {"key": "brake_fluid_type", "label": "Tipo de Fluido", "type": "enum", "required": false, "enum_values": ["Mineral", "DOT 4", "DOT 5.1", "Cable"]}]}'),
+    ('brake_rotor', 'Rotor / Disco', 'brake_system', '{road,mtb,gravel}', 'Discos de freno', 'donut_large', '{"attributes": [{"key": "rotor_size_mm", "label": "Tamaño (mm)", "type": "enum", "required": true, "enum_values": ["140", "160", "180", "200", "203", "220"]}, {"key": "rotor_mount_type", "label": "Montaje", "type": "enum", "required": true, "enum_values": ["6-Bolt", "Centerlock"]}]}')
+  on conflict (code) do update set
+    display_name = excluded.display_name,
+    parent_code = excluded.parent_code,
+    discipline_scope = excluded.discipline_scope,
+    description = excluded.description,
+    icon_name = excluded.icon_name,
+    metadata = excluded.metadata,
+    updated_at = now();
+    
+  raise notice '✅ Component library seeded with % types', (select count(*) from compat_component_library);
+end;
+$$;
+
+grant execute on function public.seed_component_library() to authenticated;
+
+-- Run the seed function once (idempotent - safe to run multiple times)
+select public.seed_component_library();
 
 
 
@@ -4052,6 +4319,10 @@ begin
   -- Seed job roles (employee-user linking system)
   perform public.seed_job_roles_for_tenant(NEW.id);
   raise notice '  ✓ Job roles catalog created';
+
+  -- Seed compatibility taxonomy for wheel builder & catalog
+  perform public.seed_compatibility_engine(NEW.id);
+  raise notice '  ✓ Compatibility engine seeded';
   
   raise notice '✅ Tenant % fully initialized and ready for use!', NEW.shop_name;
   return NEW;
@@ -4069,9 +4340,10 @@ create trigger trg_tenant_initialization
 -- MANUAL SEEDING FOR EXISTING TENANTS
 -- ============================================================================
 -- For existing tenants that were created before this trigger was added,
--- run this manually to seed their payment methods:
+-- run these manually to seed their payment methods and compatibility data:
 --
 -- SELECT public.seed_payment_methods_for_tenant(public.user_tenant_id());
+-- SELECT public.seed_compatibility_engine(public.user_tenant_id());
 --
 -- Or seed ALL existing tenants at once:
 --
@@ -4081,6 +4353,7 @@ create trigger trg_tenant_initialization
 -- BEGIN
 --   FOR tenant_record IN SELECT id FROM tenants LOOP
 --     PERFORM public.seed_payment_methods_for_tenant(tenant_record.id);
+--     PERFORM public.seed_compatibility_engine(tenant_record.id);
 --   END LOOP;
 -- END $$;
 -- ============================================================================
@@ -6155,10 +6428,9 @@ begin
   ) then
     if not exists (
       select 1
-        from information_schema.constraint_column_usage
-       where table_schema = 'public'
-         and table_name = 'smart_purchase_list'
-         and constraint_name = 'smart_purchase_list_linked_expense_id_fkey'
+        from pg_constraint
+       where conname = 'smart_purchase_list_linked_expense_id_fkey'
+         and conrelid = 'public.smart_purchase_list'::regclass
     ) then
       alter table public.smart_purchase_list
         add constraint smart_purchase_list_linked_expense_id_fkey
@@ -6464,6 +6736,12 @@ begin
     select 1
       from pg_trigger
      where tgname = 'trg_expense_lines_change'
+       and tgrelid = 'public.expense_lines'::regclass
+  ) then
+    create trigger trg_expense_lines_change
+      after insert or update or delete on public.expense_lines
+      for each row execute procedure public.handle_expense_line_change();
+  end if;
 end $$;
 
 create or replace function public.recalculate_expense_totals(p_expense_id uuid)
@@ -7144,59 +7422,6 @@ end $$;
 -- ================================================
 -- Trigger for expense_lines changes
 -- ================================================
-create or replace function public.handle_expense_line_change()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_expense_id uuid;
-  v_posting_status text;
-begin
-  -- Get the expense_id from the relevant row
-  if TG_OP = 'DELETE' then
-    v_expense_id := OLD.expense_id;
-  else
-    v_expense_id := NEW.expense_id;
-  end if;
-
-  -- Check if parent expense is posted
-  select posting_status into v_posting_status
-    from public.expenses
-   where id = v_expense_id;
-
-  -- If posted, regenerate journal entry
-  if lower(coalesce(v_posting_status, 'draft')) = 'posted' then
-    perform public.delete_expense_journal_entry(v_expense_id);
-    perform public.create_expense_journal_entry(v_expense_id);
-  end if;
-
-  -- Recalculate expense totals
-  perform public.recalculate_expense_totals(v_expense_id);
-
-  if TG_OP = 'DELETE' then
-    return OLD;
-  else
-    return NEW;
-  end if;
-end;
-$$;
-
-do $$
-begin
-  if not exists (
-    select 1
-      from pg_trigger
-     where tgname = 'trg_expense_lines_change'
-       and tgrelid = 'public.expense_lines'::regclass
-  ) then
-    create trigger trg_expense_lines_change
-      after insert or update or delete on public.expense_lines
-      for each row execute procedure public.handle_expense_line_change();
-  end if;
-end $$;
-
 create table if not exists stock_movements (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
@@ -7566,7 +7791,6 @@ end $$;
 
 create table if not exists order_items (
   id uuid primary key default gen_random_uuid(),
-  tenant_id uuid references tenants(id) on delete cascade not null,
   tenant_id uuid references tenants(id) on delete cascade not null,
   order_id uuid not null references orders(id) on delete cascade,
   product_id uuid not null references products(id) on delete restrict,
@@ -9229,6 +9453,29 @@ exception
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in service_packages';
 end $$;
 
+-- Sequence + generator for mechanic job numbers (must exist before mechanic_jobs table)
+drop sequence if exists public.mechanic_job_number_seq cascade;
+create sequence public.mechanic_job_number_seq
+  start with 1
+  increment by 1
+  no cycle;
+
+create or replace function public.generate_mechanic_job_number()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_next_number integer;
+  v_job_number text;
+begin
+  v_next_number := nextval('public.mechanic_job_number_seq');
+  v_job_number := 'PG-' || lpad(v_next_number::text, 5, '0');
+  return v_job_number;
+end;
+$$;
+
 -- Table: mechanic_jobs (pegas)
 -- Main table for tracking service jobs/work orders
 create table if not exists mechanic_jobs (
@@ -10088,35 +10335,6 @@ create trigger trg_delete_invoice_cascade_pega
   after delete on sales_invoices
   for each row
   execute function public.cascade_delete_pega_invoice();
-
--- Function: Auto-generate job number (PG-#####)
--- Sequence for generating unique mechanic job numbers
-drop sequence if exists public.mechanic_job_number_seq cascade;
-create sequence public.mechanic_job_number_seq
-  start with 1
-  increment by 1
-  no cycle;
-
--- Function: Generate unique mechanic job number (uses sequence - no race conditions)
-create or replace function public.generate_mechanic_job_number()
-returns text
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_next_number integer;
-  v_job_number text;
-begin
-  -- Get next value from sequence (guaranteed unique, no race conditions)
-  v_next_number := nextval('public.mechanic_job_number_seq');
-  
-  -- Format as PG-00001, PG-00002, etc.
-  v_job_number := 'PG-' || lpad(v_next_number::text, 5, '0');
-  
-  return v_job_number;
-end;
-$$;
 
 -- Function: Recalculate mechanic job costs
 -- Sums parts and labor, applies tax, calculates total
@@ -12588,11 +12806,12 @@ end $$;
 
 -- Website content (rich text content blocks for homepage, about page, etc.)
 create table if not exists website_content (
-  id text primary key, -- e.g., 'homepage_promo', 'about_us', 'terms_conditions'
+  id text not null, -- e.g., 'homepage_promo', 'about_us', 'terms_conditions'
   tenant_id uuid references tenants(id) on delete cascade not null,
   title text not null,
   content text, -- HTML or markdown content
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  primary key (tenant_id, id)
 );
 
 do $$ begin
@@ -12600,6 +12819,15 @@ do $$ begin
 exception
   when undefined_table then raise notice '⚠ Table website_content does not exist';
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in website_content';
+end $$;
+
+do $$
+begin
+  alter table website_content drop constraint if exists website_content_pkey;
+  alter table website_content add constraint website_content_pkey primary key (tenant_id, id);
+exception
+  when undefined_table then
+    raise notice 'website_content table not found while adjusting primary key';
 end $$;
 
 -- Website blocks (Odoo-style visual editor blocks)
@@ -12999,15 +13227,53 @@ begin
   end if;
 end $$;
 
--- Seed default homepage content
-insert into website_content (id, title, content) values
-  ('homepage_hero', 'Título Principal', '<h1>Bienvenido a Vinabike</h1><p>Las mejores bicicletas de Chile</p>'),
-  ('homepage_promo', 'Promoción Destacada', '<p>¡Aprovecha nuestras ofertas especiales!</p>'),
-  ('about_us', 'Sobre Nosotros', '<p>Somos una empresa dedicada a ofrecer las mejores bicicletas y accesorios en Chile.</p>'),
-  ('terms_conditions', 'Términos y Condiciones', '<p>Términos y condiciones de uso del sitio web.</p>'),
-  ('privacy_policy', 'Política de Privacidad', '<p>Política de privacidad y manejo de datos.</p>'),
-  ('shipping_info', 'Información de Envío', '<p>Enviamos a todo Chile. Costo de envío: $5.000. Envío gratis en compras sobre $50.000.</p>')
-on conflict (id) do nothing;
+-- Seed default homepage content (per tenant when tenant_id column exists)
+do $$
+declare
+  v_has_tenant_id boolean;
+begin
+  select exists (
+    select 1
+      from information_schema.columns
+     where table_name = 'website_content'
+       and column_name = 'tenant_id'
+  ) into v_has_tenant_id;
+
+  if v_has_tenant_id then
+    insert into website_content (tenant_id, id, title, content)
+    select t.id,
+           defaults.id,
+           defaults.title,
+           defaults.content
+      from tenants t
+      cross join (
+        values
+          ('homepage_hero', 'Título Principal', '<h1>Bienvenido a Vinabike</h1><p>Las mejores bicicletas de Chile</p>'),
+          ('homepage_promo', 'Promoción Destacada', '<p>¡Aprovecha nuestras ofertas especiales!</p>'),
+          ('about_us', 'Sobre Nosotros', '<p>Somos una empresa dedicada a ofrecer las mejores bicicletas y accesorios en Chile.</p>'),
+          ('terms_conditions', 'Términos y Condiciones', '<p>Términos y condiciones de uso del sitio web.</p>'),
+          ('privacy_policy', 'Política de Privacidad', '<p>Política de privacidad y manejo de datos.</p>'),
+          ('shipping_info', 'Información de Envío', '<p>Enviamos a todo Chile. Costo de envío: $5.000. Envío gratis en compras sobre $50.000.</p>')
+      ) as defaults(id, title, content)
+    on conflict (tenant_id, id) do nothing;
+  else
+    insert into website_content (id, title, content)
+    select id, title, content
+      from (
+        values
+          ('homepage_hero', 'Título Principal', '<h1>Bienvenido a Vinabike</h1><p>Las mejores bicicletas de Chile</p>'),
+          ('homepage_promo', 'Promoción Destacada', '<p>¡Aprovecha nuestras ofertas especiales!</p>'),
+          ('about_us', 'Sobre Nosotros', '<p>Somos una empresa dedicada a ofrecer las mejores bicicletas y accesorios en Chile.</p>'),
+          ('terms_conditions', 'Términos y Condiciones', '<p>Términos y condiciones de uso del sitio web.</p>'),
+          ('privacy_policy', 'Política de Privacidad', '<p>Política de privacidad y manejo de datos.</p>'),
+          ('shipping_info', 'Información de Envío', '<p>Enviamos a todo Chile. Costo de envío: $5.000. Envío gratis en compras sobre $50.000.</p>')
+      ) as defaults(id, title, content)
+    on conflict (id) do nothing;
+  end if;
+exception
+  when undefined_table then
+    raise notice 'website_content table not found when seeding defaults';
+end $$;
 
 --------------------------------------------------------------------------------
 -- MULTI-TENANT MIGRATION: Add tenant_id to all tables
@@ -13022,10 +13288,14 @@ begin
     raise notice '✓ Added tenant_id to products';
   end if;
 
-  -- Categories
-  if not exists (select 1 from information_schema.columns where table_name = 'categories' and column_name = 'tenant_id') then
-    alter table categories add column tenant_id uuid references tenants(id) on delete cascade;
-    raise notice '✓ Added tenant_id to categories';
+  -- Categories (legacy table - only apply if it exists)
+  if exists (select 1 from information_schema.tables where table_name = 'categories') then
+    if not exists (select 1 from information_schema.columns where table_name = 'categories' and column_name = 'tenant_id') then
+      alter table categories add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to categories';
+    end if;
+  else
+    raise notice 'categories table not found, skipping tenant_id alteration';
   end if;
 
   -- Product Categories
@@ -13047,11 +13317,29 @@ begin
   end if;
 
   -- Warehouses (if exists)
-  if exists (select 1 from information_schema.tables where table_name = 'warehouses') then
-    if not exists (select 1 from information_schema.columns where table_name = 'warehouses' and column_name = 'tenant_id') then
-      alter table warehouses add column tenant_id uuid references tenants(id) on delete cascade;
-      raise notice '✓ Added tenant_id to warehouses';
+  if exists (
+    select 1
+      from information_schema.tables
+     where table_schema = 'public'
+       and table_name = 'warehouses'
+  ) then
+    if not exists (
+      select 1
+        from information_schema.columns
+       where table_schema = 'public'
+         and table_name = 'warehouses'
+         and column_name = 'tenant_id'
+    ) then
+      begin
+        alter table warehouses add column tenant_id uuid references tenants(id) on delete cascade;
+        raise notice '✓ Added tenant_id to warehouses';
+      exception
+        when undefined_table then
+          raise notice '⚠ warehouses table missing when adding tenant_id, skipping';
+      end;
     end if;
+  else
+    raise notice '⚠ Warehouses table not found, skipping tenant_id alteration';
   end if;
 
   -- Sales Invoices
@@ -13364,7 +13652,11 @@ begin
   
   alter table customers enable row level security;
   alter table products enable row level security;
-  alter table categories enable row level security;
+
+  if exists (select 1 from information_schema.tables where table_name = 'categories') then
+    alter table categories enable row level security;
+  end if;
+
   alter table product_categories enable row level security;
   alter table product_brands enable row level security;
   alter table stock_movements enable row level security;
@@ -13424,10 +13716,18 @@ begin
   drop policy if exists "products_insert" on products;
   drop policy if exists "products_update" on products;
   drop policy if exists "products_delete" on products;
-  drop policy if exists "categories_select" on categories;
-  drop policy if exists "categories_insert" on categories;
-  drop policy if exists "categories_update" on categories;
-  drop policy if exists "categories_delete" on categories;
+  if exists (
+    select 1 from information_schema.tables
+     where table_schema = 'public'
+       and table_name = 'categories'
+  ) then
+    drop policy if exists "categories_select" on categories;
+    drop policy if exists "categories_insert" on categories;
+    drop policy if exists "categories_update" on categories;
+    drop policy if exists "categories_delete" on categories;
+  else
+    raise notice '⚠ Table categories does not exist, skipping policy drops';
+  end if;
   drop policy if exists "product_categories_select" on product_categories;
   drop policy if exists "product_categories_insert" on product_categories;
   drop policy if exists "product_categories_update" on product_categories;
@@ -14782,25 +15082,46 @@ exception
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in content_media';
 end $$;
 
--- Inventory adjustments
-create table if not exists inventory_adjustments (
-  id uuid primary key default gen_random_uuid(),
-  tenant_id uuid references tenants(id) on delete cascade not null,
-  product_id uuid references products(id) on delete cascade,
-  warehouse_id uuid references warehouses(id) on delete cascade,
-  adjustment_type text check (adjustment_type in ('add', 'subtract', 'set')) not null,
-  quantity integer not null,
-  reason text,
-  reference text,
-  created_by uuid references auth.users(id),
-  created_at timestamp with time zone not null default now()
-);
+do $$
+begin
+  if exists (
+    select 1
+      from information_schema.tables
+     where table_schema = 'public'
+       and table_name = 'warehouses'
+  ) then
+    execute '
+      create table if not exists inventory_adjustments (
+        id uuid primary key default gen_random_uuid(),
+        tenant_id uuid references tenants(id) on delete cascade not null,
+        product_id uuid references products(id) on delete cascade,
+        warehouse_id uuid references warehouses(id) on delete cascade,
+        adjustment_type text check (adjustment_type in (''add'', ''subtract'', ''set'')) not null,
+        quantity integer not null,
+        reason text,
+        reference text,
+        created_by uuid references auth.users(id),
+        created_at timestamp with time zone not null default now()
+      )';
+  else
+    raise notice '⚠ Warehouses table not found, skipping inventory_adjustments creation';
+  end if;
+end $$;
 
-do $$ begin
-  create index if not exists idx_inventory_adjustments_tenant on inventory_adjustments(tenant_id);
-  create index if not exists idx_inventory_adjustments_product on inventory_adjustments(product_id);
+do $$
+begin
+  if exists (
+    select 1
+      from information_schema.tables
+     where table_schema = 'public'
+       and table_name = 'inventory_adjustments'
+  ) then
+    create index if not exists idx_inventory_adjustments_tenant on inventory_adjustments(tenant_id);
+    create index if not exists idx_inventory_adjustments_product on inventory_adjustments(product_id);
+  else
+    raise notice '⚠ Table inventory_adjustments does not exist, skipping index creation';
+  end if;
 exception
-  when undefined_table then raise notice '⚠ Table inventory_adjustments does not exist';
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in inventory_adjustments';
 end $$;
 
@@ -15053,25 +15374,45 @@ exception
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in vehicles';
 end $$;
 
--- Work order items (parts/services for work orders)
-create table if not exists work_order_items (
-  id uuid primary key default gen_random_uuid(),
-  tenant_id uuid references tenants(id) on delete cascade not null,
-  work_order_id uuid references work_orders(id) on delete cascade,
-  product_id uuid references products(id) on delete set null,
-  item_type text check (item_type in ('part', 'service', 'labor')) not null,
-  description text not null,
-  quantity numeric(10,2) not null default 1,
-  unit_price numeric(12,2) not null,
-  subtotal numeric(12,2) not null,
-  created_at timestamp with time zone not null default now()
-);
+do $$
+begin
+  if exists (
+    select 1
+      from information_schema.tables
+     where table_schema = 'public'
+       and table_name = 'work_orders'
+  ) then
+    create table if not exists work_order_items (
+      id uuid primary key default gen_random_uuid(),
+      tenant_id uuid references tenants(id) on delete cascade not null,
+      work_order_id uuid references work_orders(id) on delete cascade,
+      product_id uuid references products(id) on delete set null,
+      item_type text check (item_type in ('part', 'service', 'labor')) not null,
+      description text not null,
+      quantity numeric(10,2) not null default 1,
+      unit_price numeric(12,2) not null,
+      subtotal numeric(12,2) not null,
+      created_at timestamp with time zone not null default now()
+    );
+  else
+    raise notice '⚠ Table work_orders does not exist, skipping work_order_items creation';
+  end if;
+end $$;
 
-do $$ begin
-  create index if not exists idx_work_order_items_tenant on work_order_items(tenant_id);
-  create index if not exists idx_work_order_items_work_order on work_order_items(work_order_id);
+do $$
+begin
+  if exists (
+    select 1
+      from information_schema.tables
+     where table_schema = 'public'
+       and table_name = 'work_order_items'
+  ) then
+    create index if not exists idx_work_order_items_tenant on work_order_items(tenant_id);
+    create index if not exists idx_work_order_items_work_order on work_order_items(work_order_id);
+  else
+    raise notice '⚠ Table work_order_items does not exist, skipping index creation';
+  end if;
 exception
-  when undefined_table then raise notice '⚠ Table work_order_items does not exist';
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in work_order_items';
 end $$;
 
@@ -15247,7 +15588,19 @@ exception when others then null; end $$;
 
 -- Drop existing policies first
 drop policy if exists "public_products_select" on products;
-drop policy if exists "public_categories_select" on categories;
+do $$
+begin
+  if exists (
+    select 1
+      from information_schema.tables
+     where table_schema = 'public'
+       and table_name = 'categories'
+  ) then
+    execute 'drop policy if exists "public_categories_select" on categories';
+  else
+    raise notice '⚠ No categories table exists, skipping legacy public policy drop';
+  end if;
+end $$;
 drop policy if exists "public_product_categories_select" on product_categories;
 drop policy if exists "public_website_banners_select" on website_banners;
 drop policy if exists "public_website_content_select" on website_content;
@@ -15277,8 +15630,15 @@ create policy "public_product_categories_select" on product_categories
 -- App must filter by tenant_id explicitly
 do $$
 begin
-  if exists (select 1 from information_schema.tables where table_name = 'categories') then
+  if exists (
+    select 1
+      from information_schema.tables
+     where table_schema = 'public'
+       and table_name = 'categories'
+  ) then
     execute 'create policy "public_categories_select" on categories for select to anon using (true)';
+  else
+    raise notice '⚠ No categories table exists, skipping legacy public policy creation';
   end if;
 end $$;
 
@@ -16781,8 +17141,29 @@ begin
 end $$;
 
 -- ============================================================================
--- SMART CATALOG & COMPATIBILITY ENGINE (Metadata + Telemetry)
+-- COMPATIBILITY ENGINE - REFACTORED TO USE product_categories (Nov 22, 2025)
 -- ============================================================================
+-- ⚠️ OLD REDUNDANT TABLES COMMENTED OUT BELOW
+-- 
+-- Problem: Created separate compat_component_types when product_categories already existed
+-- Solution: Store compatibility_metadata jsonb directly in product_categories
+-- 
+-- Benefits:
+-- ✅ No redundancy (one classification system)
+-- ✅ Simpler UX (single category picker)
+-- ✅ Better performance (one query vs multiple JOINs)
+-- ✅ Flexible schema (JSON = no migrations)
+-- 
+-- Migration: See product_categories table (~line 1993) for new columns
+-- Flutter: CompatibilityCatalogService queries product_categories now
+-- 
+-- To permanently remove old tables:
+-- 1. Verify Flutter app works with new system
+-- 2. Delete the entire commented block below
+-- 3. Search for any remaining compat_component_types references
+-- ============================================================================
+
+/* OLD REDUNDANT COMPATIBILITY TABLES - COMMENTED OUT (Nov 22, 2025)
 
 -- Core table: component types (e.g., rear_hub, rim, spoke, tire)
 create table if not exists compat_component_types (
@@ -17408,6 +17789,475 @@ alter table wheel_builds
 
 create index if not exists idx_wheel_builds_compat_session on wheel_builds(compatibility_session_id);
 
+-- Seed default compatibility taxonomy (component types, attributes, and schema)
+drop function if exists public.seed_compatibility_engine(uuid);
+create or replace function public.seed_compatibility_engine(p_tenant_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  type_rec record;
+  attr_rec record;
+  opt_rec record;
+  schema_rec record;
+  v_parent_id uuid;
+  v_component_id uuid;
+  v_attribute_id uuid;
+  v_option_id uuid;
+  v_types_created integer := 0;
+  v_attrs_created integer := 0;
+  v_opts_created integer := 0;
+  v_schema_created integer := 0;
+begin
+  if p_tenant_id is null then
+    raise exception 'seed_compatibility_engine requires a tenant_id';
+  end if;
+
+  -- Component types (order matters so parents exist before children)
+  for type_rec in
+    select *
+      from (
+        values
+          ('wheel_component','Componentes de Rueda',null,'{road,mtb,gravel}'::text[],'Agrupa cualquier parte de rueda','settings_input_component'),
+          ('wheel_hub','Maza','wheel_component','{road,mtb,gravel}'::text[],'Mazas delanteras o traseras','settings_input_component'),
+          ('wheel_hub_front','Maza Delantera','wheel_hub','{road,mtb,gravel}'::text[],'Compatibilidad de mazas delanteras','hub'),
+          ('wheel_hub_rear','Maza Trasera','wheel_hub','{road,mtb,gravel}'::text[],'Compatibilidad de mazas traseras','hub'),
+          ('wheel_rim','Aro / Rin','wheel_component','{road,mtb,gravel}'::text[],'Aros y llantas para armado','donut_large'),
+          ('wheel_spoke','Rayo','wheel_component','{road,mtb,gravel}'::text[],'Rayos tradicionales o especiales','timeline'),
+          ('wheel_nipple','Niple','wheel_component','{road,mtb,gravel}'::text[],'Niples o boquillas para rayos','adjust'),
+          ('wheel_adapter','Adaptador','wheel_component','{road,mtb,gravel}'::text[],'Spacers, kits o convertidores','swap_horiz'),
+          ('wheelset','Wheelset completo','wheel_component','{road,mtb,gravel}'::text[],'Ruedas completas y semi-armadas','downhill_skiing'),
+          ('tire','Neumático','wheel_component','{road,mtb,gravel}'::text[],'Neumáticos o cubiertas','radio_button_checked'),
+          ('tube','Cámara','wheel_component','{road,mtb,gravel}'::text[],'Cámaras de aire o inserts','trip_origin'),
+          ('frame_system','Sistema de Cuadro',null,'{road,mtb,gravel}'::text[],'Componentes estructurales del cuadro','directions_bike'),
+          ('frame','Cuadro','frame_system','{road,mtb,gravel}'::text[],'Compatibilidad general de cuadros','bike_scooter'),
+          ('fork','Horquilla','frame_system','{road,mtb,gravel}'::text[],'Horquillas y suspensiones delanteras','hiking'),
+          ('headset','Juego de dirección','frame_system','{road,mtb,gravel}'::text[],'Normas y rodamientos de dirección','donut_small'),
+          ('seatpost','Tubo de asiento','frame_system','{road,mtb,gravel}'::text[],'Seatposts rígidos tradicionales','straighten'),
+          ('dropper_post','Dropper','frame_system','{mtb,gravel}'::text[],'Seatposts telescópicos','vertical_align_center'),
+          ('handlebar','Manubrio','frame_system','{road,mtb,gravel}'::text[],'Barras, drops y risers','pan_tool_alt'),
+          ('stem','Stem / Tee','frame_system','{road,mtb,gravel}'::text[],'Potencias y tees','call_split'),
+          ('saddle','Asiento','frame_system','{road,mtb,gravel}'::text[],'Sillines y asientos','event_seat'),
+          ('seatclamp','Abrazadera asiento','frame_system','{road,mtb,gravel}'::text[],'Abrazaderas de tubo','radio_button_checked'),
+          ('drivetrain_system','Tren motriz',null,'{road,mtb,gravel}'::text[],'Componentes de transmisión','settings'),
+          ('crankset','Bielas','drivetrain_system','{road,mtb,gravel}'::text[],'Cranksets y brazos','pedal_bike'),
+          ('chainring','Plato','drivetrain_system','{road,mtb,gravel}'::text[],'Platos individuales o dobles','adjust'),
+          ('bottom_bracket','Caja centro','drivetrain_system','{road,mtb,gravel}'::text[],'Bottom brackets y rodamientos','sync_alt'),
+          ('cassette','Cassette','drivetrain_system','{road,mtb,gravel}'::text[],'Cassettes y paquetes de piñones','view_column'),
+          ('chain','Cadena','drivetrain_system','{road,mtb,gravel}'::text[],'Cadenas y master links','link'),
+          ('rear_derailleur','Cambio trasero','drivetrain_system','{road,mtb,gravel}'::text[],'Derailleurs traseros','settings_ethernet'),
+          ('front_derailleur','Cambio delantero','drivetrain_system','{road,mtb,gravel}'::text[],'Derailleurs delanteros','settings_input_component'),
+          ('shifter','Shifter / Manilla','drivetrain_system','{road,mtb,gravel}'::text[],'Mandos de cambio o STI','swipe'),
+          ('pedal','Pedales','drivetrain_system','{road,mtb,gravel}'::text[],'Pedales planos o de fijación','directions_run'),
+          ('brake_system','Sistema de freno',null,'{road,mtb,gravel}'::text[],'Componentes de freno','gpp_maybe'),
+          ('brake_caliper','Caliper','brake_system','{road,mtb,gravel}'::text[],'Pinzas / calipers','pattern'),
+          ('brake_lever','Manilla freno','brake_system','{road,mtb,gravel}'::text[],'Levas o manetas','pan_tool'),
+          ('brake_rotor','Rotor / Disco','brake_system','{road,mtb,gravel}'::text[],'Discos de freno','donut_large'),
+          ('brake_adapter','Adaptador freno','brake_system','{road,mtb,gravel}'::text[],'Adaptadores Post/IS/Flat','swap_calls'),
+          ('brake_hose','Línea freno','brake_system','{road,mtb,gravel}'::text[],'Mangueras hidráulicas o cables','timeline')
+      ) as type_def(code, display_name, parent_code, discipline_scope, description, icon_name)
+  loop
+    select id into v_parent_id
+      from compat_component_types
+     where tenant_id = p_tenant_id
+       and code = type_rec.parent_code
+     limit 1;
+
+    select id into v_component_id
+      from compat_component_types
+     where tenant_id = p_tenant_id
+       and code = type_rec.code
+     limit 1;
+
+    if v_component_id is null then
+      insert into compat_component_types (
+        tenant_id, code, display_name, parent_id, discipline_scope, description, icon_name
+      )
+      values (
+        p_tenant_id, type_rec.code, type_rec.display_name, v_parent_id,
+        type_rec.discipline_scope, type_rec.description, type_rec.icon_name
+      )
+      returning id into v_component_id;
+      v_types_created := v_types_created + 1;
+    else
+        update compat_component_types
+         set display_name = type_rec.display_name,
+           parent_id = v_parent_id,
+             discipline_scope = type_rec.discipline_scope,
+             description = type_rec.description,
+             icon_name = type_rec.icon_name,
+             updated_at = now()
+       where id = v_component_id;
+    end if;
+  end loop;
+
+  -- Attribute catalog
+  for attr_rec in
+    select *
+      from (
+        values
+          ('spoke_holes','Número de rayos','numeric',null,'Cantidad de perforaciones del componente',16::numeric,48::numeric,0::integer,null::text[],true),
+          ('hub_spacing_mm','Ancho OLD (mm)','numeric','mm','Distancia entre punteras o dropouts',90::numeric,205::numeric,1::integer,null::text[],true),
+          ('axle_type','Tipo de eje','enum',null,'Formato de eje o cierre',null::numeric,null::numeric,null::integer,'{qr_9x100,qr_10x135,qr_9x135,thru_12x100,thru_12x142,thru_12x148,thru_12x157,thru_15x100,thru_15x110,thru_20x110}'::text[],true),
+          ('freehub_body','Cuerpo de cassette','enum',null,'Interfaz de cassette / driver',null::numeric,null::numeric,null::integer,'{shimano_hg,microspline,sram_xd,sram_xdr,campagnolo,t_type}'::text[],true),
+          ('brake_interface','Sistema de freno','enum',null,'Interfaz de frenado del componente',null::numeric,null::numeric,null::integer,'{disc_6_bolt,disc_centerlock,rim_brake}'::text[],true),
+          ('flange_diameter_left_mm','Ø Flange Izq (mm)','numeric','mm','Diámetro del ala izquierda',20::numeric,120::numeric,1::integer,null::text[],true),
+          ('flange_diameter_right_mm','Ø Flange Der (mm)','numeric','mm','Diámetro del ala derecha',20::numeric,120::numeric,1::integer,null::text[],true),
+          ('center_to_flange_left_mm','Centro a flange izq (mm)','numeric','mm','Distancia del centro al flange izquierdo',15::numeric,80::numeric,1::integer,null::text[],true),
+          ('center_to_flange_right_mm','Centro a flange der (mm)','numeric','mm','Distancia del centro al flange derecho',15::numeric,80::numeric,1::integer,null::text[],true),
+          ('erd_mm','ERD (mm)','numeric','mm','Effective Rim Diameter',250::numeric,700::numeric,1::integer,null::text[],true),
+          ('rim_internal_width_mm','Ancho interno (mm)','numeric','mm','Ancho interno del aro',13::numeric,45::numeric,1::integer,null::text[],true),
+          ('wheel_size','Tamaño de rueda','enum',null,'Diámetro/tamaño del sistema',null::numeric,null::numeric,null::integer,'{700c,650b_27_5,29er,27_5_plus,26in,24in,20in}'::text[],true),
+          ('spoke_length_mm','Largo de rayo (mm)','numeric','mm','Longitud final requerida del rayo',180::numeric,320::numeric,1::integer,null::text[],true),
+          ('spoke_gauge','Calibre de rayo','enum',null,'Calibre / grosor del rayo',null::numeric,null::numeric,null::integer,'{13g,14g,15g,bladed}'::text[],true),
+          ('spoke_material','Material de rayo','enum',null,'Material principal del rayo',null::numeric,null::numeric,null::integer,'{stainless,aluminum,titanium,carbon}'::text[],true),
+          ('nipple_length_mm','Largo del niple (mm)','numeric','mm','Longitud total del niple',10::numeric,20::numeric,1::integer,null::text[],true),
+          ('nipple_material','Material del niple','enum',null,'Material del niple o boquilla',null::numeric,null::numeric,null::integer,'{brass,alloy}'::text[],true),
+          ('frame_tire_max_width_mm','Ancho máx neumático cuadro','numeric','mm','Espacio máximo permitido por el cuadro',25::numeric,85::numeric,1::integer,null::text[],true),
+          ('fork_travel_mm','Recorrido horquilla (mm)','numeric','mm','Recorrido nominal de la horquilla',40::numeric,220::numeric,1::integer,null::text[],true),
+          ('fork_offset_mm','Offset horquilla (mm)','numeric','mm','Offset o rake de la horquilla',30::numeric,60::numeric,1::integer,null::text[],true),
+          ('steerer_diameter_mm','Ø tubo dirección (mm)','numeric','mm','Diámetro del tubo de dirección',25::numeric,40::numeric,1::integer,null::text[],true),
+          ('headset_standard','Norma dirección','enum',null,'Especificación del juego de dirección',null::numeric,null::numeric,null::integer,'{is41_is52,zs44_ec44,ec34,ec44_ec44,zs44_zs56,ec49,threaded_1_1_8,bmx_internal}'::text[],true),
+          ('seatpost_diameter_mm','Ø tubo asiento (mm)','numeric','mm','Diámetro del seatpost',19::numeric,34.9::numeric,1::integer,null::text[],true),
+          ('seatpost_length_mm','Largo tubo asiento (mm)','numeric','mm','Longitud total del seatpost',200::numeric,500::numeric,1::integer,null::text[],true),
+          ('seatpost_travel_mm','Recorrido dropper (mm)','numeric','mm','Recorrido útil de un dropper post',0::numeric,250::numeric,1::integer,null::text[],true),
+          ('handlebar_width_mm','Ancho manubrio (mm)','numeric','mm','Ancho total del manubrio',360::numeric,820::numeric,1::integer,null::text[],true),
+          ('handlebar_clamp_diameter_mm','Ø abrazadera manubrio (mm)','numeric','mm','Diámetro de abrazadera',25::numeric,35::numeric,1::integer,null::text[],true),
+          ('handlebar_type','Tipo de manubrio','enum',null,'Formato del manubrio',null::numeric,null::numeric,null::integer,'{drop,flat,riser,bmx,aero}'::text[],true),
+          ('stem_length_mm','Largo stem (mm)','numeric','mm','Longitud de la potencia',30::numeric,140::numeric,1::integer,null::text[],true),
+          ('stem_rise_deg','Ángulo stem (°)','numeric','deg','Ángulo o rise de la potencia',-20::numeric,60::numeric,1::integer,null::text[],true),
+          ('bb_type','Norma caja centro','enum',null,'Tipo de caja o estándar del centro',null::numeric,null::numeric,null::integer,'{bsa_68,bsa_73,ita,pf30,bb30,bb86,bb92,bb386,t47}'::text[],true),
+          ('bb_shell_width_mm','Ancho caja centro (mm)','numeric','mm','Ancho interno del shell del cuadro',34::numeric,90::numeric,1::integer,null::text[],true),
+          ('bb_thread_pitch','Paso rosca caja centro','text',null,'Paso de hilo (solo cuadros roscados)',null::numeric,null::numeric,null::integer,null::text[],true),
+          ('crank_arm_length_mm','Largo biela (mm)','numeric','mm','Longitud de los brazos de biela',150::numeric,185::numeric,1::integer,null::text[],true),
+          ('chainline_mm','Chainline (mm)','numeric','mm','Distancia chainline objetivo',42::numeric,58::numeric,1::integer,null::text[],true),
+          ('chainring_bcd_mm','BCD plato (mm)','numeric','mm','Diámetro del círculo de pernos',64::numeric,130::numeric,1::integer,null::text[],true),
+          ('chainring_teeth','Dientes plato','numeric',null,'Número de dientes del plato',20::numeric,60::numeric,0::integer,null::text[],true),
+          ('cassette_speeds','Velocidades cassette','numeric',null,'Número de coronas o relaciones',5::numeric,13::numeric,0::integer,null::text[],true),
+          ('cassette_min_tooth','Diente mínimo cassette','numeric',null,'Piñón más pequeño',9::numeric,18::numeric,0::integer,null::text[],true),
+          ('cassette_max_tooth','Diente máximo cassette','numeric',null,'Piñón más grande',28::numeric,60::numeric,0::integer,null::text[],true),
+          ('derailleur_capacity_teeth','Capacidad desviador (dientes)','numeric',null,'Capacidad total de dientes',20::numeric,50::numeric,0::integer,null::text[],true),
+          ('derailleur_mount','Montaje desviador','enum',null,'Tipo de montaje para desviadores',null::numeric,null::numeric,null::integer,'{direct_mount,hanger,clamp_31_8,clamp_34_9,braze_on}'::text[],true),
+          ('derailleur_cage_length','Tamaño cage desviador','enum',null,'Longitud de jaula',null::numeric,null::numeric,null::integer,'{short,medium,long,dh}'::text[],true),
+          ('chain_width_mm','Ancho cadena (mm)','numeric','mm','Ancho externo de la cadena',5::numeric,8::numeric,2::integer,null::text[],true),
+          ('tire_width_mm','Ancho neumático (mm)','numeric','mm','Ancho declarado del neumático',23::numeric,85::numeric,1::integer,null::text[],true),
+          ('brake_mount_type','Montaje freno','enum',null,'Norma de montaje de freno',null::numeric,null::numeric,null::integer,'{post_mount,flat_mount,is_mount,direct_mount,canti}'::text[],true),
+          ('brake_fluid_type','Fluido freno','enum',null,'Tipo de fluido/actuación',null::numeric,null::numeric,null::integer,'{mineral,dot4,dot5_1,cable}'::text[],true),
+          ('hose_length_mm','Largo manguera (mm)','numeric','mm','Longitud utilizable de manguera',500::numeric,2200::numeric,1::integer,null::text[],true),
+          ('rotor_size_mm','Tamaño rotor (mm)','numeric','mm','Diámetro del disco de freno',140::numeric,220::numeric,0::integer,null::text[],true)
+      ) as attr_def(key, label, attribute_type, unit_code, description, min_value, max_value, precision_scale, enum_values, is_global)
+  loop
+    select id into v_attribute_id
+      from compat_attributes
+     where tenant_id = p_tenant_id
+       and key = attr_rec.key
+     limit 1;
+
+    if v_attribute_id is null then
+      insert into compat_attributes (
+        tenant_id, key, label, attribute_type, unit_code, description,
+        min_value, max_value, precision_scale, enum_values, metadata, is_global
+      )
+      values (
+        p_tenant_id, attr_rec.key, attr_rec.label, attr_rec.attribute_type, attr_rec.unit_code, attr_rec.description,
+        attr_rec.min_value, attr_rec.max_value, attr_rec.precision_scale, attr_rec.enum_values,
+        '{}'::jsonb, attr_rec.is_global
+      )
+      returning id into v_attribute_id;
+      v_attrs_created := v_attrs_created + 1;
+    else
+      update compat_attributes
+         set label = attr_rec.label,
+             attribute_type = attr_rec.attribute_type,
+             unit_code = attr_rec.unit_code,
+             description = attr_rec.description,
+             min_value = attr_rec.min_value,
+             max_value = attr_rec.max_value,
+             precision_scale = attr_rec.precision_scale,
+             enum_values = attr_rec.enum_values,
+             is_global = attr_rec.is_global,
+             updated_at = now()
+       where id = v_attribute_id;
+    end if;
+  end loop;
+
+  -- Attribute options for key enums
+  for opt_rec in
+    select *
+      from (
+        values
+          ('axle_type','qr_9x100','QR 9x100','Quick release 9x100 mm',10),
+          ('axle_type','qr_10x135','QR 10x135','Quick release trasero 10x135 mm',20),
+          ('axle_type','qr_9x135','QR 9x135','QR boost delantero urbano',25),
+          ('axle_type','thru_12x100','Thru 12x100','Eje pasante 12x100',30),
+          ('axle_type','thru_12x142','Thru 12x142','Eje pasante trasero 12x142',40),
+          ('axle_type','thru_12x148','Thru 12x148 Boost','Eje boost trasero 12x148',45),
+          ('axle_type','thru_12x157','Thru 12x157 SuperBoost','Super Boost 12x157',46),
+          ('axle_type','thru_15x100','Thru 15x100','Eje pasante 15x100',50),
+          ('axle_type','thru_15x110','Thru 15x110 Boost','Boost delantero 15x110',55),
+          ('axle_type','thru_20x110','Thru 20x110','Eje pasante DH 20x110',60),
+          ('freehub_body','shimano_hg','Shimano HG','Compatible con 8-11v Shimano/SRAM',10),
+          ('freehub_body','microspline','Shimano MicroSpline','12v Shimano MicroSpline',20),
+          ('freehub_body','sram_xd','SRAM XD','Driver SRAM XD',30),
+          ('freehub_body','sram_xdr','SRAM XDR','Driver SRAM XDR',40),
+          ('freehub_body','campagnolo','Campagnolo','Cuerpo Campagnolo',50),
+          ('freehub_body','t_type','SRAM T-Type','Driver Transmission T-Type',60),
+          ('brake_interface','disc_6_bolt','Disco 6 pernos','Montaje clásico de 6 pernos',10),
+          ('brake_interface','disc_centerlock','Centerlock','Discos Centerlock',20),
+          ('brake_interface','rim_brake','Freno de aro','Superficie para freno de zapata',30),
+          ('wheel_size','700c','700c / 28"','Ruta y gravel',10),
+          ('wheel_size','650b_27_5','650b / 27.5"','Trail y gravel',20),
+          ('wheel_size','29er','29"','MTB moderna',30),
+          ('wheel_size','27_5_plus','27.5+','Neumáticos plus',35),
+          ('wheel_size','26in','26"','MTB clásico o urbano',40),
+          ('wheel_size','24in','24"','Juvenil',50),
+          ('wheel_size','20in','20"','BMX / plegables',60),
+          ('spoke_gauge','13g','13G','Calibre grueso',10),
+          ('spoke_gauge','14g','14G','Calibre estándar',20),
+          ('spoke_gauge','15g','15G','Calibre delgado',30),
+          ('spoke_gauge','bladed','Bladed / Aero','Rayos planos',40),
+          ('spoke_material','stainless','Acero inoxidable','El estándar más duradero',10),
+          ('spoke_material','aluminum','Aluminio','Ligero, uso específico',20),
+          ('spoke_material','titanium','Titanio','Máxima ligereza',30),
+          ('spoke_material','carbon','Carbono','Rayos compuestos',40),
+          ('nipple_material','brass','Latón','Mayor durabilidad',10),
+          ('nipple_material','alloy','Aluminio','Peso reducido',20),
+          ('headset_standard','is41_is52','IS41/IS52','Tapered integrado',10),
+          ('headset_standard','zs44_ec44','ZS44/EC44','Semi integrado 1 1/8 - externo 1.5',20),
+          ('headset_standard','ec34','EC34','Rosca externa 1 1/8"',30),
+          ('headset_standard','ec44_ec44','EC44/EC44','Externo completo 44',40),
+          ('headset_standard','zs44_zs56','ZS44/ZS56','Tapered semi integrado',50),
+          ('headset_standard','ec49','EC49','DH/Enduro EC49',60),
+          ('headset_standard','threaded_1_1_8','Rosca 1-1/8"','Horquillas roscadas modernas',70),
+          ('headset_standard','bmx_internal','BMX Internal','Estándar BMX integrado',80),
+          ('handlebar_type','drop','Drop bar','Carretera o gravel',10),
+          ('handlebar_type','flat','Flat bar','MTB o urbano',20),
+          ('handlebar_type','riser','Riser bar','MTB trail',30),
+          ('handlebar_type','bmx','BMX','Barras BMX',40),
+          ('handlebar_type','aero','Aero/TT','Contrarreloj o tri',50),
+          ('bb_type','bsa_68','BSA 68mm','Rosca inglesa 68mm',10),
+          ('bb_type','bsa_73','BSA 73mm','Rosca inglesa 73mm',15),
+          ('bb_type','ita','Italiana 70mm','Rosca italiana',20),
+          ('bb_type','pf30','PressFit 30','PF30',30),
+          ('bb_type','bb30','BB30','Rodamiento directo',40),
+          ('bb_type','bb86','BB86','Road pressfit',50),
+          ('bb_type','bb92','BB92','MTB pressfit',60),
+          ('bb_type','bb386','BB386EVO','Ancho 86.5mm',70),
+          ('bb_type','t47','T47','Rosca moderna T47',80),
+          ('derailleur_mount','direct_mount','Direct Mount','Anclaje directo al cuadro',10),
+          ('derailleur_mount','hanger','Hanger','Utiliza pata de cambio',20),
+          ('derailleur_mount','clamp_31_8','Abrazadera 31.8','Abrazadera 31.8mm',30),
+          ('derailleur_mount','clamp_34_9','Abrazadera 34.9','Abrazadera 34.9mm',40),
+          ('derailleur_mount','braze_on','Braze-On','Soldado al cuadro',50),
+          ('derailleur_cage_length','short','Corta','Short cage',10),
+          ('derailleur_cage_length','medium','Media','Medium cage',20),
+          ('derailleur_cage_length','long','Larga','Long cage',30),
+          ('derailleur_cage_length','dh','DH','Jaula específica DH',40),
+          ('brake_mount_type','post_mount','Post Mount','Montaje Post',10),
+          ('brake_mount_type','flat_mount','Flat Mount','Montaje carreteras',20),
+          ('brake_mount_type','is_mount','IS Mount','International Standard',30),
+          ('brake_mount_type','direct_mount','Direct Mount','Montaje directo cuadro',40),
+          ('brake_mount_type','canti','Cantilever','Pivote cantilever / V-brake',50),
+          ('brake_fluid_type','mineral','Mineral Oil','Aceite mineral',10),
+          ('brake_fluid_type','dot4','DOT 4','Fluido DOT 4',20),
+          ('brake_fluid_type','dot5_1','DOT 5.1','Fluido DOT 5.1',30),
+          ('brake_fluid_type','cable','Cable','Sistema mecánico/cable',40)
+      ) as opt_def(attribute_key, value_key, display_name, description, sort_order)
+  loop
+    select id into v_attribute_id
+      from compat_attributes
+     where tenant_id = p_tenant_id
+       and key = opt_rec.attribute_key
+     limit 1;
+
+    if v_attribute_id is null then
+      continue;
+    end if;
+
+    select id into v_option_id
+      from compat_attribute_options
+     where tenant_id = p_tenant_id
+       and attribute_id = v_attribute_id
+       and lower(value_key) = lower(opt_rec.value_key)
+     limit 1;
+
+    if v_option_id is null then
+      insert into compat_attribute_options (
+        tenant_id, attribute_id, value_key, display_name, description, sort_order, metadata
+      )
+      values (
+        p_tenant_id, v_attribute_id, opt_rec.value_key, opt_rec.display_name, opt_rec.description, opt_rec.sort_order, '{}'::jsonb
+      );
+      v_opts_created := v_opts_created + 1;
+    else
+      update compat_attribute_options
+         set display_name = opt_rec.display_name,
+         description = opt_rec.description,
+         sort_order = opt_rec.sort_order
+       where id = v_option_id;
+    end if;
+  end loop;
+
+  -- Attribute schema per component type
+  for schema_rec in
+    select *
+      from (
+        values
+          ('wheel_hub_front','spoke_holes',true,true,5.0,'core',10),
+          ('wheel_hub_front','hub_spacing_mm',true,true,4.5,'core',20),
+          ('wheel_hub_front','axle_type',true,false,4.0,'montaje',30),
+          ('wheel_hub_front','brake_interface',false,false,3.5,'montaje',40),
+          ('wheel_hub_front','flange_diameter_left_mm',false,false,3.0,'cálculo',50),
+          ('wheel_hub_front','flange_diameter_right_mm',false,false,3.0,'cálculo',60),
+          ('wheel_hub_front','center_to_flange_left_mm',false,false,3.0,'cálculo',70),
+          ('wheel_hub_front','center_to_flange_right_mm',false,false,3.0,'cálculo',80),
+          ('wheel_hub_rear','spoke_holes',true,true,5.0,'core',10),
+          ('wheel_hub_rear','hub_spacing_mm',true,true,4.5,'core',20),
+          ('wheel_hub_rear','axle_type',true,false,4.0,'montaje',30),
+          ('wheel_hub_rear','freehub_body',true,false,4.0,'drive',40),
+          ('wheel_hub_rear','brake_interface',false,false,3.5,'montaje',50),
+          ('wheel_hub_rear','flange_diameter_left_mm',false,false,3.0,'cálculo',60),
+          ('wheel_hub_rear','flange_diameter_right_mm',false,false,3.0,'cálculo',70),
+          ('wheel_hub_rear','center_to_flange_left_mm',false,false,3.0,'cálculo',80),
+          ('wheel_hub_rear','center_to_flange_right_mm',false,false,3.0,'cálculo',90),
+          ('wheel_rim','spoke_holes',true,true,5.0,'core',10),
+          ('wheel_rim','erd_mm',true,true,5.0,'cálculo',20),
+          ('wheel_rim','rim_internal_width_mm',false,false,4.0,'core',30),
+          ('wheel_rim','wheel_size',true,false,4.0,'core',40),
+          ('wheel_rim','brake_interface',false,false,3.0,'montaje',50),
+          ('wheel_spoke','spoke_length_mm',true,true,5.0,'core',10),
+          ('wheel_spoke','spoke_gauge',true,false,4.0,'core',20),
+          ('wheel_spoke','spoke_material',false,false,3.0,'core',30),
+          ('wheel_nipple','nipple_length_mm',true,false,3.5,'core',10),
+          ('wheel_nipple','nipple_material',true,false,3.0,'core',20),
+          ('wheelset','wheel_size',true,true,4.5,'core',10),
+          ('wheelset','hub_spacing_mm',true,true,4.0,'core',20),
+          ('wheelset','axle_type',true,false,4.0,'montaje',30),
+          ('wheelset','freehub_body',false,false,3.5,'drive',40),
+          ('wheelset','brake_interface',false,false,3.0,'montaje',50),
+          ('tire','wheel_size',true,true,4.5,'core',10),
+          ('tire','tire_width_mm',true,true,4.5,'core',20),
+          ('tube','wheel_size',true,true,4.0,'core',10),
+          ('tube','tire_width_mm',true,false,3.5,'core',20),
+          ('frame','wheel_size',false,false,3.5,'core',10),
+          ('frame','frame_tire_max_width_mm',false,false,3.5,'core',20),
+          ('frame','seatpost_diameter_mm',true,false,4.0,'seatpost',30),
+          ('frame','headset_standard',true,false,4.5,'steerer',40),
+          ('frame','bb_type',true,false,4.5,'drivetrain',50),
+          ('frame','bb_shell_width_mm',false,false,3.5,'drivetrain',60),
+          ('frame','bb_thread_pitch',false,false,2.5,'drivetrain',70),
+          ('frame','chainline_mm',false,false,2.0,'drivetrain',80),
+          ('fork','wheel_size',true,true,4.5,'core',10),
+          ('fork','hub_spacing_mm',true,true,4.5,'core',20),
+          ('fork','axle_type',true,false,4.0,'montaje',30),
+          ('fork','fork_travel_mm',false,false,3.5,'suspension',40),
+          ('fork','fork_offset_mm',false,false,3.0,'suspension',50),
+          ('fork','brake_mount_type',true,false,4.0,'freno',60),
+          ('fork','steerer_diameter_mm',true,false,4.0,'steerer',70),
+          ('headset','headset_standard',true,true,5.0,'core',10),
+          ('headset','steerer_diameter_mm',true,false,4.0,'core',20),
+          ('seatpost','seatpost_diameter_mm',true,true,5.0,'core',10),
+          ('seatpost','seatpost_length_mm',false,false,3.0,'core',20),
+          ('dropper_post','seatpost_diameter_mm',true,true,5.0,'core',10),
+          ('dropper_post','seatpost_travel_mm',true,false,4.0,'core',20),
+          ('dropper_post','seatpost_length_mm',false,false,3.0,'core',30),
+          ('handlebar','handlebar_type',true,true,4.0,'core',10),
+          ('handlebar','handlebar_width_mm',true,false,4.0,'core',20),
+          ('handlebar','handlebar_clamp_diameter_mm',true,false,4.0,'montaje',30),
+          ('stem','stem_length_mm',true,true,4.0,'core',10),
+          ('stem','stem_rise_deg',false,false,3.0,'core',20),
+          ('stem','handlebar_clamp_diameter_mm',true,false,4.0,'montaje',30),
+          ('stem','steerer_diameter_mm',true,false,4.0,'montaje',40),
+          ('seatclamp','seatpost_diameter_mm',true,false,4.0,'core',10),
+          ('crankset','crank_arm_length_mm',true,true,4.0,'core',10),
+          ('crankset','chainring_teeth',false,false,3.5,'drive',20),
+          ('crankset','chainline_mm',false,false,3.5,'drive',30),
+          ('crankset','bb_type',false,false,3.0,'drive',40),
+          ('chainring','chainring_teeth',true,true,4.5,'core',10),
+          ('chainring','chainring_bcd_mm',true,false,4.0,'core',20),
+          ('bottom_bracket','bb_type',true,true,4.5,'core',10),
+          ('bottom_bracket','bb_shell_width_mm',true,false,4.0,'core',20),
+          ('bottom_bracket','bb_thread_pitch',false,false,3.0,'core',30),
+          ('cassette','cassette_speeds',true,true,5.0,'core',10),
+          ('cassette','cassette_min_tooth',true,false,4.0,'core',20),
+          ('cassette','cassette_max_tooth',true,false,4.0,'core',30),
+          ('cassette','freehub_body',true,false,4.0,'drive',40),
+          ('chain','cassette_speeds',true,true,4.5,'core',10),
+          ('chain','chain_width_mm',true,false,4.0,'core',20),
+          ('rear_derailleur','cassette_speeds',true,true,4.5,'core',10),
+          ('rear_derailleur','derailleur_capacity_teeth',true,false,4.0,'core',20),
+          ('rear_derailleur','derailleur_cage_length',false,false,3.5,'core',30),
+          ('front_derailleur','cassette_speeds',false,false,3.5,'core',10),
+          ('front_derailleur','derailleur_mount',true,false,4.5,'montaje',20),
+          ('front_derailleur','chainring_teeth',false,false,3.0,'core',30),
+          ('shifter','cassette_speeds',true,true,4.5,'core',10),
+          ('brake_caliper','brake_mount_type',true,true,4.5,'core',10),
+          ('brake_caliper','rotor_size_mm',false,false,3.5,'core',20),
+          ('brake_caliper','brake_interface',false,false,3.0,'core',30),
+          ('brake_lever','brake_fluid_type',true,true,4.0,'core',10),
+          ('brake_rotor','rotor_size_mm',true,true,4.5,'core',10),
+          ('brake_rotor','brake_interface',true,false,4.0,'core',20),
+          ('brake_adapter','brake_mount_type',true,true,4.0,'core',10),
+          ('brake_adapter','rotor_size_mm',false,false,3.0,'core',20),
+          ('brake_hose','hose_length_mm',true,true,4.0,'core',10),
+          ('brake_hose','brake_fluid_type',true,false,4.0,'core',20)
+      ) as schema_def(component_code, attribute_key, is_required, is_primary, match_weight, ui_group, ui_order)
+  loop
+    select id into v_component_id
+      from compat_component_types
+     where tenant_id = p_tenant_id
+       and code = schema_rec.component_code
+     limit 1;
+
+    select id into v_attribute_id
+      from compat_attributes
+     where tenant_id = p_tenant_id
+       and key = schema_rec.attribute_key
+     limit 1;
+
+    if v_component_id is null or v_attribute_id is null then
+      continue;
+    end if;
+
+    if not exists (
+      select 1
+        from compat_component_attribute_schema
+       where tenant_id = p_tenant_id
+         and component_type_id = v_component_id
+         and attribute_id = v_attribute_id
+    ) then
+      insert into compat_component_attribute_schema (
+        tenant_id, component_type_id, attribute_id, is_required, is_primary,
+        match_weight, ui_group, ui_order, validation
+      )
+      values (
+        p_tenant_id, v_component_id, v_attribute_id, schema_rec.is_required, schema_rec.is_primary,
+        schema_rec.match_weight, schema_rec.ui_group, schema_rec.ui_order, '{}'::jsonb
+      );
+      v_schema_created := v_schema_created + 1;
+    else
+      update compat_component_attribute_schema
+         set is_required = schema_rec.is_required,
+             is_primary = schema_rec.is_primary,
+             match_weight = schema_rec.match_weight,
+             ui_group = schema_rec.ui_group,
+             ui_order = schema_rec.ui_order,
+             updated_at = now()
+       where tenant_id = p_tenant_id
+         and component_type_id = v_component_id
+         and attribute_id = v_attribute_id;
+    end if;
+  end loop;
+
+  return format('Compat seed complete → %s tipos, %s atributos, %s opciones, %s esquemas',
+    v_types_created, v_attrs_created, v_opts_created, v_schema_created);
+end;
+$$;
+
+grant execute on function public.seed_compatibility_engine(uuid) to authenticated;
+
 -- ============================================================================
 -- COMPATIBILITY ENGINE HELPERS & RPC FUNCTIONS
 -- ============================================================================
@@ -17766,6 +18616,85 @@ end;
 $$;
 
 grant execute on function public.wheel_build_attach_compatibility(uuid, uuid, uuid, jsonb) to authenticated;
+
+*/
+-- ============================================================================
+-- END OF DEPRECATED COMPAT TABLES (Lines 16910-18412 commented out Nov 22, 2025)
+-- ============================================================================
+
+-- ============================================================================
+-- COMPATIBILITY HELPER FUNCTION (Uses product_categories)
+-- ============================================================================
+
+create or replace function public.get_category_compatibility_attributes(p_category_id uuid)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_metadata jsonb;
+begin
+  select compatibility_metadata
+  into v_metadata
+  from product_categories
+  where id = p_category_id;
+  
+  return coalesce(v_metadata, '{}'::jsonb);
+end;
+$$;
+
+grant execute on function public.get_category_compatibility_attributes(uuid) to authenticated;
+
+comment on function public.get_category_compatibility_attributes is 
+  'Fetches compatibility metadata from a product category. Returns JSON with component_code, attributes array, and rules.';
+
+-- ============================================================================
+-- EXAMPLE COMPATIBILITY METADATA STRUCTURE (for reference)
+-- ============================================================================
+/*
+compatibility_metadata = {
+  "component_code": "rear_hub",
+  "attributes": [
+    {
+      "key": "hub_spacing_mm",
+      "label": "Espaciado de Maza",
+      "type": "enum",
+      "unit": "mm",
+      "required": true,
+      "primary": true,
+      "match_weight": 1.0,
+      "enum_values": ["130", "135", "142", "148"],
+      "ui_order": 0
+    },
+    {
+      "key": "axle_type",
+      "label": "Tipo de Eje",
+      "type": "enum",
+      "required": true,
+      "enum_values": ["QR", "thru_12", "thru_15"],
+      "ui_order": 1
+    },
+    {
+      "key": "driver_type",
+      "label": "Tipo de Piñonera",
+      "type": "enum",
+      "required": false,
+      "enum_values": ["shimano_hg", "shimano_microspline", "sram_xd", "campagnolo"],
+      "ui_order": 2
+    }
+  ],
+  "rules": {
+    "mtb": {
+      "typical_spacing": "148",
+      "typical_axle": "thru_12"
+    },
+    "road": {
+      "typical_spacing": "130",
+      "typical_axle": "QR"
+    }
+  }
+}
+*/
 
 
 

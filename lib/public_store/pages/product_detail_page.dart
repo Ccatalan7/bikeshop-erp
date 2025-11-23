@@ -668,6 +668,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ),
                   const SizedBox(height: 16),
                   ..._product!.specifications.entries.map((entry) {
+                    final dynamic rawValue = entry.value;
+                    final String displayValue = rawValue == null
+                        ? ''
+                        : rawValue is String
+                            ? rawValue
+                            : rawValue.toString();
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(
@@ -688,7 +694,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                           Expanded(
                             child: Text(
-                              entry.value,
+                              displayValue,
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ),

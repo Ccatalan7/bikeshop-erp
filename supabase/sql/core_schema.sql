@@ -1526,6 +1526,11 @@ begin
     alter table products add column image_urls text[] not null default array[]::text[];
   end if;
 
+  -- Add additional_images array (Flutter model compatibility)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'additional_images') then
+    alter table products add column additional_images text[] not null default array[]::text[];
+  end if;
+
   -- Add description
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'description') then
     alter table products add column description text;
@@ -1544,6 +1549,10 @@ begin
   -- Add category_name (resolved name)
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'category_name') then
     alter table products add column category_name text;
+  end if;
+  -- Add supplier_name (resolved name from supplier_id)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'supplier_name') then
+    alter table products add column supplier_name text;
   end if;
 
   -- Add brand reference

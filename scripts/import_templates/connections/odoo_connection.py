@@ -48,10 +48,14 @@ class OdooConnection:
         
         # Authenticate
         print("🔑 Authenticating with Odoo...")
-        self.uid = self.common.authenticate(self.db, self.username, self.api_key, {})
-        if not self.uid:
-            raise Exception("Odoo authentication failed")
-        print("   ✅ Authenticated")
+        try:
+            self.uid = self.common.authenticate(self.db, self.username, self.api_key, {})
+            if not self.uid:
+                raise Exception(f"Odoo authentication failed - check API key, username ({self.username}), and database ({self.db})")
+            print(f"   ✅ Authenticated (UID: {self.uid})")
+        except Exception as e:
+            print(f"   ❌ Authentication error: {str(e)}")
+            raise
     
     def search(self, model: str, domain: List = None) -> List[int]:
         """

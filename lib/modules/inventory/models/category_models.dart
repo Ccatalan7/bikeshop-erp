@@ -11,6 +11,14 @@ class Category {
   final int sortOrder;
   final DateTime createdAt;
   final DateTime updatedAt;
+  
+  // Phase 1: Compatibility Engine Integration (OLD - kept for backward compatibility)
+  final Map<String, dynamic>? compatibilityMetadata; // JSONB with component_code, attributes array
+  final List<String>? disciplineScope; // ['mtb', 'road', 'gravel']
+  final String? iconName; // 'cassette', 'hub', 'fork'
+  
+  // NEW Flexible System: Simple FK reference to global component library
+  final String? componentTypeCode; // e.g., 'hub', 'frame', 'cassette' - user maps manually
 
   Category({
     this.id,
@@ -25,6 +33,10 @@ class Category {
     this.sortOrder = 0,
     DateTime? createdAt,
     DateTime? updatedAt,
+    this.compatibilityMetadata,
+    this.disciplineScope,
+    this.iconName,
+    this.componentTypeCode,
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
@@ -42,6 +54,26 @@ class Category {
     }
     return null;
   }
+  
+  // Phase 1: Compatibility helpers (OLD system)
+  bool get hasCompatibilityMetadata => 
+    compatibilityMetadata != null && 
+    compatibilityMetadata!.containsKey('component_code');
+  
+  // NEW Flexible System: Check if category is mapped to a component type
+  bool get hasComponentType => componentTypeCode != null && componentTypeCode!.isNotEmpty;
+  
+  String? get componentCode => 
+    hasCompatibilityMetadata ? compatibilityMetadata!['component_code'] as String? : null;
+  
+  List<Map<String, dynamic>> get compatibilityAttributes {
+    if (!hasCompatibilityMetadata) return [];
+    final attrs = compatibilityMetadata!['attributes'];
+    if (attrs is List) {
+      return attrs.cast<Map<String, dynamic>>();
+    }
+    return [];
+  }
 
   factory Category.fromJson(Map<String, dynamic> json) {
     return Category(
@@ -57,6 +89,12 @@ class Category {
       sortOrder: json['sort_order'] ?? 0,
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
+      compatibilityMetadata: json['compatibility_metadata'] as Map<String, dynamic>?,
+      disciplineScope: json['discipline_scope'] != null
+          ? List<String>.from(json['discipline_scope'] as List)
+          : null,
+      iconName: json['icon_name'] as String?,
+      componentTypeCode: json['component_type_code'] as String?,
     );
   }
 
@@ -74,6 +112,10 @@ class Category {
       'sort_order': sortOrder,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      if (compatibilityMetadata != null) 'compatibility_metadata': compatibilityMetadata,
+      if (disciplineScope != null) 'discipline_scope': disciplineScope,
+      if (iconName != null) 'icon_name': iconName,
+      if (componentTypeCode != null) 'component_type_code': componentTypeCode,
     };
   }
 
@@ -90,6 +132,9 @@ class Category {
     int? sortOrder,
     DateTime? createdAt,
     DateTime? updatedAt,
+    Map<String, dynamic>? compatibilityMetadata,
+    List<String>? disciplineScope,
+    String? iconName,
   }) {
     return Category(
       id: id ?? this.id,
@@ -104,6 +149,9 @@ class Category {
       sortOrder: sortOrder ?? this.sortOrder,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      compatibilityMetadata: compatibilityMetadata ?? this.compatibilityMetadata,
+      disciplineScope: disciplineScope ?? this.disciplineScope,
+      iconName: iconName ?? this.iconName,
     );
   }
 

@@ -86,7 +86,12 @@ odoo = OdooConnection(odoo_api_key)
 
 ### Step 4: Import Connection Modules
 
-Create your script using the connection modules:
+Create your script using the connection modules from `connections/` folder:
+
+**Available connection files:**
+- `connections/zoho_connection.py` - Zoho Inventory/Books API wrapper
+- `connections/odoo_connection.py` - Odoo XML-RPC wrapper
+- `connections/supabase_connection.py` - Supabase client wrapper
 
 ```python
 import sys
@@ -142,6 +147,10 @@ scripts/import_templates/tasks/update_skus_odoo_to_zoho.py
 ---
 
 ## 🔌 Available Connection Modules
+
+**Location:** `scripts/import_templates/connections/`
+
+All connection modules are in the `connections/` folder. Import them into your task scripts.
 
 ### 1. `connections/zoho_connection.py`
 

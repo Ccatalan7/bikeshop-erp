@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -38,6 +39,10 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
   bool _isSaving = false;
   Category? _existingCategory;
   Category? _selectedParent; // User-selected parent via tree navigator
+  
+  // Component Type Selection (Flexible Compatibility System)
+  String? _selectedComponentTypeCode;
+  List<Map<String, dynamic>> _componentTypes = [];
 
   late CategoryService _categoryService;
 
@@ -50,9 +55,14 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
   }
 
   Future<void> _loadInitialData() async {
-    setState(() => _isLoading = true);
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
     
     try {
+      // Load component types for dropdown
+      await _loadComponentTypes();
+      
       if (widget.categoryId != null) {
         // Edit mode
         await _loadCategory();
@@ -61,6 +71,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
         _selectedParent = await _categoryService.getCategoryById(widget.parentCategoryId!);
       }
     } catch (e) {
+      debugPrint('Error loading initial data: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -70,7 +81,43 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadComponentTypes() async {
+    try {
+      final response = await Supabase.instance.client
+        .from('v_component_type_catalog')
+        .select()
+        .order('display_name');
+      
+      debugPrint('Component types loaded: ${response.length} items');
+      
+      if (mounted) {
+        setState(() {
+          _componentTypes = List<Map<String, dynamic>>.from(response);
+          
+          // Validate that selected value exists in loaded items
+          if (_selectedComponentTypeCode != null) {
+            final exists = _componentTypes.any(
+              (type) => type['code'] == _selectedComponentTypeCode
+            );
+            if (!exists) {
+              debugPrint('Selected component type not found, resetting to null');
+              _selectedComponentTypeCode = null;
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Error loading component types: $e');
+      // Non-fatal error - form can still work without component types
+      if (mounted) {
+        setState(() => _componentTypes = []);
+      }
     }
   }
 
@@ -79,6 +126,30 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
     _nameController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  IconData _getIconData(String? iconName) {
+    if (iconName == null) return Icons.category;
+    
+    // Map icon names from database to Material Icons
+    switch (iconName) {
+      case 'two_wheeler':
+        return Icons.two_wheeler;
+      case 'settings':
+        return Icons.settings;
+      case 'tire_repair':
+        return Icons.tire_repair;
+      case 'chair':
+        return Icons.chair;
+      case 'hardware':
+        return Icons.hardware;
+      case 'build':
+        return Icons.build;
+      case 'pedal_bike':
+        return Icons.pedal_bike;
+      default:
+        return Icons.category;
+    }
   }
 
   Future<void> _loadCategory() async {
@@ -92,6 +163,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
           _descriptionController.text = category.description ?? '';
           _isActive = category.isActive;
           _imageUrl = category.imageUrl;
+          _selectedComponentTypeCode = category.componentTypeCode;
           
           // Load parent if exists
           if (category.parentId != null) {
@@ -194,6 +266,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
             : _descriptionController.text.trim(),
         imageUrl: finalImageUrl,
         isActive: _isActive,
+        componentTypeCode: _selectedComponentTypeCode,
       );
 
       Category resultCategory;
@@ -434,6 +507,66 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                           child: Icon(Icons.description),
                         ),
                       ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Component Type Dropdown
+                    DropdownButtonFormField<String?>(
+                      value: _selectedComponentTypeCode,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de Componente',
+                        hintText: 'Selecciona un tipo de componente (opcional)',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.settings),
+                        helperText: 'Define qué campos de compatibilidad mostrar en productos',
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Ninguno'),
+                        ),
+                        ..._componentTypes.map((type) {
+                          final code = type['code'] as String;
+                          final displayName = type['display_name'] as String;
+                          final iconName = type['icon_name'] as String?;
+                          final attributeCount = type['attribute_count'] as int? ?? 0;
+                          
+                          return DropdownMenuItem<String?>(
+                            value: code,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _getIconData(iconName),
+                                  size: 20,
+                                  color: Colors.grey[600],
+                                ),
+                                const SizedBox(width: 12),
+                                Text(displayName),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue[50],
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '$attributeCount campos',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.blue[700],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                      onChanged: (value) {
+                        setState(() => _selectedComponentTypeCode = value);
+                      },
                     ),
 
                     const SizedBox(height: 24),

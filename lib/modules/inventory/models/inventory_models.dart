@@ -30,7 +30,7 @@ class Product {
   final int? maxStockLevel;
   final String? imageUrl;
   final List<String> additionalImages;
-  final Map<String, String> specifications;
+  final Map<String, dynamic> specifications;
   final List<String> tags;
   final int warrantyMonths;
   final String lifecycleStatus;
@@ -137,8 +137,8 @@ class Product {
           : (json['image_urls'] != null
               ? List<String>.from(json['image_urls'])
               : []),
-      specifications:
-          Map<String, String>.from(json['specifications'] as Map? ?? {}),
+        specifications:
+          Map<String, dynamic>.from(json['specifications'] as Map? ?? {}),
       tags: json['tags'] != null
           ? List<String>.from(json['tags'] as List)
           : const [],
@@ -279,7 +279,7 @@ class Product {
     int? maxStockLevel,
     String? imageUrl,
     List<String>? additionalImages,
-    Map<String, String>? specifications,
+    Map<String, dynamic>? specifications,
     List<String>? tags,
     int? warrantyMonths,
     String? lifecycleStatus,

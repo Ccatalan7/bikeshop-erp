@@ -314,8 +314,8 @@ class InventoryService extends ChangeNotifier {
   brandId: json['brand_id']?.toString(),
       brand: json['brand'] as String?,
       model: json['model'] as String?,
-      specifications:
-          Map<String, String>.from(json['specifications'] as Map? ?? {}),
+        specifications:
+          Map<String, dynamic>.from(json['specifications'] as Map? ?? {}),
       tags: (json['tags'] as List?)?.cast<String>() ?? const [],
       unit: ProductUnit.values.firstWhere(
         (u) => u.name == json['unit'],

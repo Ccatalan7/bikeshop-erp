@@ -17,7 +17,7 @@ class Product {
   final String? brandId;
   final String? brand;
   final String? model;
-  final Map<String, String> specifications;
+  final Map<String, dynamic> specifications;
   final String? supplierId;
   final String? supplierReference;
   final String? manufacturer;
@@ -130,8 +130,8 @@ class Product {
       brandId: json['brand_id'] as String? ?? json['brandId'] as String?,
       brand: json['brand'] as String?,
       model: json['model'] as String?,
-      specifications:
-          Map<String, String>.from(json['specifications'] as Map? ?? {}),
+        specifications:
+          Map<String, dynamic>.from(json['specifications'] as Map? ?? {}),
       supplierId: json['supplier_id'] as String?,
       supplierReference: json['supplier_reference'] as String?,
       manufacturer: json['manufacturer'] as String?,
@@ -259,7 +259,7 @@ class Product {
     String? brand,
     bool brandHasValue = false,
     String? model,
-    Map<String, String>? specifications,
+    Map<String, dynamic>? specifications,
     String? supplierId,
     String? supplierReference,
     String? manufacturer,

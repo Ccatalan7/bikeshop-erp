@@ -2,6 +2,32 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "🧪 STAGING - Run (Development)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=ENV=development",
+        "--dart-define=DEBUG_EMAIL=vinabikechile@gmail.com",
+        "--dart-define=DEBUG_PASSWORD=000000",
+        "--dart-define=SUPABASE_URL=https://kyvgmapifacpzuyreasy.supabase.co",
+        "--dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt5dmdtYXBpZmFjcHp1eXJlYXN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4MzcxNjcsImV4cCI6MjA3OTQxMzE2N30.D9o18KmFC_L0LvtoQYSyspZubFPvieIjRrlTnSTPGuw"
+      ]
+    },
+    {
+      "name": "⚠️ PRODUCTION - Run (Development)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=ENV=development",
+        "--dart-define=DEBUG_EMAIL=vinabikechile@gmail.com",
+        "--dart-define=DEBUG_PASSWORD=000000",
+        "--dart-define=SUPABASE_URL=https://xzdvtzdqjeyqxnkqprtf.supabase.co",
+        "--dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjQyMzUsImV4cCI6MjA3NTY0MDIzNX0.q5OswWMx6C00dbSHlFSOKlv6BA6GKx36VtVSy8ohxAM"
+      ]
+    },
+    {
       "name": "🚀 Flutter: Run (Development)",
       "request": "launch",
       "type": "dart",

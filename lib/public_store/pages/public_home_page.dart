@@ -231,8 +231,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
       categoryName: json['category_name'] as String?,
       brand: json['brand'] as String?,
       model: json['model'] as String?,
-      specifications:
-          Map<String, String>.from(json['specifications'] as Map? ?? {}),
+        specifications:
+          Map<String, dynamic>.from(json['specifications'] as Map? ?? {}),
       tags: (json['tags'] as List?)?.cast<String>() ?? const [],
       unit: ProductUnit.values.firstWhere(
         (u) => u.name == json['unit'],

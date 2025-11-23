@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -543,22 +544,22 @@ class _ProductListPageState extends State<ProductListPage> {
             ],
           ),
           const SizedBox(height: 12),
-          // Search and filters row
-          Row(
+          // Search bar (full width)
+          SearchBarWidget(
+            controller: _searchController,
+            hintText: 'Buscar por nombre, SKU, marca o categoría…',
+            onChanged: _onSearchChanged,
+          ),
+          const SizedBox(height: 8),
+          // Filters row (wraps on narrow screens)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              // Search bar
-              Expanded(
-                flex: 2,
-                child: SearchBarWidget(
-                  controller: _searchController,
-                  hintText: 'Buscar por nombre, SKU, marca o categoría…',
-                  onChanged: _onSearchChanged,
-                ),
-              ),
-              const SizedBox(width: 8),
               // Category filter
               SizedBox(
-                width: 180,
+                width: math.max(160, math.min(MediaQuery.of(context).size.width * 0.25, 200)),
                 child: DropdownButtonFormField<String>(
                   value: _selectedCategoryId,
                   decoration: InputDecoration(
@@ -586,10 +587,9 @@ class _ProductListPageState extends State<ProductListPage> {
                   onChanged: _onCategoryChanged,
                 ),
               ),
-              const SizedBox(width: 8),
               // Supplier filter
               SizedBox(
-                width: 180,
+                width: math.max(160, math.min(MediaQuery.of(context).size.width * 0.25, 200)),
                 child: DropdownButtonFormField<String>(
                   value: _selectedSupplierId,
                   decoration: InputDecoration(
@@ -617,7 +617,6 @@ class _ProductListPageState extends State<ProductListPage> {
                   onChanged: _onSupplierChanged,
                 ),
               ),
-              const SizedBox(width: 8),
               // Filter chips
               FilterChip(
                 avatar: Icon(
@@ -634,7 +633,6 @@ class _ProductListPageState extends State<ProductListPage> {
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
               ),
-              const SizedBox(width: 6),
               FilterChip(
                 avatar: Icon(
                   Icons.visibility_off_outlined,
@@ -650,7 +648,6 @@ class _ProductListPageState extends State<ProductListPage> {
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
               ),
-              const SizedBox(width: 6),
               // Refresh button
               IconButton(
                 tooltip: 'Actualizar',
@@ -758,54 +755,6 @@ class _ProductListPageState extends State<ProductListPage> {
             ),
           ],
         ),
-      ],
-    );
-  }
-
-  Widget _buildContentArea(ThemeData theme) {
-    return _viewMode == ProductViewMode.table
-        ? _buildZohoTableView(theme)
-        : _buildCardGridScrollable(theme);
-  }
-
-  Widget _buildZohoTableView(ThemeData theme) {
-    return Row(
-      children: [
-        // Main table view
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border(
-                right: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withOpacity(0.5),
-                ),
-              ),
-            ),
-            child: Column(
-              children: [
-                _buildTableHeader(theme),
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: _loadProducts,
-                    child: ListView.builder(
-                      controller: _tableScrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      itemCount: _filteredProducts.length,
-                      itemBuilder: (context, index) {
-                        final product = _filteredProducts[index];
-                        final isSelected = _selectedProduct?.id == product.id;
-                        return _buildZohoTableRow(product, theme, isSelected);
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // Split-pane detail view
-        if (_selectedProduct != null)
-          _buildDetailPane(theme),
       ],
     );
   }
@@ -1661,44 +1610,6 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  Widget _buildStatTile(
-    ThemeData theme, {
-    required IconData icon,
-    required Color color,
-    required String label,
-    required String value,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: color.withOpacity(0.15),
-          child: Icon(icon, size: 18, color: color),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-            ),
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
   Widget _buildStockChip(Product product, ThemeData theme) {
     final color = _stockStatusColor(product, theme);
     final icon = _stockStatusIcon(product);
@@ -1720,30 +1631,6 @@ class _ProductListPageState extends State<ProductListPage> {
             style: theme.textTheme.labelSmall?.copyWith(
               color: color,
               fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoPill(ThemeData theme,
-      {required IconData icon, required String label}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],
