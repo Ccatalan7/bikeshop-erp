@@ -527,7 +527,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         bikeId: _selectedBike!.id!,
         priority: _selectedPriority,
         status: _selectedStatus,
-        arrivalDate: DateTime.now(),
+        // CRITICAL: Preserve original arrival_date when updating, only set NOW for new jobs
+        arrivalDate: _existingJob?.arrivalDate ?? DateTime.now(),
+        // CRITICAL: Preserve original created_at when updating
+        createdAt: _existingJob?.createdAt ?? DateTime.now(),
         clientRequest: _clientRequestController.text.trim().isEmpty
             ? null
             : _clientRequestController.text.trim(),
@@ -682,8 +685,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             backgroundColor: Colors.green,
           ),
         );
-        // Pop back to previous page (table will auto-refresh)
-        context.pop();
+        // Pop back and force refresh by passing true
+        context.pop(true); // Signal that data changed
       }
     } catch (e) {
       if (mounted) {

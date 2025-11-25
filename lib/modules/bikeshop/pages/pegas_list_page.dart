@@ -473,6 +473,16 @@ class _PegasListPageState extends State<PegasListPage> {
                           visualDensity: VisualDensity.compact,
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      // Calendar view button
+                      OutlinedButton.icon(
+                        onPressed: () => context.push('/taller/calendario'),
+                        icon: const Icon(Icons.calendar_month, size: 16),
+                        label: const Text('Calendario'),
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
                     ],
                   ),
                 ),

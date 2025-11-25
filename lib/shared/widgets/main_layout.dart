@@ -100,6 +100,11 @@ const List<MenuSubItem> _workshopMenuItems = [
     title: 'Calendario',
     route: '/taller/calendario',
   ),
+  MenuSubItem(
+    icon: Icons.tune_outlined,
+    title: 'Estados personalizados',
+    route: '/taller/estados',
+  ),
 ];
 
 const String _workshopSectionKey = 'workshop';
@@ -279,6 +284,7 @@ String _getTitleFromRoute(String route) {
     '/taller/pegas': 'Trabajos',
     '/taller/bicicletas': 'Bicicletas',
     '/taller/marcas-modelos': 'Marcas y Modelos',
+    '/taller/estados': 'Estados personalizados',
     '/taller/wheel-builder': 'Wheel Builder',
     '/taller/wheel-hubs': 'Hubs',
     '/taller/wheel-rims': 'Rims',

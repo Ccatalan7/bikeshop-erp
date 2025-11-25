@@ -23,6 +23,7 @@ import '../../modules/crm/pages/customer_form_page.dart';
 import '../../modules/crm/pages/customer_bike_directory_page.dart';
 import '../../modules/bikeshop/pages/client_logbook_page.dart';
 import '../../modules/bikeshop/pages/pegas_table_page.dart';
+import '../../modules/bikeshop/pages/job_statuses_page.dart';
 import '../../modules/bikeshop/pages/mechanic_job_form_page.dart';
 import '../../modules/bikeshop/pages/workshop_calendar_page.dart';
 import '../../modules/bikeshop/pages/bike_brands_page.dart';
@@ -568,6 +569,14 @@ class AppRouter {
             context,
             state,
             const PegasTablePage(),
+          ),
+        ),
+        GoRoute(
+          path: '/taller/estados',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const JobStatusesPage(),
           ),
         ),
         GoRoute(

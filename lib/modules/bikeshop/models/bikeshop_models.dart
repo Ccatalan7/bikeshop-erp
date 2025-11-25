@@ -1,5 +1,7 @@
 // Bikeshop Models - Bikes, Jobs, Service Packages, Labor, Timeline
 
+import 'dart:ui' show Color;
+
 import '../../../shared/models/tax_treatment.dart';
 
 DateTime _parseDate(dynamic value) {
@@ -467,6 +469,153 @@ class BikeModel {
 // MECHANIC JOB STATUS & PRIORITY
 // ============================================================
 
+/// Phase grouping for job statuses (Notion-style)
+enum StatusPhase {
+  todo,       // Not started yet
+  inProgress, // Work in progress
+  complete;   // Finished
+
+  String get displayName {
+    switch (this) {
+      case StatusPhase.todo:
+        return 'Por Hacer';
+      case StatusPhase.inProgress:
+        return 'En Progreso';
+      case StatusPhase.complete:
+        return 'Completado';
+    }
+  }
+
+  String get dbValue {
+    switch (this) {
+      case StatusPhase.todo:
+        return 'todo';
+      case StatusPhase.inProgress:
+        return 'in_progress';
+      case StatusPhase.complete:
+        return 'complete';
+    }
+  }
+
+  static StatusPhase fromDbValue(String? value) {
+    switch (value) {
+      case 'todo':
+        return StatusPhase.todo;
+      case 'in_progress':
+        return StatusPhase.inProgress;
+      case 'complete':
+        return StatusPhase.complete;
+      default:
+        return StatusPhase.inProgress;
+    }
+  }
+}
+
+/// Custom job status (Notion-style, per-tenant)
+class JobStatusCustom {
+  final String? id;
+  final String tenantId;
+  final String name;
+  final String code;
+  final String color; // Hex color like '#3B82F6'
+  final StatusPhase phase;
+  final int sortOrder;
+  final bool isSystem; // System statuses can't be deleted
+  final bool isActive;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  JobStatusCustom({
+    this.id,
+    required this.tenantId,
+    required this.name,
+    required this.code,
+    this.color = '#6B7280',
+    this.phase = StatusPhase.inProgress,
+    this.sortOrder = 0,
+    this.isSystem = false,
+    this.isActive = true,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory JobStatusCustom.fromJson(Map<String, dynamic> json) {
+    return JobStatusCustom(
+      id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
+      name: json['name'] as String? ?? '',
+      code: json['code'] as String? ?? '',
+      color: json['color'] as String? ?? '#6B7280',
+      phase: StatusPhase.fromDbValue(json['phase'] as String?),
+      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+      isSystem: json['is_system'] as bool? ?? false,
+      isActive: json['is_active'] as bool? ?? true,
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'name': name,
+      'code': code,
+      'color': color,
+      'phase': phase.dbValue,
+      'sort_order': sortOrder,
+      'is_system': isSystem,
+      'is_active': isActive,
+    };
+  }
+
+  JobStatusCustom copyWith({
+    String? id,
+    String? tenantId,
+    String? name,
+    String? code,
+    String? color,
+    StatusPhase? phase,
+    int? sortOrder,
+    bool? isSystem,
+    bool? isActive,
+  }) {
+    return JobStatusCustom(
+      id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
+      name: name ?? this.name,
+      code: code ?? this.code,
+      color: color ?? this.color,
+      phase: phase ?? this.phase,
+      sortOrder: sortOrder ?? this.sortOrder,
+      isSystem: isSystem ?? this.isSystem,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is JobStatusCustom && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  /// Converts hex color string to Flutter Color
+  Color get colorValue {
+    try {
+      final hex = color.replaceAll('#', '');
+      return Color(int.parse('FF$hex', radix: 16));
+    } catch (_) {
+      return const Color(0xFF6B7280); // Default gray
+    }
+  }
+}
+
+// Legacy enum for backwards compatibility (will be gradually phased out)
 enum JobStatus {
   pendiente,
   diagnostico,
@@ -600,7 +749,9 @@ class MechanicJob {
   final DateTime? startedAt;
   final DateTime? completedAt;
   final DateTime? deliveredAt;
-  final JobStatus status;
+  final JobStatus status; // Legacy enum (for backwards compatibility)
+  final String? statusId; // New: UUID reference to job_statuses table
+  final JobStatusCustom? customStatus; // Loaded from job_statuses join
   final JobPriority priority;
   final String? clientRequest;
   final String? diagnosis;
@@ -627,6 +778,10 @@ class MechanicJob {
   final List<String> imageUrls;
   final DateTime createdAt;
   final DateTime updatedAt;
+  
+  // Soft delete fields
+  final DateTime? deletedAt;
+  final String? deletedBy;
 
   MechanicJob({
     this.id,
@@ -641,6 +796,8 @@ class MechanicJob {
     this.completedAt,
     this.deliveredAt,
     this.status = JobStatus.pendiente,
+    this.statusId,
+    this.customStatus,
     this.priority = JobPriority.normal,
     this.clientRequest,
     this.diagnosis,
@@ -667,11 +824,19 @@ class MechanicJob {
     this.imageUrls = const [],
     DateTime? createdAt,
     DateTime? updatedAt,
+    this.deletedAt,
+    this.deletedBy,
   })  : arrivalDate = arrivalDate ?? DateTime.now(),
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
   factory MechanicJob.fromJson(Map<String, dynamic> json) {
+    // Parse custom status if joined
+    JobStatusCustom? customStatus;
+    if (json['job_status'] != null && json['job_status'] is Map) {
+      customStatus = JobStatusCustom.fromJson(json['job_status'] as Map<String, dynamic>);
+    }
+    
     return MechanicJob(
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
@@ -685,6 +850,8 @@ class MechanicJob {
       completedAt: _parseDateNullable(json['completed_at']),
       deliveredAt: _parseDateNullable(json['delivered_at']),
       status: JobStatus.fromDbValue(json['status'] as String?),
+      statusId: json['status_id']?.toString(),
+      customStatus: customStatus,
       priority: JobPriority.fromDbValue(json['priority'] as String?),
       clientRequest: json['client_request'] as String?,
       diagnosis: json['diagnosis'] as String?,
@@ -717,11 +884,17 @@ class MechanicJob {
           : [],
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
+      deletedAt: _parseDateNullable(json['deleted_at']),
+      deletedBy: json['deleted_by']?.toString(),
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
+  /// Converts this job to a JSON map for database operations.
+  /// 
+  /// When [forUpdate] is true, excludes immutable fields like created_at 
+  /// and arrival_date that should never be overwritten on updates.
+  Map<String, dynamic> toJson({bool forUpdate = false}) {
+    final json = <String, dynamic>{
       if (id != null) 'id': id,
       'tenant_id': tenantId,
       if (jobNumber != null && jobNumber!.isNotEmpty)
@@ -730,12 +903,12 @@ class MechanicJob {
       'customer_id': customerId,
       'bike_id': bikeId,
       'service_package_id': servicePackageId,
-      'arrival_date': arrivalDate.toIso8601String(),
       'deadline': deadline?.toIso8601String(),
       'started_at': startedAt?.toIso8601String(),
       'completed_at': completedAt?.toIso8601String(),
       'delivered_at': deliveredAt?.toIso8601String(),
       'status': status.dbValue,
+      if (statusId != null) 'status_id': statusId, // New: custom status reference
       'priority': priority.dbValue,
       'client_request': clientRequest,
       'diagnosis': diagnosis,
@@ -748,7 +921,7 @@ class MechanicJob {
       // Don't include parts_cost, labor_cost, total_cost - these are calculated by database triggers
       'discount_amount': discountAmount,
       'tax_amount': taxAmount,
-      'tax_treatment': taxTreatment.toValue(), // ← Add to toJson
+      'tax_treatment': taxTreatment.toValue(),
       'invoice_id': invoiceId,
       'is_invoiced': isInvoiced,
       'is_paid': isPaid,
@@ -758,9 +931,18 @@ class MechanicJob {
       'approved_by_customer': approvedByCustomer,
       'approved_at': approvedAt?.toIso8601String(),
       'image_urls': imageUrls,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
     };
+    
+    // Only include immutable timestamp fields for CREATE, not UPDATE
+    if (!forUpdate) {
+      json['arrival_date'] = arrivalDate.toIso8601String();
+      json['created_at'] = createdAt.toIso8601String();
+    }
+    
+    // updated_at is always set by database trigger, but include it for reference
+    json['updated_at'] = DateTime.now().toIso8601String();
+    
+    return json;
   }
 
   MechanicJob copyWith({
@@ -801,6 +983,8 @@ class MechanicJob {
     List<String>? imageUrls,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? statusId,
+    JobStatusCustom? customStatus,
   }) {
     return MechanicJob(
       id: id ?? this.id,
@@ -815,6 +999,8 @@ class MechanicJob {
       completedAt: completedAt ?? this.completedAt,
       deliveredAt: deliveredAt ?? this.deliveredAt,
       status: status ?? this.status,
+      statusId: statusId ?? this.statusId,
+      customStatus: customStatus ?? this.customStatus,
       priority: priority ?? this.priority,
       clientRequest: clientRequest ?? this.clientRequest,
       diagnosis: diagnosis ?? this.diagnosis,
@@ -842,6 +1028,33 @@ class MechanicJob {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+  
+  /// Get the display name for the status (prefers custom status if available)
+  String get statusDisplayName => customStatus?.name ?? status.displayName;
+  
+  /// Get the color for the status (prefers custom status if available)
+  String get statusColor => customStatus?.color ?? _defaultStatusColor;
+  
+  String get _defaultStatusColor {
+    switch (status) {
+      case JobStatus.pendiente:
+        return '#6B7280'; // Gray
+      case JobStatus.diagnostico:
+        return '#3B82F6'; // Blue
+      case JobStatus.esperandoAprobacion:
+        return '#F59E0B'; // Amber
+      case JobStatus.esperandoRepuestos:
+        return '#F97316'; // Orange
+      case JobStatus.enCurso:
+        return '#8B5CF6'; // Purple
+      case JobStatus.finalizado:
+        return '#10B981'; // Green
+      case JobStatus.entregado:
+        return '#06B6D4'; // Cyan
+      case JobStatus.cancelado:
+        return '#EF4444'; // Red
+    }
   }
 
   Duration? get timeRemaining {

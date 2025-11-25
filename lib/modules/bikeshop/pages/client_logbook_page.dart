@@ -483,6 +483,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
   Widget build(BuildContext context) {
     return MainLayout(
       title: _customer?.name ?? 'Historial del Cliente',
+      onBackPressed: () => context.pop(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null

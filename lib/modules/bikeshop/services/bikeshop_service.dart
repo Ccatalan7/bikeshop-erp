@@ -327,9 +327,15 @@ class BikeshopService extends ChangeNotifier {
     JobStatus? status,
     String? searchTerm,
     bool includeCompleted = true,
+    bool includeDeleted = false, // NEW: option to include soft-deleted jobs
   }) async {
     try {
       var query = Supabase.instance.client.from('mechanic_jobs').select();
+
+      // Filter out soft-deleted jobs by default
+      if (!includeDeleted) {
+        query = query.isFilter('deleted_at', null);
+      }
 
       if (customerId != null && customerId.isNotEmpty) {
         query = query.eq('customer_id', customerId);
@@ -380,6 +386,7 @@ class BikeshopService extends ChangeNotifier {
           .from('mechanic_jobs')
           .select()
           .eq('id', id)
+          .isFilter('deleted_at', null) // Filter out soft-deleted
           .maybeSingle();
 
       return data != null ? MechanicJob.fromJson(data) : null;
@@ -427,7 +434,8 @@ class BikeshopService extends ChangeNotifier {
         throw Exception('ID de trabajo inválido');
       }
 
-      final data = await _db.update('mechanic_jobs', job.id!, job.toJson());
+      // Use forUpdate: true to exclude arrival_date and created_at from being overwritten
+      final data = await _db.update('mechanic_jobs', job.id!, job.toJson(forUpdate: true));
       notifyListeners();
       return MechanicJob.fromJson(data);
     } catch (e) {
@@ -891,6 +899,75 @@ class BikeshopService extends ChangeNotifier {
 
   bool get mounted => !_isDisposed;
   bool _isDisposed = false;
+
+  // ========== SOFT DELETE METHODS ==========
+
+  /// Soft delete a mechanic job (sets deleted_at timestamp)
+  Future<void> softDeleteJob(String jobId) async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      await Supabase.instance.client.from('mechanic_jobs').update({
+        'deleted_at': DateTime.now().toIso8601String(),
+        'deleted_by': userId,
+      }).eq('id', jobId);
+      
+      _debouncedNotify();
+      debugPrint('🗑️ Soft deleted job: $jobId');
+    } catch (e) {
+      if (kDebugMode) print('Error soft deleting job: $e');
+      rethrow;
+    }
+  }
+
+  /// Restore a soft-deleted mechanic job
+  Future<void> restoreJob(String jobId) async {
+    try {
+      await Supabase.instance.client.from('mechanic_jobs').update({
+        'deleted_at': null,
+        'deleted_by': null,
+      }).eq('id', jobId);
+      
+      _debouncedNotify();
+      debugPrint('♻️ Restored job: $jobId');
+    } catch (e) {
+      if (kDebugMode) print('Error restoring job: $e');
+      rethrow;
+    }
+  }
+
+  /// Get only soft-deleted jobs (for "Eliminados" view)
+  Future<List<MechanicJob>> getDeletedJobs() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('mechanic_jobs')
+          .select()
+          .not('deleted_at', 'is', null)
+          .order('deleted_at', ascending: false);
+
+      return (data as List<dynamic>)
+          .map((json) => MechanicJob.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching deleted jobs: $e');
+      rethrow;
+    }
+  }
+
+  /// Permanently delete a job (hard delete - cannot be undone)
+  Future<void> permanentlyDeleteJob(String jobId) async {
+    try {
+      await Supabase.instance.client
+          .from('mechanic_jobs')
+          .delete()
+          .eq('id', jobId);
+      
+      _debouncedNotify();
+      debugPrint('🔥 Permanently deleted job: $jobId');
+    } catch (e) {
+      if (kDebugMode) print('Error permanently deleting job: $e');
+      rethrow;
+    }
+  }
 
   @override
   void dispose() {

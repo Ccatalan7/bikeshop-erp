@@ -37,6 +37,7 @@ import 'modules/settings/services/appearance_service.dart';
 import 'modules/bikeshop/services/bikeshop_service.dart';
 import 'modules/bikeshop/services/wheel_building_service.dart';
 import 'modules/bikeshop/services/smart_task_service.dart';
+import 'modules/bikeshop/services/job_status_service.dart';
 import 'modules/hr/services/hr_service.dart';
 import 'modules/website/services/website_service.dart';
 import 'modules/website/services/mercadopago_service.dart';
@@ -167,6 +168,10 @@ class VinabikeApp extends StatelessWidget {
                 )),
         ChangeNotifierProvider(
             create: (context) => BikeshopService(
+                  Provider.of<DatabaseService>(context, listen: false),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => JobStatusService(
                   Provider.of<DatabaseService>(context, listen: false),
                 )),
         ChangeNotifierProvider(create: (context) => WheelBuildingService()),
