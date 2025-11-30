@@ -50,6 +50,8 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   Product? _selectedProduct;
   bool _isLoading = false;
   bool _isTapInProgress = false; // Track tap events to prevent premature overlay removal
+  bool _hasUserInteracted = false; // Track if user has interacted with the field
+  bool _isMouseOverDropdown = false; // Track if mouse is over the dropdown
   late shared_inventory.InventoryService _inventoryService;
   OverlayEntry? _overlayEntry;
 
@@ -64,19 +66,25 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     
     _focusNode.addListener(() {
       if (_focusNode.hasFocus) {
-        _showOverlay();
+        // Only show overlay if user has explicitly interacted (tap/click/type)
+        // Don't show on programmatic focus unless autoFocus is set
+        if (_hasUserInteracted || widget.autoFocus) {
+          _showOverlay();
+        }
       } else {
-        // Add small delay to allow tap events to register
-        Future.delayed(const Duration(milliseconds: 200), () {
-          if (!_focusNode.hasFocus && mounted && !_isTapInProgress) {
+        // Add delay to allow tap events and mouse-over-dropdown to register
+        Future.delayed(const Duration(milliseconds: 250), () {
+          // Don't remove if: still focused, tap in progress, or mouse is over dropdown
+          if (!_focusNode.hasFocus && mounted && !_isTapInProgress && !_isMouseOverDropdown) {
             _removeOverlay();
           }
         });
       }
     });
     
-    // Auto-focus if requested
+    // Auto-focus if requested (for newly added lines after selecting a product)
     if (widget.autoFocus) {
+      _hasUserInteracted = true; // Mark as interacted since it's intentional
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _focusNode.requestFocus();
@@ -152,6 +160,16 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     return MouseRegion(
       onEnter: (_) {
         // Keep overlay open when mouse is over dropdown
+        _isMouseOverDropdown = true;
+      },
+      onExit: (_) {
+        _isMouseOverDropdown = false;
+        // Check if we should close the overlay now
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (mounted && !_focusNode.hasFocus && !_isTapInProgress && !_isMouseOverDropdown) {
+            _removeOverlay();
+          }
+        });
       },
       child: Container(
         constraints: const BoxConstraints(
@@ -426,12 +444,27 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   }
 
   void _onSubmitted(String value) {
-    if (_filteredProducts.isNotEmpty && _selectedProduct == null) {
-      // Auto-select first match if user presses enter
-      _selectProduct(_filteredProducts.first);
-    } else if (widget.allowCustomItems && _selectedProduct == null && value.trim().isNotEmpty) {
-      // Accept as custom item
-      _selectCustomItem(value);
+    final trimmedValue = value.trim();
+    
+    // If user typed something and presses Enter, ALWAYS create ad-hoc item
+    // Don't auto-select from search results - user must click to select a product
+    if (widget.allowCustomItems && _selectedProduct == null && trimmedValue.isNotEmpty) {
+      _selectCustomItem(trimmedValue);
+    }
+    // If no text and there are results, do nothing (user should click to select)
+    // If custom items not allowed and no selection, do nothing
+  }
+
+  void _onTap() {
+    // Mark that user has interacted - this allows overlay to show
+    if (!_hasUserInteracted) {
+      setState(() {
+        _hasUserInteracted = true;
+      });
+    }
+    // Show overlay when user explicitly taps the field
+    if (_focusNode.hasFocus) {
+      _showOverlay();
     }
   }
 
@@ -439,43 +472,57 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: TextField(
-        controller: _controller,
-        focusNode: _focusNode,
-        enabled: widget.enabled,
-        decoration: InputDecoration(
-          labelText: widget.labelText,
-          hintText: widget.hintText,
-          suffixIcon: _isLoading
-              ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : _controller.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _controller.clear();
-                        _onTextChanged('');
-                      },
+    // RepaintBoundary prevents unnecessary repaints from parent hover state changes
+    return RepaintBoundary(
+      child: CompositedTransformTarget(
+        link: _layerLink,
+        child: GestureDetector(
+          onTap: _onTap,
+          behavior: HitTestBehavior.translucent,
+          child: TextField(
+            controller: _controller,
+            focusNode: _focusNode,
+            enabled: widget.enabled,
+            decoration: InputDecoration(
+              labelText: widget.labelText,
+              hintText: widget.hintText,
+              suffixIcon: _isLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
                     )
-                  : Icon(
-                      widget.allowCustomItems ? Icons.edit : Icons.search,
-                      color: theme.colorScheme.primary,
-                    ),
-          prefixIcon: Icon(
-            _selectedProduct != null ? Icons.inventory_2 : Icons.add_shopping_cart,
-            color: _selectedProduct != null ? theme.colorScheme.primary : null,
+                  : _controller.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _controller.clear();
+                            _onTextChanged('');
+                          },
+                        )
+                      : Icon(
+                          widget.allowCustomItems ? Icons.edit : Icons.search,
+                          color: theme.colorScheme.primary,
+                        ),
+              prefixIcon: Icon(
+                _selectedProduct != null ? Icons.inventory_2 : Icons.add_shopping_cart,
+                color: _selectedProduct != null ? theme.colorScheme.primary : null,
+              ),
+            ),
+            onTap: _onTap,
+            onChanged: (value) {
+              // Mark as interacted when user types
+              if (!_hasUserInteracted) {
+                _hasUserInteracted = true;
+              }
+              _onTextChanged(value);
+            },
+            onSubmitted: _onSubmitted,
           ),
         ),
-        onChanged: _onTextChanged,
-        onSubmitted: _onSubmitted,
       ),
     );
   }

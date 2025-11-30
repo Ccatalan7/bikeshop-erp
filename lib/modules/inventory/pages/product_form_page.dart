@@ -971,13 +971,16 @@ class _ProductFormPageState extends State<ProductFormPage> {
                         title: 'Imágenes',
                         children: _buildMediaFields(theme),
                       ),
-                      const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.inventory_outlined,
-                        title: 'Inventario',
-                        children: _buildInventoryFields(theme),
-                      ),
+                      // Only show inventory for products, not services
+                      if (_selectedProductType != ProductType.service) ...[
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.inventory_outlined,
+                          title: 'Inventario',
+                          children: _buildInventoryFields(theme),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       _buildSectionCard(
                         theme,
@@ -1016,13 +1019,16 @@ class _ProductFormPageState extends State<ProductFormPage> {
                 children: _buildPricingFields(theme),
               ),
               const SizedBox(height: 16),
-              _buildSectionCard(
-                theme,
-                icon: Icons.inventory_outlined,
-                title: 'Inventario',
-                children: _buildInventoryFields(theme),
-              ),
-              const SizedBox(height: 16),
+              // Only show inventory for products, not services
+              if (_selectedProductType != ProductType.service)
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.inventory_outlined,
+                  title: 'Inventario',
+                  children: _buildInventoryFields(theme),
+                ),
+              if (_selectedProductType != ProductType.service)
+                const SizedBox(height: 16),
               _buildSectionCard(
                 theme,
                 icon: Icons.settings_outlined,

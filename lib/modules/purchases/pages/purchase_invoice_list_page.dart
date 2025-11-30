@@ -7,7 +7,6 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
-import '../widgets/purchase_model_selection_dialog.dart';
 
 // Purchase Invoice List Page with Split-Pane View
 
@@ -215,15 +214,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
   
   Future<void> _createNewInvoice() async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => const PurchaseModelSelectionDialog(),
-    );
-
-    if (result == null || !mounted) return;
-
-    final isPrepayment = result; // result is already a boolean
-    context.push('/purchases/new?prepayment=$isPrepayment');
+    // Navigate directly to form - payment model is now selected inside the form
+    // Default is prepayment (true), but user can change it in the form
+    context.push('/purchases/new?prepayment=true');
   }
   
   Widget _buildFullListView(List<PurchaseInvoice> invoices, PurchaseService purchaseService) {

@@ -1713,6 +1713,14 @@ begin
     alter table products add column product_type text not null default 'product';
   end if;
 
+  -- Add is_service (computed from product_type, for inventory triggers)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'is_service') then
+    alter table products add column is_service boolean not null default false;
+  end if;
+
+  -- Sync is_service with product_type for existing records
+  update products set is_service = (product_type = 'service') where is_service != (product_type = 'service');
+
   -- Add updated_at
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'updated_at') then
     alter table products add column updated_at timestamp with time zone not null default now();

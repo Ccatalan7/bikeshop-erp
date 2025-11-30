@@ -279,7 +279,7 @@ class _ProductListPageState extends State<ProductListPage> {
 
     if (_showLowStockOnly) {
       filtered = filtered
-          .where((product) => product.isLowStock || product.isOutOfStock)
+          .where((product) => !product.isService && (product.isLowStock || product.isOutOfStock))
           .toList();
     }
 
@@ -671,9 +671,11 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildCompactSummary(ThemeData theme) {
-    final lowStock = _products.where((p) => p.isLowStock).length;
-    final outOfStock = _products.where((p) => p.isOutOfStock).length;
-    final inventoryValue = _products.fold<double>(
+    // Exclude services from stock counts
+    final productsOnly = _products.where((p) => !p.isService);
+    final lowStock = productsOnly.where((p) => p.isLowStock).length;
+    final outOfStock = productsOnly.where((p) => p.isOutOfStock).length;
+    final inventoryValue = productsOnly.fold<double>(
       0.0,
       (total, product) => total + product.inventoryValue,
     );
@@ -1003,10 +1005,19 @@ class _ProductListPageState extends State<ProductListPage> {
                 ),
               ),
             ),
-            // Stock
+            // Stock (show dash for services)
             SizedBox(
               width: 120,
-              child: Row(
+              child: product.isService
+                  ? Text(
+                      '-',
+                      textAlign: TextAlign.right,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  : Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Text(
@@ -1166,20 +1177,23 @@ class _ProductListPageState extends State<ProductListPage> {
                           ),
                         ),
                         const SizedBox(width: 32),
-                        // Right column: Inventory
-                        Expanded(
-                          child: _buildDetailSection(
-                            theme,
-                            title: 'Inventario',
-                            children: [
-                              _buildDetailRowNumeric(theme, 'Stock Actual', product.inventoryQty),
-                              _buildDetailRowNumeric(theme, 'Stock Mínimo', product.minStockLevel),
-                              _buildDetailRowNumeric(theme, 'Stock Máximo', product.maxStockLevel ?? 0),
-                              if (product.warehouseLocation != null)
-                                _buildDetailRow(theme, 'Ubicación', product.warehouseLocation!),
-                            ],
-                          ),
-                        ),
+                        // Right column: Inventory (hide for services)
+                        if (!product.isService)
+                          Expanded(
+                            child: _buildDetailSection(
+                              theme,
+                              title: 'Inventario',
+                              children: [
+                                _buildDetailRowNumeric(theme, 'Stock Actual', product.inventoryQty),
+                                _buildDetailRowNumeric(theme, 'Stock Mínimo', product.minStockLevel),
+                                _buildDetailRowNumeric(theme, 'Stock Máximo', product.maxStockLevel ?? 0),
+                                if (product.warehouseLocation != null)
+                                  _buildDetailRow(theme, 'Ubicación', product.warehouseLocation!),
+                              ],
+                            ),
+                          )
+                        else
+                          const Expanded(child: SizedBox()), // Empty space for services
                       ],
                     )
                   else ...[
@@ -1200,18 +1214,21 @@ class _ProductListPageState extends State<ProductListPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
-                    _buildDetailSection(
-                      theme,
-                      title: 'Inventario',
-                      children: [
-                        _buildDetailRowNumeric(theme, 'Stock Actual', product.inventoryQty),
-                        _buildDetailRowNumeric(theme, 'Stock Mínimo', product.minStockLevel),
-                        _buildDetailRowNumeric(theme, 'Stock Máximo', product.maxStockLevel ?? 0),
-                        if (product.warehouseLocation != null)
-                          _buildDetailRow(theme, 'Ubicación', product.warehouseLocation!),
-                      ],
-                    ),
+                    // Only show inventory section for products, not services
+                    if (!product.isService) ...[
+                      const SizedBox(height: 24),
+                      _buildDetailSection(
+                        theme,
+                        title: 'Inventario',
+                        children: [
+                          _buildDetailRowNumeric(theme, 'Stock Actual', product.inventoryQty),
+                          _buildDetailRowNumeric(theme, 'Stock Mínimo', product.minStockLevel),
+                          _buildDetailRowNumeric(theme, 'Stock Máximo', product.maxStockLevel ?? 0),
+                          if (product.warehouseLocation != null)
+                            _buildDetailRow(theme, 'Ubicación', product.warehouseLocation!),
+                        ],
+                      ),
+                    ],
                   ],
                   const SizedBox(height: 24),
                   // Product info section
@@ -1576,16 +1593,26 @@ class _ProductListPageState extends State<ProductListPage> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(
-                            'Stock ${product.inventoryQty}',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          Text(
-                            _stockStatusLabel(product),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
+                          // Hide stock for services
+                          if (!product.isService) ...[
+                            Text(
+                              'Stock ${product.inventoryQty}',
+                              style: theme.textTheme.bodyMedium,
                             ),
-                          ),
+                            Text(
+                              _stockStatusLabel(product),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ] else
+                            Text(
+                              'Servicio',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                         ],
                       ),
                     ],

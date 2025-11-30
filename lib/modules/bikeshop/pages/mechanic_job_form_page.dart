@@ -13,6 +13,8 @@ import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
+import '../../../shared/widgets/smart_product_field.dart';
+import '../../../shared/widgets/line_row_wrapper.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/whatsapp_service.dart';
@@ -420,6 +422,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     });
   }
 
+  void _addEmptyPartLine() {
+    // Add an empty line for the user to fill in
+    setState(() {
+      _partItems.add(_JobPartItem(
+        product: null,
+        name: '',
+        isCatalogProduct: false,
+        quantity: 1,
+        unitPrice: 0,
+        notes: null,
+      ));
+    });
+  }
+
   void _addServiceItem() {
     showDialog(
           context: context,
@@ -738,7 +754,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ),
         );
         // Pop back and force refresh by passing true
-        context.pop(true); // Signal that data changed
+        if (context.canPop()) {
+          context.pop(true); // Signal that data changed
+        } else {
+          // Navigate to pegas list if we can't pop
+          context.go('/taller/pegas');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -1933,275 +1954,174 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 );
               },
             ),
-            const SizedBox(height: 12),
-            // Add service button
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: _showAddItemPicker,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Agregar ítem'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-            ),
           ],
     );
   }
 
+  /// Builds a part row using the universal LineRowWrapper.
+  /// Provides hover-based reorder arrows and consistent styling.
   Widget _buildPartRow(ThemeData theme, int index, _JobPartItem item, int itemIndex) {
-    final isAdHoc = !item.isCatalogProduct;
-    
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+    return LineRowWrapper(
+      key: ValueKey('part_${item.hashCode}_$index'),
+      index: index,
+      canMoveUp: itemIndex > 0,
+      canMoveDown: itemIndex < _partItems.length - 1,
+      onMoveUp: () {
+        if (itemIndex > 0) {
+          setState(() {
+            final temp = _partItems[itemIndex];
+            _partItems[itemIndex] = _partItems[itemIndex - 1];
+            _partItems[itemIndex - 1] = temp;
+          });
+        }
+      },
+      onMoveDown: () {
+        if (itemIndex < _partItems.length - 1) {
+          setState(() {
+            final temp = _partItems[itemIndex];
+            _partItems[itemIndex] = _partItems[itemIndex + 1];
+            _partItems[itemIndex + 1] = temp;
+          });
+        }
+      },
+      onRemove: () => setState(() => _partItems.removeAt(itemIndex)),
+      canEdit: true,
+      indexColumnWidth: _colIndexWidth,
+      actionsColumnWidth: _colActionsWidth,
+      showDeleteButton: true,
+      columns: [
+        // Product details column - uses SmartProductField for consistent behavior
+        LineColumn(
+          expanded: true,
+          minWidth: 250,
+          padding: const EdgeInsets.all(12),
+          child: SmartProductField(
+            key: ValueKey('smart_product_${item.hashCode}'),
+            initialData: item.product != null || item.name.isNotEmpty
+                ? ProductFieldData(
+                    product: item.product,
+                    productName: item.displayName.isNotEmpty ? item.displayName : null,
+                    productSku: item.sku,
+                    isCatalogProduct: item.isCatalogProduct,
+                    description: item.notes,
+                  )
+                : null,
+            enabled: true,
+            showCost: true, // Pegas use cost, not price
+            allowCustomItems: true,
+            autoFocus: item.product == null && item.name.isEmpty, // Auto-focus empty rows
+            onAutoAddLine: () {
+              // Auto-add new line when product is selected
+              _addEmptyPartLine();
+            },
+            onProductChanged: (selection) {
+              setState(() {
+                if (selection == null) {
+                  // Product cleared - reset the item
+                  _partItems[itemIndex] = _JobPartItem(
+                    product: null,
+                    name: '',
+                    isCatalogProduct: false,
+                    quantity: 1,
+                    unitPrice: 0,
+                  );
+                } else {
+                  // Product selected or updated
+                  _partItems[itemIndex] = _JobPartItem(
+                    product: selection.product,
+                    name: selection.productName ?? '',
+                    isCatalogProduct: selection.isCatalogProduct,
+                    quantity: item.quantity,
+                    unitPrice: selection.product?.cost ?? item.unitPrice,
+                    notes: selection.description,
+                  );
+                }
+              });
+            },
+          ),
         ),
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // # column
-            Container(
-              width: _colIndexWidth,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                ),
+        
+        // Cantidad column
+        LineColumn(
+          width: _colQuantityWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Center(
+            child: TextFormField(
+              initialValue: item.quantity.toString(),
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium,
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                border: OutlineInputBorder(),
               ),
-              child: Center(
-                child: Text(
-                  '$index',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              onChanged: (value) {
+                final newQty = int.tryParse(value) ?? 1;
+                setState(() {
+                  _partItems[itemIndex] = _JobPartItem(
+                    product: item.product,
+                    name: item.name,
+                    isCatalogProduct: item.isCatalogProduct,
+                    quantity: newQty,
+                    unitPrice: item.unitPrice,
+                    notes: item.notes,
+                  );
+                });
+              },
             ),
-            
-            // Product details column (MATCHING SALES INVOICE)
-            Expanded(
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 250),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Product card (MATCHING SALES INVOICE)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Product image
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceVariant.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: theme.colorScheme.outline.withOpacity(0.15)),
-                          ),
-                          child: item.product?.imageUrl != null && item.product!.imageUrl!.isNotEmpty
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: Image.network(
-                                    item.product!.imageUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Icon(
-                                      Icons.inventory_2_outlined,
-                                      size: 24,
-                                      color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
-                                    ),
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.inventory_2_outlined,
-                                  size: 24,
-                                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
-                                ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Product details
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      item.displayName,
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 14,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  // 3-dot menu for catalog products
-                                  if (!isAdHoc && item.product != null)
-                                    PopupMenuButton<String>(
-                                      icon: Icon(Icons.more_horiz, size: 20, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6)),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(minWidth: 200),
-                                      onSelected: (value) {
-                                        if (value == 'edit') {
-                                          // TODO: Edit product dialog
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Edit product - TODO')),
-                                          );
-                                        }
-                                      },
-                                      itemBuilder: (context) => [
-                                        PopupMenuItem(
-                                          value: 'edit',
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.edit_outlined, size: 18, color: theme.colorScheme.primary),
-                                              const SizedBox(width: 12),
-                                              const Text('Editar artículo'),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  // X button
-                                  InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        _partItems.removeAt(itemIndex);
-                                      });
-                                    },
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      child: Icon(Icons.close, size: 16, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6)),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (!isAdHoc && item.sku != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    'SKU (Código de artículo): ${item.sku}',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    // Description field (MATCHING SALES INVOICE)
-                    const SizedBox(height: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: TextField(
-                        controller: TextEditingController(text: item.notes ?? ''),
-                        decoration: InputDecoration(
-                          hintText: 'Agregue una descripción a su artículo',
-                          hintStyle: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
-                            fontSize: 13,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        ),
-                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 13),
-                        maxLines: 3,
-                        minLines: 3,
-                        onChanged: (value) {
-                          item.notes = value;
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            
-            // Cantidad column
-            Container(
-              width: _colQuantityWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  item.quantity.toString(),
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ),
-            ),
-            
-            // Precio column - EDITABLE
-            Container(
-              width: _colPriceWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                ),
-              ),
-              child: TextFormField(
-                initialValue: item.unitPrice.toStringAsFixed(0),
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  border: OutlineInputBorder(),
-                  prefixText: '\$ ',
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-                ],
-                onChanged: (value) {
-                  final newPrice = double.tryParse(value) ?? 0;
-                  setState(() {
-                    item.unitPrice = newPrice;
-                  });
-                },
-              ),
-            ),
-            
-            // Total column
-            Container(
-              width: _colTotalWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Text(
-                NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.quantity * item.unitPrice),
-                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                textAlign: TextAlign.right,
-              ),
-            ),
-            
-            // Actions column (empty - X button is in product card)
-            SizedBox(width: _colActionsWidth),
-          ],
+          ),
         ),
-      ),
+        
+        // Precio column - EDITABLE
+        LineColumn(
+          width: _colPriceWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: TextFormField(
+            initialValue: item.unitPrice.toStringAsFixed(0),
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              border: OutlineInputBorder(),
+              prefixText: '\$ ',
+            ),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+            ],
+            onChanged: (value) {
+              final newPrice = double.tryParse(value) ?? 0;
+              setState(() {
+                _partItems[itemIndex] = _JobPartItem(
+                  product: item.product,
+                  name: item.name,
+                  isCatalogProduct: item.isCatalogProduct,
+                  quantity: item.quantity,
+                  unitPrice: newPrice,
+                  notes: item.notes,
+                );
+              });
+            },
+          ),
+        ),
+        
+        // Total column (no right border - last content column)
+        LineColumn(
+          width: _colTotalWidth,
+          showRightBorder: false,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Text(
+            NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.quantity * item.unitPrice),
+            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
     );
   }
 
@@ -2404,208 +2324,174 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     );
   }
 
+  /// Builds a service/labor row using the universal LineRowWrapper.
+  /// Provides hover-based reorder arrows and consistent styling.
   Widget _buildServiceRow(ThemeData theme, int index, _JobServiceItem item, int itemIndex) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-        ),
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // # column
-            Container(
-              width: _colIndexWidth,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  '$index',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-            
-            // Description column
-            Expanded(
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 250),
-                padding: const EdgeInsets.all(12),
+    return LineRowWrapper(
+      key: ValueKey('service_${item.hashCode}_$index'),
+      index: index,
+      canMoveUp: itemIndex > 0,
+      canMoveDown: itemIndex < _serviceItems.length - 1,
+      onMoveUp: () {
+        if (itemIndex > 0) {
+          setState(() {
+            final temp = _serviceItems[itemIndex];
+            _serviceItems[itemIndex] = _serviceItems[itemIndex - 1];
+            _serviceItems[itemIndex - 1] = temp;
+          });
+        }
+      },
+      onMoveDown: () {
+        if (itemIndex < _serviceItems.length - 1) {
+          setState(() {
+            final temp = _serviceItems[itemIndex];
+            _serviceItems[itemIndex] = _serviceItems[itemIndex + 1];
+            _serviceItems[itemIndex + 1] = temp;
+          });
+        }
+      },
+      onRemove: () => setState(() => _serviceItems.removeAt(itemIndex)),
+      canEdit: true,
+      indexColumnWidth: _colIndexWidth,
+      actionsColumnWidth: _colActionsWidth,
+      columns: [
+        // Description column
+        LineColumn(
+          expanded: true,
+          minWidth: 250,
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Service icon/image
+              Container(
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  border: Border(
-                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.2),
                   ),
                 ),
-                child: Row(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: item.serviceProduct?.imageUrl != null
+                      ? Image.network(
+                          item.serviceProduct!.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(
+                            Icons.work_outline,
+                            color: Colors.blue,
+                            size: 24,
+                          ),
+                        )
+                      : Icon(
+                          Icons.work_outline,
+                          color: Colors.blue,
+                          size: 24,
+                        ),
+                ),
+              ),
+              
+              const SizedBox(width: 12),
+              
+              // Service name + description
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Service icon/image
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: theme.colorScheme.outline.withOpacity(0.2),
+                    Text(
+                      item.displayName,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    
+                    // Custom description only
+                    if (item.hasCustomDescription)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          item.description,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(5),
-                        child: item.serviceProduct?.imageUrl != null
-                            ? Image.network(
-                                item.serviceProduct!.imageUrl!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Icon(
-                                  Icons.work_outline,
-                                  color: Colors.blue,
-                                  size: 24,
-                                ),
-                              )
-                            : Icon(
-                                Icons.work_outline,
-                                color: Colors.blue,
-                                size: 24,
-                              ),
-                      ),
-                    ),
-                    
-                    const SizedBox(width: 12),
-                    
-                    // Service name + description
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.displayName,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          
-                          // Custom description only
-                          if (item.hasCustomDescription)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                item.description,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontSize: 11,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
-            ),
-            
-            // Quantity column (represents hours for services)
-            Container(
-              width: _colQuantityWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  item.hours % 1 == 0
-                      ? item.hours.toStringAsFixed(0)
-                      : item.hours.toStringAsFixed(2),
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ),
-            ),
-            
-            // Unit Price column - EDITABLE
-            Container(
-              width: _colPriceWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                ),
-              ),
-              child: TextFormField(
-                initialValue: item.hourlyRate.toStringAsFixed(0),
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-                decoration: InputDecoration(
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide: BorderSide(color: theme.colorScheme.outline.withOpacity(0.3)),
-                  ),
-                  prefixText: '\$ ',
-                  prefixStyle: theme.textTheme.bodyMedium,
-                ),
-                onChanged: (value) {
-                  final newPrice = double.tryParse(value) ?? 0;
-                  setState(() {
-                    _serviceItems[itemIndex] = _JobServiceItem(
-                      serviceProduct: item.serviceProduct,
-                      description: item.description,
-                      hours: item.hours,
-                      hourlyRate: newPrice,
-                      date: item.date,
-                    );
-                  });
-                },
-              ),
-            ),
-            
-            // Total column
-            Container(
-              width: _colTotalWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Text(
-                NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.total),
-                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                textAlign: TextAlign.right,
-              ),
-            ),
-            
-            // Actions column
-            SizedBox(
-              width: _colActionsWidth,
-              child: Center(
-                child: IconButton(
-                  icon: Icon(Icons.delete_outline, size: 20, color: theme.colorScheme.error),
-                  onPressed: () {
-                    setState(() {
-                      _serviceItems.removeAt(itemIndex);
-                    });
-                  },
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+        
+        // Quantity column (represents hours for services)
+        LineColumn(
+          width: _colQuantityWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Center(
+            child: Text(
+              item.hours % 1 == 0
+                  ? item.hours.toStringAsFixed(0)
+                  : item.hours.toStringAsFixed(2),
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+        ),
+        
+        // Unit Price column - EDITABLE
+        LineColumn(
+          width: _colPriceWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: TextFormField(
+            initialValue: item.hourlyRate.toStringAsFixed(0),
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(4),
+                borderSide: BorderSide(color: theme.colorScheme.outline.withOpacity(0.3)),
+              ),
+              prefixText: '\$ ',
+              prefixStyle: theme.textTheme.bodyMedium,
+            ),
+            onChanged: (value) {
+              final newPrice = double.tryParse(value) ?? 0;
+              setState(() {
+                _serviceItems[itemIndex] = _JobServiceItem(
+                  serviceProduct: item.serviceProduct,
+                  description: item.description,
+                  hours: item.hours,
+                  hourlyRate: newPrice,
+                  date: item.date,
+                );
+              });
+            },
+          ),
+        ),
+        
+        // Total column (no right border - last content column)
+        LineColumn(
+          width: _colTotalWidth,
+          showRightBorder: false,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Text(
+            NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(item.total),
+            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
     );
   }
 

@@ -355,14 +355,20 @@ class Product {
 
   double get marginAmount => price - cost;
 
-  bool get isLowStock => trackStock && stockQuantity <= minStockLevel;
+  /// Returns true if this product is a service (doesn't track inventory)
+  bool get isService => productType == ProductType.service;
+  
+  /// Returns true if this product tracks inventory
+  bool get tracksInventory => !isService && trackStock;
 
-  bool get isOverStock => trackStock && stockQuantity >= maxStockLevel;
+  bool get isLowStock => tracksInventory && stockQuantity <= minStockLevel;
 
-  bool get isOutOfStock => trackStock && stockQuantity <= 0;
+  bool get isOverStock => tracksInventory && stockQuantity >= maxStockLevel;
+
+  bool get isOutOfStock => tracksInventory && stockQuantity <= 0;
 
   StockStatus get stockStatus {
-    if (!trackStock) return StockStatus.notTracked;
+    if (isService || !trackStock) return StockStatus.notTracked;
     if (stockQuantity <= 0) return StockStatus.outOfStock;
     if (stockQuantity <= minStockLevel) return StockStatus.lowStock;
     if (stockQuantity >= maxStockLevel) return StockStatus.overStock;

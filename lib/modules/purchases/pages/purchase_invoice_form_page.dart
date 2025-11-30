@@ -9,14 +9,16 @@ import '../../../shared/models/product.dart';
 import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart';
+import '../../../shared/services/number_generation_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/invoice_parser_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
-import '../../../shared/widgets/product_autocomplete_field.dart';
+import '../../../shared/widgets/smart_product_field.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
+import '../../../shared/widgets/line_row_wrapper.dart';
 import '../../../shared/widgets/ocr_upload_widget.dart';
 import '../../inventory/pages/product_form_page.dart';
 import '../models/purchase_invoice.dart';
@@ -76,6 +78,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   bool _isSaving = false;
   bool _isUpdatingStatus = false;
   bool _isEditing = false; // Edit mode toggle (like sales invoice)
+  
+  /// Payment model: true = Prepayment (pay before receive), false = Standard (receive before pay)
+  /// Defaults to true (prepayment) for new invoices
+  late bool _isPrepaymentModel;
 
   List<shared_supplier.Supplier> _supplierCache = const [];
   List<Product> _productCache = const [];
@@ -87,8 +93,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   @override
   void initState() {
     super.initState();
-    print('🔍 DEBUG Form: isPrepayment = ${widget.isPrepayment}');
     _dueDate = _issueDate.add(const Duration(days: 30));
+    
+    // Initialize payment model:
+    // - New invoice: default to prepayment (true) unless widget says otherwise
+    // - Existing invoice: will be loaded from database in _initialize()
+    _isPrepaymentModel = widget.isPrepayment || widget.invoiceId == null; // Default to prepayment for new
     
     // Set initial editing state:
     // - New invoice (invoiceId == null) → editing mode
@@ -435,7 +445,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           _applyInvoice(invoice);
         }
       } else {
-        _invoiceNumberController.text = _buildSuggestedNumber();
+        // Generate invoice number on load (same pattern as sales invoices)
+        _invoiceNumberController.text = await _generatePurchaseInvoiceNumber();
         
         // Check for pending data from smart purchase list (via service)
         final pendingData = _purchaseService.consumePendingSmartPurchaseData();
@@ -538,7 +549,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           backgroundColor: Colors.red,
         ),
       );
-      _invoiceNumberController.text = _buildSuggestedNumber();
+      _invoiceNumberController.text = await _generatePurchaseInvoiceNumber();
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -566,6 +577,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     _dueDate = invoice.dueDate ?? invoice.date.add(const Duration(days: 30));
     _status = invoice.status;
     _taxTreatment = invoice.taxTreatment;
+    _isPrepaymentModel = invoice.prepaymentModel; // Load payment model from invoice
 
     _selectedSupplier = _supplierCache.firstWhere(
       (supplier) => supplier.id == invoice.supplierId,
@@ -622,11 +634,23 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   String _buildSuggestedNumber() {
+    // Deprecated: Use NumberGenerationService.nextPurchaseInvoiceNumber() instead
+    // This fallback should rarely be used
     final now = DateTime.now();
     final datePortion =
         '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final timePortion = now.millisecondsSinceEpoch.toString().substring(7);
     return 'FC-$datePortion-$timePortion';
+  }
+
+  Future<String> _generatePurchaseInvoiceNumber() async {
+    try {
+      final numberService = NumberGenerationService();
+      return await numberService.nextPurchaseInvoiceNumber();
+    } catch (e) {
+      debugPrint('Error generating purchase invoice number: $e');
+      return _buildSuggestedNumber(); // Fallback to old method
+    }
   }
 
   double get _subtotal => _lineEntries.fold<double>(
@@ -804,12 +828,17 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       throw Exception('No tenant found. Please log in again.');
     }
 
+    // Generate invoice number NOW (only when actually saving)
+    String invoiceNumber = _invoiceNumberController.text.trim();
+    if (invoiceNumber.isEmpty || invoiceNumber == 'FC-NUEVO') {
+      invoiceNumber = await _generatePurchaseInvoiceNumber();
+      _invoiceNumberController.text = invoiceNumber; // Update UI
+    }
+    
     final invoice = PurchaseInvoice(
       id: _loadedInvoice?.id,
       tenantId: tenantId,
-      invoiceNumber: _invoiceNumberController.text.trim().isEmpty
-          ? _buildSuggestedNumber()
-          : _invoiceNumberController.text.trim(),
+      invoiceNumber: invoiceNumber,
       supplierId: _selectedSupplier!.id,
       supplierName: _selectedSupplier!.name,
       supplierRut: _selectedSupplier!.rut,
@@ -828,14 +857,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       taxTreatment: _taxTreatment,
       netAmount: _netAmount,
       items: items,
-      // Set prepayment model when creating new invoice
-      prepaymentModel: _loadedInvoice != null
-          ? _loadedInvoice!.prepaymentModel
-          : widget.isPrepayment,
+      // Use the form's payment model state
+      prepaymentModel: _isPrepaymentModel,
     );
 
-    print('🔍 DEBUG Save: prepaymentModel = ${invoice.prepaymentModel}');
-    print('🔍 DEBUG Save: invoice toJson = ${invoice.toJson()}');
+    debugPrint('🔍 Save: prepaymentModel = ${invoice.prepaymentModel}');
 
     setState(() => _isSaving = true);
 
@@ -1113,7 +1139,25 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     _recalculateTotals();
   }
   
-  void _addEmptyLine() {
+  void _moveLineUp(_PurchaseLineEntry entry) {
+    final index = _lineEntries.indexOf(entry);
+    if (index <= 0) return;
+    setState(() {
+      _lineEntries.removeAt(index);
+      _lineEntries.insert(index - 1, entry);
+    });
+  }
+  
+  void _moveLineDown(_PurchaseLineEntry entry) {
+    final index = _lineEntries.indexOf(entry);
+    if (index < 0 || index >= _lineEntries.length - 1) return;
+    setState(() {
+      _lineEntries.removeAt(index);
+      _lineEntries.insert(index + 1, entry);
+    });
+  }
+  
+  void _addEmptyLine({bool shouldAutoFocus = false}) {
     if (!_canEditFields) return;
     
     final entry = _PurchaseLineEntry(
@@ -1126,12 +1170,24 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         discount: 0,
         ivaRate: _ivaRate,
       ),
+      shouldAutoFocus: shouldAutoFocus,
     );
     entry.attachListeners(_recalculateTotals);
 
     setState(() {
       _lineEntries.add(entry);
     });
+  }
+  
+  void _autoAddEmptyLineIfNeeded() {
+    // Check if the last line has a product selected
+    if (_lineEntries.isEmpty) return;
+    
+    final lastEntry = _lineEntries.last;
+    if (lastEntry.line.productName?.isNotEmpty ?? false) {
+      // Last line is filled, add a new empty line with auto-focus
+      _addEmptyLine(shouldAutoFocus: true);
+    }
   }
 
   @override
@@ -1172,8 +1228,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     final actionButtons = <Widget>[];
     
     if (!widget.readOnly && widget.invoiceId != null) {
-      // Get prepayment model from loaded invoice
-      final isPrepayment = _loadedInvoice?.prepaymentModel ?? widget.isPrepayment;
+      // Use form's payment model state
+      final isPrepayment = _isPrepaymentModel;
       
       if (_status == PurchaseInvoiceStatus.draft) {
         // Draft: Can edit (if not editing), send to supplier, or delete
@@ -1293,7 +1349,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         );
       } else if (_status == PurchaseInvoiceStatus.paid) {
         // Paid: Can undo payment or mark as received (prepayment only)
-        final isPrepayment = _loadedInvoice?.prepaymentModel ?? widget.isPrepayment;
+        final isPrepayment = _isPrepaymentModel;
         
         actionButtons.add(
           OutlinedButton.icon(
@@ -1380,7 +1436,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  widget.isPrepayment
+                  _isPrepaymentModel
                       ? 'Prepago: pagar antes de recibir mercancía'
                       : 'Flujo estándar: recibir y luego pagar',
                   style: theme.textTheme.bodyMedium?.copyWith(
@@ -1476,6 +1532,65 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
+  /// Build payment model toggle (Prepayment vs Standard)
+  Widget _buildPaymentModelToggle(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.swap_horiz, size: 20, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Modelo de pago',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                value: true,
+                label: Text('Prepago'),
+                icon: Icon(Icons.payment),
+              ),
+              ButtonSegment(
+                value: false,
+                label: Text('Estándar'),
+                icon: Icon(Icons.local_shipping),
+              ),
+            ],
+            selected: {_isPrepaymentModel},
+            onSelectionChanged: (selection) {
+              setState(() {
+                _isPrepaymentModel = selection.first;
+              });
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _isPrepaymentModel
+                ? 'Pagar primero, recibir después (importaciones, transferencias)'
+                : 'Recibir primero, pagar después (proveedores locales)',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildForm() {
     final theme = Theme.of(context);
     return LayoutBuilder(
@@ -1491,6 +1606,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   child: SingleChildScrollView(
                     child: Column(
                       children: [
+                        // Payment model toggle (only for new invoices or draft)
+                        if (_canEditFields) _buildPaymentModelToggle(theme),
+                        if (_canEditFields) const SizedBox(height: 16),
                         _buildSectionCard(
                           theme,
                           icon: Icons.store_outlined,
@@ -1542,6 +1660,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
+                // Payment model toggle (only for new invoices or draft)
+                if (_canEditFields) _buildPaymentModelToggle(theme),
+                if (_canEditFields) const SizedBox(height: 16),
                 _buildSectionCard(
                   theme,
                   icon: Icons.store_outlined,
@@ -1892,14 +2013,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           // Line items
           Column(
             children: [
-              // Existing line items
+              // Existing line items - using same pattern as sales invoice
               if (_lineEntries.isNotEmpty)
-                ..._lineEntries.map((lineEntry) => 
-                  _PurchaseLineRow(
-                    entry: lineEntry,
-                    onRemove: () => _removeLine(lineEntry),
-                    canEdit: _canEditFields,
-                  )
+                ..._lineEntries.asMap().entries.map((entry) => 
+                  _buildCompactLineRow(theme, entry.key + 1, entry.value)
                 ),
               
               // Empty state
@@ -1921,6 +2038,127 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           ),
         );
       },
+    );
+  }
+  
+  /// Builds a single line row using the universal LineRowWrapper.
+  /// Hover state is managed locally inside the wrapper, preventing SmartProductField rebuilds.
+  Widget _buildCompactLineRow(ThemeData theme, int index, _PurchaseLineEntry entry) {
+    final line = entry.line;
+    
+    return LineRowWrapper(
+      key: ValueKey('line_${entry.hashCode}_$index'),
+      index: index,
+      canMoveUp: index > 1 && _canEditFields,
+      canMoveDown: index < _lineEntries.length && _canEditFields,
+      onMoveUp: () => _moveLineUp(entry),
+      onMoveDown: () => _moveLineDown(entry),
+      onRemove: () => _removeLine(entry),
+      canEdit: _canEditFields,
+      indexColumnWidth: _colIndexWidth,
+      actionsColumnWidth: _colActionsWidth,
+      columns: [
+        // Product details column - uses CACHED widget from entry
+        LineColumn(
+          expanded: true,
+          minWidth: 250,
+          padding: const EdgeInsets.all(12),
+          child: entry.buildSmartProductField(
+            context,
+            theme,
+            _canEditFields,
+            () {}, // No setState needed - hover is local to wrapper
+            () => _autoAddEmptyLineIfNeeded(),
+          ),
+        ),
+        
+        // Cantidad column
+        LineColumn(
+          width: _colQuantityWidth,
+          child: _canEditFields
+              ? TextField(
+                  controller: entry.quantityController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    isDense: true,
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                )
+              : Center(
+                  child: Text(
+                    entry.quantityController.text,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+        ),
+        
+        // Precio column
+        LineColumn(
+          width: _colPriceWidth,
+          child: _canEditFields
+              ? TextField(
+                  controller: entry.unitCostController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    isDense: true,
+                    prefixText: '\$',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.right,
+                  style: theme.textTheme.bodyMedium,
+                )
+              : Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    ChileanUtils.formatCurrency(line.unitCost),
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+        ),
+        
+        // Descuento column
+        LineColumn(
+          width: _colDiscountWidth,
+          child: _canEditFields
+              ? TextField(
+                  controller: entry.discountController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    isDense: true,
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                )
+              : Center(
+                  child: Text(
+                    entry.discountController.text,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+        ),
+        
+        // Importe/Total column (no right border - last content column)
+        LineColumn(
+          width: _colTotalWidth,
+          showRightBorder: false,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              ChileanUtils.formatCurrency(line.netAmountClamped),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -2003,7 +2241,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 }
 
 class _PurchaseLineEntry {
-  _PurchaseLineEntry({required PurchaseInvoiceItem line, this.product})
+  _PurchaseLineEntry({required PurchaseInvoiceItem line, this.shouldAutoFocus = false})
       : line = line,
         quantityController =
             TextEditingController(text: line.quantity.toStringAsFixed(0)),
@@ -2018,6 +2256,8 @@ class _PurchaseLineEntry {
 
   PurchaseInvoiceItem line;
   Product? product; // Store full product for image access
+  /// Whether this line's product field should auto-focus (for newly added lines)
+  bool shouldAutoFocus;
   final TextEditingController quantityController;
   final TextEditingController unitCostController;
   final TextEditingController discountController;
@@ -2068,498 +2308,83 @@ class _PurchaseLineEntry {
     descriptionController.dispose();
     productNameFocusNode.dispose();
   }
-}
-
-class _PurchaseLineRow extends StatefulWidget {
-  final _PurchaseLineEntry entry;
-  final VoidCallback onRemove;
-  final bool canEdit;
-
-  const _PurchaseLineRow({
-    required this.entry,
-    required this.onRemove,
-    required this.canEdit,
-  });
-
-  @override
-  State<_PurchaseLineRow> createState() => _PurchaseLineRowState();
-}
-
-class _PurchaseLineRowState extends State<_PurchaseLineRow> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final line = widget.entry.line;
+  
+  // CRITICAL: Cache the SmartProductField widget to prevent rebuilds on parent hover state changes
+  // This is the fix for flickering and disappearing dropdown when mouse moves
+  Widget? _cachedSmartProductField;
+  bool? _cachedCanEdit;
+  
+  /// Build the SmartProductField for this line entry
+  /// This method lives on the entry (not the row widget state) to prevent
+  /// row hover state changes from rebuilding the field
+  Widget buildSmartProductField(
+    BuildContext context,
+    ThemeData theme,
+    bool canEdit,
+    VoidCallback onUpdate,
+    VoidCallback onAutoAdd,
+  ) {
+    // Return cached widget if nothing meaningful changed
+    // Only rebuild if canEdit changes (not on hover which doesn't change canEdit)
+    if (_cachedSmartProductField != null && _cachedCanEdit == canEdit) {
+      return _cachedSmartProductField!;
+    }
     
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: Container(
-        decoration: BoxDecoration(
-          color: _isHovered ? theme.colorScheme.surfaceVariant.withOpacity(0.3) : null,
-          border: Border(
-            bottom: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-          ),
-        ),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // # column (placeholder, no reordering for now)
-              Container(
-                width: 40.0,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  border: Border(
-                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                  ),
-                ),
-                child: Center(
-                  child: Icon(
-                    Icons.drag_indicator,
-                    size: 18,
-                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
-                  ),
-                ),
-              ),
-      
-              // Product details column
-              Expanded(
-                child: Container(
-                  constraints: const BoxConstraints(minWidth: 250),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Smart product field - shows product card OR search field
-                      Expanded(
-                        child: _buildSmartProductField(line, theme),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              
-              // Quantity column
-              Container(
-                width: 120.0,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                  ),
-                ),
-                child: widget.canEdit
-                    ? TextField(
-                        controller: widget.entry.quantityController,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          isDense: true,
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium,
-                      )
-                    : Center(
-                        child: Text(
-                          widget.entry.quantityController.text,
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ),
-              ),
-              
-              // Price column
-              Container(
-                width: 130.0,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                  ),
-                ),
-                child: widget.canEdit
-                    ? TextField(
-                        controller: widget.entry.unitCostController,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          isDense: true,
-                          prefixText: '\$',
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        textAlign: TextAlign.right,
-                        style: theme.textTheme.bodyMedium,
-                      )
-                    : Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          ChileanUtils.formatCurrency(line.unitCost),
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ),
-              ),
-              
-              // Discount column
-              Container(
-                width: 130.0,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                  ),
-                ),
-                child: widget.canEdit
-                    ? TextField(
-                        controller: widget.entry.discountController,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          isDense: true,
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium,
-                      )
-                    : Center(
-                        child: Text(
-                          widget.entry.discountController.text,
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ),
-              ),
-              
-              // Total column
-              Container(
-                width: 130.0,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    ChileanUtils.formatCurrency(line.netAmountClamped),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              
-              // Actions column
-              SizedBox(
-                width: 48.0,
-                child: widget.canEdit
-                    ? IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 18),
-                        color: Colors.red,
-                        onPressed: widget.onRemove,
-                        tooltip: 'Eliminar línea',
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ),
-        ),
+    _cachedCanEdit = canEdit;
+    _cachedSmartProductField = SmartProductField(
+      key: ValueKey('product_${hashCode}'),
+      initialData: ProductFieldData(
+        product: product,
+        productName: line.productName?.isEmpty ?? true ? null : line.productName,
+        productSku: line.productSku?.isEmpty ?? true ? null : line.productSku,
+        isCatalogProduct: line.productId.isNotEmpty,
+        description: descriptionController.text,
       ),
-    );
-  }
-
-  // Smart product field - Zoho-style: shows product card when filled, search when empty
-  Widget _buildSmartProductField(PurchaseInvoiceItem line, ThemeData theme) {
-    // If can't edit, just show as text
-    if (!widget.canEdit) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            line.productName ?? 'Producto',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (line.productSku != null && line.productSku!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                'SKU: ${line.productSku}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontSize: 11,
-                ),
-              ),
-            ),
-        ],
-      );
-    }
-    
-    final hasProduct = (line.productName?.isNotEmpty ?? false);
-    
-    // If product is set, show Zoho-style card with X button
-    if (hasProduct) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Product row with image, name, and X button
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Product image (48x48 like Zoho, larger than before)
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceVariant.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: theme.colorScheme.outline.withOpacity(0.15),
-                  ),
-                ),
-                child: widget.entry.product?.imageUrl != null && widget.entry.product!.imageUrl!.isNotEmpty
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: Image.network(
-                          widget.entry.product!.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Icon(
-                              Icons.inventory_2_outlined,
-                              size: 24,
-                              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
-                            );
-                          },
-                        ),
-                      )
-                    : Icon(
-                        Icons.inventory_2_outlined,
-                        size: 24,
-                        color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
-                      ),
-              ),
-              const SizedBox(width: 12),
-              // Product details column
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Product name with menu and X button
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            line.productName!,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                              fontSize: 14,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        // 3-dot menu button (only for catalog products)
-                        if (widget.entry.product != null)
-                          PopupMenuButton<String>(
-                            icon: Icon(
-                              Icons.more_horiz,
-                              size: 20,
-                              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
-                            ),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 200),
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                _showEditProductDialog(widget.entry.product!);
-                              } else if (value == 'details') {
-                                _showProductDetailsPane(widget.entry.product!);
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.edit_outlined,
-                                      size: 18,
-                                      color: theme.colorScheme.primary,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    const Text('Editar artículo'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'details',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.inventory_2_outlined,
-                                      size: 18,
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    const Text('Ver detalles del artículo'),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        // X button
-                        InkWell(
-                          onTap: () {
-                            widget.entry.product = null;
-                            widget.entry.productNameController.clear();
-                            widget.entry.productSkuController.clear();
-                            widget.entry.descriptionController.clear();
-                            widget.entry.line = widget.entry.line.copyWith(
-                              productId: '',
-                              productName: '',
-                              productSku: '',
-                            );
-                            setState(() {});
-                            Future.delayed(const Duration(milliseconds: 100), () {
-                              if (mounted) {
-                                widget.entry.productNameFocusNode.requestFocus();
-                              }
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            child: Icon(
-                              Icons.close,
-                              size: 16,
-                              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    // SKU
-                    if (line.productSku != null && line.productSku!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          'SKU (Código de artículo): ${line.productSku}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          // Description field (like Zoho) - separate box below
-          const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: theme.colorScheme.outline.withOpacity(0.3),
-              ),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: TextField(
-              controller: widget.entry.descriptionController,
-              decoration: InputDecoration(
-                hintText: 'Agregue una descripción a su artículo',
-                hintStyle: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
-                  fontSize: 13,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontSize: 13,
-              ),
-              maxLines: 3,
-              minLines: 3,
-            ),
-          ),
-        ],
-      );
-    }
-    
-    // Empty product - show search field
-    return ProductAutocompleteField(
-      key: ValueKey('product_${widget.entry.hashCode}'),
-      controller: widget.entry.productNameController,
-      focusNode: widget.entry.productNameFocusNode,
-      autoFocus: true, // Auto-focus when field appears
+      enabled: canEdit,
+      showCost: true, // Purchases use cost, not price
       allowCustomItems: true,
-      labelText: null,
-      hintText: 'Buscar producto o escribir nombre...',
-      showCost: true,
-      onProductSelected: (selection) {
-        if (selection.isCatalogProduct && selection.product != null) {
-          // Replace with catalog product
-          widget.entry.product = selection.product; // Store full product for image
-          widget.entry.line = widget.entry.line.copyWith(
-            productId: selection.product!.id,
-            productName: selection.product!.name,
-            productSku: selection.product!.sku,
-            unitCost: selection.product!.cost > 0 ? selection.product!.cost : selection.product!.price,
-          );
-          widget.entry.unitCostController.text = widget.entry.line.unitCost.toStringAsFixed(0);
-          
-          // Auto-fill description from product
-          if (selection.product!.description != null && selection.product!.description!.isNotEmpty) {
-            widget.entry.descriptionController.text = selection.product!.description!;
-          }
-          
-          setState(() {});
-          
-          // Auto-add new empty line after selecting product
-          _autoAddEmptyLineIfNeeded();
-        } else if (!selection.isCatalogProduct) {
-          // Keep as ad-hoc, update name
-          widget.entry.product = null; // Clear product for ad-hoc items
-          widget.entry.line = widget.entry.line.copyWith(
+      autoFocus: shouldAutoFocus,
+      focusNode: productNameFocusNode,
+      descriptionController: descriptionController,
+      onAutoAddLine: onAutoAdd,
+      onEditProduct: (p) => _showEditProductDialog(context, p),
+      onShowProductDetails: (p) => _showProductDetailsPane(context, p, theme),
+      onProductChanged: (selection) {
+        if (selection == null) {
+          // Product cleared
+          product = null;
+          productNameController.clear();
+          productSkuController.clear();
+          descriptionController.clear();
+          line = line.copyWith(
             productId: '',
-            productName: selection.displayText,
-            productSku: null,
+            productName: '',
+            productSku: '',
           );
-          setState(() {});
-          
-          // Auto-add new empty line after entering ad-hoc product
-          _autoAddEmptyLineIfNeeded();
+          onUpdate();
+        } else {
+          // Product selected or description changed
+          product = selection.product;
+          productNameController.text = selection.productName ?? '';
+          productSkuController.text = selection.productSku ?? '';
+          line = line.copyWith(
+            productId: selection.product?.id ?? '',
+            productName: selection.productName ?? '',
+            productSku: selection.productSku,
+            unitCost: selection.price > 0 ? selection.price : line.unitCost,
+          );
+          if (selection.price > 0) {
+            unitCostController.text = selection.price.toStringAsFixed(0);
+          }
+          onUpdate();
         }
       },
     );
-  }
-  
-  void _autoAddEmptyLineIfNeeded() {
-    // Check if this is the last line and it has a product name
-    final parentState = _getParentState();
-    final isLastLine = widget.entry == parentState._lineEntries.last;
-    final hasProduct = widget.entry.line.productName?.isNotEmpty ?? false;
     
-    if (isLastLine && hasProduct) {
-      // Add new empty line automatically
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (mounted) {
-          parentState._addEmptyLine();
-        }
-      });
-    }
+    return _cachedSmartProductField!;
   }
   
-  _PurchaseInvoiceFormPageState _getParentState() {
-    return context.findAncestorStateOfType<_PurchaseInvoiceFormPageState>()!;
-  }
-  
-  void _showEditProductDialog(Product product) {
+  void _showEditProductDialog(BuildContext context, Product product) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -2581,40 +2406,37 @@ class _PurchaseLineRowState extends State<_PurchaseLineRow> {
     );
   }
   
-  void _showProductDetailsPane(Product product) {
+  void _showProductDetailsPane(BuildContext context, Product product, ThemeData theme) {
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Product Details',
       barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (context, anim1, anim2) {
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, animation, secondaryAnimation) {
         return Align(
           alignment: Alignment.centerRight,
           child: Material(
-            elevation: 8,
             child: Container(
               width: 400,
-              height: MediaQuery.of(context).size.height,
-              color: Theme.of(context).scaffoldBackgroundColor,
+              height: double.infinity,
+              color: theme.scaffoldBackgroundColor,
               child: Column(
                 children: [
-                  // Header with close button
+                  // Header
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       border: Border(
-                        bottom: BorderSide(color: Theme.of(context).dividerColor),
+                        bottom: BorderSide(color: theme.dividerColor),
                       ),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.inventory_2_outlined, color: Theme.of(context).colorScheme.primary),
-                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Detalles del artículo',
-                            style: Theme.of(context).textTheme.titleLarge,
+                            'Detalles del Producto',
+                            style: theme.textTheme.titleMedium,
                           ),
                         ),
                         IconButton(
@@ -2624,61 +2446,33 @@ class _PurchaseLineRowState extends State<_PurchaseLineRow> {
                       ],
                     ),
                   ),
-                  // Scrollable content
+                  // Content
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Product image
-                          if (product.imageUrl != null && product.imageUrl!.isNotEmpty)
+                          if (product.imageUrl != null)
                             Center(
-                              child: Container(
-                                width: 200,
+                              child: Image.network(
+                                product.imageUrl!,
                                 height: 200,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Theme.of(context).dividerColor),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    product.imageUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Icon(Icons.inventory_2_outlined, size: 80);
-                                    },
-                                  ),
-                                ),
+                                fit: BoxFit.contain,
                               ),
                             ),
-                          const SizedBox(height: 24),
-                          // Product name
-                          Text(
-                            product.name,
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                           const SizedBox(height: 16),
-                          // SKU
-                          _detailRow('SKU', product.sku),
-                          // Description
-                          if (product.description != null && product.description!.isNotEmpty) ...[
+                          Text(product.name, style: theme.textTheme.titleLarge),
+                          const SizedBox(height: 8),
+                          Text('SKU: ${product.sku}'),
+                          Text('Costo: \$${product.cost.toStringAsFixed(0)}'),
+                          Text('Precio: \$${product.price.toStringAsFixed(0)}'),
+                          Text('Stock: ${product.stockQuantity}'),
+                          if (product.description != null) ...[
                             const SizedBox(height: 16),
-                            Text('Descripción', style: Theme.of(context).textTheme.labelLarge),
-                            const SizedBox(height: 4),
+                            Text('Descripción:', style: theme.textTheme.titleSmall),
                             Text(product.description!),
                           ],
-                          const SizedBox(height: 16),
-                          _detailRow('Precio', '\$${product.price.toStringAsFixed(0)}'),
-                          _detailRow('Costo', '\$${product.cost.toStringAsFixed(0)}'),
-                          _detailRow('Stock', '${product.stockQuantity}'),
-                          if (product.brand != null && product.brand!.isNotEmpty)
-                            _detailRow('Marca', product.brand!),
-                          if (product.model != null && product.model!.isNotEmpty)
-                            _detailRow('Modelo', product.model!),
                         ],
                       ),
                     ),
@@ -2689,39 +2483,6 @@ class _PurchaseLineRowState extends State<_PurchaseLineRow> {
           ),
         );
       },
-      transitionBuilder: (context, anim1, anim2, child) {
-        return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(1, 0),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOut)),
-          child: child,
-        );
-      },
-    );
-  }
-  
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(value),
-          ),
-        ],
-      ),
     );
   }
 }

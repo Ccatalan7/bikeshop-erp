@@ -16,7 +16,8 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
-import '../../../shared/widgets/product_autocomplete_field.dart';
+import '../../../shared/widgets/smart_product_field.dart';
+import '../../../shared/widgets/line_row_wrapper.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../inventory/pages/product_form_page.dart';
@@ -783,7 +784,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         isCatalogProduct: false,
       );
 
-      final entry = _InvoiceLineEntry(line);
+      // Create entry with shouldAutoFocus=true so the product field auto-focuses and shows overlay
+      final entry = _InvoiceLineEntry(line, shouldAutoFocus: true);
       entry.attachListeners(_handleLinesChanged);
 
       setState(() {
@@ -1579,17 +1581,18 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                                 right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
                               ),
                             ),
-                            child: ProductAutocompleteField(
+                            child: SmartProductField(
                               key: ValueKey(_autocompleteKey), // Reset field when key changes
-                              onProductSelected: (selection) {
+                              onProductChanged: (selection) {
+                                if (selection == null) return;
                                 if (selection.isCatalogProduct && selection.product != null) {
                                   _addProductLine(selection.product!);
-                                } else if (!selection.isCatalogProduct && selection.customDescription != null) {
-                                  _addCustomItemLine(selection.customDescription!);
+                                } else if (!selection.isCatalogProduct && selection.productName != null) {
+                                  _addCustomItemLine(selection.productName!);
                                 }
                               },
                               allowCustomItems: true,
-                              labelText: 'Agregar producto o servicio',
+                              showCost: false,
                               hintText: 'Buscar por nombre o SKU, o escribir artículo personalizado...',
                             ),
                           ),
@@ -1649,118 +1652,123 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
+  /// Builds a single line row using the universal LineRowWrapper.
+  /// Hover state is managed locally inside the wrapper, preventing SmartProductField rebuilds.
   Widget _buildCompactLineRow(ThemeData theme, int index, _InvoiceLineEntry entry) {
     final line = entry.line;
-    final canMoveUp = index > 1 && _canEditFields;
-    final canMoveDown = index < _lineEntries.length && _canEditFields;
     
-    return MouseRegion(
-      cursor: SystemMouseCursors.basic,
-      child: Builder(
-        builder: (context) {
-          // Track hover state
-          bool isHovered = false;
-          
-          return StatefulBuilder(
-            builder: (context, setState) {
-              return MouseRegion(
-                onEnter: (_) => setState(() => isHovered = true),
-                onExit: (_) => setState(() => isHovered = false),
-                child: Container(
-                  key: ValueKey('line_${entry.hashCode}_$index'),
-                  decoration: BoxDecoration(
-                    color: isHovered ? theme.colorScheme.surfaceVariant.withOpacity(0.3) : null,
-                    border: Border(
-                      bottom: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                    ),
-                  ),
-                  child: IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                      // # / Drag handle column
-                      Container(
-                        width: _colIndexWidth,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+    return LineRowWrapper(
+      key: ValueKey('line_${entry.hashCode}_$index'),
+      index: index,
+      canMoveUp: index > 1 && _canEditFields,
+      canMoveDown: index < _lineEntries.length && _canEditFields,
+      onMoveUp: () => _moveLineUp(entry),
+      onMoveDown: () => _moveLineDown(entry),
+      onRemove: () => _removeLine(entry),
+      canEdit: _canEditFields,
+      indexColumnWidth: _colIndexWidth,
+      actionsColumnWidth: _colActionsWidth,
+      columns: [
+        // Product details column - uses CACHED widget from entry
+        LineColumn(
+          expanded: true,
+          minWidth: 250,
+          padding: const EdgeInsets.all(12),
+          child: entry.buildSmartProductField(
+            context,
+            theme,
+            _canEditFields,
+            () {}, // No setState needed - hover is local to wrapper
+            () => _autoAddEmptyLineIfNeeded(),
+          ),
+        ),
+        
+        // Cantidad column with stock warning
+        LineColumn(
+          width: _colQuantityWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextField(
+                controller: entry.quantityController,
+                enabled: _canEditFields,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  border: _canEditFields ? const OutlineInputBorder() : InputBorder.none,
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                ],
+              ),
+              
+              // Stock warning (hide for services)
+              if (line.product != null && !line.product!.isService && line.product!.stockQuantity < line.quantity)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.warning_amber, size: 12, color: Colors.red),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Stock bajo: ${line.product!.stockQuantity.toInt()} disponibles',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.red,
+                            fontSize: 10,
                           ),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (canMoveUp && isHovered)
-                              InkWell(
-                                onTap: () => _moveLineUp(entry),
-                                child: Icon(
-                                  Icons.keyboard_arrow_up,
-                                  size: 18,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              )
-                            else
-                              const SizedBox(height: 18),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 2),
-                              child: Text(
-                                '$index',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            if (canMoveDown && isHovered)
-                              InkWell(
-                                onTap: () => _moveLineDown(entry),
-                                child: Icon(
-                                  Icons.keyboard_arrow_down,
-                                  size: 18,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              )
-                            else
-                              const SizedBox(height: 18),
-                          ],
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-            
-            // Product details column
-            Expanded(
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 250),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                    ],
                   ),
                 ),
-                child: entry.buildSmartProductField(
-                  context,
-                  theme,
-                  _canEditFields,
-                  () => setState(() {}),
-                  () => _autoAddEmptyLineIfNeeded(),
-                ),
+            ],
+          ),
+        ),
+        
+        // Tarifa/Price column
+        LineColumn(
+          width: _colPriceWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Center(
+            child: TextField(
+              controller: entry.unitPriceController,
+              enabled: _canEditFields,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                border: _canEditFields ? const OutlineInputBorder() : InputBorder.none,
+                prefixText: '\$ ',
               ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+              ],
             ),
-            
-            // Cantidad column
-            Container(
-              width: _colQuantityWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TextField(
-                    controller: entry.quantityController,
+          ),
+        ),
+        
+        // Descuento column with % symbol
+        LineColumn(
+          width: _colDiscountWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Center(
+            child: Row(
+              children: [
+                const SizedBox(width: 4),
+                const Text('\$ ', style: TextStyle(fontSize: 14)),
+                Expanded(
+                  child: TextField(
+                    controller: entry.discountController,
                     enabled: _canEditFields,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium,
@@ -1774,147 +1782,38 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                       FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
                     ],
                   ),
-                  
-                  // Stock warning
-                  if (line.product != null && line.product!.stockQuantity < line.quantity)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.warning_amber, size: 12, color: Colors.red),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              'Stock bajo: ${line.product!.stockQuantity.toInt()} disponibles',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: Colors.red,
-                                fontSize: 10,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            
-            // Tarifa column
-            Container(
-              width: _colPriceWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
                 ),
-              ),
-              child: Center(
-                child: TextField(
-                  controller: entry.unitPriceController,
-                  enabled: _canEditFields,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    border: _canEditFields ? const OutlineInputBorder() : InputBorder.none,
-                    prefixText: '\$ ',
+                const SizedBox(width: 4),
+                // Dropdown for % or fixed amount (placeholder)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(4),
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
-                  ],
+                  child: const Text('%', style: TextStyle(fontSize: 12)),
                 ),
-              ),
+              ],
             ),
-            
-            // Descuento column
-            Container(
-              width: _colDiscountWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                ),
-              ),
-              child: Center(
-                child: Row(
-                  children: [
-                    const SizedBox(width: 4),
-                    const Text('\$ ', style: TextStyle(fontSize: 14)),
-                    Expanded(
-                      child: TextField(
-                        controller: entry.discountController,
-                        enabled: _canEditFields,
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          border: _canEditFields ? const OutlineInputBorder() : InputBorder.none,
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    // Dropdown for % or fixed amount (placeholder)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text('%', style: TextStyle(fontSize: 12)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            
-            // Importe column
-            Container(
-              width: _colTotalWidth,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Center(
-                child: Text(
-                  ChileanUtils.formatCurrency(line.netAmount),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.right,
-                ),
-              ),
-            ),
-            
-            // Delete button
-            SizedBox(
-              width: _colActionsWidth,
-              child: Center(
-                child: _canEditFields
-                    ? IconButton(
-                        icon: const Icon(Icons.close, size: 20),
-                        onPressed: () => _removeLine(entry),
-                        color: theme.colorScheme.error,
-                        tooltip: 'Eliminar',
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
-                ),
-              );
-            },
-          );
-        },
-      ),
+        
+        // Importe/Total column (no right border - last content column)
+        LineColumn(
+          width: _colTotalWidth,
+          showRightBorder: false,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Center(
+            child: Text(
+              ChileanUtils.formatCurrency(line.netAmount),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -2163,7 +2062,7 @@ class _InvoiceLine {
 }
 
 class _InvoiceLineEntry {
-  _InvoiceLineEntry(this.line)
+  _InvoiceLineEntry(this.line, {this.shouldAutoFocus = false})
       : product = line.product,
         quantityController =
             TextEditingController(text: line.quantity.toStringAsFixed(0)),
@@ -2178,6 +2077,8 @@ class _InvoiceLineEntry {
 
   final _InvoiceLine line;
   Product? product; // Store full product for image access
+  /// Whether this line's product field should auto-focus (for newly added lines)
+  bool shouldAutoFocus;
   final TextEditingController quantityController;
   final TextEditingController unitPriceController;
   final TextEditingController discountController;
@@ -2256,231 +2157,59 @@ class _InvoiceLineEntry {
     productNameFocusNode.dispose();
   }
   
+  // CRITICAL: Cache the SmartProductField widget to prevent rebuilds on parent hover state changes
+  // This is the fix for flickering and disappearing dropdown when mouse moves
+  Widget? _cachedSmartProductField;
+  bool? _cachedCanEdit;
+  
   Widget buildSmartProductField(BuildContext context, ThemeData theme, bool canEdit, VoidCallback onUpdate, VoidCallback onAutoAdd) {
-    final hasProduct = line.name.isNotEmpty;
-    
-    // If can't edit, show as text
-    if (!canEdit) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            line.name,
-            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (line.sku.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                'SKU: ${line.sku}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontSize: 11,
-                ),
-              ),
-            ),
-          if (descriptionController.text.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                descriptionController.text,
-                style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
-              ),
-            ),
-        ],
-      );
+    // Return cached widget if nothing meaningful changed
+    // Only rebuild if canEdit changes (not on hover which doesn't change canEdit)
+    if (_cachedSmartProductField != null && _cachedCanEdit == canEdit) {
+      return _cachedSmartProductField!;
     }
     
-    // If product set, show Zoho-style card
-    if (hasProduct) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Product image
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceVariant.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: theme.colorScheme.outline.withOpacity(0.15)),
-                ),
-                child: product?.imageUrl != null && product!.imageUrl!.isNotEmpty
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: Image.network(
-                          product!.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Icon(
-                            Icons.inventory_2_outlined,
-                            size: 24,
-                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
-                          ),
-                        ),
-                      )
-                    : Icon(
-                        Icons.inventory_2_outlined,
-                        size: 24,
-                        color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
-                      ),
-              ),
-              const SizedBox(width: 12),
-              // Product details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            line.name,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                              fontSize: 14,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        // 3-dot menu for catalog products
-                        if (product != null)
-                          PopupMenuButton<String>(
-                            icon: Icon(Icons.more_horiz, size: 20, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6)),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 200),
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                _showEditProductDialog(context, product!);
-                              } else if (value == 'details') {
-                                _showProductDetailsPane(context, product!, theme);
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit_outlined, size: 18, color: theme.colorScheme.primary),
-                                    const SizedBox(width: 12),
-                                    const Text('Editar artículo'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'details',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.inventory_2_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
-                                    const SizedBox(width: 12),
-                                    const Text('Ver detalles del artículo'),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        // X button
-                        InkWell(
-                          onTap: () {
-                            product = null;
-                            productNameController.clear();
-                            productSkuController.clear();
-                            descriptionController.clear();
-                            onUpdate();
-                            Future.delayed(const Duration(milliseconds: 100), () {
-                              productNameFocusNode.requestFocus();
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            child: Icon(Icons.close, size: 16, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6)),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (line.sku.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          'SKU (Código de artículo): ${line.sku}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          // Description field
-          const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: TextField(
-              controller: descriptionController,
-              decoration: InputDecoration(
-                hintText: 'Agregue una descripción a su artículo',
-                hintStyle: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
-                  fontSize: 13,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-              style: theme.textTheme.bodySmall?.copyWith(fontSize: 13),
-              maxLines: 3,
-              minLines: 3,
-            ),
-          ),
-        ],
-      );
-    }
-    
-    // Empty product - show search field
-    return ProductAutocompleteField(
+    _cachedCanEdit = canEdit;
+    _cachedSmartProductField = SmartProductField(
       key: ValueKey('product_${hashCode}'),
-      controller: productNameController,
-      focusNode: productNameFocusNode,
-      autoFocus: true,
+      initialData: ProductFieldData(
+        product: product,
+        productName: line.name.isEmpty ? null : line.name,
+        productSku: line.sku.isEmpty ? null : line.sku,
+        isCatalogProduct: line.isCatalogProduct,
+        description: descriptionController.text,
+      ),
+      enabled: canEdit,
+      showCost: false, // Sales uses price, not cost
       allowCustomItems: true,
-      labelText: null,
-      hintText: 'Buscar producto o escribir nombre...',
-      showCost: false, // Show price for sales
-      onProductSelected: (selection) {
-        if (selection.isCatalogProduct && selection.product != null) {
-          product = selection.product;
-          productNameController.text = selection.product!.name;
-          productSkuController.text = selection.product!.sku;
-          unitPriceController.text = selection.product!.price.toStringAsFixed(0);
-          
-          // Auto-fill description
-          if (selection.product!.description != null && selection.product!.description!.isNotEmpty) {
-            descriptionController.text = selection.product!.description!;
-          }
-          
-          onUpdate();
-          onAutoAdd();
-        } else if (!selection.isCatalogProduct) {
+      autoFocus: shouldAutoFocus, // Auto-focus newly added lines
+      focusNode: productNameFocusNode,
+      descriptionController: descriptionController,
+      onAutoAddLine: onAutoAdd,
+      onEditProduct: (p) => _showEditProductDialog(context, p),
+      onShowProductDetails: (p) => _showProductDetailsPane(context, p, theme),
+      onProductChanged: (selection) {
+        if (selection == null) {
+          // Product cleared
           product = null;
-          productNameController.text = selection.displayText;
+          productNameController.clear();
           productSkuController.clear();
+          descriptionController.clear();
           onUpdate();
-          onAutoAdd();
+        } else {
+          // Product selected or description changed
+          product = selection.product;
+          productNameController.text = selection.productName ?? '';
+          productSkuController.text = selection.productSku ?? '';
+          if (selection.price > 0) {
+            unitPriceController.text = selection.price.toStringAsFixed(0);
+          }
+          onUpdate();
         }
       },
     );
+    
+    return _cachedSmartProductField!;
   }
   
   void _showEditProductDialog(BuildContext context, Product product) {

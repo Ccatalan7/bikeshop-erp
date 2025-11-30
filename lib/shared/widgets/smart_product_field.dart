@@ -43,11 +43,15 @@ class SmartProductField extends StatefulWidget {
   /// Hint text for the search field
   final String hintText;
   
-  /// Whether to auto-focus when the field is empty
+  /// Whether to auto-focus when the field is empty (should be false for new invoices, true for newly added lines)
   final bool autoFocus;
   
   /// External focus node (optional)
   final FocusNode? focusNode;
+  
+  /// External controllers (optional - for integration with existing forms)
+  final TextEditingController? productNameController;
+  final TextEditingController? descriptionController;
 
   const SmartProductField({
     super.key,
@@ -60,8 +64,10 @@ class SmartProductField extends StatefulWidget {
     this.onEditProduct,
     this.onShowProductDetails,
     this.hintText = 'Buscar producto o escribir nombre...',
-    this.autoFocus = true,
+    this.autoFocus = false, // Default to false - only auto-focus on newly added lines
     this.focusNode,
+    this.productNameController,
+    this.descriptionController,
   });
 
   @override
@@ -72,6 +78,9 @@ class _SmartProductFieldState extends State<SmartProductField> {
   late TextEditingController _productNameController;
   late TextEditingController _descriptionController;
   late FocusNode _focusNode;
+  bool _ownsProductNameController = false;
+  bool _ownsDescriptionController = false;
+  bool _ownsFocusNode = false;
   
   Product? _product;
   String? _productName;
@@ -81,9 +90,28 @@ class _SmartProductFieldState extends State<SmartProductField> {
   @override
   void initState() {
     super.initState();
-    _productNameController = TextEditingController();
-    _descriptionController = TextEditingController();
-    _focusNode = widget.focusNode ?? FocusNode();
+    
+    // Use external controllers if provided, otherwise create our own
+    if (widget.productNameController != null) {
+      _productNameController = widget.productNameController!;
+    } else {
+      _productNameController = TextEditingController();
+      _ownsProductNameController = true;
+    }
+    
+    if (widget.descriptionController != null) {
+      _descriptionController = widget.descriptionController!;
+    } else {
+      _descriptionController = TextEditingController();
+      _ownsDescriptionController = true;
+    }
+    
+    if (widget.focusNode != null) {
+      _focusNode = widget.focusNode!;
+    } else {
+      _focusNode = FocusNode();
+      _ownsFocusNode = true;
+    }
     
     // Initialize from initial data
     if (widget.initialData != null) {
@@ -98,9 +126,13 @@ class _SmartProductFieldState extends State<SmartProductField> {
 
   @override
   void dispose() {
-    _productNameController.dispose();
-    _descriptionController.dispose();
-    if (widget.focusNode == null) {
+    if (_ownsProductNameController) {
+      _productNameController.dispose();
+    }
+    if (_ownsDescriptionController) {
+      _descriptionController.dispose();
+    }
+    if (_ownsFocusNode) {
       _focusNode.dispose();
     }
     super.dispose();
@@ -190,6 +222,13 @@ class _SmartProductFieldState extends State<SmartProductField> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     
+    // RepaintBoundary prevents unnecessary repaints from parent hover state changes
+    return RepaintBoundary(
+      child: _buildContent(theme),
+    );
+  }
+  
+  Widget _buildContent(ThemeData theme) {
     // If not editable, show as read-only text
     if (!widget.enabled) {
       return _buildReadOnlyView(theme);

@@ -7,8 +7,6 @@ import '../services/bikeshop_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/models/product.dart';
-import '../../../shared/widgets/product_autocomplete_field.dart';
-import '../../../shared/models/product.dart';
 
 /// Smart Tasks Tab - Collapsible hierarchical checklist with three-way sync
 ///
@@ -341,6 +339,22 @@ class _TasksTabViewState extends State<TasksTabView> {
     final completed = subTasks.where((t) => t.isCompleted).length;
     final total = subTasks.length;
     final isCollapsed = _collapsedItems.contains('item_${item.id}');
+    
+    // Determine checkbox state:
+    // - No subtasks: unchecked (will create a task when checked)
+    // - All subtasks complete: checked
+    // - Some subtasks complete: indeterminate (tristate)
+    // - No subtasks complete: unchecked
+    final bool? checkboxValue;
+    if (total == 0) {
+      checkboxValue = false; // No subtasks - unchecked by default
+    } else if (completed == total) {
+      checkboxValue = true; // All done
+    } else if (completed > 0) {
+      checkboxValue = null; // Some done - indeterminate
+    } else {
+      checkboxValue = false; // None done
+    }
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -353,6 +367,15 @@ class _TasksTabViewState extends State<TasksTabView> {
       ),
       child: Row(
         children: [
+          // Checkbox for item completion
+          Checkbox(
+            value: checkboxValue,
+            tristate: total > 0, // Only tristate if has subtasks
+            onChanged: widget.readOnly
+                ? null
+                : (value) => _toggleItemCompletion(item, subTasks, value ?? true),
+          ),
+          
           // Collapse/Expand toggle (only if has subtasks)
           if (total > 0)
             IconButton(
@@ -371,9 +394,7 @@ class _TasksTabViewState extends State<TasksTabView> {
                   }
                 });
               },
-            )
-          else
-            const SizedBox(width: 20),
+            ),
 
           const SizedBox(width: 8),
 
@@ -839,6 +860,72 @@ class _TasksTabViewState extends State<TasksTabView> {
             content: Text('❌ Error: $e'),
             backgroundColor: Colors.red,
           ),
+        );
+      }
+    }
+  }
+
+  /// Toggle item completion - handles both items with and without subtasks
+  Future<void> _toggleItemCompletion(
+    MechanicJobItem item,
+    List<MechanicJobTask> subTasks,
+    bool markComplete,
+  ) async {
+    if (_taskService == null || item.id == null) return;
+    
+    try {
+      if (subTasks.isEmpty) {
+        // No subtasks - create a simple completion marker (not a duplicate of the item name)
+        final tenantId = await _tenantService?.getTenantId();
+        if (tenantId == null) return;
+        
+        // Create a completion marker task with a generic name
+        final task = MechanicJobTask(
+          tenantId: tenantId,
+          jobId: widget.jobId,
+          parentItemId: item.id!,
+          taskName: 'Completado', // Generic completion marker, not the item name
+          isCompleted: markComplete,
+          parsedFromDescription: false,
+          isAdhoc: false,
+        );
+        
+        await _taskService!.createTask(task);
+        await _loadTasks(); // Reload to show the new task
+      } else {
+        // Has subtasks - toggle all of them
+        // Optimistic update
+        setState(() {
+          for (var task in subTasks) {
+            final index = _groupedTasks['item_${item.id}']?.indexWhere((t) => t.id == task.id) ?? -1;
+            if (index != -1) {
+              _groupedTasks['item_${item.id}']![index] = task.copyWith(isCompleted: markComplete);
+            }
+          }
+        });
+        
+        // Update all subtasks in database
+        for (var task in subTasks) {
+          if (task.id != null && task.isCompleted != markComplete) {
+            await _taskService!.toggleTaskCompletion(task.id!, markComplete);
+          }
+        }
+      }
+      
+      // Refresh progress
+      final progress = await _taskService!.calculateProgress(widget.jobId);
+      if (mounted) {
+        setState(() {
+          _progress = progress;
+        });
+      }
+    } catch (e) {
+      // Reload on error to revert
+      await _loadTasks();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
         );
       }
     }

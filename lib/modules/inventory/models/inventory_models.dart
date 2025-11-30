@@ -102,6 +102,12 @@ class Product {
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
+  /// Returns true if this product is a service (doesn't track inventory)
+  bool get isService => productType == ProductType.service;
+  
+  /// Returns true if this product tracks inventory
+  bool get tracksInventory => !isService;
+
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       id: json['id']?.toString(),
@@ -233,6 +239,8 @@ class Product {
       'is_published': isPublished,
       'show_on_website': isPublished,
       'product_type': productType.name,
+      'is_service': isService, // Computed from product_type for DB triggers
+      'track_stock': tracksInventory, // Services don't track stock
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
