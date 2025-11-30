@@ -330,7 +330,11 @@ class BikeshopService extends ChangeNotifier {
     bool includeDeleted = false, // NEW: option to include soft-deleted jobs
   }) async {
     try {
-      var query = Supabase.instance.client.from('mechanic_jobs').select();
+      // Join with job_statuses to get custom status details
+      var query = Supabase.instance.client.from('mechanic_jobs').select('''
+        *,
+        job_status:job_statuses(*)
+      ''');
 
       // Filter out soft-deleted jobs by default
       if (!includeDeleted) {
@@ -382,9 +386,13 @@ class BikeshopService extends ChangeNotifier {
     try {
       if (id.isEmpty) return null;
 
+      // Join with job_statuses to get custom status details
       final data = await Supabase.instance.client
           .from('mechanic_jobs')
-          .select()
+          .select('''
+            *,
+            job_status:job_statuses(*)
+          ''')
           .eq('id', id)
           .isFilter('deleted_at', null) // Filter out soft-deleted
           .maybeSingle();

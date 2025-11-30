@@ -19,6 +19,7 @@ import '../../../shared/services/whatsapp_service.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../services/smart_task_service.dart';
+import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
 import 'bike_form_dialog.dart';
 
@@ -63,7 +64,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Bike? _selectedBike;
   JobPriority _selectedPriority = JobPriority.normal;
   JobStatus _selectedStatus = JobStatus.pendiente;
+  JobStatusCustom? _selectedCustomStatus; // Custom status from job_statuses table
+  List<JobStatusCustom> _customStatuses = []; // All available custom statuses
   DateTime? _selectedDeadline;
+  DateTime _selectedArrivalDate = DateTime.now(); // Arrival date (editable)
   bool _requiresApproval = false;
   bool _isWarrantyJob = false;
   TaxTreatment _taxTreatment = TaxTreatment.noTax; // Default: no tax (matches sales invoice)
@@ -116,6 +120,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           Provider.of<CustomerService>(context, listen: false);
       final inventoryService =
           Provider.of<InventoryService>(context, listen: false);
+      final jobStatusService =
+          Provider.of<JobStatusService>(context, listen: false);
 
       // Load customers
       final customers = await customerService.getCustomers();
@@ -126,11 +132,24 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           .where((product) => product.productType == ProductType.service)
           .toList();
 
+      // Load custom statuses (ensure they're loaded)
+      await jobStatusService.loadStatuses();
+      final customStatuses = jobStatusService.activeStatuses;
+      debugPrint('📋 Loaded ${customStatuses.length} custom statuses');
+
       if (mounted) {
         setState(() {
           _customers = customers.cast<Customer>();
           _products = products;
           _serviceProducts = serviceProducts;
+          _customStatuses = customStatuses;
+          // Set default status to first "todo" phase status if available
+          if (_customStatuses.isNotEmpty && _selectedCustomStatus == null) {
+            _selectedCustomStatus = _customStatuses.firstWhere(
+              (s) => s.phase == StatusPhase.todo,
+              orElse: () => _customStatuses.first,
+            );
+          }
         });
       }
 
@@ -249,7 +268,27 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _selectedBike = bike;
           _selectedPriority = job.priority;
           _selectedStatus = job.status;
+          // Load custom status if available
+          debugPrint('🔍 Loading custom status: statusId=${job.statusId}, customStatus=${job.customStatus?.name}');
+          debugPrint('🔍 Available custom statuses: ${_customStatuses.map((s) => '${s.id}:${s.name}').join(', ')}');
+          if (job.customStatus != null) {
+            debugPrint('✅ Using job.customStatus: ${job.customStatus!.name}');
+            _selectedCustomStatus = job.customStatus;
+          } else if (job.statusId != null && _customStatuses.isNotEmpty) {
+            // Try to find by ID
+            debugPrint('🔍 Looking for status by ID: ${job.statusId}');
+            final found = _customStatuses.where((s) => s.id == job.statusId);
+            if (found.isNotEmpty) {
+              _selectedCustomStatus = found.first;
+              debugPrint('✅ Found status by ID: ${_selectedCustomStatus?.name}');
+            } else {
+              debugPrint('⚠️ Status ID ${job.statusId} not found in custom statuses, keeping default');
+            }
+          } else {
+            debugPrint('⚠️ No statusId or customStatus on job, keeping default: ${_selectedCustomStatus?.name}');
+          }
           _selectedDeadline = job.deadline;
+          _selectedArrivalDate = job.arrivalDate;
           _requiresApproval = job.requiresApproval;
           _isWarrantyJob = job.isWarrantyJob;
           _taxTreatment = loadedTaxTreatment; // ← Set the loaded tax treatment
@@ -485,6 +524,18 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return _subtotal - _discountAmount;
   }
 
+  /// Maps StatusPhase to JobStatus for legacy compatibility
+  JobStatus _mapPhaseToJobStatus(StatusPhase phase) {
+    switch (phase) {
+      case StatusPhase.todo:
+        return JobStatus.pendiente;
+      case StatusPhase.inProgress:
+        return JobStatus.enCurso;
+      case StatusPhase.complete:
+        return JobStatus.finalizado;
+    }
+  }
+
   Future<void> _saveJob() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -527,8 +578,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         bikeId: _selectedBike!.id!,
         priority: _selectedPriority,
         status: _selectedStatus,
-        // CRITICAL: Preserve original arrival_date when updating, only set NOW for new jobs
-        arrivalDate: _existingJob?.arrivalDate ?? DateTime.now(),
+        statusId: _selectedCustomStatus?.id, // Custom status ID
+        // Use selected arrival date (editable by user)
+        arrivalDate: _selectedArrivalDate,
         // CRITICAL: Preserve original created_at when updating
         createdAt: _existingJob?.createdAt ?? DateTime.now(),
         clientRequest: _clientRequestController.text.trim().isEmpty
@@ -1458,33 +1510,103 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: DropdownButtonFormField<JobStatus>(
-                value: _selectedStatus,
-                decoration: const InputDecoration(
-                  labelText: 'Estado',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.swap_horiz),
-                ),
-                items: JobStatus.values.map((status) {
-                  return DropdownMenuItem(
-                    value: status,
-                    child: Text(status.displayName),
-                  );
-                }).toList(),
-                onChanged: (status) {
-                  if (status != null) {
-                    setState(() {
-                      _selectedStatus = status;
-                    });
-                  }
-                },
-              ),
+              child: _customStatuses.isEmpty
+                  // Fallback to enum dropdown if no custom statuses
+                  ? DropdownButtonFormField<JobStatus>(
+                      value: _selectedStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Estado',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.swap_horiz),
+                      ),
+                      items: JobStatus.values.map((status) {
+                        return DropdownMenuItem(
+                          value: status,
+                          child: Text(status.displayName),
+                        );
+                      }).toList(),
+                      onChanged: (status) {
+                        if (status != null) {
+                          setState(() {
+                            _selectedStatus = status;
+                          });
+                        }
+                      },
+                    )
+                  // Use custom statuses dropdown
+                  : DropdownButtonFormField<JobStatusCustom>(
+                      value: _selectedCustomStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Estado',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.swap_horiz),
+                      ),
+                      items: _customStatuses.map((status) {
+                        return DropdownMenuItem(
+                          value: status,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                margin: const EdgeInsets.only(right: 8),
+                                decoration: BoxDecoration(
+                                  color: status.colorValue,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                              Text(status.name),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (status) {
+                        if (status != null) {
+                          setState(() {
+                            _selectedCustomStatus = status;
+                            // Also update the enum status for legacy compatibility
+                            _selectedStatus = _mapPhaseToJobStatus(status.phase);
+                          });
+                        }
+                      },
+                    ),
             ),
           ],
         ),
         const SizedBox(height: 16),
+        // Arrival Date and Deadline Row
         Row(
           children: [
+            // Arrival Date (editable)
+            Expanded(
+              child: InkWell(
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedArrivalDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now().add(const Duration(days: 30)),
+                  );
+                  if (date != null) {
+                    setState(() {
+                      _selectedArrivalDate = date;
+                    });
+                  }
+                },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Fecha de llegada',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.login),
+                  ),
+                  child: Text(
+                    DateFormat('dd/MM/yyyy').format(_selectedArrivalDate),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Deadline
             Expanded(
               child: InkWell(
                 onTap: () async {
@@ -1516,7 +1638,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // Estimated Duration
+        Row(
+          children: [
             Expanded(
               child: TextFormField(
                 controller: _estimatedDurationController,

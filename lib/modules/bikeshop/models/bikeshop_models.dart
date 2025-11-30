@@ -892,7 +892,7 @@ class MechanicJob {
   /// Converts this job to a JSON map for database operations.
   /// 
   /// When [forUpdate] is true, excludes immutable fields like created_at 
-  /// and arrival_date that should never be overwritten on updates.
+  /// that should never be overwritten on updates.
   Map<String, dynamic> toJson({bool forUpdate = false}) {
     final json = <String, dynamic>{
       if (id != null) 'id': id,
@@ -903,6 +903,7 @@ class MechanicJob {
       'customer_id': customerId,
       'bike_id': bikeId,
       'service_package_id': servicePackageId,
+      'arrival_date': arrivalDate.toIso8601String(), // Always include (editable)
       'deadline': deadline?.toIso8601String(),
       'started_at': startedAt?.toIso8601String(),
       'completed_at': completedAt?.toIso8601String(),
@@ -933,9 +934,8 @@ class MechanicJob {
       'image_urls': imageUrls,
     };
     
-    // Only include immutable timestamp fields for CREATE, not UPDATE
+    // Only include created_at for CREATE, not UPDATE
     if (!forUpdate) {
-      json['arrival_date'] = arrivalDate.toIso8601String();
       json['created_at'] = createdAt.toIso8601String();
     }
     
