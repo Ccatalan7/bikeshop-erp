@@ -16,7 +16,29 @@ class WindowZoomScope extends StatelessWidget {
 
   final Widget child;
 
-  static Map<ShortcutActivator, Intent> get _shortcuts => const {
+  /// Windows uses Ctrl, macOS uses Cmd (meta)
+  static Map<ShortcutActivator, Intent> get _shortcuts {
+    if (WindowZoomService.isMacOS) {
+      // macOS: Cmd+Plus, Cmd+Minus, Cmd+0
+      return const {
+        SingleActivator(LogicalKeyboardKey.equal, meta: true):
+            ZoomIntent(ZoomCommand.zoomIn),
+        SingleActivator(LogicalKeyboardKey.add, meta: true):
+            ZoomIntent(ZoomCommand.zoomIn),
+        SingleActivator(LogicalKeyboardKey.numpadAdd, meta: true):
+            ZoomIntent(ZoomCommand.zoomIn),
+        SingleActivator(LogicalKeyboardKey.minus, meta: true):
+            ZoomIntent(ZoomCommand.zoomOut),
+        SingleActivator(LogicalKeyboardKey.numpadSubtract, meta: true):
+            ZoomIntent(ZoomCommand.zoomOut),
+        SingleActivator(LogicalKeyboardKey.digit0, meta: true):
+            ZoomIntent(ZoomCommand.reset),
+        SingleActivator(LogicalKeyboardKey.numpad0, meta: true):
+            ZoomIntent(ZoomCommand.reset),
+      };
+    } else {
+      // Windows/Linux: Ctrl+Plus, Ctrl+Minus, Ctrl+0
+      return const {
         SingleActivator(LogicalKeyboardKey.equal, control: true):
             ZoomIntent(ZoomCommand.zoomIn),
         SingleActivator(LogicalKeyboardKey.numpadAdd, control: true):
@@ -28,6 +50,8 @@ class WindowZoomScope extends StatelessWidget {
         SingleActivator(LogicalKeyboardKey.digit0, control: true):
             ZoomIntent(ZoomCommand.reset),
       };
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,18 +107,37 @@ class _ZoomContent extends StatelessWidget {
       return child;
     }
 
-    final mediaQuery = MediaQuery.of(context);
-    
-    // "Safe Zoom": We only scale the text.
-    // This keeps the layout bounds intact but makes content readable.
-    // Flutter's widgets are designed to handle text scaling gracefully.
-    final scaledMedia = mediaQuery.copyWith(
-      textScaler: TextScaler.linear(scale),
-    );
-
-    return MediaQuery(
-      data: scaledMedia,
-      child: child,
+    // Browser-style zoom: Scale the entire UI uniformly
+    // We use FittedBox with a scaled child to achieve true zoom behavior
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Calculate the scaled dimensions
+        final scaledWidth = constraints.maxWidth / scale;
+        final scaledHeight = constraints.maxHeight / scale;
+        
+        return ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            maxWidth: double.infinity,
+            maxHeight: double.infinity,
+            child: Transform.scale(
+              scale: scale,
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: scaledWidth,
+                height: scaledHeight,
+                child: MediaQuery(
+                  // Also adjust media query so widgets know the "logical" size
+                  data: MediaQuery.of(context).copyWith(
+                    size: Size(scaledWidth, scaledHeight),
+                  ),
+                  child: child,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

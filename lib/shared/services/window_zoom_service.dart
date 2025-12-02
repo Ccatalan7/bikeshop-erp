@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Centralizes desktop zoom handling so we can mirror browser-style shortcuts
-/// on Windows builds without affecting other platforms.
+/// on Windows and macOS builds without affecting other platforms.
 class WindowZoomService extends ChangeNotifier {
   WindowZoomService();
 
@@ -16,8 +16,15 @@ class WindowZoomService extends ChangeNotifier {
   double get scale => _scale;
   bool get isZoomed => _scale != _defaultScale;
 
+  /// Supported on Windows and macOS desktop platforms
   static bool get isSupportedPlatform =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+      !kIsWeb && 
+      (defaultTargetPlatform == TargetPlatform.windows ||
+       defaultTargetPlatform == TargetPlatform.macOS);
+  
+  /// Check if running on macOS (for keyboard shortcut modifier)
+  static bool get isMacOS =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
 
   void zoomIn() {
     if (!isSupportedPlatform) return;

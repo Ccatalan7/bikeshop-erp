@@ -1,17 +1,170 @@
 import 'package:flutter/material.dart';
 
+/// Maps route paths to human-readable titles for workspace tabs
+String getRouteTitle(String path) {
+  // Remove query parameters and clean the path
+  final cleanPath = path.split('?').first;
+  
+  // Route to title mappings
+  final Map<String, String> routeTitles = {
+    // Dashboard
+    '/dashboard': 'Dashboard',
+    
+    // Accounting
+    '/accounting/accounts': 'Plan de Cuentas',
+    '/accounting/accounts/new': 'Nueva Cuenta',
+    '/accounting/journal-entries': 'Asientos Contables',
+    '/accounting/journal-entries/new': 'Nuevo Asiento',
+    '/accounting/reports': 'Reportes Financieros',
+    '/accounting/reports/income-statement': 'Estado de Resultados',
+    '/accounting/reports/balance-sheet': 'Balance General',
+    '/accounting/expenses': 'Gastos',
+    '/accounting/expenses/new': 'Nuevo Gasto',
+    
+    // Tax Reports
+    '/tax-reports/f29': 'Formulario F29',
+    
+    // CRM / Clientes
+    '/clientes': 'Clientes',
+    '/clientes/nuevo': 'Nuevo Cliente',
+    '/clientes/bicicletas': 'Directorio de Bicicletas',
+    
+    // Bikeshop / Taller
+    '/taller': 'Taller',
+    '/taller/pegas': 'Pegas',
+    '/taller/calendario': 'Calendario Taller',
+    '/taller/nueva-pega': 'Nueva Pega',
+    '/taller/estados': 'Estados de Pegas',
+    '/taller/marcas-bicicletas': 'Marcas de Bicicletas',
+    '/taller/enciclopedia': 'Enciclopedia de Bicicletas',
+    '/taller/logbook': 'Logbook Cliente',
+    
+    // Wheel Building
+    '/wheel-building/hubs': 'Mazas',
+    '/wheel-building/rims': 'Aros',
+    '/wheel-building/spokes': 'Rayos',
+    '/wheel-building/wizard': 'Constructor de Ruedas',
+    '/wheel-building/spoke-calculator': 'Calculadora de Rayos',
+    
+    // Inventory
+    '/inventory/products': 'Productos',
+    '/inventory/products/new': 'Nuevo Producto',
+    '/inventory/products/import': 'Importar Productos',
+    '/inventory/categories': 'Categorías',
+    '/inventory/categories/new': 'Nueva Categoría',
+    '/inventory/brands': 'Marcas',
+    '/inventory/brands/new': 'Nueva Marca',
+    '/inventory/stock-movements': 'Movimientos de Stock',
+    '/inventory/stock-adjustments': 'Ajustes de Stock',
+    
+    // Sales
+    '/sales/invoices': 'Facturas de Venta',
+    '/sales/invoices/new': 'Nueva Factura',
+    '/sales/payments': 'Pagos Recibidos',
+    '/sales/payments/new': 'Nuevo Pago',
+    
+    // Purchases
+    '/purchases/invoices': 'Facturas de Compra',
+    '/purchases/invoices/new': 'Nueva Compra',
+    '/purchases/suppliers': 'Proveedores',
+    '/purchases/suppliers/new': 'Nuevo Proveedor',
+    '/purchases/payments': 'Pagos a Proveedores',
+    '/purchases/smart-list': 'Lista Inteligente',
+    
+    // POS
+    '/pos': 'Punto de Venta',
+    '/pos/cart': 'Carrito POS',
+    '/pos/payment': 'Pago POS',
+    '/pos/receipt': 'Recibo POS',
+    
+    // HR
+    '/hr/employees': 'Empleados',
+    '/hr/employees/new': 'Nuevo Empleado',
+    '/hr/attendance': 'Asistencia',
+    '/hr/kiosk': 'Modo Kiosko',
+    '/hr/medical-leaves': 'Licencias Médicas',
+    
+    // Website
+    '/website': 'Sitio Web',
+    '/website/editor': 'Editor Web',
+    
+    // Settings
+    '/settings': 'Configuración',
+    '/settings/appearance': 'Apariencia',
+    '/settings/users': 'Usuarios',
+    '/settings/payment-methods': 'Métodos de Pago',
+    '/settings/bluetooth-scanner': 'Escáner Bluetooth',
+    '/settings/keyboard-scanner': 'Escáner USB',
+    '/settings/remote-scanner': 'Escáner Remoto',
+    '/settings/backup': 'Respaldos',
+    '/settings/factory-reset': 'Reseteo de Fábrica',
+    
+    // WebView modules
+    '/webview/feria-del-disco': 'Feria del Disco',
+    '/webview/google-maps': 'Google Maps',
+    '/webview/custom': 'WebView',
+  };
+  
+  // First check for exact match
+  if (routeTitles.containsKey(cleanPath)) {
+    return routeTitles[cleanPath]!;
+  }
+  
+  // Check for pattern matches (routes with parameters like :id)
+  // Handle /clientes/:id/editar → "Editar Cliente"
+  if (cleanPath.contains('/editar') || cleanPath.contains('/edit')) {
+    if (cleanPath.startsWith('/clientes/')) return 'Editar Cliente';
+    if (cleanPath.startsWith('/inventory/products/')) return 'Editar Producto';
+    if (cleanPath.startsWith('/inventory/categories/')) return 'Editar Categoría';
+    if (cleanPath.startsWith('/inventory/brands/')) return 'Editar Marca';
+    if (cleanPath.startsWith('/sales/invoices/')) return 'Editar Factura';
+    if (cleanPath.startsWith('/purchases/invoices/')) return 'Editar Compra';
+    if (cleanPath.startsWith('/purchases/suppliers/')) return 'Editar Proveedor';
+    if (cleanPath.startsWith('/accounting/accounts/')) return 'Editar Cuenta';
+    if (cleanPath.startsWith('/accounting/journal-entries/')) return 'Editar Asiento';
+    if (cleanPath.startsWith('/accounting/expenses/')) return 'Editar Gasto';
+    if (cleanPath.startsWith('/hr/employees/')) return 'Editar Empleado';
+    if (cleanPath.startsWith('/taller/pega/')) return 'Editar Pega';
+  }
+  
+  // Handle detail views /clientes/:id → "Cliente"
+  if (RegExp(r'^/clientes/[^/]+$').hasMatch(cleanPath)) return 'Detalle Cliente';
+  if (RegExp(r'^/taller/pega/[^/]+$').hasMatch(cleanPath)) return 'Detalle Pega';
+  if (RegExp(r'^/sales/invoices/[^/]+$').hasMatch(cleanPath)) return 'Detalle Factura';
+  if (RegExp(r'^/purchases/invoices/[^/]+$').hasMatch(cleanPath)) return 'Detalle Compra';
+  if (RegExp(r'^/inventory/products/[^/]+$').hasMatch(cleanPath)) return 'Detalle Producto';
+  if (RegExp(r'^/accounting/expenses/[^/]+$').hasMatch(cleanPath)) return 'Detalle Gasto';
+  
+  // Fallback: Extract last segment and capitalize
+  final segments = cleanPath.split('/').where((s) => s.isNotEmpty).toList();
+  if (segments.isNotEmpty) {
+    final last = segments.last;
+    // Skip UUIDs
+    if (RegExp(r'^[0-9a-f-]{36}$').hasMatch(last) && segments.length > 1) {
+      return segments[segments.length - 2].replaceAll('-', ' ').toUpperCase();
+    }
+    return last.replaceAll('-', ' ').split(' ').map((w) => 
+      w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w
+    ).join(' ');
+  }
+  
+  return 'Sin título';
+}
+
 /// Represents a single workspace tab
 class Workspace {
   final String id;
-  final String title;
+  String title;  // Made mutable for dynamic updates
   final String initialRoute;
+  String currentRoute;  // Track current route for title updates
   final GlobalKey<NavigatorState> navigatorKey;
   
   Workspace({
     required this.id,
     required this.title,
     required this.initialRoute,
-  }) : navigatorKey = GlobalKey<NavigatorState>();
+  }) : currentRoute = initialRoute,
+       navigatorKey = GlobalKey<NavigatorState>();
   
   @override
   bool operator ==(Object other) =>
@@ -125,13 +278,33 @@ class WorkspaceManager extends ChangeNotifier {
   /// Update workspace title
   void updateWorkspaceTitle(int index, String newTitle) {
     if (index >= 0 && index < _workspaces.length) {
+      _workspaces[index].title = newTitle;
+      notifyListeners();
+    }
+  }
+  
+  /// Update the active workspace's title based on current route
+  /// Called when navigation changes within a workspace
+  void updateActiveWorkspaceRoute(String newRoute) {
+    if (_workspaces.isEmpty) return;
+    
+    final workspace = _workspaces[_activeIndex];
+    if (workspace.currentRoute == newRoute) return;
+    
+    workspace.currentRoute = newRoute;
+    workspace.title = getRouteTitle(newRoute);
+    debugPrint('📍 [WorkspaceManager] Updated workspace "${workspace.id}" to route: $newRoute → title: "${workspace.title}"');
+    notifyListeners();
+  }
+  
+  /// Update a specific workspace's route and title
+  void updateWorkspaceRoute(int index, String newRoute) {
+    if (index >= 0 && index < _workspaces.length) {
       final workspace = _workspaces[index];
-      final updatedWorkspace = Workspace(
-        id: workspace.id,
-        title: newTitle,
-        initialRoute: workspace.initialRoute,
-      );
-      _workspaces[index] = updatedWorkspace;
+      if (workspace.currentRoute == newRoute) return;
+      
+      workspace.currentRoute = newRoute;
+      workspace.title = getRouteTitle(newRoute);
       notifyListeners();
     }
   }

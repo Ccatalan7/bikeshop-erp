@@ -234,15 +234,16 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
   
   Widget _buildSplitView(List<PurchaseInvoice> invoices, PurchaseService purchaseService) {
+    final theme = Theme.of(context);
     return Row(
       children: [
         // Left pane - Invoice list
         Container(
           width: _listPaneWidth,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: theme.cardColor,
             border: Border(
-              right: BorderSide(color: Colors.grey[300]!, width: 1),
+              right: BorderSide(color: theme.dividerColor, width: 1),
             ),
           ),
           child: Column(
@@ -251,9 +252,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: theme.cardColor,
                   border: Border(
-                    bottom: BorderSide(color: Colors.grey[200]!),
+                    bottom: BorderSide(color: theme.dividerColor),
                   ),
                 ),
                 child: _buildSearchBar(),
@@ -279,7 +280,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             onHorizontalDragEnd: (_) => _saveListPaneWidth(_listPaneWidth),
             child: Container(
               width: 1,
-              color: Colors.grey[300],
+              color: theme.dividerColor,
             ),
           ),
         ),
@@ -357,6 +358,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
   
   Widget _buildSummaryCard(String label, String value, IconData icon, Color color) {
+    final theme = Theme.of(context);
     return Expanded(
       child: Row(
         children: [
@@ -378,7 +380,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   label,
                   style: TextStyle(
                     fontSize: 11,
-                    color: Colors.grey[600],
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -389,7 +391,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey[900],
+                    color: theme.textTheme.bodyLarge?.color,
                   ),
                 ),
               ],
@@ -401,16 +403,17 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
   
   Widget _buildInvoiceCardsList(List<PurchaseInvoice> invoices) {
+    final theme = Theme.of(context);
     if (invoices.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey[400]),
+            Icon(Icons.receipt_long_outlined, size: 48, color: theme.hintColor),
             const SizedBox(height: 12),
             Text(
               'No se encontraron facturas',
-              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+              style: TextStyle(color: theme.hintColor, fontSize: 14),
             ),
           ],
         ),
@@ -423,14 +426,17 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         final invoice = invoices[index];
         final isSelected = _selectedInvoice?.id == invoice.id;
         final balance = invoice.total - invoice.paidAmount;
+        final isDark = theme.brightness == Brightness.dark;
         
         return Container(
           decoration: BoxDecoration(
-            color: isSelected ? Colors.blue[50] : Colors.white,
+            color: isSelected 
+                ? (isDark ? theme.colorScheme.primary.withOpacity(0.15) : Colors.blue[50]) 
+                : theme.cardColor,
             border: Border(
-              bottom: BorderSide(color: Colors.grey[200]!),
+              bottom: BorderSide(color: theme.dividerColor),
               left: BorderSide(
-                color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                color: isSelected ? theme.colorScheme.primary : Colors.transparent,
                 width: 3,
               ),
             ),
@@ -463,18 +469,18 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   Text(
                     invoice.supplierName ?? 'Sin proveedor',
                     style: TextStyle(
-                      color: Colors.grey[700],
+                      color: theme.textTheme.bodyMedium?.color?.withOpacity(0.8),
                       fontSize: 13,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.calendar_today, size: 13, color: Colors.grey[600]),
+                      Icon(Icons.calendar_today, size: 13, color: theme.hintColor),
                       const SizedBox(width: 4),
                       Text(
                         ChileanUtils.formatDate(invoice.date),
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        style: TextStyle(color: theme.hintColor, fontSize: 12),
                       ),
                       const Spacer(),
                       Text(
@@ -524,14 +530,16 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             : null,
         isDense: true,
         filled: true,
-        fillColor: Colors.grey[50],
+        fillColor: Theme.of(context).brightness == Brightness.dark 
+            ? Theme.of(context).colorScheme.surfaceContainerHighest 
+            : Colors.grey[50],
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(color: Theme.of(context).dividerColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(color: Theme.of(context).dividerColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -543,16 +551,17 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
   
   Widget _buildInvoiceTable(List<PurchaseInvoice> invoices, PurchaseService purchaseService, {required bool isFullWidth}) {
+    final theme = Theme.of(context);
     if (invoices.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey[400]),
+            Icon(Icons.receipt_long_outlined, size: 64, color: theme.hintColor),
             const SizedBox(height: 16),
             Text(
               _searchTerm.isEmpty ? 'No hay facturas de compra' : 'No se encontraron facturas',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey),
+              style: theme.textTheme.titleMedium?.copyWith(color: theme.hintColor),
             ),
           ],
         ),
@@ -563,10 +572,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         border: Border(
-          top: BorderSide(color: Colors.grey[300]!),
-          bottom: BorderSide(color: Colors.grey[300]!),
+          top: BorderSide(color: theme.dividerColor),
+          bottom: BorderSide(color: theme.dividerColor),
         ),
       ),
       child: Column(
@@ -602,11 +611,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
   
   Widget _buildTableHeader(bool isFullWidth) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: isDark ? Colors.grey[850] : Colors.grey[50],
         border: Border(
-          bottom: BorderSide(color: Colors.grey[300]!),
+          bottom: BorderSide(color: Theme.of(context).dividerColor),
         ),
       ),
       child: Row(
@@ -717,18 +727,22 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
   
   Widget _buildInvoiceRow(PurchaseInvoice invoice, bool isSelected, bool isFullWidth) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return InkWell(
       onTap: () {
         setState(() {
           _selectedInvoice = isSelected ? null : invoice;
         });
       },
-      hoverColor: Colors.grey[50],
+      hoverColor: isDark ? Colors.grey[800] : Colors.grey[50],
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue[50] : null,
+          color: isSelected 
+              ? (isDark ? theme.colorScheme.primary.withOpacity(0.15) : Colors.blue[50]) 
+              : null,
           border: Border(
-            bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+            bottom: BorderSide(color: theme.dividerColor, width: 1),
           ),
         ),
         child: Row(

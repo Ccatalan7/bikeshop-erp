@@ -880,6 +880,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     Color color, {
     bool isNumber = true,
   }) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -899,7 +900,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                   label,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[600],
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
                   ),
                 ),
               ),
@@ -1235,11 +1236,13 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   ) {
     final isReceivedView = _statusFilter == 'received';
     final hasMultiplePages = filteredItems.length > _itemsPerPage;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey[200],
-        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+        color: isDark ? Colors.grey[850] : Colors.grey[200],
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -1330,11 +1333,12 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   Widget _buildItemRow(SmartPurchaseListItem item, SmartPurchaseListService service) {
     final isSelected = _selectedItems.contains(item.id);
     final isReceivedView = _statusFilter == 'received';
+    final theme = Theme.of(context);
     
     return Container(
       decoration: BoxDecoration(
-        color: isSelected ? Theme.of(context).primaryColor.withOpacity(0.05) : null,
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        color: isSelected ? theme.primaryColor.withOpacity(0.05) : null,
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(

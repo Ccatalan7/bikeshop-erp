@@ -1,12 +1,29 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// Default order of menu modules
+const List<String> defaultModuleOrder = [
+  'accounting',
+  'tax_reports',
+  'customers',
+  'workshop',
+  'smart_features',
+  'inventory',
+  'sales',
+  'purchases',
+  'pos',
+  'hr',
+  'tools',
+];
 
 /// Service to manage navigation drawer visibility state
 /// This allows universal expand/collapse functionality across all pages
 class NavigationService extends ChangeNotifier {
   static const String _drawerVisibleKey = 'navigation_drawer_visible';
   static const String _drawerWidthKey = 'navigation_drawer_width';
+  static const String _moduleOrderKey = 'navigation_module_order';
   static const double _minDrawerWidth = 200.0;
   static const double _maxDrawerWidth = 400.0;
   static const double _defaultDrawerWidth = 280.0;
@@ -15,11 +32,15 @@ class NavigationService extends ChangeNotifier {
   bool _isInitialized = false;
   double _drawerWidth = _defaultDrawerWidth;
   bool _isResizing = false;
+  List<String> _moduleOrder = List.from(defaultModuleOrder);
+  bool _isReorderMode = false;
 
   bool get isDrawerVisible => _isDrawerVisible;
   bool get isInitialized => _isInitialized;
   double get drawerWidth => _drawerWidth;
   bool get isResizing => _isResizing;
+  List<String> get moduleOrder => List.unmodifiable(_moduleOrder);
+  bool get isReorderMode => _isReorderMode;
 
   /// Initialize the service and load saved state
   Future<void> initialize() async {
@@ -29,12 +50,83 @@ class NavigationService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       _isDrawerVisible = prefs.getBool(_drawerVisibleKey) ?? true;
       _drawerWidth = prefs.getDouble(_drawerWidthKey) ?? _defaultDrawerWidth;
+      
+      // Load module order
+      final orderJson = prefs.getString(_moduleOrderKey);
+      if (orderJson != null) {
+        final List<dynamic> savedOrder = jsonDecode(orderJson);
+        // Validate and merge with defaults (in case new modules were added)
+        _moduleOrder = _mergeModuleOrder(savedOrder.cast<String>());
+      }
+      
       _isInitialized = true;
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading navigation state: $e');
       _isInitialized = true;
       notifyListeners();
+    }
+  }
+  
+  /// Merge saved order with defaults to handle new modules
+  List<String> _mergeModuleOrder(List<String> savedOrder) {
+    final result = <String>[];
+    // Add saved items in order (if they still exist in defaults)
+    for (final item in savedOrder) {
+      if (defaultModuleOrder.contains(item) && !result.contains(item)) {
+        result.add(item);
+      }
+    }
+    // Add any new modules that weren't in saved order
+    for (final item in defaultModuleOrder) {
+      if (!result.contains(item)) {
+        result.add(item);
+      }
+    }
+    return result;
+  }
+
+  /// Toggle reorder mode
+  void toggleReorderMode() {
+    _isReorderMode = !_isReorderMode;
+    notifyListeners();
+  }
+  
+  /// Exit reorder mode
+  void exitReorderMode() {
+    if (!_isReorderMode) return;
+    _isReorderMode = false;
+    notifyListeners();
+  }
+  
+  /// Reorder modules
+  Future<void> reorderModules(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    final item = _moduleOrder.removeAt(oldIndex);
+    _moduleOrder.insert(newIndex, item);
+    notifyListeners();
+    
+    // Save to preferences
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_moduleOrderKey, jsonEncode(_moduleOrder));
+    } catch (e) {
+      debugPrint('Error saving module order: $e');
+    }
+  }
+  
+  /// Reset module order to default
+  Future<void> resetModuleOrder() async {
+    _moduleOrder = List.from(defaultModuleOrder);
+    notifyListeners();
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_moduleOrderKey);
+    } catch (e) {
+      debugPrint('Error resetting module order: $e');
     }
   }
 

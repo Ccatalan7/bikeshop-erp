@@ -83,6 +83,26 @@ class _PegasTablePageState extends State<PegasTablePage>
   // Column visibility panel
   bool _showColumnPanel = false;
 
+  // Column drag state for live preview
+  String? _draggingColumnId;
+  int? _dragTargetIndex;
+
+  /// Get columns in display order (with live preview during drag)
+  List<ColumnConfig> get _displayColumns {
+    final visibleColumns = _columns.where((col) => col.visible).toList();
+    if (_draggingColumnId != null && _dragTargetIndex != null) {
+      final sourceIndex = visibleColumns.indexWhere((c) => c.id == _draggingColumnId);
+      if (sourceIndex != -1 && _dragTargetIndex! >= 0 && _dragTargetIndex! < visibleColumns.length) {
+        final reordered = List<ColumnConfig>.from(visibleColumns);
+        final draggedColumn = reordered.removeAt(sourceIndex);
+        final insertIndex = _dragTargetIndex!.clamp(0, reordered.length);
+        reordered.insert(insertIndex, draggedColumn);
+        return reordered;
+      }
+    }
+    return visibleColumns;
+  }
+
   // View mode: 'table', 'board', 'calendar', 'gantt'
   String _viewMode = 'table';
 
@@ -1250,7 +1270,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _buildTableHeader(double tableWidth) {
-    final visibleColumns = _columns.where((col) => col.visible).toList();
+    final displayColumns = _displayColumns;
 
     return Container(
       width: tableWidth,
@@ -1267,12 +1287,14 @@ class _PegasTablePageState extends State<PegasTablePage>
         ),
       ),
       child: Row(
-        children: visibleColumns.map(_buildHeaderCell).toList(),
+        children: displayColumns.asMap().entries.map((entry) {
+          return _buildHeaderCell(entry.value, entry.key, displayColumns.length);
+        }).toList(),
       ),
     );
   }
 
-  Widget _buildHeaderCell(ColumnConfig col) {
+  Widget _buildHeaderCell(ColumnConfig col, int displayIndex, int totalColumns) {
     final theme = Theme.of(context);
 
     if (col.id == 'checkbox') {
@@ -1308,28 +1330,96 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     Widget buildContent() => _buildHeaderContent(col);
     Widget baseContent;
+    final isDragging = _draggingColumnId == col.id;
 
     if (col.reorderable) {
       baseContent = DragTarget<String>(
-        onWillAccept: (sourceId) => sourceId != null && sourceId != col.id,
-        onAccept: (sourceId) => _reorderColumns(sourceId, col.id),
+        onWillAcceptWithDetails: (details) {
+          if (details.data == col.id) return false;
+          // Update target index for live preview
+          if (_dragTargetIndex != displayIndex) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _draggingColumnId != null) {
+                setState(() {
+                  _dragTargetIndex = displayIndex;
+                });
+              }
+            });
+          }
+          return true;
+        },
+        onLeave: (_) {
+          // Don't clear target when leaving - it causes flickering
+        },
+        onAcceptWithDetails: (details) {
+          // Apply the reorder using the tracked target index
+          final sourceId = details.data;
+          if (_dragTargetIndex != null) {
+            _applyColumnReorder(sourceId, _dragTargetIndex!);
+          }
+          setState(() {
+            _draggingColumnId = null;
+            _dragTargetIndex = null;
+          });
+        },
         builder: (context, candidateData, rejectedData) {
-          final isActive = candidateData.isNotEmpty;
-          final decoratedChild = DecoratedBox(
-            decoration: BoxDecoration(
-              color: isActive
-                  ? theme.colorScheme.primary.withOpacity(0.08)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: buildContent(),
-          );
-
-          return LongPressDraggable<String>(
+          return Draggable<String>(
             data: col.id,
             axis: Axis.horizontal,
-            feedback: _buildHeaderDragFeedback(col),
-            child: decoratedChild,
+            feedback: Material(
+              color: Colors.transparent,
+              child: Opacity(
+                opacity: 0.85,
+                child: Container(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.drag_indicator, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 6),
+                      Text(
+                        col.label,
+                        style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            onDragStarted: () {
+              setState(() {
+                _draggingColumnId = col.id;
+                _dragTargetIndex = displayIndex;
+              });
+            },
+            onDragEnd: (_) {
+              setState(() {
+                _draggingColumnId = null;
+                _dragTargetIndex = null;
+              });
+            },
+            onDraggableCanceled: (_, __) {
+              setState(() {
+                _draggingColumnId = null;
+                _dragTargetIndex = null;
+              });
+            },
+            child: Opacity(
+              opacity: isDragging ? 0.3 : 1.0,
+              child: buildContent(),
+            ),
           );
         },
       );
@@ -1410,62 +1500,39 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
-  Widget _buildHeaderDragFeedback(ColumnConfig col) {
-    return Material(
-      elevation: 6,
-      color: Colors.transparent,
-      child: Container(
-        width: col.width,
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-              color: Theme.of(context).colorScheme.primary, width: 1),
-        ),
-        child: DefaultTextStyle(
-          style: Theme.of(context)
-                  .textTheme
-                  .labelLarge
-                  ?.copyWith(fontWeight: FontWeight.w600) ??
-              const TextStyle(fontWeight: FontWeight.w600),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(col.label, overflow: TextOverflow.ellipsis),
-          ),
-        ),
-      ),
-    );
-  }
 
-  void _reorderColumns(String sourceId, String targetId) {
-    if (sourceId == targetId) return;
-    final sourceIndex = _columns.indexWhere((c) => c.id == sourceId);
-    final targetIndex = _columns.indexWhere((c) => c.id == targetId);
-    if (sourceIndex == -1 || targetIndex == -1) return;
+
+  /// Apply column reorder using display indices (for live preview drag)
+  void _applyColumnReorder(String sourceId, int targetDisplayIndex) {
+    final visibleColumns = _columns.where((col) => col.visible).toList();
+    final sourceDisplayIndex = visibleColumns.indexWhere((c) => c.id == sourceId);
+    if (sourceDisplayIndex == -1 || sourceDisplayIndex == targetDisplayIndex) return;
+
+    // Get the actual column indices in _columns (not just visible)
+    final sourceActualIndex = _columns.indexWhere((c) => c.id == sourceId);
+    if (sourceActualIndex == -1) return;
+
+    // Calculate the target actual index based on visible columns
+    // We need to find where in _columns the visible column at targetDisplayIndex is
+    int targetActualIndex;
+    if (targetDisplayIndex >= visibleColumns.length) {
+      // Insert at end of visible columns
+      final lastVisible = visibleColumns.last;
+      targetActualIndex = _columns.indexWhere((c) => c.id == lastVisible.id) + 1;
+    } else {
+      final targetColumn = visibleColumns[targetDisplayIndex];
+      targetActualIndex = _columns.indexWhere((c) => c.id == targetColumn.id);
+    }
 
     setState(() {
-      final column = _columns.removeAt(sourceIndex);
-
-      // After removal, target index may shift if source was before target
-      var adjustedTargetIndex = targetIndex;
-      if (sourceIndex < targetIndex) {
-        adjustedTargetIndex -= 1;
+      final column = _columns.removeAt(sourceActualIndex);
+      // Adjust target index if source was before it
+      if (sourceActualIndex < targetActualIndex) {
+        targetActualIndex -= 1;
       }
-
-      if (sourceIndex < targetIndex) {
-        // Moving to the right → insert AFTER target column
-        final insertIndex = (adjustedTargetIndex + 1).clamp(0, _columns.length);
-        _columns.insert(insertIndex, column);
-      } else {
-        // Moving to the left → insert BEFORE target column
-        final insertIndex = adjustedTargetIndex.clamp(0, _columns.length);
-        _columns.insert(insertIndex, column);
-      }
+      _columns.insert(targetActualIndex.clamp(0, _columns.length), column);
     });
 
-    // Save the new column order
     _saveColumnOrder();
   }
 
@@ -1495,7 +1562,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           ),
         ),
         child: Row(
-          children: _columns.where((col) => col.visible).map((col) {
+          children: _displayColumns.map((col) {
             return _buildDataCell(col, job, customer, bike);
           }).toList(),
         ),

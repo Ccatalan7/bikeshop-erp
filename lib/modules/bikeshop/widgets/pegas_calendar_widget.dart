@@ -945,34 +945,37 @@ class _HoverImageWidget extends StatefulWidget {
 class _HoverImageWidgetState extends State<_HoverImageWidget> {
   bool _isHovered = false;
   OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
 
   void _showZoomedImage(BuildContext context) {
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
-    final offset = renderBox.localToGlobal(Offset.zero);
-
     _overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
-        left: offset.dx + widget.size + 8,
-        top: offset.dy - 75,
-        child: Material(
-          elevation: 8,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            width: 300,
-            height: 300,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[300]!, width: 2),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Image.network(
-                widget.imageUrl,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: Colors.grey[200],
-                  child: const Icon(Icons.broken_image, size: 50),
+        width: 300,
+        height: 300,
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: Offset(widget.size + 8, -130),
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[300]!, width: 2),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(
+                  widget.imageUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.broken_image, size: 50),
+                  ),
                 ),
               ),
             ),
@@ -991,34 +994,37 @@ class _HoverImageWidgetState extends State<_HoverImageWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) {
-        setState(() => _isHovered = true);
-        _showZoomedImage(context);
-      },
-      onExit: (_) {
-        setState(() => _isHovered = false);
-        _hideZoomedImage();
-      },
-      child: Container(
-        width: widget.size,
-        height: widget.size,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: _isHovered ? Theme.of(context).colorScheme.primary : Colors.grey[300]!,
-            width: _isHovered ? 2 : 1,
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: MouseRegion(
+        onEnter: (_) {
+          setState(() => _isHovered = true);
+          _showZoomedImage(context);
+        },
+        onExit: (_) {
+          setState(() => _isHovered = false);
+          _hideZoomedImage();
+        },
+        child: Container(
+          width: widget.size,
+          height: widget.size,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: _isHovered ? Theme.of(context).colorScheme.primary : Colors.grey[300]!,
+              width: _isHovered ? 2 : 1,
+            ),
+            color: Colors.grey[100],
           ),
-          color: Colors.grey[100],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(5),
-          child: Image.network(
-            widget.imageUrl,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => Container(
-              color: Colors.grey[200],
-              child: const Icon(Icons.image, size: 20, color: Colors.grey),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(5),
+            child: Image.network(
+              widget.imageUrl,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => Container(
+                color: Colors.grey[200],
+                child: const Icon(Icons.image, size: 20, color: Colors.grey),
+              ),
             ),
           ),
         ),

@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../services/auth_service.dart';
 import '../services/navigation_service.dart';
 import '../services/workspace_manager.dart';
+import '../services/window_zoom_service.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import 'expandable_menu_item.dart';
 
@@ -370,6 +371,183 @@ const List<MenuSubItem> _toolsMenuItems = [
 
 const String _toolsSectionKey = 'tools';
 
+/// Shows the sidebar options menu with live-updating zoom controls
+void _showSidebarOptionsMenu(BuildContext context, NavigationService navigationService) {
+  final RenderBox button = context.findRenderObject() as RenderBox;
+  final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
+  final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
+  
+  showDialog(
+    context: context,
+    barrierColor: Colors.transparent,
+    builder: (dialogContext) {
+      return Stack(
+        children: [
+          // Invisible barrier to close on tap outside
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => Navigator.of(dialogContext).pop(),
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          // Menu positioned above the button
+          Positioned(
+            left: buttonPosition.dx,
+            bottom: overlay.size.height - buttonPosition.dy + 8,
+            child: _SidebarOptionsPanel(
+              navigationService: navigationService,
+              onClose: () => Navigator.of(dialogContext).pop(),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// Stateful widget for the options panel to enable live updates
+class _SidebarOptionsPanel extends StatelessWidget {
+  final NavigationService navigationService;
+  final VoidCallback onClose;
+
+  const _SidebarOptionsPanel({
+    required this.navigationService,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Consumer2<WindowZoomService, AppearanceService>(
+      builder: (context, zoomService, appearanceService, _) {
+        final zoomPercent = (zoomService.scale * 100).round();
+        
+        return Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(8),
+          color: theme.colorScheme.surface,
+          child: Container(
+            width: 220,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Dark mode toggle
+                _OptionTile(
+                  icon: appearanceService.themeMode == ThemeMode.dark
+                      ? Icons.light_mode
+                      : Icons.dark_mode,
+                  label: appearanceService.themeMode == ThemeMode.dark
+                      ? 'Modo claro'
+                      : 'Modo oscuro',
+                  onTap: () {
+                    final newMode = appearanceService.themeMode == ThemeMode.dark
+                        ? ThemeMode.light
+                        : ThemeMode.dark;
+                    appearanceService.setThemeMode(newMode);
+                  },
+                ),
+                // Zoom controls
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.zoom_in, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                      const SizedBox(width: 12),
+                      Text('Zoom', style: theme.textTheme.bodyMedium),
+                      const Spacer(),
+                      // Zoom out button
+                      IconButton(
+                        icon: const Icon(Icons.remove, size: 16),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        onPressed: zoomService.scale > 0.5 ? () => zoomService.zoomOut() : null,
+                      ),
+                      // Live zoom percentage
+                      Container(
+                        width: 42,
+                        alignment: Alignment.center,
+                        child: Text(
+                          '$zoomPercent%',
+                          style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      // Zoom in button
+                      IconButton(
+                        icon: const Icon(Icons.add, size: 16),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        onPressed: zoomService.scale < 3.0 ? () => zoomService.zoomIn() : null,
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+                // Reorder modules
+                _OptionTile(
+                  icon: navigationService.isReorderMode ? Icons.check : Icons.swap_vert,
+                  label: navigationService.isReorderMode ? 'Guardar orden' : 'Reordenar módulos',
+                  onTap: () {
+                    navigationService.toggleReorderMode();
+                    onClose();
+                  },
+                ),
+                // Reset order (only in reorder mode)
+                if (navigationService.isReorderMode)
+                  _OptionTile(
+                    icon: Icons.restart_alt,
+                    label: 'Restaurar orden',
+                    onTap: () {
+                      navigationService.resetModuleOrder();
+                      onClose();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _OptionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _OptionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+            const SizedBox(width: 12),
+            Text(label, style: theme.textTheme.bodyMedium),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class MainLayout extends StatelessWidget {
   final Widget? child;
   final Widget? body;
@@ -554,6 +732,146 @@ class _AppSidebarState extends State<AppSidebar> {
   String? _expandedSection;
   String? _lastLocation;
 
+  // Module configuration for reordering
+  Widget _buildModuleWidget(String moduleKey, String currentLocation) {
+    switch (moduleKey) {
+      case 'accounting':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.account_balance_outlined,
+          activeIcon: Icons.account_balance,
+          title: 'Contabilidad',
+          currentLocation: currentLocation,
+          subItems: _accountingMenuItems,
+          isExpanded: _expandedSection == _accountingSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_accountingSectionKey, expand),
+        );
+      case 'tax_reports':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.receipt_long_outlined,
+          activeIcon: Icons.receipt_long,
+          title: 'Impuestos',
+          currentLocation: currentLocation,
+          subItems: _taxReportsMenuItems,
+          isExpanded: _expandedSection == _taxReportsSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_taxReportsSectionKey, expand),
+        );
+      case 'customers':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.people_outline,
+          activeIcon: Icons.people,
+          title: 'Clientes',
+          currentLocation: currentLocation,
+          subItems: _customersMenuItems,
+          isExpanded: _expandedSection == _customersSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_customersSectionKey, expand),
+        );
+      case 'workshop':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.pedal_bike_outlined,
+          activeIcon: Icons.pedal_bike,
+          title: 'Taller',
+          currentLocation: currentLocation,
+          subItems: _workshopMenuItems,
+          isExpanded: _expandedSection == _workshopSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_workshopSectionKey, expand),
+        );
+      case 'smart_features':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.lightbulb_outlined,
+          activeIcon: Icons.lightbulb,
+          title: 'Smart Features',
+          currentLocation: currentLocation,
+          subItems: _smartFeaturesMenuItems,
+          isExpanded: _expandedSection == _smartFeaturesSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_smartFeaturesSectionKey, expand),
+        );
+      case 'inventory':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.inventory_2_outlined,
+          activeIcon: Icons.inventory_2,
+          title: 'Inventario',
+          currentLocation: currentLocation,
+          subItems: _inventoryMenuItems,
+          isExpanded: _expandedSection == _inventorySectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_inventorySectionKey, expand),
+        );
+      case 'sales':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.receipt_long_outlined,
+          activeIcon: Icons.receipt_long,
+          title: 'Ventas',
+          currentLocation: currentLocation,
+          subItems: _salesMenuItems,
+          isExpanded: _expandedSection == _salesSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_salesSectionKey, expand),
+        );
+      case 'purchases':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.shopping_cart_outlined,
+          activeIcon: Icons.shopping_cart,
+          title: 'Compras',
+          currentLocation: currentLocation,
+          subItems: _purchasesMenuItems,
+          isExpanded: _expandedSection == _purchasesSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_purchasesSectionKey, expand),
+        );
+      case 'pos':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.point_of_sale_outlined,
+          activeIcon: Icons.point_of_sale,
+          title: 'POS',
+          currentLocation: currentLocation,
+          subItems: _posMenuItems,
+          isExpanded: _expandedSection == _posSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_posSectionKey, expand),
+        );
+      case 'hr':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.badge_outlined,
+          activeIcon: Icons.badge,
+          title: 'RR.HH.',
+          currentLocation: currentLocation,
+          subItems: _hrMenuItems,
+          isExpanded: _expandedSection == _hrSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_hrSectionKey, expand),
+        );
+      case 'tools':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.build_circle_outlined,
+          activeIcon: Icons.build_circle,
+          title: 'Herramientas',
+          currentLocation: currentLocation,
+          subItems: _toolsMenuItems,
+          isExpanded: _expandedSection == _toolsSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_toolsSectionKey, expand),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -575,6 +893,11 @@ class _AppSidebarState extends State<AppSidebar> {
         final currentLocation = routerState.uri.path;
         if (currentLocation != _lastLocation) {
           _lastLocation = currentLocation;
+          
+          // Update workspace tab title based on current route
+          final workspaceManager = context.read<WorkspaceManager>();
+          workspaceManager.updateActiveWorkspaceRoute(currentLocation);
+          
           final matchingSection = _resolveSectionForPath(currentLocation);
           if (matchingSection != _expandedSection && mounted) {
             setState(() {
@@ -725,185 +1048,145 @@ class _AppSidebarState extends State<AppSidebar> {
 
           // Navigation Menu
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              children: [
-                // Dashboard
-                _buildSidebarItem(
-                  context,
-                  icon: Icons.dashboard_outlined,
-                  activeIcon: Icons.dashboard,
-                  title: 'Inicio',
-                  route: '/dashboard',
-                  currentLocation: currentLocation,
-                ),
+            child: Consumer<NavigationService>(
+              builder: (context, navigationService, _) {
+                final moduleOrder = navigationService.moduleOrder;
+                final isReorderMode = navigationService.isReorderMode;
+                
+                if (isReorderMode) {
+                  // Reorder mode: Show ReorderableListView
+                  return ReorderableListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    buildDefaultDragHandles: false,
+                    itemCount: moduleOrder.length + 2, // +2 for dashboard and divider
+                    onReorder: (oldIndex, newIndex) {
+                      // Adjust for dashboard item (index 0) and divider (index 1)
+                      if (oldIndex < 2 || newIndex < 2) return;
+                      navigationService.reorderModules(oldIndex - 2, newIndex - 2);
+                    },
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        // Dashboard (non-reorderable)
+                        return Container(
+                          key: const ValueKey('dashboard'),
+                          child: Column(
+                            children: [
+                              _buildSidebarItem(
+                                context,
+                                icon: Icons.dashboard_outlined,
+                                activeIcon: Icons.dashboard,
+                                title: 'Inicio',
+                                route: '/dashboard',
+                                currentLocation: currentLocation,
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          ),
+                        );
+                      }
+                      if (index == 1) {
+                        // Divider (non-reorderable)
+                        return Container(
+                          key: const ValueKey('divider'),
+                          child: _buildSectionDivider(context),
+                        );
+                      }
+                      // Module items
+                      final moduleIndex = index - 2;
+                      final moduleKey = moduleOrder[moduleIndex];
+                      return ReorderableDragStartListener(
+                        key: ValueKey(moduleKey),
+                        index: index,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            border: Border.all(
+                              color: theme.colorScheme.primary.withOpacity(0.3),
+                              width: 1,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          child: Row(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Icon(
+                                  Icons.drag_indicator,
+                                  size: 18,
+                                  color: theme.colorScheme.primary.withOpacity(0.6),
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildModuleWidget(moduleKey, currentLocation),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                }
+                
+                // Normal mode: Regular ListView
+                return ListView(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  children: [
+                    // Dashboard
+                    _buildSidebarItem(
+                      context,
+                      icon: Icons.dashboard_outlined,
+                      activeIcon: Icons.dashboard,
+                      title: 'Inicio',
+                      route: '/dashboard',
+                      currentLocation: currentLocation,
+                    ),
 
-                const SizedBox(height: 8),
+                    const SizedBox(height: 8),
 
-                // Core Modules Section
-                _buildSectionDivider(context),
+                    // Core Modules Section
+                    _buildSectionDivider(context),
 
-                ExpandableMenuItem(
-                  icon: Icons.account_balance_outlined,
-                  activeIcon: Icons.account_balance,
-                  title: 'Contabilidad',
-                  currentLocation: currentLocation,
-                  subItems: _accountingMenuItems,
-                  isExpanded: _expandedSection == _accountingSectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_accountingSectionKey, expand),
-                ),
+                    // Render modules in custom order
+                    ...moduleOrder.map((moduleKey) => _buildModuleWidget(moduleKey, currentLocation)),
 
-                ExpandableMenuItem(
-                  icon: Icons.receipt_long_outlined,
-                  activeIcon: Icons.receipt_long,
-                  title: 'Impuestos',
-                  currentLocation: currentLocation,
-                  subItems: _taxReportsMenuItems,
-                  isExpanded: _expandedSection == _taxReportsSectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_taxReportsSectionKey, expand),
-                ),
+                    const SizedBox(height: 8),
+                    _buildSectionDivider(context),
 
-                ExpandableMenuItem(
-                  icon: Icons.people_outline,
-                  activeIcon: Icons.people,
-                  title: 'Clientes',
-                  currentLocation: currentLocation,
-                  subItems: _customersMenuItems,
-                  isExpanded: _expandedSection == _customersSectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_customersSectionKey, expand),
-                ),
+                    // Website Module
+                    _buildSidebarItem(
+                      context,
+                      icon: Icons.web_outlined,
+                      activeIcon: Icons.web,
+                      title: 'Sitio Web',
+                      route: '/website',
+                      currentLocation: currentLocation,
+                      enabled: true,
+                    ),
 
-                ExpandableMenuItem(
-                  icon: Icons.pedal_bike_outlined,
-                  activeIcon: Icons.pedal_bike,
-                  title: 'Taller',
-                  currentLocation: currentLocation,
-                  subItems: _workshopMenuItems,
-                  isExpanded: _expandedSection == _workshopSectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_workshopSectionKey, expand),
-                ),
+                    // Additional Modules (Disabled for now)
+                    _buildSidebarItem(
+                      context,
+                      icon: Icons.build_outlined,
+                      activeIcon: Icons.build,
+                      title: 'Mantención',
+                      route: '/maintenance',
+                      currentLocation: currentLocation,
+                      enabled: false,
+                    ),
 
-                ExpandableMenuItem(
-                  icon: Icons.lightbulb_outlined,
-                  activeIcon: Icons.lightbulb,
-                  title: 'Smart Features',
-                  currentLocation: currentLocation,
-                  subItems: _smartFeaturesMenuItems,
-                  isExpanded: _expandedSection == _smartFeaturesSectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_smartFeaturesSectionKey, expand),
-                ),
-
-                ExpandableMenuItem(
-                  icon: Icons.inventory_2_outlined,
-                  activeIcon: Icons.inventory_2,
-                  title: 'Inventario',
-                  currentLocation: currentLocation,
-                  subItems: _inventoryMenuItems,
-                  isExpanded: _expandedSection == _inventorySectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_inventorySectionKey, expand),
-                ),
-
-                ExpandableMenuItem(
-                  icon: Icons.receipt_long_outlined,
-                  activeIcon: Icons.receipt_long,
-                  title: 'Ventas',
-                  currentLocation: currentLocation,
-                  subItems: _salesMenuItems,
-                  isExpanded: _expandedSection == _salesSectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_salesSectionKey, expand),
-                ),
-
-                ExpandableMenuItem(
-                  icon: Icons.shopping_cart_outlined,
-                  activeIcon: Icons.shopping_cart,
-                  title: 'Compras',
-                  currentLocation: currentLocation,
-                  subItems: _purchasesMenuItems,
-                  isExpanded: _expandedSection == _purchasesSectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_purchasesSectionKey, expand),
-                ),
-
-                ExpandableMenuItem(
-                  icon: Icons.point_of_sale_outlined,
-                  activeIcon: Icons.point_of_sale,
-                  title: 'POS',
-                  currentLocation: currentLocation,
-                  subItems: _posMenuItems,
-                  isExpanded: _expandedSection == _posSectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_posSectionKey, expand),
-                ),
-
-                ExpandableMenuItem(
-                  icon: Icons.badge_outlined,
-                  activeIcon: Icons.badge,
-                  title: 'RR.HH.',
-                  currentLocation: currentLocation,
-                  subItems: _hrMenuItems,
-                  isExpanded: _expandedSection == _hrSectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_hrSectionKey, expand),
-                ),
-
-                const SizedBox(height: 8),
-                _buildSectionDivider(context),
-                const SizedBox(height: 8),
-
-                // Tools (WebView Modules)
-                ExpandableMenuItem(
-                  icon: Icons.build_circle_outlined,
-                  activeIcon: Icons.build_circle,
-                  title: 'Herramientas',
-                  currentLocation: currentLocation,
-                  subItems: _toolsMenuItems,
-                  isExpanded: _expandedSection == _toolsSectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_toolsSectionKey, expand),
-                ),
-
-                const SizedBox(height: 8),
-                _buildSectionDivider(context),
-
-                // Website Module
-                _buildSidebarItem(
-                  context,
-                  icon: Icons.web_outlined,
-                  activeIcon: Icons.web,
-                  title: 'Sitio Web',
-                  route: '/website',
-                  currentLocation: currentLocation,
-                  enabled: true,
-                ),
-
-                // Additional Modules (Disabled for now)
-                _buildSidebarItem(
-                  context,
-                  icon: Icons.build_outlined,
-                  activeIcon: Icons.build,
-                  title: 'Mantención',
-                  route: '/maintenance',
-                  currentLocation: currentLocation,
-                  enabled: false,
-                ),
-
-                _buildSidebarItem(
-                  context,
-                  icon: Icons.analytics_outlined,
-                  activeIcon: Icons.analytics,
-                  title: 'Análisis',
-                  route: '/analytics',
-                  currentLocation: currentLocation,
-                  enabled: false,
-                ),
-              ],
+                    _buildSidebarItem(
+                      context,
+                      icon: Icons.analytics_outlined,
+                      activeIcon: Icons.analytics,
+                      title: 'Análisis',
+                      route: '/analytics',
+                      currentLocation: currentLocation,
+                      enabled: false,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
 
@@ -971,29 +1254,53 @@ class _AppSidebarState extends State<AppSidebar> {
                 ),
 
                 // Hide navigation button (bottom-right, small like Zoho)
-                Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
-                  child: IconButton(
-                    icon: const Icon(Icons.chevron_left, size: 18),
-                    iconSize: 18,
-                    padding: const EdgeInsets.all(8),
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
-                    ),
-                    tooltip: 'Ocultar menú',
-                    onPressed: () {
-                      final navigationService =
-                          context.read<NavigationService>();
-                      navigationService.hideDrawer();
-                    },
-                    style: IconButton.styleFrom(
-                      backgroundColor: theme.colorScheme.surface,
-                      foregroundColor:
-                          theme.colorScheme.onSurface.withOpacity(0.6),
-                    ),
-                  ),
+                Consumer<NavigationService>(
+                  builder: (context, navigationService, _) {
+                    return Container(
+                      padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 8),
+                      child: Row(
+                        children: [
+                          // 3-dot menu button
+                          IconButton(
+                            icon: Icon(
+                              Icons.more_horiz,
+                              size: 18,
+                              color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            ),
+                            iconSize: 18,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                            tooltip: 'Opciones',
+                            onPressed: () {
+                              _showSidebarOptionsMenu(context, navigationService);
+                            },
+                          ),
+                          const Spacer(),
+                          // Hide navigation button
+                          IconButton(
+                            icon: const Icon(Icons.chevron_left, size: 18),
+                            iconSize: 18,
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                            tooltip: 'Ocultar menú',
+                            onPressed: () {
+                              navigationService.hideDrawer();
+                            },
+                            style: IconButton.styleFrom(
+                              backgroundColor: theme.colorScheme.surface,
+                              foregroundColor: theme.colorScheme.onSurface.withOpacity(0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

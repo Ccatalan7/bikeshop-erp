@@ -335,7 +335,7 @@ class VinabikeApp extends StatelessWidget {
           if (authService.isInitializing) {
             debugPrint('⏳ [Main] Auth still initializing, showing loading screen...');
             return MaterialApp(
-              title: 'Vinabike',
+              title: 'Viñabike ERP',
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
               themeMode: appearanceService.themeMode,
@@ -351,7 +351,7 @@ class VinabikeApp extends StatelessWidget {
             debugPrint('   Reason: ${isPublicStoreHost ? "Public store host" : "Not authenticated"}');
             
             return MaterialApp.router(
-              title: 'Vinabike',
+              title: 'Viñabike ERP',
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
               themeMode: appearanceService.themeMode,
@@ -381,7 +381,7 @@ class VinabikeApp extends StatelessWidget {
           debugPrint('✅ [Main] User is AUTHENTICATED - using WORKSPACE SYSTEM');
           
           return MaterialApp(
-            title: 'Vinabike',
+            title: 'Viñabike ERP',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: appearanceService.themeMode,

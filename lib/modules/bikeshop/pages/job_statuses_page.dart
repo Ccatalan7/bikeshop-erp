@@ -115,11 +115,13 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
     StatusPhase phase,
     List<JobStatusCustom> statuses,
   ) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,7 +130,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: _getPhaseHeaderColor(phase),
+              color: _getPhaseHeaderColor(phase, isDark: isDark),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(11),
                 topRight: Radius.circular(11),
@@ -136,14 +138,14 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
             ),
             child: Row(
               children: [
-                Icon(_getPhaseIcon(phase), size: 20, color: _getPhaseTextColor(phase)),
+                Icon(_getPhaseIcon(phase), size: 20, color: _getPhaseTextColor(phase, isDark: isDark)),
                 const SizedBox(width: 8),
                 Text(
                   phase.displayName,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: _getPhaseTextColor(phase),
+                    color: _getPhaseTextColor(phase, isDark: isDark),
                   ),
                 ),
                 const Spacer(),
@@ -151,7 +153,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                   '${statuses.length} estados',
                   style: TextStyle(
                     fontSize: 13,
-                    color: _getPhaseTextColor(phase).withOpacity(0.7),
+                    color: _getPhaseTextColor(phase, isDark: isDark).withOpacity(0.7),
                   ),
                 ),
               ],
@@ -164,7 +166,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
               child: Center(
                 child: Text(
                   'No hay estados en esta fase',
-                  style: TextStyle(color: Colors.grey[500]),
+                  style: TextStyle(color: theme.hintColor),
                 ),
               ),
             )
@@ -198,12 +200,14 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
     int index,
   ) {
     final color = _parseColor(status.color);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     
     return Container(
       key: ValueKey(status.id),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: Colors.grey[100]!),
+          bottom: BorderSide(color: theme.dividerColor.withOpacity(0.5)),
         ),
       ),
       child: ListTile(
@@ -211,7 +215,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
           index: index,
           child: MouseRegion(
             cursor: SystemMouseCursors.grab,
-            child: Icon(Icons.drag_indicator, color: Colors.grey[400]),
+            child: Icon(Icons.drag_indicator, color: theme.hintColor),
           ),
         ),
         title: Row(
@@ -242,14 +246,14 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.grey[200],
+                            color: isDark ? Colors.grey[700] : Colors.grey[200],
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             'Sistema',
                             style: TextStyle(
                               fontSize: 10,
-                              color: Colors.grey[600],
+                              color: isDark ? Colors.grey[300] : Colors.grey[600],
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -259,7 +263,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                   ),
                   Text(
                     status.code,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    style: TextStyle(fontSize: 12, color: theme.hintColor),
                   ),
                 ],
               ),
@@ -286,25 +290,25 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
     );
   }
 
-  Color _getPhaseHeaderColor(StatusPhase phase) {
+  Color _getPhaseHeaderColor(StatusPhase phase, {bool isDark = false}) {
     switch (phase) {
       case StatusPhase.todo:
-        return Colors.grey[100]!;
+        return isDark ? Colors.grey[800]! : Colors.grey[100]!;
       case StatusPhase.inProgress:
-        return Colors.blue[50]!;
+        return isDark ? Colors.blue[900]!.withOpacity(0.3) : Colors.blue[50]!;
       case StatusPhase.complete:
-        return Colors.green[50]!;
+        return isDark ? Colors.green[900]!.withOpacity(0.3) : Colors.green[50]!;
     }
   }
 
-  Color _getPhaseTextColor(StatusPhase phase) {
+  Color _getPhaseTextColor(StatusPhase phase, {bool isDark = false}) {
     switch (phase) {
       case StatusPhase.todo:
-        return Colors.grey[700]!;
+        return isDark ? Colors.grey[300]! : Colors.grey[700]!;
       case StatusPhase.inProgress:
-        return Colors.blue[700]!;
+        return isDark ? Colors.blue[300]! : Colors.blue[700]!;
       case StatusPhase.complete:
-        return Colors.green[700]!;
+        return isDark ? Colors.green[300]! : Colors.green[700]!;
     }
   }
 
