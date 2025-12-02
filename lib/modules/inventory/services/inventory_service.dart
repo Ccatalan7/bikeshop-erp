@@ -8,6 +8,28 @@ class InventoryService extends ChangeNotifier {
   final DatabaseService _db;
   final TenantService _tenantService;
 
+  // ============================================================
+  // CACHING - Avoid refetching on every page navigation
+  // ============================================================
+  List<Product>? _cachedProducts;
+  DateTime? _productsCacheTime;
+  static const Duration _cacheMaxAge = Duration(minutes: 5);
+  bool _isLoadingProducts = false;
+  
+  // Public getters for cached data (instant access)
+  List<Product> get cachedProducts => _cachedProducts ?? [];
+  bool get hasProductsCache => _cachedProducts != null;
+  
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheMaxAge;
+  }
+  
+  void invalidateProductsCache() {
+    _cachedProducts = null;
+    _productsCacheTime = null;
+  }
+
   InventoryService(this._db, this._tenantService);
 
   // Product operations
@@ -15,8 +37,31 @@ class InventoryService extends ChangeNotifier {
     String? searchTerm,
     String? categoryId,
     bool? lowStockOnly,
+    bool forceRefresh = false,
   }) async {
     try {
+      // Check if this is a filtered query
+      final isFilteredQuery = (searchTerm != null && searchTerm.isNotEmpty) ||
+                              categoryId != null ||
+                              lowStockOnly == true;
+      
+      // Return cached data if valid and not a filtered query
+      if (!forceRefresh && !isFilteredQuery && _isCacheValid(_productsCacheTime) && _cachedProducts != null) {
+        debugPrint('📦 [InventoryService] Using cached products (${_cachedProducts!.length} items)');
+        return _cachedProducts!;
+      }
+      
+      // Prevent concurrent fetches
+      if (_isLoadingProducts && !isFilteredQuery) {
+        debugPrint('⏳ [InventoryService] Already loading products, waiting...');
+        while (_isLoadingProducts) {
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
+        if (_cachedProducts != null && !isFilteredQuery) return _cachedProducts!;
+      }
+      
+      if (!isFilteredQuery) _isLoadingProducts = true;
+      
       List<Map<String, dynamic>> data;
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
@@ -52,8 +97,19 @@ class InventoryService extends ChangeNotifier {
         products = products.where((p) => p.isLowStock).toList();
       }
 
-      return products..sort((a, b) => a.name.compareTo(b.name));
+      final sortedProducts = products..sort((a, b) => a.name.compareTo(b.name));
+      
+      // Cache only unfiltered results
+      if (!isFilteredQuery) {
+        _cachedProducts = sortedProducts;
+        _productsCacheTime = DateTime.now();
+        debugPrint('✅ [InventoryService] Cached ${sortedProducts.length} products');
+        _isLoadingProducts = false;
+      }
+      
+      return sortedProducts;
     } catch (e) {
+      _isLoadingProducts = false;
       if (kDebugMode) print('Error fetching products: $e');
       rethrow;
     }
@@ -102,6 +158,7 @@ class InventoryService extends ChangeNotifier {
         );
       }
 
+      invalidateProductsCache();
       notifyListeners();
       return Product.fromJson(data);
     } catch (e) {
@@ -153,6 +210,7 @@ class InventoryService extends ChangeNotifier {
 
       final data =
           await _db.update('products', product.id!, updatedProduct.toJson());
+      invalidateProductsCache();
       notifyListeners();
       return Product.fromJson(data);
     } catch (e) {
@@ -167,6 +225,7 @@ class InventoryService extends ChangeNotifier {
         throw Exception('ID de producto inválido');
       }
       await _db.delete('products', id);
+      invalidateProductsCache();
       notifyListeners();
     } catch (e) {
       if (kDebugMode) print('Error deleting product: $e');

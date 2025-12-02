@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../models/financial_report.dart';
 import '../models/income_statement.dart';
 import '../services/financial_reports_service.dart';
@@ -192,7 +193,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
+            BrandedLoading(),
             SizedBox(height: 12),
             Text('Generando reporte...'),
           ],

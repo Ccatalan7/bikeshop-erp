@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/models/payment_method.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../models/purchase_invoice.dart';
@@ -283,9 +284,9 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
         ],
       ),
       body: _isLoading || _invoice == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : _isLoadingPaymentMethods
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: BrandedLoading())
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: Form(

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -87,8 +88,20 @@ class _PegasListPageState extends State<PegasListPage> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    // Show cached data immediately if available (instant render)
+    if (_bikeshopService.hasJobsCache && _jobs.isEmpty) {
+      setState(() {
+        _jobs = _bikeshopService.cachedJobs;
+        _filteredJobs = _jobs;
+        _isLoading = false;
+      });
+      _applyFiltersAndSort();
+    } else {
+      setState(() => _isLoading = true);
+    }
+    
     try {
+      // Fetch fresh data (will use cache if still valid)
       final jobs =
           await _bikeshopService.getJobs(includeCompleted: _showCompleted);
       final customers = await _customerService.getCustomers();
@@ -118,16 +131,18 @@ class _PegasListPageState extends State<PegasListPage> {
         }
       }
 
-      setState(() {
-        _jobs = jobs;
-        _filteredJobs = jobs;
-        _customers = customerMap;
-        _bikes = bikeMap;
-        _isLoading = false;
-        if (updatedSelection != null) {
-          _selectedJob = updatedSelection;
-        }
-      });
+      if (mounted) {
+        setState(() {
+          _jobs = jobs;
+          _filteredJobs = jobs;
+          _customers = customerMap;
+          _bikes = bikeMap;
+          _isLoading = false;
+          if (updatedSelection != null) {
+            _selectedJob = updatedSelection;
+          }
+        });
+      }
 
       _applyFiltersAndSort();
 
@@ -140,8 +155,8 @@ class _PegasListPageState extends State<PegasListPage> {
         await _loadJobDetails(updatedSelection);
       }
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error cargando trabajos: $e'),
@@ -526,7 +541,7 @@ class _PegasListPageState extends State<PegasListPage> {
           // Content
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : Builder(
                     builder: (context) {
                       print('🔵 DEBUG: Building content. _selectedJob: ${_selectedJob?.jobNumber ?? "NULL"}');

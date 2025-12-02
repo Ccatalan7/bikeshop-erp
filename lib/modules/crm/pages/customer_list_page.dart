@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/image_service.dart';
@@ -41,20 +42,42 @@ class _CustomerListPageState extends State<CustomerListPage> {
   }
 
   Future<void> _loadCustomers() async {
-    setState(() {
-      _isLoading = true;
-      _currentPage = 1;
-    });
-    try {
-      final customers = await _customerService.getCustomers();
+    // 🚀 INSTANT RENDER: Show cached data immediately if available
+    if (_customerService.hasCustomersCache && _customers.isEmpty) {
       setState(() {
-        _customers = customers;
-        _filteredCustomers = customers;
+        _customers = _customerService.cachedCustomers;
+        _filteredCustomers = _customers;
         _isLoading = false;
+        _currentPage = 1;
       });
-    } catch (e) {
-      setState(() => _isLoading = false);
+      // Apply search filter if any
+      if (_searchTerm.isNotEmpty) {
+        _onSearchChanged(_searchTerm);
+      }
+    } else {
+      setState(() {
+        _isLoading = true;
+        _currentPage = 1;
+      });
+    }
+    
+    try {
+      // Fetch fresh data (will use cache if still valid)
+      final customers = await _customerService.getCustomers();
       if (mounted) {
+        setState(() {
+          _customers = customers;
+          _filteredCustomers = customers;
+          _isLoading = false;
+        });
+        // Apply search filter if any
+        if (_searchTerm.isNotEmpty) {
+          _onSearchChanged(_searchTerm);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error cargando clientes: $e'),
@@ -241,7 +264,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
           // Content
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _buildCustomersList(),
           ),
         ],

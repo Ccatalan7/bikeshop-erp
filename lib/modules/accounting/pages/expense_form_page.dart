@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/models/payment_method.dart';
 import '../../../shared/services/payment_method_service.dart';
@@ -213,7 +214,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
     return MainLayout(
       title: title,
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : _error != null
               ? _buildErrorState(context)
               : _buildForm(context),

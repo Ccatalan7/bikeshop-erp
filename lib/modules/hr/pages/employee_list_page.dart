@@ -3,6 +3,7 @@ import 'package:flutter/services.dart'; // For Clipboard
 import 'package:provider/provider.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -35,11 +36,19 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    final hrService = context.read<HRService>();
+    
+    // 🚀 INSTANT RENDER: Show cached data immediately if available
+    if (hrService.hasEmployeesCache && _employees.isEmpty) {
+      setState(() {
+        _employees = hrService.cachedEmployees;
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = true);
+    }
 
     try {
-      final hrService = context.read<HRService>();
-
       final employees = await hrService.getEmployees(
         status: _selectedStatus,
         departmentId: _selectedDepartmentId,
@@ -330,7 +339,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
           // Employee list
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _employees.isEmpty
                     ? Center(
                         child: Column(
@@ -946,7 +955,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                           if (!snapshot.hasData) {
                             return const SizedBox(
                               height: 60,
-                              child: Center(child: CircularProgressIndicator()),
+                              child: Center(child: BrandedLoading(size: 32)),
                             );
                           }
                           

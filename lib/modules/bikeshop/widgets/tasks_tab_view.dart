@@ -6,6 +6,7 @@ import '../services/smart_task_service.dart';
 import '../services/bikeshop_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/models/product.dart';
 
 /// Smart Tasks Tab - Collapsible hierarchical checklist with three-way sync
@@ -140,7 +141,7 @@ class _TasksTabViewState extends State<TasksTabView> {
         // Task list
         Expanded(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: BrandedLoading())
               : _buildTaskList(),
         ),
 

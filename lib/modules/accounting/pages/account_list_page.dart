@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../models/account.dart';
 import '../services/accounting_service.dart';
 import 'account_ledger_page.dart';
@@ -245,7 +246,7 @@ class _AccountListPageState extends State<AccountListPage> {
 
   Widget _buildAccountsList() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: BrandedLoading());
     }
 
     if (_filteredAccounts.isEmpty) {
@@ -446,8 +447,6 @@ class _AccountListPageState extends State<AccountListPage> {
         return Colors.teal;
       case AccountType.expense:
         return Colors.orange;
-      case AccountType.tax:
-        return Colors.purple;
     }
   }
 

@@ -10,6 +10,7 @@ import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../../purchases/services/purchase_service.dart';
@@ -225,7 +226,18 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Future<void> _loadProducts() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+    
+    // 🚀 INSTANT RENDER: Show cached data immediately if available
+    if (_inventoryService.hasProductsCache && _products.isEmpty) {
+      setState(() {
+        _products = _inventoryService.cachedProducts;
+        _applyFilters();
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = true);
+    }
+    
     try {
       final products = await _inventoryService.getProducts(
         categoryId: _selectedCategoryId,
@@ -363,7 +375,7 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Widget _buildBody(ThemeData theme) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: BrandedLoading());
     }
 
     if (_filteredProducts.isEmpty) {

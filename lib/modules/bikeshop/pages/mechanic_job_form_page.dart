@@ -11,6 +11,7 @@ import '../../../modules/sales/models/sales_models.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/widgets/smart_product_field.dart';
@@ -1083,7 +1084,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             _buildHeader(theme),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: BrandedLoading())
                   : _buildForm(theme),
             ),
           ],

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -14,13 +15,39 @@ class AppearanceService extends ChangeNotifier {
   IconData _homeIcon = Icons.pedal_bike;
   String? _companyLogoUrl;
   bool _isInitialized = false;
+  bool _hasLoadedWithTenant = false; // True only if settings were loaded with valid tenant
   int _cacheBuster = DateTime.now().millisecondsSinceEpoch;
   ThemeMode _themeMode = ThemeMode.light;
+  StreamSubscription<AuthState>? _authSubscription;
 
   final _supabase = Supabase.instance.client;
 
   AppearanceService() {
     _loadSettings();
+    _listenToAuthChanges();
+  }
+  
+  /// Listen to auth state changes and reload settings when user logs in
+  void _listenToAuthChanges() {
+    _authSubscription = _supabase.auth.onAuthStateChange.listen((data) {
+      debugPrint('[AppearanceService] Auth state changed: ${data.event}');
+      if (data.event == AuthChangeEvent.signedIn && !_hasLoadedWithTenant) {
+        debugPrint('[AppearanceService] User signed in, reloading settings...');
+        _loadSettings();
+      } else if (data.event == AuthChangeEvent.signedOut) {
+        // Reset state on logout
+        _companyLogoUrl = null;
+        _homeIcon = Icons.pedal_bike;
+        _hasLoadedWithTenant = false;
+        notifyListeners();
+      }
+    });
+  }
+  
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   IconData get homeIcon => _homeIcon;
@@ -32,6 +59,7 @@ class AppearanceService extends ChangeNotifier {
   }
 
   bool get isInitialized => _isInitialized;
+  bool get hasLoadedWithTenant => _hasLoadedWithTenant;
   bool get hasCustomLogo =>
       _companyLogoUrl != null && _companyLogoUrl!.isNotEmpty;
   ThemeMode get themeMode => _themeMode;
@@ -92,6 +120,7 @@ class AppearanceService extends ChangeNotifier {
       if (tenantId == null) {
         debugPrint('[AppearanceService] No tenant found, skipping settings load');
         _isInitialized = true;
+        _hasLoadedWithTenant = false; // Mark that we didn't load with tenant
         notifyListeners();
         return;
       }
@@ -120,10 +149,13 @@ class AppearanceService extends ChangeNotifier {
       }
 
       _isInitialized = true;
+      _hasLoadedWithTenant = true; // Successfully loaded with tenant
+      debugPrint('[AppearanceService] Settings loaded. hasCustomLogo=$hasCustomLogo, logoUrl=$_companyLogoUrl');
       notifyListeners();
     } catch (e) {
       debugPrint('[AppearanceService] Error loading settings: $e');
       _isInitialized = true;
+      _hasLoadedWithTenant = false;
       notifyListeners();
     }
   }

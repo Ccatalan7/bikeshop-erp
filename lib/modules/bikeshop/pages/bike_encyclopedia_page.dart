@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../shared/models/bike_catalog_models.dart';
 import '../../../shared/services/bike_catalog_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 
 /// Bike Encyclopedia - Demo page to browse and search bike catalog
 class BikeEncyclopediaPage extends StatefulWidget {
@@ -165,7 +166,7 @@ class _BikeEncyclopediaPageState extends State<BikeEncyclopediaPage> {
                   // Bikes list
                   Expanded(
                     child: _loading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const Center(child: BrandedLoading())
                         : _bikes.isEmpty
                             ? Center(
                                 child: Column(

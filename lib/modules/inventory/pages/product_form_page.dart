@@ -13,6 +13,7 @@ import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/error_reporting_service.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/models/supplier.dart';
 import '../../purchases/services/purchase_service.dart';
@@ -808,7 +809,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final content = _isLoading
-        ? const Center(child: CircularProgressIndicator())
+        ? const Center(child: BrandedLoading())
         : Column(
             children: [
               // Debug error banner

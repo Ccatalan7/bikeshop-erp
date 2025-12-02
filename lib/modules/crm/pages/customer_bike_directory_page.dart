@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../models/crm_models.dart';
@@ -174,7 +175,7 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
 
   Widget _buildContent() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: BrandedLoading());
     }
 
     if (_error != null) {

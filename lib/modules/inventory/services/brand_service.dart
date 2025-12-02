@@ -6,13 +6,57 @@ import '../models/brand_models.dart';
 class BrandService extends ChangeNotifier {
   final DatabaseService _db;
 
+  // ============================================================
+  // CACHING - Avoid refetching on every page navigation
+  // ============================================================
+  List<ProductBrand>? _cachedBrands;
+  DateTime? _brandsCacheTime;
+  static const Duration _cacheMaxAge = Duration(minutes: 5);
+  bool _isLoadingBrands = false;
+  
+  // Public getters for cached data (instant access)
+  List<ProductBrand> get cachedBrands => _cachedBrands ?? [];
+  bool get hasBrandsCache => _cachedBrands != null;
+  
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheMaxAge;
+  }
+  
+  void invalidateBrandsCache() {
+    _cachedBrands = null;
+    _brandsCacheTime = null;
+  }
+
   BrandService(this._db);
 
   Future<List<ProductBrand>> getBrands({
     String? searchTerm,
     bool? activeOnly,
+    bool forceRefresh = false,
   }) async {
     try {
+      // Check if this is a filtered query
+      final isFilteredQuery = (searchTerm != null && searchTerm.trim().isNotEmpty) ||
+                              activeOnly == true;
+      
+      // Return cached data if valid and not a filtered query
+      if (!forceRefresh && !isFilteredQuery && _isCacheValid(_brandsCacheTime) && _cachedBrands != null) {
+        debugPrint('📦 [BrandService] Using cached brands (${_cachedBrands!.length} items)');
+        return _cachedBrands!;
+      }
+      
+      // Prevent concurrent fetches
+      if (_isLoadingBrands && !isFilteredQuery) {
+        debugPrint('⏳ [BrandService] Already loading brands, waiting...');
+        while (_isLoadingBrands) {
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
+        if (_cachedBrands != null && !isFilteredQuery) return _cachedBrands!;
+      }
+      
+      if (!isFilteredQuery) _isLoadingBrands = true;
+      
       List<Map<String, dynamic>> data;
 
       if (searchTerm != null && searchTerm.trim().isNotEmpty) {
@@ -44,8 +88,18 @@ class BrandService extends ChangeNotifier {
       }
 
       brands.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      
+      // Cache only unfiltered results
+      if (!isFilteredQuery) {
+        _cachedBrands = brands;
+        _brandsCacheTime = DateTime.now();
+        debugPrint('✅ [BrandService] Cached ${brands.length} brands');
+        _isLoadingBrands = false;
+      }
+      
       return brands;
     } catch (e) {
+      _isLoadingBrands = false;
       if (kDebugMode) {
         debugPrint('Error fetching brands: $e');
       }
@@ -118,6 +172,7 @@ class BrandService extends ChangeNotifier {
 
       final data = await _db.insert('product_brands', payload.toJson());
       final created = ProductBrand.fromJson(data);
+      invalidateBrandsCache();
       notifyListeners();
       return created;
     } catch (e) {
@@ -158,6 +213,7 @@ class BrandService extends ChangeNotifier {
         brand.id!,
         payload.toJson(),
       );
+      invalidateBrandsCache();
       notifyListeners();
       return ProductBrand.fromJson(updated);
     } catch (e) {
@@ -179,6 +235,7 @@ class BrandService extends ChangeNotifier {
       }
 
       await _db.delete('product_brands', id);
+      invalidateBrandsCache();
       notifyListeners();
     } catch (e) {
       if (kDebugMode) {

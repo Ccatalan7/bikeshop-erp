@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/models/stock_movement.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../services/stock_movement_service.dart';
@@ -292,7 +293,7 @@ class _StockMovementListPageState extends State<StockMovementListPage> {
     return Consumer<StockMovementService>(
       builder: (context, service, child) {
         if (service.isLoading) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: BrandedLoading());
         }
 
         if (service.error != null) {

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../models/category_models.dart';
@@ -42,21 +43,32 @@ class _CategoryListPageState extends State<CategoryListPage> {
   }
 
   Future<void> _loadCategories() async {
-    setState(() => _isLoading = true);
+    // 🚀 INSTANT RENDER: Show cached data immediately if available
+    if (_categoryService.hasCategoriesCache && _categories.isEmpty) {
+      setState(() {
+        _categories = _categoryService.cachedCategories;
+        _applyFilters();
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = true);
+    }
     
     try {
       final categories = await _categoryService.getCategories(
         searchTerm: _searchTerm.isEmpty ? null : _searchTerm,
       );
       
-      setState(() {
-        _categories = categories;
-        _applyFilters();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() {
+          _categories = categories;
+          _applyFilters();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error cargando categorías: $e'),
@@ -291,7 +303,7 @@ class _CategoryListPageState extends State<CategoryListPage> {
           // Categories List
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _buildCategoriesList(),
           ),
         ],

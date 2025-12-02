@@ -7,6 +7,7 @@ import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 
 class BikeFormDialog extends StatefulWidget {
   final String customerId;
@@ -629,7 +630,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                           // Brand Dropdown
                           Expanded(
                             child: _loadingBrands
-                                ? const Center(child: CircularProgressIndicator())
+                                ? const Center(child: BrandedLoading())
                                 : DropdownButtonFormField<BikeBrand>(
                                     value: _selectedBrand,
                                     decoration: InputDecoration(
@@ -675,7 +676,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                           // Model Dropdown
                           Expanded(
                             child: _loadingModels
-                                ? const Center(child: CircularProgressIndicator())
+                                ? const Center(child: BrandedLoading())
                                 : DropdownButtonFormField<BikeModel>(
                                     value: _selectedModel,
                                     decoration: InputDecoration(

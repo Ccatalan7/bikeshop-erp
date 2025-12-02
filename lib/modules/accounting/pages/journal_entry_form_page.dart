@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/account.dart';
@@ -211,7 +212,7 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
     return MainLayout(
       title: 'Nuevo Asiento Contable',
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : Form(
               key: _formKey,
               child: Column(

@@ -10,6 +10,7 @@ import 'dart:typed_data' show Uint8List;
 // import 'dart:html' as html; // Removed - causes issues on native platforms
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
@@ -565,7 +566,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   
   Widget _buildInvoiceTable(List<Invoice> invoices, SalesService salesService, {required bool isFullWidth}) {
     if (salesService.isLoadingInvoices) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: BrandedLoading());
     }
     
     if (invoices.isEmpty) {

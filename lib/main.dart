@@ -48,11 +48,13 @@ import 'public_store/services/customer_account_service.dart';
 import 'public_store/services/address_autocomplete_service.dart';
 import 'public_store/services/public_inventory_service.dart';
 import 'shared/routes/app_router.dart';
+import 'shared/services/data_preload_service.dart';
 import 'shared/services/error_reporting_service.dart';
 import 'shared/services/tenant_detection_service.dart';
 import 'shared/services/backup_service.dart';
 import 'shared/services/window_zoom_service.dart';
 import 'shared/widgets/window_zoom_scope.dart';
+import 'shared/widgets/branded_loading.dart';
 
 // Custom scroll behavior to prevent browser navigation gestures on trackpad
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -271,6 +273,9 @@ class VinabikeApp extends StatelessWidget {
             return service;
           },
         ),
+        
+        // Data preload service - preloads critical data after authentication
+        ChangeNotifierProvider(create: (_) => DataPreloadService()),
       ],
       child: Builder(
         builder: (context) {
@@ -296,12 +301,30 @@ class VinabikeApp extends StatelessWidget {
           final authService = context.watch<AuthService>();
           final appearanceService = context.watch<AppearanceService>();
           
+          // Initialize data preload service (preloads critical data after auth)
+          final dataPreloadService = context.read<DataPreloadService>();
+          if (!dataPreloadService.hasPreloaded && authService.isAuthenticated) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              dataPreloadService.initialize(
+                bikeshopService: context.read<BikeshopService>(),
+                customerService: context.read<CustomerService>(),
+                inventoryService: context.read<module_inventory.InventoryService>(),
+                categoryService: context.read<CategoryService>(),
+                brandService: context.read<BrandService>(),
+                salesService: context.read<SalesService>(),
+                purchaseService: context.read<PurchaseService>(),
+                hrService: context.read<HRService>(),
+              );
+            });
+          }
+          
           debugPrint('🔐 [Main] Auth check: isAuthenticated=${authService.isAuthenticated}, isInitializing=${authService.isInitializing}');
           debugPrint('📍 [Main] isPublicStoreHost=$isPublicStoreHost');
           debugPrint('🎨 [Main] Theme mode: ${appearanceService.themeMode}');
 
           // Reload appearance settings after authentication completes
-          if (authService.isAuthenticated && !appearanceService.isInitialized) {
+          // Use hasLoadedWithTenant to ensure we reload if initial load had no tenant
+          if (authService.isAuthenticated && !appearanceService.hasLoadedWithTenant) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               debugPrint('🎨 [Main] Reloading appearance settings after authentication');
               appearanceService.reloadSettings();
@@ -312,10 +335,12 @@ class VinabikeApp extends StatelessWidget {
           if (authService.isInitializing) {
             debugPrint('⏳ [Main] Auth still initializing, showing loading screen...');
             return MaterialApp(
+              title: 'Vinabike',
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: appearanceService.themeMode,
               home: const Scaffold(
-                body: Center(
-                  child: CircularProgressIndicator(),
-                ),
+                body: BrandedLoadingOverlay(message: 'Cargando...'),
               ),
             );
           }
@@ -380,9 +405,7 @@ class VinabikeApp extends StatelessWidget {
                 if (workspaceManager.workspaces.isEmpty) {
                   debugPrint('⚠️ [Main] WorkspaceManager has no workspaces yet, showing loading...');
                   return const Scaffold(
-                    body: Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    body: BrandedLoadingOverlay(message: 'Cargando espacios de trabajo...'),
                   );
                 }
                 

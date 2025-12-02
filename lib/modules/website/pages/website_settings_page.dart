@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../services/website_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/models/tenant.dart';
@@ -193,7 +194,7 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : Form(
               key: _formKey,
               child: ListView(

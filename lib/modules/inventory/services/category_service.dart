@@ -7,14 +7,58 @@ class CategoryService extends ChangeNotifier {
   final DatabaseService _db;
   final TenantService _tenantService;
 
+  // ============================================================
+  // CACHING - Avoid refetching on every page navigation
+  // ============================================================
+  List<models.Category>? _cachedCategories;
+  DateTime? _categoriesCacheTime;
+  static const Duration _cacheMaxAge = Duration(minutes: 5);
+  bool _isLoadingCategories = false;
+  
+  // Public getters for cached data (instant access)
+  List<models.Category> get cachedCategories => _cachedCategories ?? [];
+  bool get hasCategoriesCache => _cachedCategories != null;
+  
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheMaxAge;
+  }
+  
+  void invalidateCategoriesCache() {
+    _cachedCategories = null;
+    _categoriesCacheTime = null;
+  }
+
   CategoryService(this._db, this._tenantService);
 
   // Category operations
   Future<List<models.Category>> getCategories({
     String? searchTerm,
     bool? activeOnly,
+    bool forceRefresh = false,
   }) async {
     try {
+      // Check if this is a filtered query
+      final isFilteredQuery = (searchTerm != null && searchTerm.isNotEmpty) ||
+                              activeOnly == true;
+      
+      // Return cached data if valid and not a filtered query
+      if (!forceRefresh && !isFilteredQuery && _isCacheValid(_categoriesCacheTime) && _cachedCategories != null) {
+        debugPrint('📦 [CategoryService] Using cached categories (${_cachedCategories!.length} items)');
+        return _cachedCategories!;
+      }
+      
+      // Prevent concurrent fetches
+      if (_isLoadingCategories && !isFilteredQuery) {
+        debugPrint('⏳ [CategoryService] Already loading categories, waiting...');
+        while (_isLoadingCategories) {
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
+        if (_cachedCategories != null && !isFilteredQuery) return _cachedCategories!;
+      }
+      
+      if (!isFilteredQuery) _isLoadingCategories = true;
+      
       List<Map<String, dynamic>> data;
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
@@ -43,9 +87,18 @@ class CategoryService extends ChangeNotifier {
 
       // Sort by full_path for hierarchical display
       categories.sort((a, b) => a.fullPath.compareTo(b.fullPath));
+      
+      // Cache only unfiltered results
+      if (!isFilteredQuery) {
+        _cachedCategories = categories;
+        _categoriesCacheTime = DateTime.now();
+        debugPrint('✅ [CategoryService] Cached ${categories.length} categories');
+        _isLoadingCategories = false;
+      }
 
       return categories;
     } catch (e) {
+      _isLoadingCategories = false;
       if (kDebugMode) print('Error fetching categories: $e');
       rethrow;
     }
@@ -81,6 +134,7 @@ class CategoryService extends ChangeNotifier {
 
       // Category already has tenant_id from the form - no need to add it again
       final data = await _db.insert('product_categories', category.toJson());
+      invalidateCategoriesCache();
       notifyListeners(); // ✅ Notify listeners to refresh UI
       return models.Category.fromJson(data);
     } catch (e) {
@@ -103,6 +157,7 @@ class CategoryService extends ChangeNotifier {
 
       final updatedCategory = category.copyWith(updatedAt: DateTime.now());
       await _db.update('product_categories', category.id!, updatedCategory.toJson());
+      invalidateCategoriesCache();
       notifyListeners(); // ✅ Notify listeners to refresh UI
       return updatedCategory;
     } catch (e) {
@@ -129,6 +184,7 @@ class CategoryService extends ChangeNotifier {
       }
 
       await _db.delete('product_categories', id);
+      invalidateCategoriesCache();
       notifyListeners(); // ✅ Notify listeners to refresh UI
     } catch (e) {
       if (kDebugMode) print('Error deleting category: $e');

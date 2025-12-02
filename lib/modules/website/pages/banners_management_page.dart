@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 
 /// Page for managing website banners (hero images, promotional banners)
 class BannersManagementPage extends StatefulWidget {
@@ -43,7 +44,7 @@ class _BannersManagementPageState extends State<BannersManagementPage> {
         ],
       ),
       body: websiteService.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : Column(
               children: [
                 // Info banner

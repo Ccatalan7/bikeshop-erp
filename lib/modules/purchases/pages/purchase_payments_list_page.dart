@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/services/payment_method_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../models/purchase_payment.dart';
 import '../services/purchase_service.dart';
 
@@ -167,7 +168,7 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
           // Payments list
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _filtered.isEmpty
                     ? Center(
                         child: Column(

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/models/supplier.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -207,7 +208,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
             _buildHeader(),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: BrandedLoading())
                   : _buildForm(),
             ),
           ],

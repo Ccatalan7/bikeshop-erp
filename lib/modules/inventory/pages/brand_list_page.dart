@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../shared/services/database_service.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../models/brand_models.dart';
@@ -42,14 +43,26 @@ class _BrandListPageState extends State<BrandListPage> {
   }
 
   Future<void> _loadBrands() async {
-    setState(() => _isLoading = true);
-    try {
-      final brands = await _brandService.getBrands();
+    // 🚀 INSTANT RENDER: Show cached data immediately if available
+    if (_brandService.hasBrandsCache && _brands.isEmpty) {
       setState(() {
-        _brands = brands;
+        _brands = _brandService.cachedBrands;
         _applyFilters();
         _isLoading = false;
       });
+    } else {
+      setState(() => _isLoading = true);
+    }
+    
+    try {
+      final brands = await _brandService.getBrands();
+      if (mounted) {
+        setState(() {
+          _brands = brands;
+          _applyFilters();
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -186,7 +199,7 @@ class _BrandListPageState extends State<BrandListPage> {
           const SizedBox(height: 12),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _buildBrandListView(),
           ),
         ],

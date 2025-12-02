@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/constants/storage_constants.dart';
@@ -249,7 +250,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
   Widget build(BuildContext context) {
     return MainLayout(
       child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : _buildForm(),
     );
   }
@@ -879,7 +880,7 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
             // Tree view or search results
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: BrandedLoading())
                   : _searchTerm.isNotEmpty
                       ? _buildSearchResults()
                       : _buildTreeView(),

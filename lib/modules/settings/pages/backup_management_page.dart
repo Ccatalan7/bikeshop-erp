@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../shared/services/backup_service.dart';
 import '../../../shared/models/backup.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 
 class BackupManagementPage extends StatefulWidget {
@@ -48,7 +49,7 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
       body: Consumer<BackupService>(
         builder: (context, service, _) {
           if (service.isLoading && service.backups.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: BrandedLoading());
           }
 
           return RefreshIndicator(

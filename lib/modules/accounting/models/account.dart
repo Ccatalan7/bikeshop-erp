@@ -128,8 +128,12 @@ enum AccountType {
   liability('Pasivo'),
   equity('Patrimonio'),
   income('Ingresos'),
-  expense('Gastos'),
-  tax('Impuestos');
+  expense('Gastos');
+  // Note: 'tax' type was removed (Dec 1, 2025)
+  // Tax accounts should use:
+  //   - 'liability' for taxes payable (IVA Débito, Impuesto Renta por Pagar)
+  //   - 'asset' for taxes receivable (IVA Crédito)
+  // This ensures proper inclusion in the accounting equation
 
   const AccountType(this.displayName);
   final String displayName;

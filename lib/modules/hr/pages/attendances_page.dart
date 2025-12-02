@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
@@ -361,7 +362,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
           _buildToolbar(),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _buildAttendanceGrid(),
           ),
         ],

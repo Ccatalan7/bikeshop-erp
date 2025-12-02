@@ -28,6 +28,42 @@ class BikeshopService extends ChangeNotifier {
   RealtimeChannel? _mechanicJobsChannel;
   Timer? _notifyDebounceTimer;
 
+  // ============================================================
+  // CACHING - Avoid refetching on every page navigation
+  // ============================================================
+  List<MechanicJob>? _cachedJobs;
+  List<Bike>? _cachedBikes;
+  DateTime? _jobsCacheTime;
+  DateTime? _bikesCacheTime;
+  static const Duration _cacheMaxAge = Duration(minutes: 5);
+  
+  // Loading state flags to prevent concurrent fetches
+  bool _isLoadingJobs = false;
+  bool _isLoadingBikes = false;
+  
+  // Public getters for cached data (instant access)
+  List<MechanicJob> get cachedJobs => _cachedJobs ?? [];
+  List<Bike> get cachedBikes => _cachedBikes ?? [];
+  bool get hasJobsCache => _cachedJobs != null;
+  bool get hasBikesCache => _cachedBikes != null;
+  
+  /// Check if cache is still valid
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheMaxAge;
+  }
+  
+  /// Invalidate caches (call after create/update/delete)
+  void invalidateJobsCache() {
+    _cachedJobs = null;
+    _jobsCacheTime = null;
+  }
+  
+  void invalidateBikesCache() {
+    _cachedBikes = null;
+    _bikesCacheTime = null;
+  }
+
   BikeshopService(this._db) {
     // Fire and forget - with debouncing, realtime is now safe!
     _setupMechanicJobsRealtime();
@@ -37,8 +73,35 @@ class BikeshopService extends ChangeNotifier {
   // BIKE OPERATIONS
   // ============================================================
 
-  Future<List<Bike>> getBikes({String? customerId, String? searchTerm}) async {
+  /// Get bikes with caching. Use forceRefresh=true to bypass cache.
+  Future<List<Bike>> getBikes({
+    String? customerId, 
+    String? searchTerm,
+    bool forceRefresh = false,
+  }) async {
+    // For filtered queries, always fetch fresh (but still cache the full list)
+    final isFilteredQuery = (customerId != null && customerId.isNotEmpty) || 
+                            (searchTerm != null && searchTerm.isNotEmpty);
+    
+    // Return cached data if valid and not a filtered query
+    if (!forceRefresh && !isFilteredQuery && _isCacheValid(_bikesCacheTime) && _cachedBikes != null) {
+      debugPrint('📦 [BikeshopService] Using cached bikes (${_cachedBikes!.length} items)');
+      return _cachedBikes!;
+    }
+    
+    // Prevent concurrent fetches
+    if (_isLoadingBikes && !isFilteredQuery) {
+      debugPrint('⏳ [BikeshopService] Already loading bikes, waiting...');
+      // Wait for existing fetch to complete
+      while (_isLoadingBikes) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      if (_cachedBikes != null) return _cachedBikes!;
+    }
+    
     try {
+      if (!isFilteredQuery) _isLoadingBikes = true;
+      
       List<Map<String, dynamic>> data;
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
@@ -65,11 +128,22 @@ class BikeshopService extends ChangeNotifier {
         data = await _db.select('bikes', fetchAll: true);
       }
 
-      return data.map((json) => Bike.fromJson(json)).toList()
+      final bikes = data.map((json) => Bike.fromJson(json)).toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      
+      // Cache only unfiltered results
+      if (!isFilteredQuery) {
+        _cachedBikes = bikes;
+        _bikesCacheTime = DateTime.now();
+        debugPrint('✅ [BikeshopService] Cached ${bikes.length} bikes');
+      }
+      
+      return bikes;
     } catch (e) {
       if (kDebugMode) print('Error fetching bikes: $e');
       rethrow;
+    } finally {
+      if (!isFilteredQuery) _isLoadingBikes = false;
     }
   }
 
@@ -87,6 +161,7 @@ class BikeshopService extends ChangeNotifier {
   Future<Bike> createBike(Bike bike) async {
     try {
       final data = await _db.insert('bikes', bike.toJson());
+      invalidateBikesCache();
       notifyListeners();
       return Bike.fromJson(data);
     } catch (e) {
@@ -101,6 +176,7 @@ class BikeshopService extends ChangeNotifier {
         throw Exception('ID de bicicleta inválido');
       }
       final data = await _db.update('bikes', bike.id!, bike.toJson());
+      invalidateBikesCache();
       notifyListeners();
       return Bike.fromJson(data);
     } catch (e) {
@@ -113,6 +189,7 @@ class BikeshopService extends ChangeNotifier {
     try {
       if (id.isEmpty) throw Exception('ID de bicicleta inválido');
       await _db.delete('bikes', id);
+      invalidateBikesCache();
       notifyListeners();
     } catch (e) {
       if (kDebugMode) print('Error deleting bike: $e');
@@ -321,15 +398,42 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  /// Get jobs with caching. Use forceRefresh=true to bypass cache.
   Future<List<MechanicJob>> getJobs({
     String? customerId,
     String? bikeId,
     JobStatus? status,
     String? searchTerm,
     bool includeCompleted = true,
-    bool includeDeleted = false, // NEW: option to include soft-deleted jobs
+    bool includeDeleted = false,
+    bool forceRefresh = false,
   }) async {
+    // Check if this is a filtered query
+    final isFilteredQuery = (customerId != null && customerId.isNotEmpty) ||
+                            (bikeId != null && bikeId.isNotEmpty) ||
+                            status != null ||
+                            (searchTerm != null && searchTerm.isNotEmpty) ||
+                            !includeCompleted ||
+                            includeDeleted;
+    
+    // Return cached data if valid and not a filtered query
+    if (!forceRefresh && !isFilteredQuery && _isCacheValid(_jobsCacheTime) && _cachedJobs != null) {
+      debugPrint('📦 [BikeshopService] Using cached jobs (${_cachedJobs!.length} items)');
+      return _cachedJobs!;
+    }
+    
+    // Prevent concurrent fetches
+    if (_isLoadingJobs && !isFilteredQuery) {
+      debugPrint('⏳ [BikeshopService] Already loading jobs, waiting...');
+      while (_isLoadingJobs) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      if (_cachedJobs != null && !isFilteredQuery) return _cachedJobs!;
+    }
+    
     try {
+      if (!isFilteredQuery) _isLoadingJobs = true;
+      
       // Join with job_statuses to get custom status details
       var query = Supabase.instance.client.from('mechanic_jobs').select('''
         *,
@@ -375,10 +479,21 @@ class BikeshopService extends ChangeNotifier {
         }).toList();
       }
 
-      return jobs..sort((a, b) => b.arrivalDate.compareTo(a.arrivalDate));
+      jobs.sort((a, b) => b.arrivalDate.compareTo(a.arrivalDate));
+      
+      // Cache only unfiltered results
+      if (!isFilteredQuery) {
+        _cachedJobs = jobs;
+        _jobsCacheTime = DateTime.now();
+        debugPrint('✅ [BikeshopService] Cached ${jobs.length} jobs');
+      }
+      
+      return jobs;
     } catch (e) {
       if (kDebugMode) print('Error fetching jobs: $e');
       rethrow;
+    } finally {
+      if (!isFilteredQuery) _isLoadingJobs = false;
     }
   }
 
@@ -423,6 +538,7 @@ class BikeshopService extends ChangeNotifier {
             '✅ [CREATE JOB] Database returned: job_number=${data['job_number']}');
       }
 
+      invalidateJobsCache();
       notifyListeners();
       return MechanicJob.fromJson(data);
     } catch (e) {
@@ -444,6 +560,7 @@ class BikeshopService extends ChangeNotifier {
 
       // Use forUpdate: true to exclude arrival_date and created_at from being overwritten
       final data = await _db.update('mechanic_jobs', job.id!, job.toJson(forUpdate: true));
+      invalidateJobsCache();
       notifyListeners();
       return MechanicJob.fromJson(data);
     } catch (e) {
@@ -456,6 +573,7 @@ class BikeshopService extends ChangeNotifier {
     try {
       if (id.isEmpty) throw Exception('ID de trabajo inválido');
       await _db.delete('mechanic_jobs', id);
+      invalidateJobsCache();
       notifyListeners();
     } catch (e) {
       if (kDebugMode) print('Error deleting job: $e');
@@ -919,6 +1037,7 @@ class BikeshopService extends ChangeNotifier {
         'deleted_by': userId,
       }).eq('id', jobId);
       
+      invalidateJobsCache();
       _debouncedNotify();
       debugPrint('🗑️ Soft deleted job: $jobId');
     } catch (e) {
@@ -935,6 +1054,7 @@ class BikeshopService extends ChangeNotifier {
         'deleted_by': null,
       }).eq('id', jobId);
       
+      invalidateJobsCache();
       _debouncedNotify();
       debugPrint('♻️ Restored job: $jobId');
     } catch (e) {
@@ -969,6 +1089,7 @@ class BikeshopService extends ChangeNotifier {
           .delete()
           .eq('id', jobId);
       
+      invalidateJobsCache();
       _debouncedNotify();
       debugPrint('🔥 Permanently deleted job: $jobId');
     } catch (e) {

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../models/expense.dart';
@@ -338,7 +339,7 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
 
   Widget _buildContent(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: BrandedLoading());
     }
 
     if (_filteredExpenses.isEmpty) {

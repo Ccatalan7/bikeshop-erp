@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 import '../widgets/payment_form.dart' show PaymentForm;
@@ -51,7 +52,7 @@ class _InvoicePaymentPageState extends State<InvoicePaymentPage> {
   Widget build(BuildContext context) {
     return MainLayout(
       child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : _invoice == null
               ? _buildNotFound()
               : _buildContent(context, _invoice!),

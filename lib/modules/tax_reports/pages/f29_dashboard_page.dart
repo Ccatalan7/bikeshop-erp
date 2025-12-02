@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../services/f29_service.dart';
 import '../models/f29_declaration.dart';
@@ -64,7 +65,7 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
             child: Consumer<F29Service>(
         builder: (context, service, child) {
           if (service.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: BrandedLoading());
           }
 
           if (service.error != null) {

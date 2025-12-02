@@ -13,12 +13,62 @@ class HRService extends ChangeNotifier {
 
   HRService(this._tenantService);
 
+  // ============================================================
+  // CACHING - TTL-based cache for performance optimization
+  // ============================================================
+  List<Employee> _employeesCache = [];
+  List<Department> _departmentsCache = [];
+  DateTime? _employeesCacheTime;
+  DateTime? _departmentsCacheTime;
+  static const Duration _cacheMaxAge = Duration(minutes: 5);
+  bool _isLoadingEmployees = false;
+  bool _isLoadingDepartments = false;
+  
+  // Public getters for cached data (instant UI access)
+  List<Employee> get cachedEmployees => List.unmodifiable(_employeesCache);
+  List<Department> get cachedDepartments => List.unmodifiable(_departmentsCache);
+  bool get hasEmployeesCache => _employeesCache.isNotEmpty && _employeesCacheTime != null;
+  bool get hasDepartmentsCache => _departmentsCache.isNotEmpty && _departmentsCacheTime != null;
+  
+  /// Check if cache is still valid
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheMaxAge;
+  }
+  
+  /// Invalidate employee cache (call after create/update/delete)
+  void invalidateEmployeesCache() {
+    _employeesCacheTime = null;
+    debugPrint('🗑️ [HRService] Employees cache invalidated');
+  }
+  
+  /// Invalidate department cache (call after create/update/delete)
+  void invalidateDepartmentsCache() {
+    _departmentsCacheTime = null;
+    debugPrint('🗑️ [HRService] Departments cache invalidated');
+  }
+
   // ============================================================================
   // DEPARTMENTS
   // ============================================================================
 
-  Future<List<Department>> getDepartments({bool activeOnly = true}) async {
+  Future<List<Department>> getDepartments({bool activeOnly = true, bool forceRefresh = false}) async {
+    // Return cached data if valid (for non-filtered queries)
+    if (!forceRefresh && !activeOnly && _isCacheValid(_departmentsCacheTime) && _departmentsCache.isNotEmpty) {
+      debugPrint('📦 [HRService] Using cached departments (${_departmentsCache.length} items)');
+      return _departmentsCache;
+    }
+    
+    if (_isLoadingDepartments && !activeOnly) {
+      while (_isLoadingDepartments) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      if (_departmentsCache.isNotEmpty && !activeOnly) return _departmentsCache;
+    }
+    
     try {
+      if (!activeOnly) _isLoadingDepartments = true;
+      
       var query = _client.from('departments').select();
 
       if (activeOnly) {
@@ -26,12 +76,23 @@ class HRService extends ChangeNotifier {
       }
 
       final response = await query.order('name');
-      return (response as List)
+      final departments = (response as List)
           .map((json) => Department.fromMap(json))
           .toList();
+      
+      // Cache only non-filtered queries
+      if (!activeOnly) {
+        _departmentsCache = departments;
+        _departmentsCacheTime = DateTime.now();
+        debugPrint('✅ [HRService] Cached ${departments.length} departments');
+      }
+      
+      return departments;
     } catch (e) {
       debugPrint('Error getting departments: $e');
       rethrow;
+    } finally {
+      if (!activeOnly) _isLoadingDepartments = false;
     }
   }
 
@@ -53,6 +114,7 @@ class HRService extends ChangeNotifier {
           .insert(department.toMap())
           .select()
           .single();
+      invalidateDepartmentsCache();
       notifyListeners();
       return Department.fromMap(response);
     } catch (e) {
@@ -69,6 +131,7 @@ class HRService extends ChangeNotifier {
           .eq('id', department.id!)
           .select()
           .single();
+      invalidateDepartmentsCache();
       notifyListeners();
       return Department.fromMap(response);
     } catch (e) {
@@ -80,6 +143,7 @@ class HRService extends ChangeNotifier {
   Future<void> deleteDepartment(String id) async {
     try {
       await _client.from('departments').delete().eq('id', id);
+      invalidateDepartmentsCache();
       notifyListeners();
     } catch (e) {
       debugPrint('Error deleting department: $e');
@@ -95,8 +159,28 @@ class HRService extends ChangeNotifier {
     EmployeeStatus? status,
     String? departmentId,
     String? searchQuery,
+    bool forceRefresh = false,
   }) async {
+    // Check if this is a filtered query
+    final isFilteredQuery = status != null || departmentId != null || 
+        (searchQuery != null && searchQuery.isNotEmpty);
+    
+    // Return cached data if valid and not a filtered query
+    if (!forceRefresh && !isFilteredQuery && _isCacheValid(_employeesCacheTime) && _employeesCache.isNotEmpty) {
+      debugPrint('📦 [HRService] Using cached employees (${_employeesCache.length} items)');
+      return _employeesCache;
+    }
+    
+    if (_isLoadingEmployees && !isFilteredQuery) {
+      while (_isLoadingEmployees) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      if (_employeesCache.isNotEmpty && !isFilteredQuery) return _employeesCache;
+    }
+    
     try {
+      if (!isFilteredQuery) _isLoadingEmployees = true;
+      
       var query = _client.from('employees').select();
 
       if (status != null) {
@@ -113,10 +197,21 @@ class HRService extends ChangeNotifier {
       }
 
       final response = await query.order('last_name').order('first_name');
-      return (response as List).map((json) => Employee.fromMap(json)).toList();
+      final employees = (response as List).map((json) => Employee.fromMap(json)).toList();
+      
+      // Cache only non-filtered queries
+      if (!isFilteredQuery) {
+        _employeesCache = employees;
+        _employeesCacheTime = DateTime.now();
+        debugPrint('✅ [HRService] Cached ${employees.length} employees');
+      }
+      
+      return employees;
     } catch (e) {
       debugPrint('Error getting employees: $e');
       rethrow;
+    } finally {
+      if (!isFilteredQuery) _isLoadingEmployees = false;
     }
   }
 
@@ -154,6 +249,7 @@ class HRService extends ChangeNotifier {
           .insert(employeeData)
           .select()
           .single();
+      invalidateEmployeesCache();
       notifyListeners();
       return Employee.fromMap(response);
     } catch (e) {
@@ -170,6 +266,7 @@ class HRService extends ChangeNotifier {
           .eq('id', employee.id!)
           .select()
           .single();
+      invalidateEmployeesCache();
       notifyListeners();
       return Employee.fromMap(response);
     } catch (e) {
@@ -181,6 +278,7 @@ class HRService extends ChangeNotifier {
   Future<void> deleteEmployee(String id) async {
     try {
       await _client.from('employees').delete().eq('id', id);
+      invalidateEmployeesCache();
       notifyListeners();
     } catch (e) {
       debugPrint('Error deleting employee: $e');

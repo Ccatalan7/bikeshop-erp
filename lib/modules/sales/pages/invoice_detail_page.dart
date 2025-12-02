@@ -6,6 +6,7 @@ import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
@@ -469,7 +470,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
     return MainLayout(
       child: _isLoading && invoice == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : invoice == null
               ? Center(
                   child: Column(

@@ -8,6 +8,7 @@ import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
+import '../../shared/widgets/branded_loading.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -191,7 +192,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: BrandedLoading());
     }
 
     if (_product == null) {

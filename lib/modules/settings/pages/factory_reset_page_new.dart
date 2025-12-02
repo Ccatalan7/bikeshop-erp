@@ -6,6 +6,7 @@ import '../../sales/services/sales_service.dart';
 import '../../inventory/services/inventory_service.dart';
 import '../services/factory_reset_service.dart';
 import '../models/reset_configuration.dart';
+import '../../../shared/widgets/branded_loading.dart';
 
 class FactoryResetPageNew extends StatefulWidget {
   const FactoryResetPageNew({super.key});
@@ -409,7 +410,7 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(),
+          const BrandedLoading(),
           const SizedBox(height: 24),
           Text(
             'Eliminando datos...',
@@ -501,7 +502,7 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
                   ),
                   const SizedBox(height: 12),
                   if (_isLoadingConfigs)
-                    const Center(child: CircularProgressIndicator())
+                    const Center(child: BrandedLoading())
                   else if (_savedConfigs.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(16),

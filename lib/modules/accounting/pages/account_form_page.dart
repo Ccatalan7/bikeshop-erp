@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/account.dart';
@@ -112,9 +113,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
           AccountCategory.costOfGoodsSold,
           AccountCategory.operatingExpense,
           AccountCategory.financialExpense,
-        ];
-      case AccountType.tax:
-        return [
+          // Tax categories can be used with expense type
           AccountCategory.taxPayable,
           AccountCategory.taxReceivable,
           AccountCategory.taxExpense,
@@ -226,7 +225,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
             // Form Content
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: BrandedLoading())
                   : SingleChildScrollView(
                       padding: const EdgeInsets.all(24.0),
                       child: Center(

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 
 class MedicalLeavesPage extends StatefulWidget {
   const MedicalLeavesPage({super.key});
@@ -89,14 +90,14 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
             child: Consumer<HRService>(
               builder: (context, hrService, child) {
                 if (hrService.isLoading) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: BrandedLoading());
                 }
 
                 return FutureBuilder<List<Employee>>(
                   future: hrService.employees,
                   builder: (context, employeeSnapshot) {
                     if (!employeeSnapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
+                      return const Center(child: BrandedLoading());
                     }
 
                     final employees = employeeSnapshot.data!;

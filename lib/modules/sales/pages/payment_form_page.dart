@@ -6,6 +6,7 @@ import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 
@@ -68,7 +69,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
           const SizedBox(height: 8),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : payments.isEmpty
                     ? _buildEmptyState()
                     : RefreshIndicator(

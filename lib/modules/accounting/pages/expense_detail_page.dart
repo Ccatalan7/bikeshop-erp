@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../models/expense.dart';
 import '../models/expense_line.dart';
@@ -145,7 +146,7 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
     return MainLayout(
       title: 'Detalle de gasto',
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : _error != null
               ? _buildErrorState(context)
               : _expense == null

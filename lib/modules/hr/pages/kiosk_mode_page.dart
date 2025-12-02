@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 
 /// Kiosk Mode - Touch-friendly employee check-in/check-out interface
 /// Designed to be displayed full-screen on a tablet/monitor at the store entrance
@@ -276,7 +277,7 @@ class _KioskModePageState extends State<KioskModePage> {
           // Employee grid
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _filteredEmployees.isEmpty
                     ? Center(
                         child: Column(

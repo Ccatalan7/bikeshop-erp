@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/journal_entry.dart';
 import '../services/accounting_service.dart';
@@ -245,7 +246,7 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
           // Entries List
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _filteredEntries.isEmpty
                     ? Center(
                         child: Column(

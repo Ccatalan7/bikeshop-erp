@@ -15,6 +15,7 @@ import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/smart_product_field.dart';
 import '../../../shared/widgets/line_row_wrapper.dart';
@@ -267,7 +268,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           _applyInvoice(invoice);
         }
       } else {
-        _invoiceNumberController.text = await _generateInvoiceNumber();
+        // Use PREVIEW number - doesn't increment counter until save
+        _invoiceNumberController.text = await _previewInvoiceNumber();
 
         // Preselect customer if coming from a job
         if (widget.preselectedJobId != null) {
@@ -284,7 +286,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             backgroundColor: Colors.red,
           ),
         );
-        _invoiceNumberController.text = await _generateInvoiceNumber();
+        _invoiceNumberController.text = await _previewInvoiceNumber();
       }
     } finally {
       if (mounted) {
@@ -365,7 +367,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   String _buildSuggestedNumber() {
-    // Deprecated: Use NumberGenerationService.nextSalesInvoiceNumber() instead
+    // Deprecated: Use NumberGenerationService instead
     // This fallback should rarely be used
     final now = DateTime.now();
     final datePortion =
@@ -374,6 +376,20 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     return 'FV-$datePortion-$timePortion';
   }
 
+  /// Preview what the next invoice number will be (doesn't increment counter)
+  /// Used when entering form - actual number assigned only on save
+  Future<String> _previewInvoiceNumber() async {
+    try {
+      final numberService = NumberGenerationService();
+      return await numberService.previewSalesInvoiceNumber();
+    } catch (e) {
+      if (kDebugMode) print('Error previewing invoice number: $e');
+      return _buildSuggestedNumber(); // Fallback to old method
+    }
+  }
+
+  /// Generate the actual invoice number (increments counter)
+  /// Used only when actually SAVING a new invoice
   Future<String> _generateInvoiceNumber() async {
     try {
       final numberService = NumberGenerationService();
@@ -905,10 +921,18 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       throw Exception('User does not have a tenant_id. Cannot proceed.');
     }
 
+    // For NEW invoices (no ID yet), generate the ACTUAL number now
+    // This is when the counter actually increments
+    String invoiceNumber = _invoiceNumberController.text.trim();
+    if (_loadedInvoice?.id == null && widget.invoiceId == null) {
+      invoiceNumber = await _generateInvoiceNumber();
+      _invoiceNumberController.text = invoiceNumber;
+    }
+
     final invoice = Invoice(
       id: _loadedInvoice?.id,
       tenantId: tenantId,
-      invoiceNumber: _invoiceNumberController.text.trim(),
+      invoiceNumber: invoiceNumber,
       customerId: customerId,
       customerName: _selectedCustomer!.name,
       customerRut: _selectedCustomer!.rut,
@@ -979,7 +1003,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             _buildHeader(theme),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: BrandedLoading())
                   : _buildForm(theme),
             ),
           ],

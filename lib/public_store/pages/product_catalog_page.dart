@@ -7,6 +7,7 @@ import '../providers/public_store_tenant_provider.dart';
 import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../providers/cart_provider.dart';
+import '../../shared/widgets/branded_loading.dart';
 
 class ProductCatalogPage extends StatefulWidget {
   const ProductCatalogPage({super.key});
@@ -123,7 +124,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: BrandedLoading());
     }
 
     return Container(

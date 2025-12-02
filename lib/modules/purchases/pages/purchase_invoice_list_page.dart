@@ -70,7 +70,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     });
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PurchaseService>().getPurchaseInvoices(forceRefresh: true);
+      context.read<PurchaseService>().getPurchaseInvoices(); // Uses cache if valid
     });
   }
   

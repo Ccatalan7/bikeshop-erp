@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../modules/crm/models/crm_models.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
@@ -485,7 +486,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
       title: _customer?.name ?? 'Historial del Cliente',
       onBackPressed: () => context.pop(),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : _error != null
               ? Center(
                   child: Column(

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 
 /// Page for managing website content (text blocks, pages, etc.)
 class ContentManagementPage extends StatefulWidget {
@@ -251,7 +252,7 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
         ],
       ),
       body: websiteService.isLoading && websiteService.contents.isEmpty
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : Column(
               children: [
                 // Info banner

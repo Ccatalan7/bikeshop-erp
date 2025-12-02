@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/services/database_service.dart';
 import '../../crm/models/crm_models.dart';
@@ -273,7 +274,18 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    // Show cached jobs immediately if available (instant render)
+    if (_bikeshopService.hasJobsCache && _jobs.isEmpty) {
+      setState(() {
+        _jobs = _bikeshopService.cachedJobs;
+        _filteredJobs = _jobs;
+        _isLoading = false;
+      });
+      _applyFiltersAndSort();
+    } else {
+      setState(() => _isLoading = true);
+    }
+    
     try {
       final results = await Future.wait([
         _bikeshopService.getJobs(includeCompleted: true),
@@ -555,7 +567,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   Widget build(BuildContext context) {
     return MainLayout(
       child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : _selectedJob != null
               ? _buildSplitView()
               : Column(

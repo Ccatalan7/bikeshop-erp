@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
@@ -94,11 +95,11 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
           // Content
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _invoice == null
                     ? const Center(child: Text('Factura no encontrada'))
                     : _isProcessing
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const Center(child: BrandedLoading())
                         : SingleChildScrollView(
                             padding: const EdgeInsets.all(16),
                             child: Column(

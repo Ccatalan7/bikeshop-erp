@@ -6,6 +6,7 @@ import '../models/website_models.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/widgets/branded_loading.dart';
 
 /// Page for selecting and managing featured products shown on website homepage
 class FeaturedProductsPage extends StatefulWidget {
@@ -112,7 +113,7 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
         ],
       ),
       body: websiteService.isLoading && featured.isEmpty
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : Column(
               children: [
                 // Info banner
@@ -250,7 +251,7 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
                 // Products list
                 Expanded(
                   child: _isLoadingProducts
-                      ? const Center(child: CircularProgressIndicator())
+                      ? const Center(child: BrandedLoading())
                       : _filteredProducts.isEmpty
                           ? Center(
                               child: Text(

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/services/database_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -154,7 +155,7 @@ class _BrandFormPageState extends State<BrandFormPage> {
   Widget build(BuildContext context) {
     return MainLayout(
       child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : _buildForm(context),
     );
   }

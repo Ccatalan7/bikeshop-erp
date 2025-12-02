@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../services/wheel_building_service.dart';
 import '../models/wheel_building_models.dart';
 
@@ -297,7 +298,7 @@ class _WheelHubsPageState extends State<WheelHubsPage> {
           // Hub list
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _filteredHubs.isEmpty
                     ? Center(
                         child: Column(

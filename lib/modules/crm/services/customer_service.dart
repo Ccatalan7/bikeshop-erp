@@ -11,14 +11,56 @@ class CustomerService extends ChangeNotifier {
   
   RealtimeChannel? _customersChannel;
 
+  // ============================================================
+  // CACHING - Avoid refetching on every page navigation
+  // ============================================================
+  List<Customer>? _cachedCustomers;
+  DateTime? _customersCacheTime;
+  static const Duration _cacheMaxAge = Duration(minutes: 5);
+  bool _isLoadingCustomers = false;
+  
+  // Public getters for cached data (instant access)
+  List<Customer> get cachedCustomers => _cachedCustomers ?? [];
+  bool get hasCustomersCache => _cachedCustomers != null;
+  
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheMaxAge;
+  }
+  
+  void invalidateCustomersCache() {
+    _cachedCustomers = null;
+    _customersCacheTime = null;
+  }
+
   CustomerService(this._db, this._tenantService) {
     // Don't await - fire and forget to avoid blocking constructor
     _setupCustomersRealtime();
   }
 
   // Customer operations
-  Future<List<Customer>> getCustomers({String? searchTerm}) async {
+  Future<List<Customer>> getCustomers({String? searchTerm, bool forceRefresh = false}) async {
     try {
+      // Check if this is a filtered query
+      final isFilteredQuery = searchTerm != null && searchTerm.isNotEmpty;
+      
+      // Return cached data if valid and not a filtered query
+      if (!forceRefresh && !isFilteredQuery && _isCacheValid(_customersCacheTime) && _cachedCustomers != null) {
+        debugPrint('📦 [CustomerService] Using cached customers (${_cachedCustomers!.length} items)');
+        return _cachedCustomers!;
+      }
+      
+      // Prevent concurrent fetches
+      if (_isLoadingCustomers && !isFilteredQuery) {
+        debugPrint('⏳ [CustomerService] Already loading customers, waiting...');
+        while (_isLoadingCustomers) {
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
+        if (_cachedCustomers != null && !isFilteredQuery) return _cachedCustomers!;
+      }
+      
+      if (!isFilteredQuery) _isLoadingCustomers = true;
+      
       List<Map<String, dynamic>> data;
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
@@ -42,8 +84,19 @@ class CustomerService extends ChangeNotifier {
         data = await _db.select('customers', fetchAll: true, orderBy: 'name');
       }
 
-      return data.map((json) => Customer.fromJson(json)).toList();
+      final customers = data.map((json) => Customer.fromJson(json)).toList();
+      
+      // Cache only unfiltered results
+      if (!isFilteredQuery) {
+        _cachedCustomers = customers;
+        _customersCacheTime = DateTime.now();
+        debugPrint('✅ [CustomerService] Cached ${customers.length} customers');
+        _isLoadingCustomers = false;
+      }
+      
+      return customers;
     } catch (e) {
+      _isLoadingCustomers = false;
       if (kDebugMode) print('Error fetching customers: $e');
       rethrow;
     }
@@ -114,6 +167,7 @@ class CustomerService extends ChangeNotifier {
         await _createInitialLoyalty(customerId);
       }
 
+      invalidateCustomersCache();
       notifyListeners();
       return Customer.fromJson(data);
     } catch (e) {
@@ -157,6 +211,7 @@ class CustomerService extends ChangeNotifier {
 
       final data =
           await _db.update('customers', customer.id!, customerToSave.toJson());
+      invalidateCustomersCache();
       notifyListeners();
       return Customer.fromJson(data);
     } catch (e) {
@@ -171,6 +226,7 @@ class CustomerService extends ChangeNotifier {
         throw Exception('ID de cliente inválido');
       }
       await _db.delete('customers', id);
+      invalidateCustomersCache();
       notifyListeners();
     } catch (e) {
       if (kDebugMode) print('Error deleting customer: $e');

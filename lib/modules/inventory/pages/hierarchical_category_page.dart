@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel_lib;
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/database_service.dart';
 import '../models/category_models.dart';
@@ -325,7 +326,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
           // Content
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _buildContent(),
           ),
         ],

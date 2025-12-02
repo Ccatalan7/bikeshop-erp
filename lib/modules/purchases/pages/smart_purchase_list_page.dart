@@ -6,6 +6,7 @@ import '../services/smart_purchase_list_service.dart';
 import '../services/purchase_service.dart';
 import '../models/smart_purchase_list_item.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/models/supplier.dart';
 import '../../../shared/services/tenant_service.dart';
 import 'purchase_invoice_form_page.dart';
@@ -729,7 +730,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             child: Consumer<SmartPurchaseListService>(
               builder: (context, service, _) {
                 if (service.isLoading) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: BrandedLoading());
                 }
 
                 if (service.error != null) {

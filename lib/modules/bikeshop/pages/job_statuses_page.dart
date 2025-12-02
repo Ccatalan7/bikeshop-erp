@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../models/bikeshop_models.dart';
 import '../services/job_status_service.dart';
 
@@ -28,7 +29,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
       child: Consumer<JobStatusService>(
         builder: (context, service, _) {
           if (service.isLoading && service.statuses.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: BrandedLoading());
           }
 
           if (service.error != null && service.statuses.isEmpty) {

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../services/website_service.dart';
 import 'featured_products_page.dart';
 import 'content_management_page.dart';
@@ -45,7 +46,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
 
     if (_isInitializing) {
       return const MainLayout(
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: BrandedLoading()),
       );
     }
 

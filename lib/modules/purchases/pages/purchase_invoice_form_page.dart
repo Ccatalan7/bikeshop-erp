@@ -15,6 +15,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/invoice_parser_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/smart_product_field.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
@@ -445,8 +446,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           _applyInvoice(invoice);
         }
       } else {
-        // Generate invoice number on load (same pattern as sales invoices)
-        _invoiceNumberController.text = await _generatePurchaseInvoiceNumber();
+        // Use PREVIEW number - doesn't increment counter until save
+        _invoiceNumberController.text = await _previewPurchaseInvoiceNumber();
         
         // Check for pending data from smart purchase list (via service)
         final pendingData = _purchaseService.consumePendingSmartPurchaseData();
@@ -549,7 +550,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           backgroundColor: Colors.red,
         ),
       );
-      _invoiceNumberController.text = await _generatePurchaseInvoiceNumber();
+      _invoiceNumberController.text = await _previewPurchaseInvoiceNumber();
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -634,7 +635,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   String _buildSuggestedNumber() {
-    // Deprecated: Use NumberGenerationService.nextPurchaseInvoiceNumber() instead
+    // Deprecated: Use NumberGenerationService instead
     // This fallback should rarely be used
     final now = DateTime.now();
     final datePortion =
@@ -643,6 +644,20 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     return 'FC-$datePortion-$timePortion';
   }
 
+  /// Preview what the next invoice number will be (doesn't increment counter)
+  /// Used when entering form - actual number assigned only on save
+  Future<String> _previewPurchaseInvoiceNumber() async {
+    try {
+      final numberService = NumberGenerationService();
+      return await numberService.previewPurchaseInvoiceNumber();
+    } catch (e) {
+      debugPrint('Error previewing purchase invoice number: $e');
+      return _buildSuggestedNumber(); // Fallback to old method
+    }
+  }
+
+  /// Generate the actual invoice number (increments counter)
+  /// Used only when actually SAVING a new invoice
   Future<String> _generatePurchaseInvoiceNumber() async {
     try {
       final numberService = NumberGenerationService();
@@ -828,11 +843,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       throw Exception('No tenant found. Please log in again.');
     }
 
-    // Generate invoice number NOW (only when actually saving)
+    // For NEW invoices (no ID yet), generate the ACTUAL number now
+    // This is when the counter actually increments
     String invoiceNumber = _invoiceNumberController.text.trim();
-    if (invoiceNumber.isEmpty || invoiceNumber == 'FC-NUEVO') {
+    if (_loadedInvoice?.id == null && widget.invoiceId == null) {
       invoiceNumber = await _generatePurchaseInvoiceNumber();
-      _invoiceNumberController.text = invoiceNumber; // Update UI
+      _invoiceNumberController.text = invoiceNumber;
     }
     
     final invoice = PurchaseInvoice(
@@ -1202,7 +1218,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             _buildHeader(),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: BrandedLoading())
                   : _buildForm(),
             ),
           ],

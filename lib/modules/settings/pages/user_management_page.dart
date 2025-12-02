@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../shared/services/user_management_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../widgets/user_invite_dialog.dart';
 import '../widgets/user_edit_dialog.dart';
@@ -161,7 +162,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : _errorMessage != null
               ? Center(
                   child: Column(

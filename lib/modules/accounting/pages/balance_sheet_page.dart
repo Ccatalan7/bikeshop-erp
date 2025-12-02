@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../models/financial_report.dart';
 import '../models/balance_sheet.dart';
 import '../services/financial_reports_service.dart';
@@ -196,7 +197,7 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
+            BrandedLoading(),
             SizedBox(height: 16),
             Text('Generando reporte...'),
           ],

@@ -875,8 +875,8 @@ class _AppSidebarState extends State<AppSidebar> {
                 // Website Module
                 _buildSidebarItem(
                   context,
-                  icon: Icons.language_outlined,
-                  activeIcon: Icons.language,
+                  icon: Icons.web_outlined,
+                  activeIcon: Icons.web,
                   title: 'Sitio Web',
                   route: '/website',
                   currentLocation: currentLocation,

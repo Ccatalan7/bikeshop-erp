@@ -7,6 +7,7 @@ import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../crm/models/crm_models.dart';
+import '../../../shared/widgets/branded_loading.dart';
 
 /// Shared calendar widget for displaying mechanic jobs
 /// Used by both WorkshopCalendarPage and PegasTablePage calendar tab
@@ -272,7 +273,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: BrandedLoading());
     }
 
     return Padding(
@@ -817,7 +818,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
           // Loading indicator
           if (_loadingDetails) ...[
             const SizedBox(height: 12),
-            const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+            const Center(child: Padding(padding: EdgeInsets.all(16), child: BrandedLoading())),
           ],
 
           // Notes section

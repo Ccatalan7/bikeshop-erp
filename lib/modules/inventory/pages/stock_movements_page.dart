@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/models/product.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
@@ -205,7 +206,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     return Consumer<InventoryService>(
       builder: (context, inventoryService, _) {
         if (inventoryService.isLoading) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: BrandedLoading());
         }
 
         // Filter products by search query
@@ -331,7 +332,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         }
 
         if (movementsService.isLoading) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: BrandedLoading());
         }
 
         if (movementsService.error != null) {

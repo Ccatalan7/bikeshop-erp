@@ -27,6 +27,49 @@ class PurchaseService extends ChangeNotifier {
   bool _invoicesLoaded = false;
   bool _paymentsLoaded = false;
   
+  // ============================================================
+  // CACHING - TTL-based cache for performance optimization
+  // ============================================================
+  DateTime? _suppliersCacheTime;
+  DateTime? _invoicesCacheTime;
+  DateTime? _paymentsCacheTime;
+  static const Duration _cacheMaxAge = Duration(minutes: 5);
+  
+  // Public getters for cached data (instant UI access)
+  List<shared_supplier.Supplier> get cachedSuppliers => List.unmodifiable(_supplierCache);
+  List<PurchaseInvoice> get cachedInvoices => List.unmodifiable(_invoiceCache);
+  List<PurchasePayment> get cachedPayments => List.unmodifiable(_paymentCache);
+  bool get hasSuppliersCache => _supplierCache.isNotEmpty && _suppliersCacheTime != null;
+  bool get hasInvoicesCache => _invoiceCache.isNotEmpty && _invoicesCacheTime != null;
+  bool get hasPaymentsCache => _paymentCache.isNotEmpty && _paymentsCacheTime != null;
+  
+  /// Check if cache is still valid
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheMaxAge;
+  }
+  
+  /// Invalidate supplier cache (call after create/update/delete)
+  void invalidateSuppliersCache() {
+    _suppliersCacheTime = null;
+    _suppliersLoaded = false;
+    debugPrint('🗑️ [PurchaseService] Suppliers cache invalidated');
+  }
+  
+  /// Invalidate invoice cache (call after create/update/delete)
+  void invalidateInvoicesCache() {
+    _invoicesCacheTime = null;
+    _invoicesLoaded = false;
+    debugPrint('🗑️ [PurchaseService] Invoices cache invalidated');
+  }
+  
+  /// Invalidate payment cache (call after create/update/delete)
+  void invalidatePaymentsCache() {
+    _paymentsCacheTime = null;
+    _paymentsLoaded = false;
+    debugPrint('🗑️ [PurchaseService] Payments cache invalidated');
+  }
+  
   // Pending data from smart purchase list
   String? _pendingSupplierId;
   List<Map<String, dynamic>>? _pendingLineItems;
@@ -75,7 +118,9 @@ class PurchaseService extends ChangeNotifier {
     bool forceRefresh = false,
     bool activeOnly = false,
   }) async {
-    if (_suppliersLoaded && !forceRefresh) {
+    // Return cached data if valid
+    if (!forceRefresh && _isCacheValid(_suppliersCacheTime) && _supplierCache.isNotEmpty) {
+      debugPrint('📦 [PurchaseService] Using cached suppliers (${_supplierCache.length} items)');
       return activeOnly
           ? _supplierCache.where((s) => s.isActive).toList()
           : _supplierCache;
@@ -87,6 +132,8 @@ class PurchaseService extends ChangeNotifier {
           .toList()
         ..sort((a, b) => a.name.compareTo(b.name));
       _suppliersLoaded = true;
+      _suppliersCacheTime = DateTime.now();
+      debugPrint('✅ [PurchaseService] Cached ${_supplierCache.length} suppliers');
       notifyListeners(); // Notify UI after loading suppliers
       return activeOnly
           ? _supplierCache.where((s) => s.isActive).toList()
@@ -129,6 +176,7 @@ class PurchaseService extends ChangeNotifier {
       });
       final supplier = shared_supplier.Supplier.fromJson(result);
       _supplierCache = [..._supplierCache, supplier];
+      invalidateSuppliersCache();
       notifyListeners();
       return supplier;
     } catch (e) {
@@ -151,12 +199,14 @@ class PurchaseService extends ChangeNotifier {
       if (supplier.id.isEmpty) {
         final inserted = await _db.insert('suppliers', payload..remove('id'));
         final created = shared_supplier.Supplier.fromJson(inserted);
+        invalidateSuppliersCache();
         await getSuppliers(forceRefresh: true);
         notifyListeners();
         return created;
       } else {
         payload.remove('created_at');
         await _db.update('suppliers', supplier.id, payload);
+        invalidateSuppliersCache();
         await getSuppliers(forceRefresh: true);
         notifyListeners();
         final refreshed = await getSupplier(supplier.id);
@@ -170,6 +220,7 @@ class PurchaseService extends ChangeNotifier {
   Future<void> deleteSupplier(String id) async {
     try {
       await _db.delete('suppliers', id);
+      invalidateSuppliersCache();
       await getSuppliers(forceRefresh: true);
       notifyListeners();
     } catch (e) {
@@ -179,12 +230,18 @@ class PurchaseService extends ChangeNotifier {
 
   Future<List<PurchaseInvoice>> getPurchaseInvoices(
       {bool forceRefresh = false}) async {
-    if (_invoicesLoaded && !forceRefresh) return _invoiceCache;
+    // Return cached data if valid
+    if (!forceRefresh && _isCacheValid(_invoicesCacheTime) && _invoiceCache.isNotEmpty) {
+      debugPrint('📦 [PurchaseService] Using cached invoices (${_invoiceCache.length} items)');
+      return _invoiceCache;
+    }
     try {
       final data = await _db.select('purchase_invoices');
       _invoiceCache = data.map((row) => PurchaseInvoice.fromJson(row)).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
       _invoicesLoaded = true;
+      _invoicesCacheTime = DateTime.now();
+      debugPrint('✅ [PurchaseService] Cached ${_invoiceCache.length} invoices');
       _setupPurchaseRealtime(); // Setup realtime after first load
       notifyListeners(); // Notify UI to rebuild after loading invoices
       return _invoiceCache;
@@ -220,6 +277,7 @@ class PurchaseService extends ChangeNotifier {
         saved = refreshed ?? invoice;
       }
 
+      invalidateInvoicesCache();
       await getPurchaseInvoices(forceRefresh: true);
       // NOTE: Accounting entries are now created automatically by database triggers
       // when invoice status changes to 'received'. No need to call _postAccountingEntry here.
@@ -273,6 +331,7 @@ class PurchaseService extends ChangeNotifier {
       
       // Clear cache and reload
       debugPrint('🔄 Clearing cache and refreshing invoice list...');
+      invalidateInvoicesCache();
       _invoiceCache = const []; // Clear cache
       _invoicesLoaded = false;
       await getPurchaseInvoices(forceRefresh: true);

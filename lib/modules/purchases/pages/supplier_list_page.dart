@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../shared/models/supplier.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../services/purchase_service.dart';
@@ -44,9 +45,19 @@ class _SupplierListPageState extends State<SupplierListPage> {
   }
 
   Future<void> _loadSuppliers() async {
-    try {
+    // 🚀 INSTANT RENDER: Show cached data immediately if available
+    if (_purchaseService.hasSuppliersCache && _suppliers.isEmpty) {
+      setState(() {
+        _suppliers = _purchaseService.cachedSuppliers;
+        _filteredSuppliers = _suppliers;
+        _isLoading = false;
+      });
+    } else {
       setState(() => _isLoading = true);
-      final suppliers = await _purchaseService.getSuppliers(forceRefresh: true);
+    }
+    
+    try {
+      final suppliers = await _purchaseService.getSuppliers();
       if (mounted) {
         setState(() {
           _suppliers = suppliers;
@@ -189,7 +200,7 @@ class _SupplierListPageState extends State<SupplierListPage> {
           // Content
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _filteredSuppliers.isEmpty
                     ? _buildEmptyState()
                     : _buildSupplierList(),

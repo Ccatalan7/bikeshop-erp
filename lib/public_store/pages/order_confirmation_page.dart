@@ -5,6 +5,7 @@ import '../theme/public_store_theme.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/models/website_models.dart';
 import '../../shared/utils/chilean_utils.dart';
+import '../../shared/widgets/branded_loading.dart';
 
 class OrderConfirmationPage extends StatefulWidget {
   final String orderId;
@@ -54,7 +55,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : _error != null
               ? _buildError()
               : _order == null

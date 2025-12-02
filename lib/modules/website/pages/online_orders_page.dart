@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
@@ -108,7 +109,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           // Orders List
           Expanded(
             child: websiteService.isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : orders.isEmpty
                     ? Center(
                         child: Column(

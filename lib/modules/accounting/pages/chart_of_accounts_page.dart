@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/database_service.dart';
@@ -98,7 +99,7 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
                       ),
                       Expanded(
                         child: _isLoading
-                            ? const Center(child: CircularProgressIndicator())
+                            ? const Center(child: BrandedLoading())
                             : _buildChartOfAccounts(),
                       ),
                     ],
@@ -124,7 +125,7 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
                 ),
                 Expanded(
                   child: _isLoading
-                      ? const Center(child: CircularProgressIndicator())
+                      ? const Center(child: BrandedLoading())
                       : _buildChartOfAccounts(),
                 ),
               ],
@@ -290,8 +291,6 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
         return Colors.purple;
       case AccountType.expense:
         return Colors.orange;
-      case AccountType.tax:
-        return Colors.teal;
     }
   }
 }

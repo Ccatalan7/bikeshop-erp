@@ -29,6 +29,37 @@ class SalesService extends ChangeNotifier {
   String? _invoiceError;
   String? _paymentError;
 
+  // ============================================================
+  // CACHING - Avoid refetching on every page navigation
+  // ============================================================
+  DateTime? _invoicesCacheTime;
+  DateTime? _paymentsCacheTime;
+  static const Duration _cacheMaxAge = Duration(minutes: 5);
+  
+  // Public getters for cached data (instant UI access)
+  List<Invoice> get cachedInvoices => List.unmodifiable(_invoices);
+  List<Payment> get cachedPayments => List.unmodifiable(_payments);
+  bool get hasInvoicesCache => _invoices.isNotEmpty && _invoicesCacheTime != null;
+  bool get hasPaymentsCache => _payments.isNotEmpty && _paymentsCacheTime != null;
+  
+  /// Check if cache is still valid
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheMaxAge;
+  }
+  
+  /// Invalidate invoice cache (call after create/update/delete)
+  void invalidateInvoicesCache() {
+    _invoicesCacheTime = null;
+    debugPrint('🗑️ [SalesService] Invoices cache invalidated');
+  }
+  
+  /// Invalidate payment cache (call after create/update/delete)
+  void invalidatePaymentsCache() {
+    _paymentsCacheTime = null;
+    debugPrint('🗑️ [SalesService] Payments cache invalidated');
+  }
+
   UnmodifiableListView<Invoice> get invoices => UnmodifiableListView(_invoices);
   UnmodifiableListView<Payment> get payments => UnmodifiableListView(_payments);
 
@@ -46,8 +77,13 @@ class SalesService extends ChangeNotifier {
   }
 
   Future<void> loadInvoices({bool forceRefresh = false}) async {
+    // Return cached data if valid
+    if (!forceRefresh && _isCacheValid(_invoicesCacheTime) && _invoices.isNotEmpty) {
+      debugPrint('📦 [SalesService] Using cached invoices (${_invoices.length} items)');
+      return;
+    }
+    
     if (_isLoadingInvoices) return;
-    if (!forceRefresh && _invoices.isNotEmpty) return;
 
     _isLoadingInvoices = true;
     _invoiceError = null;
@@ -61,6 +97,8 @@ class SalesService extends ChangeNotifier {
       _invoices
         ..clear()
         ..addAll(invoices);
+      _invoicesCacheTime = DateTime.now();
+      debugPrint('✅ [SalesService] Cached ${invoices.length} invoices');
       _ensureRealtimeSubscriptions();
     } catch (e) {
       debugPrint('SalesService.loadInvoices error: $e');
@@ -131,6 +169,7 @@ class SalesService extends ChangeNotifier {
       await _accountingService.initialize();
       await _accountingService.journalEntries.loadJournalEntries();
 
+      invalidateInvoicesCache();
       notifyListeners();
       return savedInvoice;
     } catch (e) {
@@ -147,6 +186,7 @@ class SalesService extends ChangeNotifier {
     try {
       await _databaseService.delete(_invoicesCollection, invoiceId);
       _invoices.removeWhere((invoice) => invoice.id == invoiceId);
+      invalidateInvoicesCache();
       notifyListeners();
     } catch (e) {
       debugPrint('SalesService.deleteInvoice error: $e');
@@ -156,8 +196,13 @@ class SalesService extends ChangeNotifier {
 
   Future<void> loadPayments(
       {String? invoiceId, bool forceRefresh = false}) async {
+    // Return cached data if valid
+    if (!forceRefresh && _isCacheValid(_paymentsCacheTime) && _payments.isNotEmpty && invoiceId == null) {
+      debugPrint('📦 [SalesService] Using cached payments (${_payments.length} items)');
+      return;
+    }
+    
     if (_isLoadingPayments) return;
-    if (!forceRefresh && _payments.isNotEmpty && invoiceId == null) return;
 
     _isLoadingPayments = true;
     _paymentError = null;
@@ -172,6 +217,8 @@ class SalesService extends ChangeNotifier {
       _payments
         ..clear()
         ..addAll(payments);
+      _paymentsCacheTime = DateTime.now();
+      debugPrint('✅ [SalesService] Cached ${payments.length} payments');
       if (invoiceId != null) {
         // Mantener caché completa; las vistas filtrarán por factura según sea necesario.
       }
@@ -206,6 +253,8 @@ class SalesService extends ChangeNotifier {
       await _accountingService.initialize();
       await _accountingService.journalEntries.loadJournalEntries();
 
+      invalidatePaymentsCache();
+      invalidateInvoicesCache(); // Invoice balance changes when payment added
       notifyListeners();
       return savedPayment;
     } catch (e) {
@@ -220,6 +269,8 @@ class SalesService extends ChangeNotifier {
       _payments.removeWhere((payment) => payment.id == paymentId);
       await _accountingService.initialize();
       await _accountingService.journalEntries.loadJournalEntries();
+      invalidatePaymentsCache();
+      invalidateInvoicesCache(); // Invoice balance changes when payment deleted
       notifyListeners();
     } catch (e) {
       debugPrint('SalesService.deletePayment error: $e');

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../shared/models/payment_method.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/payment_method_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../accounting/services/accounting_service.dart';
 
@@ -44,7 +45,7 @@ class _PaymentMethodsSettingsPageState
       body: Consumer<PaymentMethodService>(
         builder: (context, service, child) {
           if (service.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: BrandedLoading());
           }
 
           if (service.error != null) {

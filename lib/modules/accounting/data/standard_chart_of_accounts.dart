@@ -120,15 +120,15 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
   AccountDefinition(
     code: '1180',
     name: 'IVA Crédito Fiscal',
-    type: AccountType.tax,
-    category: AccountCategory.taxReceivable,
+    type: AccountType.asset, // Changed from 'tax' - taxes paid = asset
+    category: AccountCategory.currentAsset,
     description: 'Crédito fiscal por IVA soportado en compras.',
   ),
   AccountDefinition(
     code: '1185',
     name: 'Impuestos por Recuperar',
-    type: AccountType.tax,
-    category: AccountCategory.taxReceivable,
+    type: AccountType.asset, // Changed from 'tax' - taxes receivable = asset
+    category: AccountCategory.currentAsset,
     description: 'Otros impuestos y tributos recuperables.',
   ),
 
@@ -203,15 +203,15 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
   AccountDefinition(
     code: '2150',
     name: 'IVA Débito Fiscal',
-    type: AccountType.tax,
-    category: AccountCategory.taxPayable,
+    type: AccountType.liability, // Changed from 'tax' - taxes collected = liability
+    category: AccountCategory.currentLiability,
     description: 'IVA recaudado en ventas (19%).',
   ),
   AccountDefinition(
     code: '2120',
     name: 'IVA Crédito Fiscal',
-    type: AccountType.tax,
-    category: AccountCategory.taxReceivable,
+    type: AccountType.asset, // Changed from 'tax' - taxes paid = asset (refundable)
+    category: AccountCategory.currentAsset,
     description: 'IVA pagado en compras (19%).',
   ),
   AccountDefinition(
@@ -240,23 +240,23 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
   AccountDefinition(
     code: '2150',
     name: 'IVA Débito Fiscal',
-    type: AccountType.tax,
-    category: AccountCategory.taxPayable,
+    type: AccountType.liability, // Changed from 'tax' - taxes owed = liability
+    category: AccountCategory.currentLiability,
     description: 'IVA generado en ventas y servicios por enterar al fisco.',
   ),
   AccountDefinition(
     code: '2155',
     name: 'Retenciones y Aportes por Pagar',
-    type: AccountType.tax,
-    category: AccountCategory.taxPayable,
+    type: AccountType.liability, // Changed from 'tax' - withholdings = liability
+    category: AccountCategory.currentLiability,
     description:
         'Retenciones previsionales, de honorarios e impuestos a enterar.',
   ),
   AccountDefinition(
     code: '2160',
     name: 'Impuesto a la Renta por Pagar',
-    type: AccountType.tax,
-    category: AccountCategory.taxPayable,
+    type: AccountType.liability, // Changed from 'tax' - tax payable = liability
+    category: AccountCategory.currentLiability,
     description: 'Impuesto a la renta devengado pendiente de pago.',
   ),
   AccountDefinition(
@@ -560,8 +560,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
   AccountDefinition(
     code: '5500',
     name: 'Impuesto a la Renta',
-    type: AccountType.tax,
-    category: AccountCategory.taxExpense,
+    type: AccountType.expense, // Changed from 'tax' - tax expense is an expense
+    category: AccountCategory.operatingExpense,
     description: 'Gasto por impuesto a la renta del período.',
   ),
 ];

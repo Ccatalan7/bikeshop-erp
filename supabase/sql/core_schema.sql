@@ -2709,13 +2709,41 @@ grant execute on function public.import_product_with_context(uuid, text, jsonb, 
 -- after all required columns have been added to sales_invoices and purchase_invoices
 -- ============================================================================
 
+-- ============================================================================
+-- FIX: Migrate 'tax' type accounts to 'liability' (Dec 1, 2025)
+-- The accounting equation only considers: asset, liability, equity, income, expense
+-- 'tax' type was causing IVA accounts to be excluded from balance sheet calculations
+-- ============================================================================
+do $$
+begin
+  -- Fix IVA Débito Fiscal (sales tax collected - we owe to government = liability)
+  update accounts 
+  set type = 'liability', category = 'currentLiability'
+  where code = '2150' and type = 'tax';
+  
+  -- Fix IVA Crédito Fiscal (purchase tax paid - government owes us = asset)
+  update accounts 
+  set type = 'asset', category = 'currentAsset'
+  where code = '2120' and type = 'tax';
+  
+  -- Fix any other tax accounts to liability by default
+  update accounts 
+  set type = 'liability', category = 'currentLiability'
+  where type = 'tax';
+  
+  raise notice '✅ Migrated tax-type accounts to proper liability/asset types';
+exception
+  when undefined_table then null;
+  when undefined_column then null;
+end $$;
+
 create table if not exists accounts (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   code text not null,
   name text not null,
   type text not null
-    check (type in ('asset','liability','equity','income','expense','tax')),
+    check (type in ('asset','liability','equity','income','expense')),
   category text not null
     check (category in (
       'currentAsset','fixedAsset','otherAsset',
@@ -2791,19 +2819,19 @@ begin
   end if;
 end $$;
 
+-- Remove old 'tax' type constraint and add new one without 'tax'
 do $$
 begin
-  if not exists (
-    select 1
-      from pg_constraint
-     where conrelid = 'public.accounts'::regclass
-       and contype = 'c'
-       and conname = 'accounts_type_check'
-  ) then
-    alter table public.accounts
-      add constraint accounts_type_check
-        check (type in ('asset','liability','equity','income','expense','tax'));
-  end if;
+  -- Drop old constraint if it includes 'tax'
+  alter table public.accounts drop constraint if exists accounts_type_check;
+  
+  -- Add new constraint without 'tax' type
+  alter table public.accounts
+    add constraint accounts_type_check
+      check (type in ('asset','liability','equity','income','expense'));
+exception
+  when undefined_table then null;
+  when others then raise notice '⚠️ accounts_type_check: %', sqlerrm;
 end $$;
 
 do $$
@@ -16785,6 +16813,52 @@ end;
 $$;
 
 grant execute on function public.get_next_document_number(uuid, text, text) to authenticated;
+
+-- Function: preview_next_document_number
+-- Returns what the NEXT number would be, WITHOUT incrementing
+-- Used for form previews - number is only "consumed" when actually saving
+create or replace function public.preview_next_document_number(
+  p_tenant_id uuid,
+  p_document_type text,
+  p_prefix text default null
+) returns text
+language plpgsql
+security definer
+as $$
+declare
+  v_current_number integer;
+  v_next_number integer;
+  v_prefix text;
+  v_formatted_number text;
+begin
+  -- Default prefixes if not provided
+  v_prefix := coalesce(p_prefix, case p_document_type
+    when 'sales_invoice' then 'FV'
+    when 'purchase_invoice' then 'FC'
+    when 'sales_payment' then 'PV'
+    when 'purchase_payment' then 'PC'
+    when 'journal_entry' then 'AC'
+    when 'mechanic_job' then 'PG'
+    when 'stock_adjustment' then 'AJ'
+    else 'DOC'
+  end);
+  
+  -- Get current sequence value (or 0 if none)
+  select coalesce(last_number, 0) into v_current_number
+  from document_sequences
+  where tenant_id = p_tenant_id and document_type = p_document_type;
+  
+  -- Next number is current + 1 (or 1 if no sequence exists)
+  v_next_number := coalesce(v_current_number, 0) + 1;
+  
+  -- Format: PREFIX-NNNNN (e.g., FV-00143)
+  v_formatted_number := v_prefix || '-' || lpad(v_next_number::text, 5, '0');
+  
+  return v_formatted_number;
+end;
+$$;
+
+grant execute on function public.preview_next_document_number(uuid, text, text) to authenticated;
 
 -- =====================================================
 -- FACTORY RESET CONFIGURATIONS

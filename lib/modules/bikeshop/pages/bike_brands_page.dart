@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
@@ -135,7 +136,7 @@ class _BikeBrandsPageState extends State<BikeBrandsPage> {
                   .getBikeBrands(activeOnly: !_showInactive),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: BrandedLoading());
                 }
 
                 if (snapshot.hasError) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/account.dart';
 
@@ -292,7 +293,7 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
           // Transactions table
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BrandedLoading())
                 : _transactions.isEmpty
                     ? Center(
                         child: Column(

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../shared/config/supabase_config.dart';
 import '../../../shared/services/remote_scanner_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import '../models/barcode_scan_event.dart';
 
 /// Page to manage remote phone scanner connections
@@ -96,7 +97,7 @@ class _RemoteScannerPageState extends State<RemoteScannerPage> {
         title: const Text('📱 Escáner Remoto (Celular)'),
       ),
       body: _deviceId == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandedLoading())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(

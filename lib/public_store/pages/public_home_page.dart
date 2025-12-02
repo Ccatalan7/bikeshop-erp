@@ -10,6 +10,7 @@ import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
+import '../../shared/widgets/branded_loading.dart';
 import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_inventory_service.dart';
@@ -311,7 +312,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
     );
 
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: BrandedLoading());
     }
 
     final currentBreakpoint = _currentBreakpoint(context);

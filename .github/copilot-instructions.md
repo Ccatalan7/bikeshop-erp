@@ -904,7 +904,252 @@ class CustomerService extends ChangeNotifier {
 
 ---
 
-# �🖼️ SPACE MANAGEMENT & RESPONSIVE UI PATTERNS
+# 🚀 PERFORMANCE OPTIMIZATION: SERVICE-LEVEL CACHING
+
+**CRITICAL: Implemented Dec 1, 2025 for Taller module - APPLY TO ALL MODULES**
+
+## The Problem
+
+Navigation between pages in the same module feels slow because:
+- Every page calls `_loadData()` on init
+- Every `_loadData()` fetches from database
+- Even switching between tabs/pages in same module causes full reload
+- Users see loading spinners constantly
+
+## The Solution: Service-Level Caching
+
+Cache data at the **service layer** so pages can:
+1. Show cached data **instantly** (no loading spinner)
+2. Fetch fresh data in background
+3. Invalidate cache only when data actually changes
+
+## Implementation Pattern
+
+### 1. Add Caching Infrastructure to Service
+
+```dart
+class YourModuleService extends ChangeNotifier {
+  // ============================================================
+  // CACHING - Avoid refetching on every page navigation
+  // ============================================================
+  List<YourModel>? _cachedItems;
+  DateTime? _itemsCacheTime;
+  static const Duration _cacheMaxAge = Duration(minutes: 5);
+  
+  // Loading state flag to prevent concurrent fetches
+  bool _isLoadingItems = false;
+  
+  // Public getters for cached data (instant access)
+  List<YourModel> get cachedItems => _cachedItems ?? [];
+  bool get hasItemsCache => _cachedItems != null;
+  
+  /// Check if cache is still valid
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheMaxAge;
+  }
+  
+  /// Invalidate cache (call after create/update/delete)
+  void invalidateItemsCache() {
+    _cachedItems = null;
+    _itemsCacheTime = null;
+  }
+}
+```
+
+### 2. Update Fetch Methods to Use Cache
+
+```dart
+Future<List<YourModel>> getItems({
+  String? filterParam,
+  bool forceRefresh = false,
+}) async {
+  // Check if this is a filtered query (don't use cache for filtered results)
+  final isFilteredQuery = filterParam != null && filterParam.isNotEmpty;
+  
+  // Return cached data if valid and not a filtered query
+  if (!forceRefresh && !isFilteredQuery && _isCacheValid(_itemsCacheTime) && _cachedItems != null) {
+    debugPrint('📦 [YourService] Using cached items (${_cachedItems!.length} items)');
+    return _cachedItems!;
+  }
+  
+  // Prevent concurrent fetches
+  if (_isLoadingItems && !isFilteredQuery) {
+    debugPrint('⏳ [YourService] Already loading items, waiting...');
+    while (_isLoadingItems) {
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+    if (_cachedItems != null && !isFilteredQuery) return _cachedItems!;
+  }
+  
+  try {
+    if (!isFilteredQuery) _isLoadingItems = true;
+    
+    // Fetch from database...
+    final data = await _fetchFromDatabase(filterParam);
+    
+    // Cache only unfiltered results
+    if (!isFilteredQuery) {
+      _cachedItems = data;
+      _itemsCacheTime = DateTime.now();
+      debugPrint('✅ [YourService] Cached ${data.length} items');
+    }
+    
+    return data;
+  } finally {
+    if (!isFilteredQuery) _isLoadingItems = false;
+  }
+}
+```
+
+### 3. Add Cache Invalidation to ALL CRUD Methods
+
+```dart
+Future<YourModel> createItem(YourModel item) async {
+  final data = await _db.insert('your_table', item.toJson());
+  invalidateItemsCache();  // ⚠️ CRITICAL: Invalidate after mutation
+  notifyListeners();
+  return YourModel.fromJson(data);
+}
+
+Future<YourModel> updateItem(YourModel item) async {
+  final data = await _db.update('your_table', item.id!, item.toJson());
+  invalidateItemsCache();  // ⚠️ CRITICAL: Invalidate after mutation
+  notifyListeners();
+  return YourModel.fromJson(data);
+}
+
+Future<void> deleteItem(String id) async {
+  await _db.delete('your_table', id);
+  invalidateItemsCache();  // ⚠️ CRITICAL: Invalidate after mutation
+  notifyListeners();
+}
+```
+
+### 4. Update Page `_loadData()` to Use Cache for Instant Render
+
+```dart
+Future<void> _loadData() async {
+  // 🚀 INSTANT RENDER: Show cached data immediately if available
+  if (_yourService.hasItemsCache && _items.isEmpty) {
+    setState(() {
+      _items = _yourService.cachedItems;
+      _filteredItems = _items;
+      _isLoading = false;  // No loading spinner!
+    });
+    _applyFiltersAndSort();
+  } else {
+    setState(() => _isLoading = true);
+  }
+  
+  try {
+    // Fetch fresh data (will use cache if still valid)
+    final items = await _yourService.getItems();
+    
+    if (mounted) {
+      setState(() {
+        _items = items;
+        _filteredItems = items;
+        _isLoading = false;
+      });
+      _applyFiltersAndSort();
+    }
+  } catch (e) {
+    if (mounted) {
+      setState(() => _isLoading = false);
+      // Show error...
+    }
+  }
+}
+```
+
+## Reference Implementation
+
+**Services WITH Caching (Production-Ready as of Dec 1, 2025):**
+
+| Service | Cache Variables | Preloaded on Login |
+|---------|-----------------|---------------------|
+| `BikeshopService` | `_cachedJobs`, `_cachedBikes` | ✅ Yes |
+| `CustomerService` | `_customersCache` | ✅ Yes |
+| `InventoryService` | `_productsCache` | ✅ Yes |
+| `CategoryService` | `_categoriesCache` | ✅ Yes |
+| `BrandService` | `_brandsCache` | ✅ Yes |
+| `SalesService` | `_invoices`, `_payments` | ✅ Yes |
+| `PurchaseService` | `_invoiceCache`, `_supplierCache` | ✅ Yes |
+| `HRService` | `_employeesCache`, `_departmentsCache` | ✅ Yes |
+
+**Pages WITH Instant Render:**
+- `pegas_list_page.dart` - Shows cached jobs instantly
+- `pegas_table_page.dart` - Shows cached jobs instantly
+- `customer_list_page.dart` - Shows cached customers instantly
+- `product_list_page.dart` - Shows cached products instantly
+- `category_list_page.dart` - Shows cached categories instantly
+- `brand_list_page.dart` - Shows cached brands instantly
+- `invoice_list_page.dart` - Uses Provider.watch pattern with cached data
+- `purchase_invoice_list_page.dart` - Uses Provider.watch with cached data
+- `employee_list_page.dart` - Shows cached employees instantly
+- `supplier_list_page.dart` - Shows cached suppliers instantly
+
+**DataPreloadService** (`lib/shared/services/data_preload_service.dart`):
+- Initializes after authentication
+- Preloads ALL cached data in parallel on login
+- Reduces first navigation time from ~500ms to ~50ms
+
+## Cache Configuration
+
+| Setting | Value | Reason |
+|---------|-------|--------|
+| `_cacheMaxAge` | 5 minutes | Balance between freshness and performance |
+| Concurrent fetch wait | 50ms polling | Prevent duplicate requests |
+| Filtered queries | Always fetch | Filters may not match cache |
+
+## When to Apply This Pattern
+
+**APPLY TO:**
+- ✅ Any module with list pages (inventory, sales, purchases, CRM, HR)
+- ✅ Services that are called frequently during navigation
+- ✅ Data that doesn't change every second
+
+**DO NOT APPLY TO:**
+- ❌ Realtime data (use Supabase realtime subscriptions instead)
+- ❌ Dashboard/analytics (always show fresh data)
+- ❌ Single-record fetches (getById) - no benefit
+
+## Checklist for New Modules
+
+When creating a new module:
+
+1. ✅ **Add cache variables** to service: `_cachedItems`, `_itemsCacheTime`, `_isLoadingItems`
+2. ✅ **Add public getters**: `cachedItems`, `hasItemsCache`
+3. ✅ **Add invalidation method**: `invalidateItemsCache()`
+4. ✅ **Update fetch method** with cache logic (see pattern above)
+5. ✅ **Add invalidation calls** to ALL CRUD methods (create, update, delete, softDelete, restore)
+6. ✅ **Update page `_loadData()`** to show cached data instantly
+7. ✅ **Add service to DataPreloadService** for preloading on login
+8. ✅ **Test navigation** - should feel instant, no loading spinners on second visit
+
+## Services Pending Optimization
+
+These services may benefit from caching if frequently used:
+
+- ⏳ `AccountingService` → Chart of accounts, Journal entries (large datasets)
+- ⏳ `StockMovementsService` → Stock movement history
+- ⏳ `SmartTaskService` → Task templates
+
+## Debugging Cache
+
+Add these debug prints to track cache behavior:
+
+```dart
+debugPrint('📦 Using cached items');      // Cache hit
+debugPrint('⏳ Already loading, waiting'); // Concurrent fetch prevented
+debugPrint('✅ Cached ${items.length}');   // Cache stored
+debugPrint('🗑️ Cache invalidated');        // After mutation
+```
+
+---
+
+# 🖼️ SPACE MANAGEMENT & RESPONSIVE UI PATTERNS
 
 **CRITICAL LESSONS LEARNED FROM PRODUCTION TESTING (Oct 31, 2025)**
 
