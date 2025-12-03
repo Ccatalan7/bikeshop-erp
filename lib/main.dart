@@ -41,6 +41,7 @@ import 'modules/bikeshop/services/job_status_service.dart';
 import 'modules/hr/services/hr_service.dart';
 import 'modules/website/services/website_service.dart';
 import 'modules/website/services/mercadopago_service.dart';
+import 'modules/website/providers/website_edit_mode_provider.dart';
 import 'shared/services/job_role_service.dart';
 import 'public_store/providers/cart_provider.dart';
 import 'public_store/providers/public_store_tenant_provider.dart';
@@ -105,12 +106,39 @@ Future<void> main() async {
     }
 
     FlutterError.onError = (FlutterErrorDetails details) {
+      // Suppress Flutter Web-specific "disposed EngineFlutterView" errors
+      // These occur during hot reload and navigation and don't affect functionality
+      final errorString = details.exceptionAsString();
+      if (kIsWeb && errorString.contains('disposed') && errorString.contains('EngineFlutterView')) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [Flutter Web] Suppressed disposed view error (hot reload artifact)');
+        }
+        return; // Don't report or dump these errors
+      }
+      
       ErrorReportingService.report(details.exception, details.stack);
       FlutterError.dumpErrorToConsole(details);
     };
 
     runApp(const VinabikeApp());
   }, (error, stack) {
+    // Suppress Flutter Web-specific errors in zone guard as well
+    final errorString = error.toString();
+    if (kIsWeb && errorString.contains('disposed') && errorString.contains('EngineFlutterView')) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [Flutter Web] Suppressed disposed view error (zone)');
+      }
+      return; // Don't report these errors
+    }
+    
+    // Also suppress LegacyJavaScriptObject errors (http package compatibility issue)
+    if (kIsWeb && errorString.contains('LegacyJavaScriptObject')) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [Flutter Web] Suppressed LegacyJavaScriptObject error');
+      }
+      return;
+    }
+    
     ErrorReportingService.report(error, stack);
     debugPrint('Uncaught error: $error\n$stack');
   });
@@ -212,6 +240,7 @@ class VinabikeApp extends StatelessWidget {
                   Provider.of<TenantService>(context, listen: false),
                 )),
         ChangeNotifierProvider(create: (_) => WebsiteService()),
+        ChangeNotifierProvider(create: (_) => WebsiteEditModeProvider()),
         ChangeNotifierProvider(create: (_) => MercadoPagoService()..initialize()),
         ChangeNotifierProvider(create: (_) => BackupService()),
         
@@ -288,11 +317,20 @@ class VinabikeApp extends StatelessWidget {
 
           // Detect tenant for public store (subdomain-based routing)
           if (isPublicStoreHost) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
               final tenantProvider = context.read<PublicStoreTenantProvider>();
               if (!tenantProvider.hasTenant && !tenantProvider.isLoading) {
                 debugPrint('[Main] Triggering tenant detection for public store...');
-                tenantProvider.detectTenant();
+                await tenantProvider.detectTenant();
+                
+                // After tenant detection, load website settings ONCE
+                if (tenantProvider.tenantId != null) {
+                  debugPrint('[Main] Tenant detected, loading website settings...');
+                  final websiteService = context.read<WebsiteService>();
+                  await websiteService.loadSettingsForTenant(tenantProvider.tenantId!);
+                  await websiteService.loadBlocksForTenant(tenantProvider.tenantId!);
+                  debugPrint('[Main] Website settings loaded for tenant: ${tenantProvider.tenantId}');
+                }
               }
             });
           }
@@ -522,6 +560,13 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
 }
 
 bool _detectPublicStoreHost() {
+  // Development: Check for FORCE_SUBDOMAIN environment variable
+  const forceSubdomain = String.fromEnvironment('FORCE_SUBDOMAIN');
+  if (forceSubdomain.isNotEmpty) {
+    debugPrint('🧪 [Main] FORCE_SUBDOMAIN=$forceSubdomain → treating as public store host');
+    return true;
+  }
+
   if (!kIsWeb) {
     return false;
   }

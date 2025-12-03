@@ -8,12 +8,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../modules/website/models/website_models.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
+import '../../modules/website/widgets/editable_block_renderer.dart';
+import '../../modules/website/widgets/inline_edit_toolbar.dart';
+import '../../modules/website/widgets/website_editor_panel.dart';
+import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/models/product.dart';
-import '../../shared/utils/chilean_utils.dart';
 import '../../shared/widgets/branded_loading.dart';
 import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
-import '../services/public_inventory_service.dart';
 
 class PublicHomePage extends StatefulWidget {
   const PublicHomePage({super.key});
@@ -24,7 +26,7 @@ class PublicHomePage extends StatefulWidget {
 
 class _PublicHomePageState extends State<PublicHomePage> {
   bool _isLoading = true;
-  List<Map<String, dynamic>> _heroBlocks = []; // Changed from _banners to _heroBlocks
+  List<Map<String, dynamic>> _allBlocks = []; // All loaded blocks
   List<Product> _featuredProducts = [];
 
   static const List<String> _responsiveBreakpoints = [
@@ -33,10 +35,96 @@ class _PublicHomePageState extends State<PublicHomePage> {
     'mobile'
   ];
 
+  String? _lastLoadedTenantId; // Track which tenant we loaded data for
+
   @override
   void initState() {
     super.initState();
-    _loadData();
+    // Trigger tenant detection and data loading
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureTenantAndLoad();
+    });
+  }
+  
+  Future<void> _ensureTenantAndLoad() async {
+    if (!mounted) return;
+    
+    final tenantProvider = context.read<PublicStoreTenantProvider>();
+    
+    // If no tenant yet, trigger detection
+    if (!tenantProvider.hasTenant && !tenantProvider.isLoading) {
+      debugPrint('[PublicHomePage] No tenant detected, triggering detection...');
+      await tenantProvider.detectTenant();
+    }
+    
+    // After tenant is available, load data
+    if (mounted && tenantProvider.tenantId != null && tenantProvider.tenantId != _lastLoadedTenantId) {
+      _lastLoadedTenantId = tenantProvider.tenantId;
+      await _loadData();
+      
+      // After data is loaded, check for edit mode
+      _checkAutoEditMode();
+    }
+  }
+  
+  void _checkAutoEditMode() {
+    if (!mounted) return;
+    
+    // Check URL for edit=true parameter
+    // Handle both regular URLs and hash-based routing (/#/path?edit=true)
+    final uri = Uri.base;
+    var shouldEdit = uri.queryParameters['edit'] == 'true';
+    
+    // For hash-based routing, the query params are in the fragment
+    // URL format: http://localhost:64749/#/tienda?edit=true
+    if (!shouldEdit && uri.fragment.isNotEmpty) {
+      final fragmentUri = Uri.tryParse(uri.fragment);
+      if (fragmentUri != null) {
+        shouldEdit = fragmentUri.queryParameters['edit'] == 'true';
+      }
+    }
+    
+    debugPrint('[PublicHomePage] _checkAutoEditMode: shouldEdit=$shouldEdit, uri=$uri, fragment=${uri.fragment}');
+    
+    if (shouldEdit) {
+      final editProvider = context.read<WebsiteEditModeProvider>();
+      final websiteService = context.read<WebsiteService>();
+      
+      if (!editProvider.isEditMode) {
+        final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
+        final settings = Map<String, dynamic>.from(websiteService.settings);
+        debugPrint('[PublicHomePage] Entering edit mode with ${blocks.length} blocks');
+        editProvider.enterEditMode(blocks, settings);
+      }
+    }
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Check if tenant is now available and we haven't loaded data for it yet
+    final tenantProvider = context.read<PublicStoreTenantProvider>();
+    final tenantId = tenantProvider.tenantId;
+    
+    if (tenantId != null && tenantId != _lastLoadedTenantId) {
+      debugPrint('[PublicHomePage] Tenant detected: $tenantId, loading data...');
+      _lastLoadedTenantId = tenantId;
+      _loadData();
+      
+      // Re-check edit mode after data loads
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAutoEditMode();
+      });
+    } else if (tenantId == null && !tenantProvider.isLoading && _lastLoadedTenantId == null) {
+      // Tenant detection finished but no tenant found - show loading briefly then fallback
+      if (_isLoading) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted && _lastLoadedTenantId == null) {
+            setState(() => _isLoading = false);
+          }
+        });
+      }
+    }
   }
 
   String _currentBreakpoint(BuildContext context) {
@@ -112,27 +200,39 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
     try {
       final websiteService = context.read<WebsiteService>();
+      
+      // Get tenant from provider (detected from subdomain - works for anonymous users)
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      final tenantId = tenantProvider.tenantId;
+      
+      debugPrint('[PublicHomePage] _loadData started, tenantId: $tenantId');
 
-      if (websiteService.settings.isEmpty) {
-        await websiteService.loadSettings();
+      if (tenantId == null) {
+        debugPrint('[PublicHomePage] No tenant detected from subdomain');
+        return;
       }
 
-      await websiteService.loadBlocks();
+      // Settings are already loaded in main.dart after tenant detection
+      // Only load blocks if not already in service (blocks are cached in _allBlocks)
+      
+      // ✅ Get blocks from service (already loaded in main.dart, or load now)
+      List<Map<String, dynamic>> blocks;
+      if (websiteService.blocks.isNotEmpty) {
+        blocks = websiteService.blocks;
+        debugPrint('[PublicHomePage] Using cached blocks: ${blocks.length}');
+      } else {
+        blocks = await websiteService.loadBlocksForTenant(tenantId);
+        debugPrint('[PublicHomePage] Loaded ${blocks.length} blocks for tenant');
+      }
+      
+      // Store all blocks for rendering
+      _allBlocks = blocks;
 
-      // Extract hero blocks (visible only) from website_blocks
-      _heroBlocks = websiteService.blocks
-          .where((block) {
-            final blockType = block['block_type']?.toString() ?? '';
-            final isVisible = block['is_visible'] == true;
-            return (blockType == 'hero' || blockType == 'carousel') && isVisible;
-          })
-          .toList();
+      // ✅ Use tenant-aware method for featured products
+      final featuredEntries = await websiteService.loadFeaturedProductsForTenant(tenantId);
+      final activeFeatured = featuredEntries.where((fp) => fp.active).toList();
 
-      await websiteService.loadFeaturedProducts();
-      final featuredEntries =
-          websiteService.featuredProducts.where((fp) => fp.active).toList();
-
-      _featuredProducts = await _fetchFeaturedProducts(featuredEntries);
+      _featuredProducts = await _fetchFeaturedProducts(activeFeatured);
     } catch (error) {
       debugPrint('[PublicHomePage] Error loading data: $error');
     } finally {
@@ -271,7 +371,23 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch tenant provider to trigger rebuild when tenant is detected
+    final tenantProvider = context.watch<PublicStoreTenantProvider>();
     final websiteService = context.watch<WebsiteService>();
+    
+    // If tenant is now available but we haven't loaded data, trigger load
+    if (tenantProvider.tenantId != null && 
+        tenantProvider.tenantId != _lastLoadedTenantId &&
+        !_isLoading) {
+      // Schedule data load for next frame to avoid calling setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && tenantProvider.tenantId != _lastLoadedTenantId) {
+          _lastLoadedTenantId = tenantProvider.tenantId;
+          _loadData();
+        }
+      });
+    }
+    
     final primaryColor = _resolveColor(
       websiteService.getSetting('theme_primary_color', ''),
       PublicStoreTheme.primaryBlue,
@@ -311,14 +427,51 @@ class _PublicHomePageState extends State<PublicHomePage> {
       max: 64.0,
     );
 
-    if (_isLoading) {
+    debugPrint('[PublicHomePage] BUILD: _isLoading=$_isLoading, tenantLoading=${tenantProvider.isLoading}, tenantId=${tenantProvider.tenantId}, blocksCount=${_allBlocks.length}');
+
+    if (_isLoading || tenantProvider.isLoading) {
+      debugPrint('[PublicHomePage] Showing loading spinner');
       return const Center(child: BrandedLoading());
+    }
+    
+    // If no tenant detected after loading, show error
+    if (tenantProvider.tenantId == null && !tenantProvider.isLoading) {
+      debugPrint('[PublicHomePage] Showing "Tienda no encontrada" - tenant is null');
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.store_outlined, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'Tienda no encontrada',
+              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Verifica la URL e intenta nuevamente',
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
     }
 
     final currentBreakpoint = _currentBreakpoint(context);
+    
+    // Check if we're in edit mode
+    final editProvider = context.watch<WebsiteEditModeProvider>();
+    final isEditMode = editProvider.isEditMode;
 
+    // Use edit provider blocks if in edit mode, otherwise use loaded blocks
+    final blocksToRender = isEditMode ? editProvider.blocks : _allBlocks;
+
+    // In edit mode, show all blocks (even hidden ones, with opacity)
+    // In normal mode, filter by visibility
     final visibleBlocks = List<Map<String, dynamic>>.from(
-      websiteService.blocks.where((block) {
+      blocksToRender.where((block) {
+        if (isEditMode) return true; // Show all blocks in edit mode
+        
         final isGloballyVisible = block['is_visible'] ?? true;
         if (!isGloballyVisible) {
           return false;
@@ -329,13 +482,62 @@ class _PublicHomePageState extends State<PublicHomePage> {
         return visibility[currentBreakpoint] ?? true;
       }),
     )..sort(
-        (a, b) => (a['order_index'] ?? 0).compareTo(b['order_index'] ?? 0),
+        (a, b) => (a['sort_order'] ?? a['order_index'] ?? 0).compareTo(b['sort_order'] ?? b['order_index'] ?? 0),
       );
 
+    // Build the page content (blocks)
+    Widget pageContent = _buildPageContent(
+      context: context,
+      visibleBlocks: visibleBlocks,
+      isEditMode: isEditMode,
+      editProvider: editProvider,
+      primaryColor: primaryColor,
+      accentColor: accentColor,
+      headingFont: headingFont,
+      bodyFont: bodyFont,
+      headingSize: headingSize,
+      bodySize: bodySize,
+      textColor: textColor,
+      sectionSpacing: sectionSpacing,
+      containerPadding: containerPadding,
+    );
+
+    // In edit mode, use side panel layout (Odoo-style)
+    if (isEditMode) {
+      return _buildEditModeLayout(
+        context: context,
+        pageContent: pageContent,
+        editProvider: editProvider,
+        websiteService: websiteService,
+      );
+    }
+
+    return pageContent;
+  }
+
+  /// Build the main page content (blocks list)
+  Widget _buildPageContent({
+    required BuildContext context,
+    required List<Map<String, dynamic>> visibleBlocks,
+    required bool isEditMode,
+    required WebsiteEditModeProvider editProvider,
+    required Color primaryColor,
+    required Color accentColor,
+    required String headingFont,
+    required String bodyFont,
+    required double headingSize,
+    required double bodySize,
+    required Color textColor,
+    required double sectionSpacing,
+    required double containerPadding,
+  }) {
     if (visibleBlocks.isNotEmpty) {
       return SingleChildScrollView(
         child: Column(
           children: [
+            // Add space for toolbar in edit mode
+            if (isEditMode) const SizedBox(height: 60),
+            
             for (final block in visibleBlocks)
               _buildBlockFromData(
                 block,
@@ -348,35 +550,214 @@ class _PublicHomePageState extends State<PublicHomePage> {
                 textColor: textColor,
                 sectionSpacing: sectionSpacing,
                 containerPadding: containerPadding,
+                isEditMode: isEditMode,
               ),
             SizedBox(height: sectionSpacing),
+            
+            // Add block button at the end in edit mode
+            if (isEditMode)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 32),
+                child: _AddBlockButtonLarge(
+                  onAdd: (type) => editProvider.addBlock(type),
+                ),
+              ),
           ],
         ),
       );
-    }
-
-    return SingleChildScrollView(
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          textTheme: Theme.of(context).textTheme.apply(
-                bodyColor: textColor,
-                displayColor: textColor,
-              ),
-        ),
+    } else if (isEditMode) {
+      // Edit mode with no blocks - show empty state with add button
+      return SingleChildScrollView(
         child: Column(
           children: [
-            _buildHeroSection(primaryColor, accentColor),
-            SizedBox(height: sectionSpacing),
-            _buildFeaturedProductsSection(primaryColor, accentColor),
-            SizedBox(height: sectionSpacing),
-            _buildCategoriesSection(primaryColor),
-            SizedBox(height: sectionSpacing),
-            _buildWhyChooseUsSection(primaryColor),
-            SizedBox(height: sectionSpacing),
+            const SizedBox(height: 80), // Space for toolbar
+            Container(
+              padding: const EdgeInsets.all(48),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.web,
+                    size: 80,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Tu sitio web está vacío',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Agrega bloques para construir tu página',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  _AddBlockButtonLarge(
+                    onAdd: (type) => editProvider.addBlock(type),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
-      ),
+      );
+    } else {
+      // No blocks - show coming soon page for visitors
+      return SingleChildScrollView(
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 500),
+          padding: const EdgeInsets.all(48),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.storefront,
+                  size: 100,
+                  color: primaryColor.withValues(alpha: 0.5),
+                ),
+                const SizedBox(height: 32),
+                Text(
+                  'Próximamente',
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    color: primaryColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Estamos preparando algo increíble para ti',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Build the edit mode layout with side panel (Odoo-style)
+  Widget _buildEditModeLayout({
+    required BuildContext context,
+    required Widget pageContent,
+    required WebsiteEditModeProvider editProvider,
+    required WebsiteService websiteService,
+  }) {
+    return Row(
+      children: [
+        // Main content area (preview)
+        Expanded(
+          child: Stack(
+            children: [
+              // Page content
+              pageContent,
+              // Top toolbar
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: InlineEditToolbar(
+                  onSave: () => _saveChanges(context, editProvider, websiteService),
+                  onCancel: () => editProvider.exitEditMode(),
+                  onAddBlock: () => _showAddBlockDialog(context, editProvider),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Side panel for editing
+        WebsiteEditorPanel(
+          onSave: () => _saveChanges(context, editProvider, websiteService),
+          onDiscard: () => editProvider.exitEditMode(),
+        ),
+      ],
     );
+  }
+
+  Future<void> _saveChanges(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+    WebsiteService websiteService,
+  ) async {
+    try {
+      // Get tenant ID
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      final tenantId = tenantProvider.tenantId;
+      
+      if (tenantId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: No se pudo identificar el tenant')),
+        );
+        return;
+      }
+
+      // Show saving indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Guardando cambios...')),
+      );
+
+      // Convert blocks to the format expected by saveBlocks
+      final blocks = editProvider.blocks;
+      final blocksForSave = blocks.asMap().entries.map((entry) {
+        final index = entry.key;
+        final block = entry.value;
+        return {
+          'id': block['id'],
+          'type': block['block_type'],
+          'data': block['block_data'],
+          'isVisible': block['is_visible'] ?? true,
+          'order_index': index,
+        };
+      }).toList();
+
+      // Save all blocks
+      await websiteService.saveBlocks(blocksForSave);
+
+      // Mark as saved
+      editProvider.markAsSaved();
+      
+      // Reload blocks
+      _allBlocks = await websiteService.loadBlocksForTenant(tenantId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Cambios guardados'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAddBlockDialog(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+  ) async {
+    final blockType = await showDialog<String>(
+      context: context,
+      builder: (context) => const AddBlockDialog(),
+    );
+    if (blockType != null) {
+      editProvider.addBlock(blockType);
+    }
   }
 
   Widget _buildBlockFromData(
@@ -390,9 +771,12 @@ class _PublicHomePageState extends State<PublicHomePage> {
     required Color textColor,
     required double sectionSpacing,
     required double containerPadding,
+    bool isEditMode = false,
   }) {
+    final blockId = blockData['id']?.toString() ?? '';
     final blockType = (blockData['block_type'] ?? '').toString();
     final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
+    final isVisible = blockData['is_visible'] ?? true;
     data.remove('visibility');
     final resolvedHeadingFont = headingFont.isNotEmpty ? headingFont : null;
     final resolvedBodyFont = bodyFont.isNotEmpty ? bodyFont : null;
@@ -406,20 +790,37 @@ class _PublicHomePageState extends State<PublicHomePage> {
     final horizontalPadding = containerPadding.clamp(0.0, 200.0).toDouble();
     final verticalPadding = (sectionSpacing / 2).clamp(0.0, 200.0).toDouble();
 
-    final content = WebsiteBlockRenderer.build(
-      context: context,
-      blockType: blockType,
-      data: data,
-      primaryColor: primaryColor,
-      accentColor: accentColor,
-      featuredProducts: blockType == 'products' ? _featuredProducts : null,
-      previewMode: false,
-      headingFont: resolvedHeadingFont,
-      bodyFont: resolvedBodyFont,
-      headingSize: headingSize,
-      bodySize: bodySize,
-      onNavigate: (route) => context.go(route),
-    );
+    // Use editable renderer if in edit mode
+    final content = isEditMode
+        ? EditableBlockRenderer.build(
+            context: context,
+            blockId: blockId,
+            blockType: blockType,
+            data: data,
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            featuredProducts: blockType == 'products' ? _featuredProducts : null,
+            headingFont: resolvedHeadingFont,
+            bodyFont: resolvedBodyFont,
+            headingSize: headingSize,
+            bodySize: bodySize,
+            onNavigate: (route) => context.go(route),
+            isVisible: isVisible,
+          )
+        : WebsiteBlockRenderer.build(
+            context: context,
+            blockType: blockType,
+            data: data,
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            featuredProducts: blockType == 'products' ? _featuredProducts : null,
+            previewMode: false,
+            headingFont: resolvedHeadingFont,
+            bodyFont: resolvedBodyFont,
+            headingSize: headingSize,
+            bodySize: bodySize,
+            onNavigate: (route) => context.go(route),
+          );
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -431,440 +832,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
       child: Theme(
         data: baseTheme.copyWith(textTheme: themedText),
         child: content,
-      ),
-    );
-  }
-
-  Widget _buildHeroSection(Color primaryColor, Color accentColor) {
-    if (_heroBlocks.isEmpty) {
-      return Container(
-        height: 480,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              primaryColor,
-              accentColor.withOpacity(0.85),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'SERVICIOS Y PRODUCTOS DE BICICLETA',
-                style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                      color: Colors.white,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Todo lo que necesitas para tu bicicleta en Viña del Mar',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.white70,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: () => context.go('/tienda/productos'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
-                ),
-                child: const Text('VER PRODUCTOS'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Get first hero block
-    final heroBlock = _heroBlocks.first;
-    final blockData = heroBlock['block_data'] as Map<String, dynamic>? ?? {};
-    
-    final title = blockData['title']?.toString() ?? 'Tu tienda de bicicletas favorita';
-    final subtitle = blockData['subtitle']?.toString() ?? '';
-    final buttonText = blockData['buttonText']?.toString() ?? 'Ver Catálogo';
-    final backgroundImage = blockData['backgroundImage']?.toString();
-    final hasImage = backgroundImage != null && backgroundImage.isNotEmpty;
-
-    return Container(
-      height: 480,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        image: hasImage
-            ? DecorationImage(
-                image: NetworkImage(backgroundImage),
-                fit: BoxFit.cover,
-              )
-            : null,
-        gradient: !hasImage
-            ? LinearGradient(
-                colors: [
-                  primaryColor,
-                  accentColor.withOpacity(0.85),
-                ],
-              )
-            : null,
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.black.withOpacity(0.35),
-              Colors.black.withOpacity(0.65),
-            ],
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                      color: Colors.white,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              if (subtitle.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: Colors.white70,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              if (buttonText.isNotEmpty) ...[
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: () {
-                    context.go('/tienda/productos');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accentColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 48,
-                      vertical: 20,
-                    ),
-                  ),
-                  child: Text(buttonText.toUpperCase()),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeaturedProductsSection(Color primaryColor, Color accentColor) {
-    if (_featuredProducts.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 1200),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Productos Destacados',
-            style: Theme.of(context).textTheme.displaySmall,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Descubre nuestras mejores ofertas',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: PublicStoreTheme.textSecondary,
-                ),
-          ),
-          const SizedBox(height: 32),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              childAspectRatio: 0.68,
-              crossAxisSpacing: 24,
-              mainAxisSpacing: 24,
-            ),
-            itemCount: _featuredProducts.length,
-            itemBuilder: (context, index) {
-              return _buildProductCard(
-                _featuredProducts[index],
-                primaryColor,
-                accentColor,
-              );
-            },
-          ),
-          const SizedBox(height: 32),
-          Center(
-            child: OutlinedButton(
-              onPressed: () => context.go('/tienda/productos'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: primaryColor,
-                side: BorderSide(color: primaryColor, width: 1.5),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
-              ),
-              child: const Text('VER TODOS LOS PRODUCTOS'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductCard(
-    Product product,
-    Color primaryColor,
-    Color accentColor,
-  ) {
-    return InkWell(
-      onTap: () => context.go('/tienda/producto/${product.id}'),
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: PublicStoreTheme.surface,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(12),
-                  ),
-                ),
-                child: product.imageUrl != null
-                    ? ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(12),
-                        ),
-                        child: Image.network(
-                          product.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Center(
-                              child: Icon(
-                                Icons.image_not_supported,
-                                size: 48,
-                                color: PublicStoreTheme.textMuted,
-                              ),
-                            );
-                          },
-                        ),
-                      )
-                    : const Center(
-                        child: Icon(
-                          Icons.pedal_bike,
-                          size: 64,
-                          color: PublicStoreTheme.textMuted,
-                        ),
-                      ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    ChileanUtils.formatCurrency(product.price),
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: primaryColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  if (product.stockQuantity > 0)
-                    Text(
-                      'Stock disponible',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: PublicStoreTheme.success,
-                          ),
-                    )
-                  else
-                    Text(
-                      'Sin stock',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: PublicStoreTheme.error,
-                          ),
-                    ),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed: () =>
-                        context.go('/tienda/producto/${product.id}'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentColor,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 42),
-                    ),
-                    child: const Text('VER DETALLE'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoriesSection(Color primaryColor) {
-    final categories = [
-      {'name': 'Bicicletas', 'icon': Icons.pedal_bike},
-      {'name': 'Accesorios', 'icon': Icons.settings},
-      {'name': 'Repuestos', 'icon': Icons.build},
-      {'name': 'Ropa', 'icon': Icons.checkroom},
-    ];
-
-    return Container(
-      width: double.infinity,
-      color: PublicStoreTheme.surface,
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
-      child: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          child: Column(
-            children: [
-              Text(
-                'Explora por Categoría',
-                style: Theme.of(context).textTheme.displaySmall,
-              ),
-              const SizedBox(height: 48),
-              Wrap(
-                spacing: 24,
-                runSpacing: 24,
-                alignment: WrapAlignment.center,
-                children: categories.map((category) {
-                  return InkWell(
-                    onTap: () => context.go('/tienda/productos'),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: PublicStoreTheme.cardShadow,
-                          ),
-                          child: Icon(
-                            category['icon'] as IconData,
-                            size: 48,
-                            color: primaryColor,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          category['name'] as String,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWhyChooseUsSection(Color primaryColor) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 1200),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        children: [
-          Text(
-            '¿Por qué elegirnos?',
-            style: Theme.of(context).textTheme.displaySmall,
-          ),
-          const SizedBox(height: 48),
-          Wrap(
-            spacing: 24,
-            runSpacing: 24,
-            alignment: WrapAlignment.center,
-            children: [
-              _buildFeatureCard(
-                Icons.local_shipping_outlined,
-                'Envío Rápido',
-                'Envíos a todo Chile en 24-48 horas',
-                primaryColor,
-              ),
-              _buildFeatureCard(
-                Icons.verified_user_outlined,
-                'Productos Originales',
-                'Garantía de autenticidad en todos nuestros productos',
-                primaryColor,
-              ),
-              _buildFeatureCard(
-                Icons.support_agent_outlined,
-                'Atención Personalizada',
-                'Asesoramiento experto para encontrar lo que necesitas',
-                primaryColor,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeatureCard(
-    IconData icon,
-    String title,
-    String description,
-    Color primaryColor,
-  ) {
-    return SizedBox(
-      width: 320,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Icon(icon, size: 48, color: primaryColor),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                description,
-                style: Theme.of(context).textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -925,5 +892,79 @@ class _PublicHomePageState extends State<PublicHomePage> {
       result = max;
     }
     return result;
+  }
+}
+
+/// Large add block button for the end of the page
+class _AddBlockButtonLarge extends StatelessWidget {
+  final void Function(String blockType) onAdd;
+
+  const _AddBlockButtonLarge({required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      child: Material(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: () async {
+            final blockType = await showDialog<String>(
+              context: context,
+              builder: (context) => const AddBlockDialog(),
+            );
+            if (blockType != null) {
+              onAdd(blockType);
+            }
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Colors.blue.withValues(alpha: 0.3),
+                width: 2,
+                strokeAlign: BorderSide.strokeAlignInside,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                  child: const Icon(
+                    Icons.add,
+                    color: Colors.blue,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Agregar nuevo bloque',
+                  style: TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Haz clic para agregar contenido a tu página',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

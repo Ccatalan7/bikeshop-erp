@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/website_models.dart';
+import '../models/website_page_models.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/services/tenant_service.dart';
 
@@ -22,6 +23,7 @@ class WebsiteService extends ChangeNotifier {
   bool _isLoading = false;
   bool _isInitializing = false;
   String? _error;
+  bool _disposed = false; // Track disposal state
   
   // Realtime subscriptions
   RealtimeChannel? _ordersChannel;
@@ -36,6 +38,13 @@ class WebsiteService extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
+  /// Safe version of notifyListeners that checks disposal state
+  void _safeNotifyListeners() {
+    if (!_disposed) {
+      notifyListeners();
+    }
+  }
+
   // ============================================================================
   // BANNERS (DEPRECATED - Use website_blocks instead)
   // ============================================================================
@@ -47,7 +56,7 @@ class WebsiteService extends ChangeNotifier {
   Future<void> loadBanners() async {
     _isLoading = true;
     _error = null;
-    if (!_isInitializing) notifyListeners();
+    if (!_isInitializing) _safeNotifyListeners();
 
     try {
       final response =
@@ -63,7 +72,7 @@ class WebsiteService extends ChangeNotifier {
       debugPrint(_error);
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -85,7 +94,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al guardar banner: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -99,7 +108,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al eliminar banner: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -117,7 +126,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al reordenar banners: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -127,24 +136,29 @@ class WebsiteService extends ChangeNotifier {
   // ============================================================================
 
   Future<void> loadBlocks() async {
+    debugPrint('[WebsiteService] loadBlocks started');
     _isLoading = true;
     _error = null;
-    if (!_isInitializing) notifyListeners();
+    if (!_isInitializing) _safeNotifyListeners();
 
     try {
       // Get current tenant_id
+      debugPrint('[WebsiteService] Getting tenant ID...');
       final tenantId = await _tenantService.getTenantId();
+      debugPrint('[WebsiteService] Got tenant ID: $tenantId');
       if (tenantId == null) {
         throw Exception('No tenant_id found');
       }
 
+      debugPrint('[WebsiteService] Querying website_blocks...');
       final response = await _supabase
           .from('website_blocks')
           .select()
           .eq('tenant_id', tenantId) // ✅ Filter by tenant
           .order('order_index', ascending: true);
+      debugPrint('[WebsiteService] Query complete, got ${(response as List).length} blocks');
 
-      final data = List<Map<String, dynamic>>.from(response as List);
+      final data = List<Map<String, dynamic>>.from(response);
       data.sort(
         (a, b) => (a['order_index'] ?? 0).compareTo(b['order_index'] ?? 0),
       );
@@ -156,7 +170,38 @@ class WebsiteService extends ChangeNotifier {
       debugPrint(_error);
     } finally {
       _isLoading = false;
-      notifyListeners();
+      debugPrint('[WebsiteService] loadBlocks complete');
+      _safeNotifyListeners();
+    }
+  }
+
+  /// Load blocks for a specific tenant (used by public store for anonymous visitors)
+  /// This method does NOT require authentication - it uses the provided tenant_id
+  /// from subdomain detection (PublicStoreTenantProvider)
+  Future<List<Map<String, dynamic>>> loadBlocksForTenant(String tenantId) async {
+    debugPrint('[WebsiteService] loadBlocksForTenant started for tenant: $tenantId');
+    
+    try {
+      final response = await _supabase
+          .from('website_blocks')
+          .select()
+          .eq('tenant_id', tenantId)
+          .order('order_index', ascending: true);
+      
+      final data = List<Map<String, dynamic>>.from(response as List);
+      data.sort(
+        (a, b) => (a['order_index'] ?? 0).compareTo(b['order_index'] ?? 0),
+      );
+      
+      // Cache the blocks for reuse
+      _blocks = data;
+      _safeNotifyListeners();
+      
+      debugPrint('[WebsiteService] loadBlocksForTenant complete, got ${data.length} blocks');
+      return data;
+    } catch (e) {
+      debugPrint('[WebsiteService] Error loading blocks for tenant: $e');
+      return [];
     }
   }
 
@@ -198,7 +243,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al guardar bloques: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -211,7 +256,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al eliminar bloque: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -223,7 +268,7 @@ class WebsiteService extends ChangeNotifier {
   Future<void> loadFeaturedProducts() async {
     _isLoading = true;
     _error = null;
-    if (!_isInitializing) notifyListeners();
+    if (!_isInitializing) _safeNotifyListeners();
 
     try {
       final response = await _supabase
@@ -241,7 +286,34 @@ class WebsiteService extends ChangeNotifier {
       debugPrint(_error);
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
+    }
+  }
+
+  /// Load featured products for a specific tenant (used by public store for anonymous visitors)
+  /// This method does NOT require authentication
+  Future<List<FeaturedProduct>> loadFeaturedProductsForTenant(String tenantId) async {
+    debugPrint('[WebsiteService] loadFeaturedProductsForTenant started for tenant: $tenantId');
+    
+    try {
+      final response = await _supabase
+          .from('featured_products')
+          .select()
+          .eq('tenant_id', tenantId)
+          .order('order_index');
+
+      final products = (response as List)
+          .map((json) => FeaturedProduct.fromJson(json))
+          .toList();
+      
+      // Also update internal state
+      _featuredProducts = products;
+      
+      debugPrint('[WebsiteService] loadFeaturedProductsForTenant complete, got ${products.length} products');
+      return products;
+    } catch (e) {
+      debugPrint('[WebsiteService] Error loading featured products for tenant: $e');
+      return [];
     }
   }
 
@@ -271,7 +343,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al agregar producto destacado: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -284,7 +356,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al eliminar producto destacado: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -301,7 +373,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al reordenar productos destacados: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -313,7 +385,7 @@ class WebsiteService extends ChangeNotifier {
   Future<void> loadContents() async {
     _isLoading = true;
     _error = null;
-    if (!_isInitializing) notifyListeners();
+    if (!_isInitializing) _safeNotifyListeners();
 
     try {
       final response = await _supabase.from('website_content').select();
@@ -328,7 +400,7 @@ class WebsiteService extends ChangeNotifier {
       debugPrint(_error);
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -349,7 +421,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al guardar contenido: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -369,7 +441,7 @@ class WebsiteService extends ChangeNotifier {
   Future<void> loadSettings() async {
     _isLoading = true;
     _error = null;
-    if (!_isInitializing) notifyListeners();
+    if (!_isInitializing) _safeNotifyListeners();
 
     try {
       final tenantId = await _tenantService.getTenantId();
@@ -395,7 +467,35 @@ class WebsiteService extends ChangeNotifier {
       debugPrint(_error);
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
+    }
+  }
+
+  /// Load settings for a specific tenant (used by public store for anonymous visitors)
+  /// This method does NOT require authentication
+  Future<Map<String, String>> loadSettingsForTenant(String tenantId) async {
+    debugPrint('[WebsiteService] loadSettingsForTenant started for tenant: $tenantId');
+    
+    try {
+      final response = await _supabase
+          .from('website_settings')
+          .select()
+          .eq('tenant_id', tenantId);
+
+      final settings = <String, String>{};
+      for (final row in response as List) {
+        settings[row['key'] as String] = row['value'] as String? ?? '';
+      }
+      
+      // Also update internal state so getSetting() works
+      _settings = settings;
+      _themePresets = _parseThemePresets(_settings['theme_presets']);
+      
+      debugPrint('[WebsiteService] loadSettingsForTenant complete, got ${settings.length} settings');
+      return settings;
+    } catch (e) {
+      debugPrint('[WebsiteService] Error loading settings for tenant: $e');
+      return {};
     }
   }
 
@@ -403,6 +503,14 @@ class WebsiteService extends ChangeNotifier {
     await _upsertSettings(
       {key: value},
       errorContext: 'Error al guardar configuración',
+    );
+  }
+
+  /// Save multiple settings at once
+  Future<void> saveSettings(Map<String, String> settings) async {
+    await _upsertSettings(
+      settings,
+      errorContext: 'Error al guardar configuraciones',
     );
   }
 
@@ -538,7 +646,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = '$errorContext: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -550,7 +658,7 @@ class WebsiteService extends ChangeNotifier {
   Future<void> loadOrders() async {
     _isLoading = true;
     _error = null;
-    if (!_isInitializing) notifyListeners();
+    if (!_isInitializing) _safeNotifyListeners();
 
     try {
       final response = await _supabase
@@ -573,7 +681,7 @@ class WebsiteService extends ChangeNotifier {
       debugPrint(_error);
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -637,7 +745,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al crear pedido: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -653,7 +761,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al actualizar estado del pedido: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -669,7 +777,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al actualizar estado de pago: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -684,7 +792,7 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al procesar pedido: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -714,11 +822,11 @@ class WebsiteService extends ChangeNotifier {
 
       await _supabase.from('products').update(updates).eq('id', productId);
 
-      notifyListeners();
+      _safeNotifyListeners();
     } catch (e) {
       _error = 'Error al actualizar visibilidad del producto: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -828,6 +936,471 @@ class WebsiteService extends ChangeNotifier {
   // INITIALIZATION
   // ============================================================================
 
+  // ============================================================================
+  // WEBSITE PAGES (Multi-page Support - Dec 2025)
+  // ============================================================================
+
+  List<WebsitePage> _pages = [];
+  List<WebsiteNavigation> _navigation = [];
+
+  List<WebsitePage> get pages => _pages;
+  List<WebsiteNavigation> get navigation => _navigation;
+
+  /// Load all pages for the current tenant
+  Future<void> loadPages() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+
+      final response = await _supabase
+          .from('website_pages')
+          .select()
+          .eq('tenant_id', tenantId)
+          .order('is_home', ascending: false)
+          .order('title', ascending: true);
+
+      _pages = (response as List)
+          .map((json) => WebsitePage.fromJson(json))
+          .toList();
+
+      _safeNotifyListeners();
+    } catch (e) {
+      _error = 'Error al cargar páginas: $e';
+      debugPrint(_error);
+    }
+  }
+
+  /// Get a page by ID
+  Future<WebsitePage?> getPageById(String pageId) async {
+    try {
+      final response = await _supabase
+          .from('website_pages')
+          .select()
+          .eq('id', pageId)
+          .maybeSingle();
+
+      if (response != null) {
+        return WebsitePage.fromJson(response);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting page by ID: $e');
+      return null;
+    }
+  }
+
+  /// Get a page by slug
+  Future<WebsitePage?> getPageBySlug(String slug) async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) return null;
+
+      final response = await _supabase
+          .from('website_pages')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('slug', slug)
+          .maybeSingle();
+
+      if (response != null) {
+        return WebsitePage.fromJson(response);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting page by slug: $e');
+      return null;
+    }
+  }
+
+  /// Get the home page for the current tenant
+  Future<WebsitePage?> getHomePage() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) return null;
+
+      final response = await _supabase
+          .from('website_pages')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('is_home', true)
+          .maybeSingle();
+
+      if (response != null) {
+        return WebsitePage.fromJson(response);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting home page: $e');
+      return null;
+    }
+  }
+
+  /// Create a new page
+  Future<WebsitePage> createPage(WebsitePage page) async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+
+      final data = page.toInsertJson();
+      data['tenant_id'] = tenantId;
+
+      final response = await _supabase
+          .from('website_pages')
+          .insert(data)
+          .select()
+          .single();
+
+      final newPage = WebsitePage.fromJson(response);
+      _pages.add(newPage);
+      _safeNotifyListeners();
+
+      return newPage;
+    } catch (e) {
+      _error = 'Error al crear página: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  /// Update an existing page
+  Future<WebsitePage> updatePage(WebsitePage page) async {
+    try {
+      final response = await _supabase
+          .from('website_pages')
+          .update(page.toUpdateJson())
+          .eq('id', page.id)
+          .select()
+          .single();
+
+      final updatedPage = WebsitePage.fromJson(response);
+      
+      // Update local cache
+      final index = _pages.indexWhere((p) => p.id == page.id);
+      if (index >= 0) {
+        _pages[index] = updatedPage;
+      }
+      _safeNotifyListeners();
+
+      return updatedPage;
+    } catch (e) {
+      _error = 'Error al actualizar página: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  /// Delete a page (fails for system pages)
+  Future<void> deletePage(String pageId) async {
+    try {
+      await _supabase
+          .from('website_pages')
+          .delete()
+          .eq('id', pageId);
+
+      _pages.removeWhere((p) => p.id == pageId);
+      _safeNotifyListeners();
+    } catch (e) {
+      _error = 'Error al eliminar página: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  /// Publish or unpublish a page
+  Future<void> togglePagePublished(String pageId, bool published) async {
+    try {
+      await _supabase
+          .from('website_pages')
+          .update({
+            'is_published': published,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', pageId);
+
+      await loadPages();
+    } catch (e) {
+      _error = 'Error al publicar página: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  /// Set a page as home page
+  Future<void> setHomePage(String pageId) async {
+    try {
+      await _supabase
+          .from('website_pages')
+          .update({
+            'is_home': true,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', pageId);
+
+      await loadPages();
+    } catch (e) {
+      _error = 'Error al establecer página de inicio: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  /// Load blocks for a specific page
+  Future<List<Map<String, dynamic>>> loadBlocksForPage(String pageId) async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+
+      final response = await _supabase
+          .from('website_blocks')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('page_id', pageId)
+          .order('order_index', ascending: true);
+
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (e) {
+      _error = 'Error al cargar bloques de página: $e';
+      debugPrint(_error);
+      return [];
+    }
+  }
+
+  /// Save blocks for a specific page
+  Future<void> saveBlocksForPage(String pageId, List<Map<String, dynamic>> blocks) async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant ID found');
+      }
+
+      // Delete existing blocks FOR THIS PAGE ONLY
+      await _supabase
+          .from('website_blocks')
+          .delete()
+          .eq('tenant_id', tenantId)
+          .eq('page_id', pageId);
+
+      // Insert new blocks
+      if (blocks.isNotEmpty) {
+        final blocksToInsert = blocks.asMap().entries.map((entry) {
+          final index = entry.key;
+          final block = entry.value;
+
+          return {
+            'id': block['id'],
+            'tenant_id': tenantId,
+            'page_id': pageId,
+            'block_type': block['type'] ?? block['block_type'],
+            'block_data': block['data'] ?? block['block_data'],
+            'is_visible': block['isVisible'] ?? block['is_visible'] ?? true,
+            'order_index': index,
+            'updated_at': DateTime.now().toIso8601String(),
+          };
+        }).toList();
+
+        await _supabase.from('website_blocks').insert(blocksToInsert);
+      }
+
+      _safeNotifyListeners();
+    } catch (e) {
+      _error = 'Error al guardar bloques de página: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  // ============================================================================
+  // WEBSITE NAVIGATION (Menu Management - Dec 2025)
+  // ============================================================================
+
+  /// Load all navigation items for the current tenant
+  Future<void> loadNavigation() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+
+      final response = await _supabase
+          .from('website_navigation')
+          .select()
+          .eq('tenant_id', tenantId)
+          .order('order_index', ascending: true);
+
+      _navigation = (response as List)
+          .map((json) => WebsiteNavigation.fromJson(json))
+          .toList();
+
+      // Build hierarchy (children under parents)
+      _buildNavigationHierarchy();
+
+      _safeNotifyListeners();
+    } catch (e) {
+      _error = 'Error al cargar navegación: $e';
+      debugPrint(_error);
+    }
+  }
+
+  /// Build parent-child hierarchy for navigation items
+  void _buildNavigationHierarchy() {
+    // Create a map for quick lookup
+    final Map<String, WebsiteNavigation> navMap = {};
+    for (final item in _navigation) {
+      navMap[item.id] = item;
+    }
+
+    // Assign children to parents
+    for (final item in _navigation) {
+      if (item.parentId != null && navMap.containsKey(item.parentId)) {
+        navMap[item.parentId]!.children.add(item);
+      }
+    }
+
+    // Sort children by order_index
+    for (final item in _navigation) {
+      item.children.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    }
+  }
+
+  /// Get navigation items for a specific menu location
+  List<WebsiteNavigation> getNavigationByLocation(MenuLocation location) {
+    return _navigation
+        .where((nav) => nav.menuLocation == location && nav.isTopLevel)
+        .toList()
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+  }
+
+  /// Get navigation items for header menu
+  List<WebsiteNavigation> get headerNavigation =>
+      getNavigationByLocation(MenuLocation.header);
+
+  /// Get navigation items for footer menu
+  List<WebsiteNavigation> get footerNavigation =>
+      getNavigationByLocation(MenuLocation.footer);
+
+  /// Create a new navigation item
+  Future<WebsiteNavigation> createNavigation(WebsiteNavigation nav) async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+
+      final data = nav.toInsertJson();
+      data['tenant_id'] = tenantId;
+
+      final response = await _supabase
+          .from('website_navigation')
+          .insert(data)
+          .select()
+          .single();
+
+      final newNav = WebsiteNavigation.fromJson(response);
+      _navigation.add(newNav);
+      _buildNavigationHierarchy();
+      _safeNotifyListeners();
+
+      return newNav;
+    } catch (e) {
+      _error = 'Error al crear navegación: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  /// Update an existing navigation item
+  Future<WebsiteNavigation> updateNavigation(WebsiteNavigation nav) async {
+    try {
+      final response = await _supabase
+          .from('website_navigation')
+          .update(nav.toUpdateJson())
+          .eq('id', nav.id)
+          .select()
+          .single();
+
+      final updatedNav = WebsiteNavigation.fromJson(response);
+      
+      // Update local cache
+      final index = _navigation.indexWhere((n) => n.id == nav.id);
+      if (index >= 0) {
+        _navigation[index] = updatedNav;
+      }
+      _buildNavigationHierarchy();
+      _safeNotifyListeners();
+
+      return updatedNav;
+    } catch (e) {
+      _error = 'Error al actualizar navegación: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  /// Delete a navigation item and its children
+  Future<void> deleteNavigation(String navId) async {
+    try {
+      await _supabase
+          .from('website_navigation')
+          .delete()
+          .eq('id', navId);
+
+      _navigation.removeWhere((n) => n.id == navId || n.parentId == navId);
+      _buildNavigationHierarchy();
+      _safeNotifyListeners();
+    } catch (e) {
+      _error = 'Error al eliminar navegación: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  /// Reorder navigation items
+  Future<void> reorderNavigation(MenuLocation location, List<String> orderedIds) async {
+    try {
+      for (int i = 0; i < orderedIds.length; i++) {
+        await _supabase
+            .from('website_navigation')
+            .update({
+              'order_index': i,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', orderedIds[i]);
+      }
+
+      await loadNavigation();
+    } catch (e) {
+      _error = 'Error al reordenar navegación: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  /// Link navigation items to pages (populate linkedPage field)
+  Future<void> linkNavigationToPages() async {
+    final Map<String, WebsitePage> pageMap = {};
+    for (final page in _pages) {
+      pageMap[page.id] = page;
+    }
+
+    for (final nav in _navigation) {
+      if (nav.linkType == NavLinkType.page && nav.linkValue != null) {
+        nav.linkedPage = pageMap[nav.linkValue];
+      }
+    }
+
+    _safeNotifyListeners();
+  }
+
+  // ============================================================================
+  // INITIALIZATION
+  // ============================================================================
+
   Future<void> initialize() async {
     _isInitializing = true;
     try {
@@ -837,11 +1410,17 @@ class WebsiteService extends ChangeNotifier {
         loadSettings(),
         loadOrders(),
         loadBlocks(), // Load Odoo-style blocks
+        loadPages(),  // Load multi-page support
+        loadNavigation(), // Load navigation menus
       ]);
+      
+      // Link navigation items to their pages
+      await linkNavigationToPages();
+      
       _setupOrdersRealtime(); // Subscribe to real-time order updates
     } finally {
       _isInitializing = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -884,6 +1463,7 @@ class WebsiteService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _ordersChannel?.unsubscribe();
     super.dispose();
   }

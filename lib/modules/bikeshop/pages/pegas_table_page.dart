@@ -91,8 +91,11 @@ class _PegasTablePageState extends State<PegasTablePage>
   List<ColumnConfig> get _displayColumns {
     final visibleColumns = _columns.where((col) => col.visible).toList();
     if (_draggingColumnId != null && _dragTargetIndex != null) {
-      final sourceIndex = visibleColumns.indexWhere((c) => c.id == _draggingColumnId);
-      if (sourceIndex != -1 && _dragTargetIndex! >= 0 && _dragTargetIndex! < visibleColumns.length) {
+      final sourceIndex =
+          visibleColumns.indexWhere((c) => c.id == _draggingColumnId);
+      if (sourceIndex != -1 &&
+          _dragTargetIndex! >= 0 &&
+          _dragTargetIndex! < visibleColumns.length) {
         final reordered = List<ColumnConfig>.from(visibleColumns);
         final draggedColumn = reordered.removeAt(sourceIndex);
         final insertIndex = _dragTargetIndex!.clamp(0, reordered.length);
@@ -108,7 +111,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   // Timeline/Gantt state
   String _timelineScale = 'week'; // 'week' or 'month'
-  DateTime _timelineViewStart = DateTime.now().subtract(const Duration(days: 7));
+  DateTime _timelineViewStart =
+      DateTime.now().subtract(const Duration(days: 7));
 
   // Calendar view state - moved to PegasCalendarWidget (shared widget)
 
@@ -216,9 +220,9 @@ class _PegasTablePageState extends State<PegasTablePage>
       ),
       ColumnConfig(
         id: 'diagnosis',
-        label: 'Diagnóstico',
-        width: 250,
-        minWidth: 150,
+        label: 'Detalles',
+        width: 280,
+        minWidth: 180,
         visible: true,
         sortable: true,
       ),
@@ -272,7 +276,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           _loadData();
         }
       });
-      
+
       // Also handle the old refresh flag
       if (_needsRefresh) {
         _needsRefresh = false;
@@ -305,7 +309,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     } else {
       setState(() => _isLoading = true);
     }
-    
+
     try {
       final results = await Future.wait([
         _bikeshopService.getJobs(includeCompleted: true),
@@ -689,7 +693,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   });
                 },
                 onEdit: () async {
-                  final result = await context.push('/taller/pegas/${_selectedJob!.id}');
+                  final result =
+                      await context.push('/taller/pegas/${_selectedJob!.id}');
                   if (!mounted) return;
                   // If job was updated (result == true), refresh the list
                   if (result == true) {
@@ -702,7 +707,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                 onStatusChange: (newStatus) async {
                   // Optimistic update
                   setState(() {
-                    final index = _jobs.indexWhere((j) => j.id == _selectedJob!.id);
+                    final index =
+                        _jobs.indexWhere((j) => j.id == _selectedJob!.id);
                     if (index != -1) {
                       final job = _jobs[index];
                       _jobs[index] = MechanicJob(
@@ -751,10 +757,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                     }
                     _applyFiltersAndSort();
                   });
-                  
+
                   // Save in background
                   try {
-                    final updatedJob = _selectedJob!.copyWith(status: newStatus);
+                    final updatedJob =
+                        _selectedJob!.copyWith(status: newStatus);
                     await _databaseService.update(
                       'mechanic_jobs',
                       updatedJob.id!,
@@ -1168,6 +1175,9 @@ class _PegasTablePageState extends State<PegasTablePage>
         final tableWidth = totalColumnsWidth > constraints.maxWidth
             ? totalColumnsWidth
             : constraints.maxWidth;
+        
+        // Check if horizontal scrolling is needed
+        final needsHorizontalScroll = totalColumnsWidth > constraints.maxWidth;
 
         return Column(
           children: [
@@ -1195,6 +1205,13 @@ class _PegasTablePageState extends State<PegasTablePage>
                 ),
               ),
             ),
+            // Horizontal scrollbar - always visible when scrolling is needed
+            if (needsHorizontalScroll)
+              _HoverScrollbar(
+                scrollController: _horizontalScrollController,
+                contentWidth: totalColumnsWidth,
+                viewportWidth: constraints.maxWidth,
+              ),
             // Pagination controls
             _buildPaginationControls(startIndex, endIndex),
           ],
@@ -1288,13 +1305,15 @@ class _PegasTablePageState extends State<PegasTablePage>
       ),
       child: Row(
         children: displayColumns.asMap().entries.map((entry) {
-          return _buildHeaderCell(entry.value, entry.key, displayColumns.length);
+          return _buildHeaderCell(
+              entry.value, entry.key, displayColumns.length);
         }).toList(),
       ),
     );
   }
 
-  Widget _buildHeaderCell(ColumnConfig col, int displayIndex, int totalColumns) {
+  Widget _buildHeaderCell(
+      ColumnConfig col, int displayIndex, int totalColumns) {
     final theme = Theme.of(context);
 
     if (col.id == 'checkbox') {
@@ -1372,7 +1391,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                 opacity: 0.85,
                 child: Container(
                   height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surface,
                     borderRadius: BorderRadius.circular(4),
@@ -1387,11 +1407,13 @@ class _PegasTablePageState extends State<PegasTablePage>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.drag_indicator, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                      Icon(Icons.drag_indicator,
+                          size: 16, color: theme.colorScheme.onSurfaceVariant),
                       const SizedBox(width: 6),
                       Text(
                         col.label,
-                        style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+                        style: theme.textTheme.labelLarge
+                            ?.copyWith(fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -1500,13 +1522,13 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
-
-
   /// Apply column reorder using display indices (for live preview drag)
   void _applyColumnReorder(String sourceId, int targetDisplayIndex) {
     final visibleColumns = _columns.where((col) => col.visible).toList();
-    final sourceDisplayIndex = visibleColumns.indexWhere((c) => c.id == sourceId);
-    if (sourceDisplayIndex == -1 || sourceDisplayIndex == targetDisplayIndex) return;
+    final sourceDisplayIndex =
+        visibleColumns.indexWhere((c) => c.id == sourceId);
+    if (sourceDisplayIndex == -1 || sourceDisplayIndex == targetDisplayIndex)
+      return;
 
     // Get the actual column indices in _columns (not just visible)
     final sourceActualIndex = _columns.indexWhere((c) => c.id == sourceId);
@@ -1518,7 +1540,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     if (targetDisplayIndex >= visibleColumns.length) {
       // Insert at end of visible columns
       final lastVisible = visibleColumns.last;
-      targetActualIndex = _columns.indexWhere((c) => c.id == lastVisible.id) + 1;
+      targetActualIndex =
+          _columns.indexWhere((c) => c.id == lastVisible.id) + 1;
     } else {
       final targetColumn = visibleColumns[targetDisplayIndex];
       targetActualIndex = _columns.indexWhere((c) => c.id == targetColumn.id);
@@ -1949,11 +1972,28 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'diagnosis':
-        // Clickable diagnosis cell with inline edit popup
-        return _DiagnosisCell(
+        // Clickable job details cell with inline edit popup for all text fields
+        return _JobDetailsCell(
+          customerName: customer?.name,
+          bikeName: bike?.displayName,
+          clientRequest: job.clientRequest,
           diagnosis: job.diagnosis,
-          onSave: (newDiagnosis) async {
-            // Optimistic update
+          workPerformed: job.workPerformed,
+          notes: job.notes,
+          onSave: ({
+            String? clientRequest,
+            String? diagnosis,
+            String? workPerformed,
+            String? notes,
+          }) async {
+            // Helper to get the new value: null means unchanged, empty string means clear
+            String? resolveField(String? newValue, String? oldValue) {
+              if (newValue == null) return oldValue; // Unchanged
+              if (newValue.isEmpty) return null; // Cleared
+              return newValue; // New value
+            }
+
+            // Optimistic update - only update fields that were changed
             final updatedJob = MechanicJob(
               id: job.id,
               tenantId: job.tenantId,
@@ -1968,10 +2008,10 @@ class _PegasTablePageState extends State<PegasTablePage>
               deliveredAt: job.deliveredAt,
               status: job.status,
               priority: job.priority,
-              clientRequest: job.clientRequest,
-              diagnosis: newDiagnosis,
-              workPerformed: job.workPerformed,
-              notes: job.notes,
+              clientRequest: resolveField(clientRequest, job.clientRequest),
+              diagnosis: resolveField(diagnosis, job.diagnosis),
+              workPerformed: resolveField(workPerformed, job.workPerformed),
+              notes: resolveField(notes, job.notes),
               assignedTo: job.assignedTo,
               assignedTechnicianName: job.assignedTechnicianName,
               estimatedCost: job.estimatedCost,
@@ -1996,7 +2036,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               deletedAt: job.deletedAt,
               deletedBy: job.deletedBy,
             );
-            
+
             setState(() {
               final index = _jobs.indexWhere((j) => j.id == job.id);
               if (index != -1) {
@@ -2004,7 +2044,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 _applyFiltersAndSort();
               }
             });
-            
+
             // Save in background
             try {
               await _bikeshopService.updateJob(updatedJob);
@@ -2014,7 +2054,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 await _loadData();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Error al guardar diagnóstico: $e'),
+                    content: Text('Error al guardar detalles: $e'),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -2233,7 +2273,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   // ========== STATUS FILTER BUTTON ==========
-  
+
   Color _getStatusColorForFilter(JobStatus status) {
     switch (status) {
       case JobStatus.pendiente:
@@ -2280,7 +2320,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Widget _buildStatusFilterButton() {
     final hasFilter = _customStatusFilter.isNotEmpty;
-    
+
     return InkWell(
       key: _statusFilterKey,
       onTap: () => _showStatusFilterMenu(),
@@ -2323,7 +2363,8 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   void _showStatusFilterMenu() {
-    final RenderBox button = _statusFilterKey.currentContext!.findRenderObject() as RenderBox;
+    final RenderBox button =
+        _statusFilterKey.currentContext!.findRenderObject() as RenderBox;
     final Offset buttonPosition = button.localToGlobal(Offset.zero);
     final Size buttonSize = button.size;
 
@@ -2362,22 +2403,28 @@ class _PegasTablePageState extends State<PegasTablePage>
                               children: [
                                 const Text(
                                   'Filtrar por Estado',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13),
                                 ),
                                 const Spacer(),
                                 if (_customStatusFilter.isNotEmpty)
                                   TextButton(
                                     onPressed: () {
-                                      setState(() => _customStatusFilter.clear());
+                                      setState(
+                                          () => _customStatusFilter.clear());
                                       setDialogState(() {});
                                       _applyFiltersAndSort();
                                     },
                                     style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8),
                                       minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
                                     ),
-                                    child: const Text('Limpiar', style: TextStyle(fontSize: 12)),
+                                    child: const Text('Limpiar',
+                                        style: TextStyle(fontSize: 12)),
                                   ),
                               ],
                             ),
@@ -2389,13 +2436,16 @@ class _PegasTablePageState extends State<PegasTablePage>
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: JobStatus.values.map((status) {
-                                  final isSelected = _customStatusFilter.contains(status);
-                                  final statusColor = _getStatusColorForFilter(status);
-                                  
+                                  final isSelected =
+                                      _customStatusFilter.contains(status);
+                                  final statusColor =
+                                      _getStatusColorForFilter(status);
+
                                   return InkWell(
                                     onTap: () {
                                       setState(() {
-                                        if (_customStatusFilter.contains(status)) {
+                                        if (_customStatusFilter
+                                            .contains(status)) {
                                           _customStatusFilter.remove(status);
                                         } else {
                                           _customStatusFilter.add(status);
@@ -2405,22 +2455,30 @@ class _PegasTablePageState extends State<PegasTablePage>
                                       _applyFiltersAndSort();
                                     },
                                     child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 10),
                                       child: Row(
                                         children: [
                                           Container(
                                             width: 20,
                                             height: 20,
                                             decoration: BoxDecoration(
-                                              color: isSelected ? statusColor : Colors.transparent,
-                                              borderRadius: BorderRadius.circular(4),
+                                              color: isSelected
+                                                  ? statusColor
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
                                               border: Border.all(
-                                                color: isSelected ? statusColor : Colors.grey.shade400,
+                                                color: isSelected
+                                                    ? statusColor
+                                                    : Colors.grey.shade400,
                                                 width: 1.5,
                                               ),
                                             ),
                                             child: isSelected
-                                                ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                                ? const Icon(Icons.check,
+                                                    size: 14,
+                                                    color: Colors.white)
                                                 : null,
                                           ),
                                           const SizedBox(width: 12),
@@ -2437,7 +2495,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                                             _getStatusLabel(status),
                                             style: TextStyle(
                                               fontSize: 13,
-                                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
                                             ),
                                           ),
                                         ],
@@ -2585,12 +2645,14 @@ class _PegasTablePageState extends State<PegasTablePage>
         }
         _applyFiltersAndSort();
       });
-      
+
       try {
         await _bikeshopService.updateJobStatus(job.id!, JobStatus.finalizado);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Trabajo completado'), duration: Duration(seconds: 1)),
+            const SnackBar(
+                content: Text('Trabajo completado'),
+                duration: Duration(seconds: 1)),
           );
         }
       } catch (e) {
@@ -2635,12 +2697,14 @@ class _PegasTablePageState extends State<PegasTablePage>
         _jobs.removeWhere((j) => j.id == job.id);
         _applyFiltersAndSort();
       });
-      
+
       try {
         await _bikeshopService.deleteJob(job.id!);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Trabajo eliminado'), duration: Duration(seconds: 1)),
+            const SnackBar(
+                content: Text('Trabajo eliminado'),
+                duration: Duration(seconds: 1)),
           );
         }
       } catch (e) {
@@ -2673,13 +2737,14 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
-  Future<void> _updateJobToCustomStatus(MechanicJob job, JobStatusCustom newStatus) async {
+  Future<void> _updateJobToCustomStatus(
+      MechanicJob job, JobStatusCustom newStatus) async {
     // Map custom status code to legacy JobStatus for backward compatibility
     final legacyStatus = _mapCodeToLegacyStatus(newStatus.code);
     final oldStatusId = job.statusId;
     final oldStatus = job.status;
     final oldCustomStatus = job.customStatus;
-    
+
     // Optimistic update
     setState(() {
       final index = _jobs.indexWhere((j) => j.id == job.id);
@@ -2693,7 +2758,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       }
       _applyFiltersAndSort();
     });
-    
+
     // Update in background
     try {
       await _jobStatusService.updateJobStatus(job.id!, newStatus.id!);
@@ -2886,24 +2951,26 @@ class _PegasTablePageState extends State<PegasTablePage>
                                   createdAt: job.createdAt,
                                   updatedAt: DateTime.now(),
                                 );
-                                
+
                                 // Optimistic update
                                 setState(() {
-                                  final index = _jobs.indexWhere((j) => j.id == job.id);
+                                  final index =
+                                      _jobs.indexWhere((j) => j.id == job.id);
                                   if (index != -1) {
                                     _jobs[index] = updatedJob;
                                   }
                                   _bikes[bike.id!] = bike;
                                   _applyFiltersAndSort();
                                 });
-                                
+
                                 // Save in background
                                 try {
                                   await _bikeshopService.updateJob(updatedJob);
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('Bicicleta cambiada a: $bikeName'),
+                                        content: Text(
+                                            'Bicicleta cambiada a: $bikeName'),
                                         duration: const Duration(seconds: 1),
                                       ),
                                     );
@@ -3074,7 +3141,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         }
         _applyFiltersAndSort(); // Refresh filtered view
       });
-      
+
       // Save in background
       try {
         final updatedJob = MechanicJob(
@@ -3123,7 +3190,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Plazo actualizado: ${DateFormat('dd/MM/yyyy').format(picked)}'),
+              content: Text(
+                  'Plazo actualizado: ${DateFormat('dd/MM/yyyy').format(picked)}'),
               duration: const Duration(seconds: 1),
             ),
           );
@@ -3302,7 +3370,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     if (selectedJobs.isEmpty) return;
 
     final statusesByPhase = _jobStatusService.statusesByPhase;
-    
+
     final newCustomStatus = await showDialog<JobStatusCustom>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -3323,28 +3391,34 @@ class _PegasTablePageState extends State<PegasTablePage>
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                        color: Theme.of(dialogContext)
+                            .colorScheme
+                            .onSurfaceVariant,
                         letterSpacing: 0.5,
                       ),
                     ),
                   ),
-                  ...statusesByPhase[StatusPhase.todo]!.map((status) => ListTile(
-                    dense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                    leading: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: status.colorValue,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    title: Text(status.name, style: const TextStyle(fontSize: 14)),
-                    onTap: () => Navigator.pop(dialogContext, status),
-                  )),
+                  ...statusesByPhase[StatusPhase.todo]!
+                      .map((status) => ListTile(
+                            dense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 8),
+                            leading: Container(
+                              width: 14,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: status.colorValue,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            title: Text(status.name,
+                                style: const TextStyle(fontSize: 14)),
+                            onTap: () => Navigator.pop(dialogContext, status),
+                          )),
                 ],
                 // En Progreso section
-                if (statusesByPhase[StatusPhase.inProgress]?.isNotEmpty == true) ...[
+                if (statusesByPhase[StatusPhase.inProgress]?.isNotEmpty ==
+                    true) ...[
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4, top: 12),
                     child: Text(
@@ -3352,28 +3426,34 @@ class _PegasTablePageState extends State<PegasTablePage>
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                        color: Theme.of(dialogContext)
+                            .colorScheme
+                            .onSurfaceVariant,
                         letterSpacing: 0.5,
                       ),
                     ),
                   ),
-                  ...statusesByPhase[StatusPhase.inProgress]!.map((status) => ListTile(
-                    dense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                    leading: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: status.colorValue,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    title: Text(status.name, style: const TextStyle(fontSize: 14)),
-                    onTap: () => Navigator.pop(dialogContext, status),
-                  )),
+                  ...statusesByPhase[StatusPhase.inProgress]!
+                      .map((status) => ListTile(
+                            dense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 8),
+                            leading: Container(
+                              width: 14,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: status.colorValue,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            title: Text(status.name,
+                                style: const TextStyle(fontSize: 14)),
+                            onTap: () => Navigator.pop(dialogContext, status),
+                          )),
                 ],
                 // Completado section
-                if (statusesByPhase[StatusPhase.complete]?.isNotEmpty == true) ...[
+                if (statusesByPhase[StatusPhase.complete]?.isNotEmpty ==
+                    true) ...[
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4, top: 12),
                     child: Text(
@@ -3381,25 +3461,30 @@ class _PegasTablePageState extends State<PegasTablePage>
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                        color: Theme.of(dialogContext)
+                            .colorScheme
+                            .onSurfaceVariant,
                         letterSpacing: 0.5,
                       ),
                     ),
                   ),
-                  ...statusesByPhase[StatusPhase.complete]!.map((status) => ListTile(
-                    dense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                    leading: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: status.colorValue,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    title: Text(status.name, style: const TextStyle(fontSize: 14)),
-                    onTap: () => Navigator.pop(dialogContext, status),
-                  )),
+                  ...statusesByPhase[StatusPhase.complete]!
+                      .map((status) => ListTile(
+                            dense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 8),
+                            leading: Container(
+                              width: 14,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: status.colorValue,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            title: Text(status.name,
+                                style: const TextStyle(fontSize: 14)),
+                            onTap: () => Navigator.pop(dialogContext, status),
+                          )),
                 ],
               ],
             ),
@@ -3444,7 +3529,8 @@ class _PegasTablePageState extends State<PegasTablePage>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${selectedJobs.length} trabajos actualizados a ${newCustomStatus.name}'),
+            content: Text(
+                '${selectedJobs.length} trabajos actualizados a ${newCustomStatus.name}'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 1),
           ),
@@ -3494,7 +3580,8 @@ class _PegasTablePageState extends State<PegasTablePage>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: statuses.map((status) {
-          final jobsInStatus = _filteredJobs.where((j) => j.status == status).toList();
+          final jobsInStatus =
+              _filteredJobs.where((j) => j.status == status).toList();
           return _buildBoardColumn(status, jobsInStatus);
         }).toList(),
       ),
@@ -3522,7 +3609,8 @@ class _PegasTablePageState extends State<PegasTablePage>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: statusColors[status],
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
             ),
             child: Row(
               children: [
@@ -3536,7 +3624,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -3557,7 +3646,8 @@ class _PegasTablePageState extends State<PegasTablePage>
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.grey[50],
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                borderRadius:
+                    const BorderRadius.vertical(bottom: Radius.circular(12)),
                 border: Border.all(color: Colors.grey[300]!),
               ),
               child: jobs.isEmpty
@@ -3588,7 +3678,8 @@ class _PegasTablePageState extends State<PegasTablePage>
   Widget _buildBoardCard(MechanicJob job) {
     final customer = _customers[job.customerId];
     final bike = _bikes[job.bikeId];
-    final isOverdue = job.deadline != null && job.deadline!.isBefore(DateTime.now());
+    final isOverdue =
+        job.deadline != null && job.deadline!.isBefore(DateTime.now());
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -3605,7 +3696,8 @@ class _PegasTablePageState extends State<PegasTablePage>
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: Colors.blue[50],
                       borderRadius: BorderRadius.circular(4),
@@ -3622,7 +3714,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   const SizedBox(width: 4),
                   if (job.priority == JobPriority.urgente)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.red[50],
                         borderRadius: BorderRadius.circular(4),
@@ -3678,7 +3771,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                       style: TextStyle(
                         fontSize: 11,
                         color: isOverdue ? Colors.red[700] : Colors.grey[700],
-                        fontWeight: isOverdue ? FontWeight.bold : FontWeight.normal,
+                        fontWeight:
+                            isOverdue ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                   ],
@@ -3699,13 +3793,13 @@ class _PegasTablePageState extends State<PegasTablePage>
     for (final entry in _customers.entries) {
       customersMap[entry.key] = entry.value;
     }
-    
+
     // Convert _bikes map to Bike map
     final bikesMap = <String, Bike>{};
     for (final entry in _bikes.entries) {
       bikesMap[entry.key] = entry.value;
     }
-    
+
     return PegasCalendarWidget(
       jobs: _filteredJobs,
       customers: customersMap,
@@ -3715,7 +3809,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   // ========== GANTT VIEW (Notion-style Timeline) ==========
-  
+
   Widget _buildGanttView() {
     final jobsWithDates = _filteredJobs.toList()
       ..sort((a, b) => a.arrivalDate.compareTo(b.arrivalDate));
@@ -3738,8 +3832,9 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Calculate visible range (infinite scroll simulation)
     final dayWidth = _timelineScale == 'week' ? 120.0 : 40.0;
-    final visibleDays = _timelineScale == 'week' ? 14 : 60; // 2 weeks or 2 months
-    
+    final visibleDays =
+        _timelineScale == 'week' ? 14 : 60; // 2 weeks or 2 months
+
     return Column(
       children: [
         // Timeline controls
@@ -3805,7 +3900,8 @@ class _PegasTablePageState extends State<PegasTablePage>
           OutlinedButton(
             onPressed: () {
               setState(() {
-                _timelineViewStart = DateTime.now().subtract(const Duration(days: 7));
+                _timelineViewStart =
+                    DateTime.now().subtract(const Duration(days: 7));
               });
             },
             child: const Text('Hoy'),
@@ -3826,9 +3922,10 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
-  Widget _buildTimelineContent(List<MechanicJob> jobs, double dayWidth, int visibleDays) {
+  Widget _buildTimelineContent(
+      List<MechanicJob> jobs, double dayWidth, int visibleDays) {
     final totalWidth = dayWidth * visibleDays;
-    
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: SizedBox(
@@ -3841,9 +3938,10 @@ class _PegasTablePageState extends State<PegasTablePage>
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
-                  children: jobs.map((job) => 
-                    _buildTimelineJobRow(job, dayWidth, visibleDays)
-                  ).toList(),
+                  children: jobs
+                      .map((job) =>
+                          _buildTimelineJobRow(job, dayWidth, visibleDays))
+                      .toList(),
                 ),
               ),
             ),
@@ -3858,9 +3956,9 @@ class _PegasTablePageState extends State<PegasTablePage>
       visibleDays,
       (i) => _timelineViewStart.add(Duration(days: i)),
     );
-    
+
     final today = DateTime.now();
-    
+
     return Container(
       height: 60,
       decoration: BoxDecoration(
@@ -3871,19 +3969,19 @@ class _PegasTablePageState extends State<PegasTablePage>
       ),
       child: Row(
         children: dates.map((date) {
-          final isToday = date.year == today.year && 
-                          date.month == today.month && 
-                          date.day == today.day;
-          final isWeekend = date.weekday == DateTime.saturday || 
-                            date.weekday == DateTime.sunday;
+          final isToday = date.year == today.year &&
+              date.month == today.month &&
+              date.day == today.day;
+          final isWeekend = date.weekday == DateTime.saturday ||
+              date.weekday == DateTime.sunday;
           final isFirstOfMonth = date.day == 1;
-          
+
           return Container(
             width: dayWidth,
             decoration: BoxDecoration(
               color: isWeekend ? Colors.grey[200] : null,
               border: Border(
-                left: isFirstOfMonth 
+                left: isFirstOfMonth
                     ? BorderSide(color: Colors.grey[400]!, width: 2)
                     : BorderSide(color: Colors.grey[300]!),
               ),
@@ -3913,7 +4011,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                       '${date.day}',
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                        fontWeight:
+                            isToday ? FontWeight.bold : FontWeight.normal,
                         color: isToday ? Colors.white : Colors.grey[800],
                       ),
                     ),
@@ -3939,40 +4038,46 @@ class _PegasTablePageState extends State<PegasTablePage>
     return days[weekday - 1];
   }
 
-  Widget _buildTimelineJobRow(MechanicJob job, double dayWidth, int visibleDays) {
+  Widget _buildTimelineJobRow(
+      MechanicJob job, double dayWidth, int visibleDays) {
     final customer = _customers[job.customerId];
     final viewEnd = _timelineViewStart.add(Duration(days: visibleDays));
-    
+
     // Calculate bar position
     final jobStart = job.arrivalDate;
     final jobEnd = job.deadline ?? job.arrivalDate.add(const Duration(days: 1));
-    
+
     // Check if job is visible in current view
-    final isVisible = jobEnd.isAfter(_timelineViewStart) && jobStart.isBefore(viewEnd);
-    
+    final isVisible =
+        jobEnd.isAfter(_timelineViewStart) && jobStart.isBefore(viewEnd);
+
     if (!isVisible) {
       return const SizedBox.shrink(); // Hide jobs outside view
     }
-    
+
     // Calculate position relative to view start
-    final startDayOffset = jobStart.difference(_timelineViewStart).inDays.toDouble();
-    final endDayOffset = jobEnd.difference(_timelineViewStart).inDays.toDouble() + 1;
-    
+    final startDayOffset =
+        jobStart.difference(_timelineViewStart).inDays.toDouble();
+    final endDayOffset =
+        jobEnd.difference(_timelineViewStart).inDays.toDouble() + 1;
+
     // Clamp to visible area
     final clampedStart = startDayOffset.clamp(0.0, visibleDays.toDouble());
     final clampedEnd = endDayOffset.clamp(0.0, visibleDays.toDouble());
-    
+
     if (clampedEnd <= clampedStart) {
       return const SizedBox.shrink();
     }
-    
+
     final barLeft = clampedStart * dayWidth;
     final barWidth = (clampedEnd - clampedStart) * dayWidth;
-    
+
     // Determine bar color
-    final isOverdue = job.deadline != null && job.deadline!.isBefore(DateTime.now());
-    final isCompleted = job.status == JobStatus.entregado || job.status == JobStatus.finalizado;
-    
+    final isOverdue =
+        job.deadline != null && job.deadline!.isBefore(DateTime.now());
+    final isCompleted =
+        job.status == JobStatus.entregado || job.status == JobStatus.finalizado;
+
     Color barColor;
     if (isCompleted) {
       barColor = Colors.green[400]!;
@@ -3989,7 +4094,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       };
       barColor = statusColors[job.status] ?? Colors.grey[400]!;
     }
-    
+
     return Container(
       height: 36,
       margin: const EdgeInsets.symmetric(vertical: 2),
@@ -3999,8 +4104,8 @@ class _PegasTablePageState extends State<PegasTablePage>
           Row(
             children: List.generate(visibleDays, (i) {
               final date = _timelineViewStart.add(Duration(days: i));
-              final isWeekend = date.weekday == DateTime.saturday || 
-                                date.weekday == DateTime.sunday;
+              final isWeekend = date.weekday == DateTime.saturday ||
+                  date.weekday == DateTime.sunday;
               return Container(
                 width: dayWidth,
                 decoration: BoxDecoration(
@@ -4020,7 +4125,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             bottom: 4,
             child: Tooltip(
               message: '${customer?.name ?? 'N/A'}\n${job.jobNumber ?? ''}\n'
-                       '${DateFormat('dd/MM').format(jobStart)} - ${DateFormat('dd/MM').format(jobEnd)}',
+                  '${DateFormat('dd/MM').format(jobStart)} - ${DateFormat('dd/MM').format(jobEnd)}',
               child: InkWell(
                 onTap: () => context.push('/taller/pegas/${job.id}'),
                 child: Container(
@@ -4081,38 +4186,80 @@ class ColumnConfig {
   });
 }
 
-/// Inline editable diagnosis cell with popup overlay
-class _DiagnosisCell extends StatefulWidget {
+/// Inline editable job details cell with popup overlay for all text fields
+class _JobDetailsCell extends StatefulWidget {
+  final String? customerName;
+  final String? bikeName;
+  final String? clientRequest;
   final String? diagnosis;
-  final Future<void> Function(String?) onSave;
+  final String? workPerformed;
+  final String? notes;
+  final Future<void> Function({
+    String? clientRequest,
+    String? diagnosis,
+    String? workPerformed,
+    String? notes,
+  }) onSave;
 
-  const _DiagnosisCell({
+  const _JobDetailsCell({
+    this.customerName,
+    this.bikeName,
+    required this.clientRequest,
     required this.diagnosis,
+    required this.workPerformed,
+    required this.notes,
     required this.onSave,
   });
 
   @override
-  State<_DiagnosisCell> createState() => _DiagnosisCellState();
+  State<_JobDetailsCell> createState() => _JobDetailsCellState();
 }
 
-class _DiagnosisCellState extends State<_DiagnosisCell> {
+enum _JobDetailTab { solicitud, diagnostico, trabajos, notas }
+
+class _JobDetailsCellState extends State<_JobDetailsCell> {
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   bool _isOpen = false;
+  _JobDetailTab _selectedTab = _JobDetailTab.diagnostico;
+
+  // Track original values to detect changes
+  late String _originalClientRequest;
+  late String _originalDiagnosis;
+  late String _originalWorkPerformed;
+  late String _originalNotes;
+
+  // Current edited values
+  late String _clientRequest;
+  late String _diagnosis;
+  late String _workPerformed;
+  late String _notes;
 
   @override
   void initState() {
     super.initState();
-    _textController.text = widget.diagnosis ?? '';
+    _initValues();
+  }
+
+  void _initValues() {
+    _originalClientRequest = widget.clientRequest ?? '';
+    _originalDiagnosis = widget.diagnosis ?? '';
+    _originalWorkPerformed = widget.workPerformed ?? '';
+    _originalNotes = widget.notes ?? '';
+
+    _clientRequest = _originalClientRequest;
+    _diagnosis = _originalDiagnosis;
+    _workPerformed = _originalWorkPerformed;
+    _notes = _originalNotes;
   }
 
   @override
-  void didUpdateWidget(_DiagnosisCell oldWidget) {
+  void didUpdateWidget(_JobDetailsCell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.diagnosis != widget.diagnosis && !_isOpen) {
-      _textController.text = widget.diagnosis ?? '';
+    if (!_isOpen) {
+      _initValues();
     }
   }
 
@@ -4124,151 +4271,437 @@ class _DiagnosisCellState extends State<_DiagnosisCell> {
     super.dispose();
   }
 
+  String _getCurrentFieldValue() {
+    switch (_selectedTab) {
+      case _JobDetailTab.solicitud:
+        return _clientRequest;
+      case _JobDetailTab.diagnostico:
+        return _diagnosis;
+      case _JobDetailTab.trabajos:
+        return _workPerformed;
+      case _JobDetailTab.notas:
+        return _notes;
+    }
+  }
+
+  void _setCurrentFieldValue(String value) {
+    switch (_selectedTab) {
+      case _JobDetailTab.solicitud:
+        _clientRequest = value;
+        break;
+      case _JobDetailTab.diagnostico:
+        _diagnosis = value;
+        break;
+      case _JobDetailTab.trabajos:
+        _workPerformed = value;
+        break;
+      case _JobDetailTab.notas:
+        _notes = value;
+        break;
+    }
+  }
+
+  void _switchTab(_JobDetailTab newTab) {
+    if (newTab == _selectedTab) return;
+
+    // Save current text to the current field
+    _setCurrentFieldValue(_textController.text);
+
+    // Switch to new tab
+    _selectedTab = newTab;
+    _textController.text = _getCurrentFieldValue();
+
+    // Update overlay
+    _overlayEntry?.markNeedsBuild();
+
+    // Keep focus
+    Future.delayed(const Duration(milliseconds: 50), () {
+      if (mounted && _isOpen) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
   void _showOverlay() {
     if (_isOpen) return;
-    
-    _textController.text = widget.diagnosis ?? '';
+
+    _initValues();
+    _textController.text = _getCurrentFieldValue();
     _isOpen = true;
 
     _overlayEntry = OverlayEntry(
-      builder: (context) => Stack(
-        children: [
-          // Backdrop to close on outside click
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _saveAndClose,
-              child: Container(color: Colors.transparent),
+      builder: (context) {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+
+        return Stack(
+          children: [
+            // Backdrop to close on outside click
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _saveAndClose,
+                child: Container(color: Colors.transparent),
+              ),
             ),
-          ),
-          // Popup content
-          Positioned(
-            width: 350,
-            child: CompositedTransformFollower(
-              link: _layerLink,
-              showWhenUnlinked: false,
-              offset: const Offset(0, 30),
-              child: Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  constraints: const BoxConstraints(maxHeight: 250),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Header
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[50],
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(7),
-                            topRight: Radius.circular(7),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.medical_information_outlined, 
-                                 size: 16, color: Colors.grey[600]),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Diagnóstico',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                            const Spacer(),
-                            InkWell(
-                              onTap: _saveAndClose,
-                              borderRadius: BorderRadius.circular(4),
-                              child: Padding(
-                                padding: const EdgeInsets.all(4),
-                                child: Icon(Icons.close, 
-                                           size: 16, color: Colors.grey[500]),
-                              ),
-                            ),
-                          ],
-                        ),
+            // Popup content
+            Positioned(
+              width: 420,
+              child: CompositedTransformFollower(
+                link: _layerLink,
+                showWhenUnlinked: false,
+                offset: const Offset(0, 30),
+                child: Material(
+                  elevation: 8,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    constraints: const BoxConstraints(maxHeight: 320),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[850] : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
                       ),
-                      // Text field
-                      Flexible(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: TextField(
-                            controller: _textController,
-                            focusNode: _focusNode,
-                            maxLines: 6,
-                            minLines: 3,
-                            autofocus: true,
-                            style: const TextStyle(fontSize: 14),
-                            decoration: InputDecoration(
-                              hintText: 'Ingresa el diagnóstico...',
-                              hintStyle: TextStyle(color: Colors.grey[400]),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Customer & Bike header (compact, minimalist)
+                        if (widget.customerName != null ||
+                            widget.bikeName != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color:
+                                  isDark ? Colors.grey[800] : Colors.grey[100],
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(7),
+                                topRight: Radius.circular(7),
                               ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: BorderSide(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  width: 1.5,
+                            ),
+                            child: Row(
+                              children: [
+                                // Customer info - takes more space
+                                Expanded(
+                                  flex: 3,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.person_outline,
+                                        size: 14,
+                                        color: isDark
+                                            ? Colors.grey[400]
+                                            : Colors.grey[600],
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          widget.customerName ?? '—',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: isDark
+                                                ? Colors.grey[300]
+                                                : Colors.grey[700],
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              contentPadding: const EdgeInsets.all(10),
-                              filled: true,
-                              fillColor: Colors.white,
+                                // Divider
+                                Container(
+                                  margin:
+                                      const EdgeInsets.symmetric(horizontal: 10),
+                                  width: 1,
+                                  height: 14,
+                                  color: isDark
+                                      ? Colors.grey[600]
+                                      : Colors.grey[300],
+                                ),
+                                // Bike info - takes less space
+                                Expanded(
+                                  flex: 2,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.pedal_bike,
+                                        size: 14,
+                                        color: isDark
+                                            ? Colors.grey[400]
+                                            : Colors.grey[600],
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          widget.bikeName ?? '—',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: isDark
+                                                ? Colors.grey[300]
+                                                : Colors.grey[700],
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Close button - fixed on the right
+                                const SizedBox(width: 8),
+                                InkWell(
+                                  onTap: _saveAndClose,
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: Icon(Icons.close,
+                                        size: 16,
+                                        color: isDark
+                                            ? Colors.grey[400]
+                                            : Colors.grey[500]),
+                                  ),
+                                ),
+                              ],
                             ),
-                            onSubmitted: (_) => _saveAndClose(),
+                          ),
+                        // Header with segmented tabs
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.grey[800] : Colors.grey[50],
+                            borderRadius: (widget.customerName == null &&
+                                    widget.bikeName == null)
+                                ? const BorderRadius.only(
+                                    topLeft: Radius.circular(7),
+                                    topRight: Radius.circular(7),
+                                  )
+                                : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _buildSegmentedTabs(isDark),
+                              ),
+                              if (widget.customerName == null &&
+                                  widget.bikeName == null) ...[
+                                const SizedBox(width: 8),
+                                InkWell(
+                                  onTap: _saveAndClose,
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: Icon(Icons.close,
+                                        size: 18,
+                                        color: isDark
+                                            ? Colors.grey[400]
+                                            : Colors.grey[500]),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                      ),
-                      // Footer hint
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[50],
-                          borderRadius: const BorderRadius.only(
-                            bottomLeft: Radius.circular(7),
-                            bottomRight: Radius.circular(7),
+                        // Text field
+                        Flexible(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: TextField(
+                              controller: _textController,
+                              focusNode: _focusNode,
+                              maxLines: 8,
+                              minLines: 5,
+                              autofocus: true,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.grey[200]
+                                    : Colors.grey[800],
+                              ),
+                              decoration: InputDecoration(
+                                hintText: _getHintText(),
+                                hintStyle: TextStyle(
+                                  color: isDark
+                                      ? Colors.grey[600]
+                                      : Colors.grey[400],
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                  borderSide: BorderSide(
+                                    color: isDark
+                                        ? Colors.grey[700]!
+                                        : Colors.grey[300]!,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                  borderSide: BorderSide(
+                                    color: isDark
+                                        ? Colors.grey[700]!
+                                        : Colors.grey[300]!,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                  borderSide: BorderSide(
+                                    color: theme.colorScheme.primary,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                contentPadding: const EdgeInsets.all(10),
+                                filled: true,
+                                fillColor:
+                                    isDark ? Colors.grey[900] : Colors.white,
+                              ),
+                            ),
                           ),
                         ),
-                        child: Text(
-                          'Click afuera para guardar',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[500],
-                            fontStyle: FontStyle.italic,
+                        // Footer hint
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.grey[800] : Colors.grey[50],
+                            borderRadius: const BorderRadius.only(
+                              bottomLeft: Radius.circular(7),
+                              bottomRight: Radius.circular(7),
+                            ),
                           ),
-                          textAlign: TextAlign.center,
+                          child: Text(
+                            'Click afuera para guardar • Cambios se guardan al cerrar',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color:
+                                  isDark ? Colors.grey[500] : Colors.grey[500],
+                              fontStyle: FontStyle.italic,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
 
     Overlay.of(context).insert(_overlayEntry!);
-    
+
     // Focus after a short delay to ensure overlay is rendered
     Future.delayed(const Duration(milliseconds: 50), () {
       if (mounted && _isOpen) {
         _focusNode.requestFocus();
       }
     });
+  }
+
+  Widget _buildSegmentedTabs(bool isDark) {
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[900] : Colors.grey[200],
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          _buildTabButton(_JobDetailTab.solicitud, 'Solicitud', isDark),
+          _buildTabButton(_JobDetailTab.diagnostico, 'Diagnóstico', isDark),
+          _buildTabButton(_JobDetailTab.trabajos, 'Trabajos', isDark),
+          _buildTabButton(_JobDetailTab.notas, 'Notas', isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabButton(_JobDetailTab tab, String label, bool isDark) {
+    final isSelected = _selectedTab == tab;
+    final hasContent = _tabHasContent(tab);
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _switchTab(tab),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          margin: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? (isDark ? Colors.grey[700] : Colors.white)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
+                      blurRadius: 2,
+                      offset: const Offset(0, 1),
+                    )
+                  ]
+                : null,
+          ),
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected
+                        ? (isDark ? Colors.white : Colors.grey[800])
+                        : (isDark ? Colors.grey[500] : Colors.grey[600]),
+                  ),
+                ),
+                if (hasContent && !isSelected) ...[
+                  const SizedBox(width: 3),
+                  Container(
+                    width: 5,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.blue[400] : Colors.blue[600],
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _tabHasContent(_JobDetailTab tab) {
+    switch (tab) {
+      case _JobDetailTab.solicitud:
+        return _clientRequest.isNotEmpty;
+      case _JobDetailTab.diagnostico:
+        return _diagnosis.isNotEmpty;
+      case _JobDetailTab.trabajos:
+        return _workPerformed.isNotEmpty;
+      case _JobDetailTab.notas:
+        return _notes.isNotEmpty;
+    }
+  }
+
+  String _getHintText() {
+    switch (_selectedTab) {
+      case _JobDetailTab.solicitud:
+        return 'Describe la solicitud del cliente...';
+      case _JobDetailTab.diagnostico:
+        return 'Ingresa el diagnóstico...';
+      case _JobDetailTab.trabajos:
+        return 'Lista los trabajos a realizar...';
+      case _JobDetailTab.notas:
+        return 'Notas adicionales del técnico...';
+    }
   }
 
   void _removeOverlay() {
@@ -4278,21 +4711,55 @@ class _DiagnosisCellState extends State<_DiagnosisCell> {
   }
 
   void _saveAndClose() {
-    final newValue = _textController.text.trim();
-    final oldValue = widget.diagnosis?.trim() ?? '';
-    
+    // Save current text field value to the current field
+    _setCurrentFieldValue(_textController.text);
+
     _removeOverlay();
-    
-    // Only save if value changed
-    if (newValue != oldValue) {
-      widget.onSave(newValue.isEmpty ? null : newValue);
+
+    // Check if any value changed
+    final clientRequestChanged =
+        _clientRequest.trim() != _originalClientRequest.trim();
+    final diagnosisChanged = _diagnosis.trim() != _originalDiagnosis.trim();
+    final workPerformedChanged =
+        _workPerformed.trim() != _originalWorkPerformed.trim();
+    final notesChanged = _notes.trim() != _originalNotes.trim();
+
+    if (clientRequestChanged ||
+        diagnosisChanged ||
+        workPerformedChanged ||
+        notesChanged) {
+      // Pass trimmed values, empty string becomes null for DB storage
+      // Use a special constant to mark "unchanged" vs "cleared to empty"
+      widget.onSave(
+        clientRequest: clientRequestChanged
+            ? (_clientRequest.trim().isEmpty ? '' : _clientRequest.trim())
+            : null,
+        diagnosis: diagnosisChanged
+            ? (_diagnosis.trim().isEmpty ? '' : _diagnosis.trim())
+            : null,
+        workPerformed: workPerformedChanged
+            ? (_workPerformed.trim().isEmpty ? '' : _workPerformed.trim())
+            : null,
+        notes:
+            notesChanged ? (_notes.trim().isEmpty ? '' : _notes.trim()) : null,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final diagnosis = widget.diagnosis?.trim();
-    final isEmpty = diagnosis == null || diagnosis.isEmpty;
+    final hasAnyContent = (widget.clientRequest?.isNotEmpty ?? false) ||
+        (widget.diagnosis?.isNotEmpty ?? false) ||
+        (widget.workPerformed?.isNotEmpty ?? false) ||
+        (widget.notes?.isNotEmpty ?? false);
+
+    // Count filled fields for indicator
+    int filledCount = 0;
+    if (widget.clientRequest?.isNotEmpty ?? false) filledCount++;
+    if (widget.diagnosis?.isNotEmpty ?? false) filledCount++;
+    if (widget.workPerformed?.isNotEmpty ?? false) filledCount++;
+    if (widget.notes?.isNotEmpty ?? false) filledCount++;
 
     return CompositedTransformTarget(
       link: _layerLink,
@@ -4300,7 +4767,9 @@ class _DiagnosisCellState extends State<_DiagnosisCell> {
         onTap: _showOverlay,
         borderRadius: BorderRadius.circular(4),
         child: Tooltip(
-          message: isEmpty ? 'Click para agregar diagnóstico' : diagnosis,
+          message: hasAnyContent
+              ? 'Click para ver/editar detalles ($filledCount/4 campos)'
+              : 'Click para agregar detalles',
           waitDuration: const Duration(milliseconds: 500),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -4311,7 +4780,7 @@ class _DiagnosisCellState extends State<_DiagnosisCell> {
             child: Row(
               children: [
                 Expanded(
-                  child: isEmpty
+                  child: !hasAnyContent
                       ? Text(
                           '—',
                           style: TextStyle(
@@ -4321,18 +4790,40 @@ class _DiagnosisCellState extends State<_DiagnosisCell> {
                           ),
                         )
                       : Text(
-                          diagnosis,
+                          diagnosis ??
+                              widget.clientRequest ??
+                              widget.workPerformed ??
+                              widget.notes ??
+                              '',
                           style: const TextStyle(fontSize: 13),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                 ),
                 const SizedBox(width: 4),
-                Icon(
-                  Icons.edit_outlined,
-                  size: 14,
-                  color: Colors.grey[400],
-                ),
+                if (filledCount > 0)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '$filledCount/4',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue[700],
+                      ),
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.edit_outlined,
+                    size: 14,
+                    color: Colors.grey[400],
+                  ),
               ],
             ),
           ),
@@ -4367,12 +4858,27 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
   final _nameController = TextEditingController();
   String _selectedColor = '#6B7280';
   StatusPhase _selectedPhase = StatusPhase.inProgress;
-  
+
   // 18 preset colors
   static const List<String> _colors = [
-    '#6B7280', '#EF4444', '#F97316', '#F59E0B', '#EAB308', '#84CC16',
-    '#22C55E', '#10B981', '#14B8A6', '#06B6D4', '#0EA5E9', '#3B82F6',
-    '#6366F1', '#8B5CF6', '#A855F7', '#D946EF', '#EC4899', '#F43F5E',
+    '#6B7280',
+    '#EF4444',
+    '#F97316',
+    '#F59E0B',
+    '#EAB308',
+    '#84CC16',
+    '#22C55E',
+    '#10B981',
+    '#14B8A6',
+    '#06B6D4',
+    '#0EA5E9',
+    '#3B82F6',
+    '#6366F1',
+    '#8B5CF6',
+    '#A855F7',
+    '#D946EF',
+    '#EC4899',
+    '#F43F5E',
   ];
 
   @override
@@ -4416,7 +4922,10 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
         await widget.jobStatusService.updateStatus(updated);
       } else {
         // Create new
-        final code = name.toUpperCase().replaceAll(' ', '_').replaceAll(RegExp(r'[^A-Z0-9_]'), '');
+        final code = name
+            .toUpperCase()
+            .replaceAll(' ', '_')
+            .replaceAll(RegExp(r'[^A-Z0-9_]'), '');
         await widget.jobStatusService.createStatus(
           name: name,
           code: code,
@@ -4439,9 +4948,12 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('¿Eliminar estado?'),
-        content: Text('Se eliminará "${status.name}". Los trabajos con este estado quedarán sin estado asignado.'),
+        content: Text(
+            'Se eliminará "${status.name}". Los trabajos con este estado quedarán sin estado asignado.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
@@ -4477,15 +4989,18 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
       listenable: widget.jobStatusService,
       builder: (context, _) {
         final statusesByPhase = widget.jobStatusService.statusesByPhase;
-        final currentStatusId = widget.job.statusId ?? widget.job.customStatus?.id;
+        final currentStatusId =
+            widget.job.statusId ?? widget.job.customStatus?.id;
 
         return AlertDialog(
           title: Row(
             children: [
               Expanded(
-                child: Text(_isEditMode 
-                  ? (_editingStatus != null ? 'Editar Estado' : 'Nuevo Estado')
-                  : 'Cambiar Estado'),
+                child: Text(_isEditMode
+                    ? (_editingStatus != null
+                        ? 'Editar Estado'
+                        : 'Nuevo Estado')
+                    : 'Cambiar Estado'),
               ),
               if (!_isEditMode)
                 IconButton(
@@ -4497,16 +5012,22 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
           ),
           content: SizedBox(
             width: 360,
-            child: _isEditMode ? _buildEditForm() : _buildStatusList(statusesByPhase, currentStatusId),
+            child: _isEditMode
+                ? _buildEditForm()
+                : _buildStatusList(statusesByPhase, currentStatusId),
           ),
           actions: _isEditMode
-            ? [
-                TextButton(onPressed: _cancelEditing, child: const Text('Cancelar')),
-                FilledButton(onPressed: _saveStatus, child: const Text('Guardar')),
-              ]
-            : [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
-              ],
+              ? [
+                  TextButton(
+                      onPressed: _cancelEditing, child: const Text('Cancelar')),
+                  FilledButton(
+                      onPressed: _saveStatus, child: const Text('Guardar')),
+                ]
+              : [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cerrar')),
+                ],
         );
       },
     );
@@ -4532,16 +5053,20 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
           const SizedBox(height: 16),
 
           // Phase selector
-          const Text('Fase', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+          const Text('Fase',
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
           const SizedBox(height: 8),
           SegmentedButton<StatusPhase>(
             segments: const [
               ButtonSegment(value: StatusPhase.todo, label: Text('Por Hacer')),
-              ButtonSegment(value: StatusPhase.inProgress, label: Text('En Progreso')),
-              ButtonSegment(value: StatusPhase.complete, label: Text('Completado')),
+              ButtonSegment(
+                  value: StatusPhase.inProgress, label: Text('En Progreso')),
+              ButtonSegment(
+                  value: StatusPhase.complete, label: Text('Completado')),
             ],
             selected: {_selectedPhase},
-            onSelectionChanged: (selected) => setState(() => _selectedPhase = selected.first),
+            onSelectionChanged: (selected) =>
+                setState(() => _selectedPhase = selected.first),
             style: const ButtonStyle(
               visualDensity: VisualDensity.compact,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -4550,7 +5075,8 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
           const SizedBox(height: 16),
 
           // Color picker
-          const Text('Color', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+          const Text('Color',
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -4570,11 +5096,18 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                       color: isSelected ? Colors.white : Colors.transparent,
                       width: 3,
                     ),
-                    boxShadow: isSelected ? [
-                      BoxShadow(color: colorValue.withOpacity(0.5), blurRadius: 8, spreadRadius: 2),
-                    ] : null,
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                                color: colorValue.withOpacity(0.5),
+                                blurRadius: 8,
+                                spreadRadius: 2),
+                          ]
+                        : null,
                   ),
-                  child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 18) : null,
+                  child: isSelected
+                      ? const Icon(Icons.check, color: Colors.white, size: 18)
+                      : null,
                 ),
               );
             }).toList(),
@@ -4587,7 +5120,8 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
             decoration: BoxDecoration(
               color: _parseColor(_selectedColor).withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _parseColor(_selectedColor).withOpacity(0.3)),
+              border: Border.all(
+                  color: _parseColor(_selectedColor).withOpacity(0.3)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -4602,7 +5136,9 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  _nameController.text.isEmpty ? 'Vista previa' : _nameController.text,
+                  _nameController.text.isEmpty
+                      ? 'Vista previa'
+                      : _nameController.text,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: _parseColor(_selectedColor),
@@ -4616,11 +5152,13 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
     );
   }
 
-  Widget _buildStatusList(Map<StatusPhase, List<JobStatusCustom>> statusesByPhase, String? currentStatusId) {
+  Widget _buildStatusList(
+      Map<StatusPhase, List<JobStatusCustom>> statusesByPhase,
+      String? currentStatusId) {
     // Build a flat list with phase headers as separators
     // Each item is either a header (non-draggable) or a status (draggable)
     final List<_StatusListItem> items = [];
-    
+
     // Por Hacer
     if (statusesByPhase[StatusPhase.todo]?.isNotEmpty == true) {
       items.add(_StatusListItem.header('Por Hacer', StatusPhase.todo));
@@ -4628,7 +5166,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
         items.add(_StatusListItem.status(status));
       }
     }
-    
+
     // En Progreso
     if (statusesByPhase[StatusPhase.inProgress]?.isNotEmpty == true) {
       items.add(_StatusListItem.header('En Progreso', StatusPhase.inProgress));
@@ -4636,7 +5174,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
         items.add(_StatusListItem.status(status));
       }
     }
-    
+
     // Completado
     if (statusesByPhase[StatusPhase.complete]?.isNotEmpty == true) {
       items.add(_StatusListItem.header('Completado', StatusPhase.complete));
@@ -4667,12 +5205,12 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
       onReorder: (oldIndex, newIndex) async {
         final item = items[oldIndex];
         if (item.isHeader) return; // Can't drag headers
-        
+
         // Adjust newIndex
         if (newIndex > oldIndex) newIndex--;
         if (newIndex < 0) newIndex = 0;
         if (newIndex >= items.length) newIndex = items.length - 1;
-        
+
         // Determine target phase based on where it's dropped
         StatusPhase targetPhase = StatusPhase.todo;
         for (int i = newIndex; i >= 0; i--) {
@@ -4681,7 +5219,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
             break;
           }
         }
-        
+
         // Calculate new sort order within the target phase
         int newSortOrder = 0;
         int countInPhase = 0;
@@ -4698,29 +5236,30 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
             break;
           }
         }
-        
+
         final status = item.status!;
         final jobStatusService = context.read<JobStatusService>();
-        
+
         // Update the dragged status with new phase and sort order
         final updatedStatus = status.copyWith(
           phase: targetPhase,
           sortOrder: newSortOrder,
         );
         await jobStatusService.updateStatus(updatedStatus);
-        
+
         // Reorder other items in the target phase to make room
         final allStatuses = jobStatusService.statuses;
         final targetPhaseStatuses = allStatuses
             .where((s) => s.phase == targetPhase && s.id != status.id)
             .toList()
           ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-        
+
         for (int i = 0; i < targetPhaseStatuses.length; i++) {
           final s = targetPhaseStatuses[i];
           final expectedOrder = i >= newSortOrder ? i + 1 : i;
           if (s.sortOrder != expectedOrder) {
-            await jobStatusService.updateStatus(s.copyWith(sortOrder: expectedOrder));
+            await jobStatusService
+                .updateStatus(s.copyWith(sortOrder: expectedOrder));
           }
         }
       },
@@ -4826,7 +5365,8 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                   color: statusColor,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: isSelected ? statusColor : statusColor.withOpacity(0.5),
+                    color:
+                        isSelected ? statusColor : statusColor.withOpacity(0.5),
                     width: isSelected ? 3 : 1,
                   ),
                 ),
@@ -4845,7 +5385,8 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
               ),
               // Edit button
               IconButton(
-                icon: Icon(Icons.edit_outlined, size: 16, color: Colors.grey[400]),
+                icon: Icon(Icons.edit_outlined,
+                    size: 16, color: Colors.grey[400]),
                 tooltip: 'Editar',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -4854,10 +5395,12 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
               // Delete button (only for non-system statuses)
               if (!status.isSystem)
                 IconButton(
-                  icon: Icon(Icons.delete_outline, size: 16, color: Colors.grey[400]),
+                  icon: Icon(Icons.delete_outline,
+                      size: 16, color: Colors.grey[400]),
                   tooltip: 'Eliminar',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints:
+                      const BoxConstraints(minWidth: 28, minHeight: 28),
                   onPressed: () => _deleteStatus(status),
                 ),
             ],
@@ -4888,5 +5431,144 @@ class _StatusListItem {
 
   factory _StatusListItem.status(JobStatusCustom status) {
     return _StatusListItem._(isHeader: false, status: status);
+  }
+}
+
+/// Custom horizontal scrollbar that appears on hover near the bottom of the table
+class _HoverScrollbar extends StatefulWidget {
+  final ScrollController scrollController;
+  final double contentWidth;
+  final double viewportWidth;
+
+  const _HoverScrollbar({
+    required this.scrollController,
+    required this.contentWidth,
+    required this.viewportWidth,
+  });
+
+  @override
+  State<_HoverScrollbar> createState() => _HoverScrollbarState();
+}
+
+class _HoverScrollbarState extends State<_HoverScrollbar> {
+  bool _isHovered = false;
+  bool _isDragging = false;
+  double _scrollPosition = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    widget.scrollController.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (mounted) {
+      setState(() {
+        _scrollPosition = widget.scrollController.offset;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    // Calculate thumb size and position
+    final scrollableWidth = widget.contentWidth - widget.viewportWidth;
+    final thumbRatio = widget.viewportWidth / widget.contentWidth;
+    final thumbWidth = (widget.viewportWidth * thumbRatio).clamp(40.0, widget.viewportWidth * 0.5);
+    final trackWidth = widget.viewportWidth - 32; // 16px padding on each side
+    final maxThumbOffset = trackWidth - thumbWidth;
+    final thumbOffset = scrollableWidth > 0 
+        ? (_scrollPosition / scrollableWidth) * maxThumbOffset 
+        : 0.0;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) {
+        if (!_isDragging) setState(() => _isHovered = false);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: _isHovered || _isDragging ? 14 : 6,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: _isHovered || _isDragging
+              ? (isDark ? Colors.grey[800] : Colors.grey[200])
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Stack(
+          children: [
+            // Track (only visible on hover)
+            if (_isHovered || _isDragging)
+              Positioned.fill(
+                child: Container(
+                  margin: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[850] : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+              ),
+            // Thumb
+            Positioned(
+              left: thumbOffset + 16,
+              top: _isHovered || _isDragging ? 2 : 1,
+              child: GestureDetector(
+                onHorizontalDragStart: (_) => setState(() => _isDragging = true),
+                onHorizontalDragEnd: (_) => setState(() {
+                  _isDragging = false;
+                  if (!_isHovered) _isHovered = false;
+                }),
+                onHorizontalDragUpdate: (details) {
+                  final newOffset = thumbOffset + details.delta.dx;
+                  final scrollRatio = newOffset / maxThumbOffset;
+                  final newScrollPosition = (scrollRatio * scrollableWidth).clamp(0.0, scrollableWidth);
+                  widget.scrollController.jumpTo(newScrollPosition);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: thumbWidth,
+                  height: _isHovered || _isDragging ? 10 : 4,
+                  decoration: BoxDecoration(
+                    color: _isDragging
+                        ? (isDark ? Colors.grey[400] : Colors.grey[600])
+                        : _isHovered
+                            ? (isDark ? Colors.grey[500] : Colors.grey[500])
+                            : (isDark ? Colors.grey[600] : Colors.grey[400]),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+              ),
+            ),
+            // Click on track to jump
+            if (_isHovered || _isDragging)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTapDown: (details) {
+                    final tapPosition = details.localPosition.dx - 16;
+                    final scrollRatio = tapPosition / trackWidth;
+                    final newScrollPosition = (scrollRatio * scrollableWidth).clamp(0.0, scrollableWidth);
+                    widget.scrollController.animateTo(
+                      newScrollPosition,
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

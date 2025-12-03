@@ -73,6 +73,8 @@ import '../../modules/hr/pages/kiosk_mode_page.dart';
 import '../../modules/hr/pages/medical_leaves_page.dart';
 import '../../modules/website/pages/website_management_page.dart';
 import '../../modules/website/pages/odoo_style_editor_page.dart';
+import '../../modules/website/pages/page_management_page.dart';
+import '../../modules/website/pages/navigation_management_page.dart';
 import '../widgets/workspace_demo_page.dart';
 
 // WebView Modules (embedded websites)
@@ -91,6 +93,7 @@ import '../../public_store/pages/customer_account_page.dart';
 import '../../public_store/pages/customer_profile_page.dart';
 import '../../public_store/pages/customer_addresses_page.dart';
 import '../../public_store/pages/customer_orders_page.dart';
+import '../../public_store/pages/dynamic_website_page.dart';
 import '../../public_store/widgets/public_store_layout.dart';
 
 // Helper wrapper for public store pages
@@ -133,6 +136,7 @@ class AppRouter {
       '/tienda/pedido',
       '/tienda/contacto',
       '/tienda/cuenta',
+      '/tienda/pagina', // Dynamic pages (Dec 2025)
     ];
 
     final effectiveInitialLocation = initialLocationOverride ??
@@ -151,8 +155,9 @@ class AppRouter {
           (route) => state.uri.path.startsWith(route),
         );
 
+        // Public store host (vinabike-store.web.app): ONLY allow /tienda/* routes
+        // Customer auth on store is for orders/addresses, NOT for ERP access
         if (forcePublicStoreHost) {
-          // Force public storefront hosts to stay within /tienda routes.
           if (!isPublicRoute) {
             return '/tienda';
           }
@@ -329,6 +334,23 @@ class AppRouter {
             state,
             const PublicStoreWrapper(child: CustomerOrdersPage()),
           ),
+        ),
+
+        // ========================================
+        // DYNAMIC PAGES (Dec 2025 - Multi-page support)
+        // Renders any page from website_pages by slug
+        // MUST be last in /tienda routes to avoid conflicts
+        // ========================================
+        GoRoute(
+          path: '/tienda/pagina/:slug',
+          pageBuilder: (context, state) {
+            final slug = state.pathParameters['slug'] ?? '';
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(child: DynamicWebsitePage(slug: slug)),
+            );
+          },
         ),
 
         // ========================================
@@ -1201,6 +1223,24 @@ class AppRouter {
                 context,
                 state,
                 const OdooStyleEditorPage(),
+              ),
+            ),
+            // Page Management (Dec 2025)
+            GoRoute(
+              path: 'pages',
+              pageBuilder: (context, state) => _buildPageWithNoTransition(
+                context,
+                state,
+                const PageManagementPage(),
+              ),
+            ),
+            // Navigation Management (Dec 2025)
+            GoRoute(
+              path: 'navigation',
+              pageBuilder: (context, state) => _buildPageWithNoTransition(
+                context,
+                state,
+                const NavigationManagementPage(),
               ),
             ),
           ],

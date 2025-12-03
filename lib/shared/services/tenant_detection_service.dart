@@ -129,7 +129,7 @@ class TenantDetectionService {
   }
 
   /// Detect tenant from current URL
-  /// Tries subdomain first, then custom domain lookup
+  /// Tries subdomain first, then custom domain lookup, then authenticated user's tenant
   Future<Tenant?> detectTenant() async {
     if (!kIsWeb) {
       debugPrint('[TenantDetection] Not running on web, skipping detection');
@@ -138,6 +138,29 @@ class TenantDetectionService {
 
     final host = Uri.base.host;
     debugPrint('[TenantDetection] Detecting tenant for host: $host');
+
+    // Development: Check for FORCE_SUBDOMAIN environment variable
+    // This allows testing public store locally without real subdomain
+    const forceSubdomain = String.fromEnvironment('FORCE_SUBDOMAIN');
+    if (forceSubdomain.isNotEmpty) {
+      debugPrint('[TenantDetection] 🧪 FORCE_SUBDOMAIN=$forceSubdomain (development override)');
+      final tenant = await getTenantBySubdomain(forceSubdomain);
+      if (tenant != null) {
+        debugPrint('[TenantDetection] ✅ Using forced tenant: ${tenant.shopName}');
+        return tenant;
+      }
+      debugPrint('[TenantDetection] ⚠️ Forced subdomain "$forceSubdomain" not found in database');
+    }
+
+    // Special handling for Firebase Hosting site-specific domains
+    // vinabike-store.web.app → lookup subdomain "vinabike"
+    if (host == 'vinabike-store.web.app' || host == 'vinabike-store.firebaseapp.com') {
+      debugPrint('[TenantDetection] Detected vinabike-store Firebase domain, looking up vinabike tenant');
+      final tenant = await getTenantBySubdomain('vinabike');
+      if (tenant != null) {
+        return tenant;
+      }
+    }
 
     // Try subdomain extraction first
     final subdomain = extractSubdomain(host);
@@ -155,8 +178,64 @@ class TenantDetectionService {
       return tenant;
     }
 
+    // FALLBACK: On localhost/ERP domain, use authenticated user's tenant
+    // This allows admins to preview their store without real subdomain
+    final isLocalOrErpDomain = host.contains('localhost') || 
+        host.contains('127.0.0.1') ||
+        host == 'project-vinabike.web.app' ||
+        host == 'project-vinabike.firebaseapp.com';
+    
+    if (isLocalOrErpDomain) {
+      debugPrint('[TenantDetection] On localhost/ERP domain, checking authenticated user...');
+      final user = _supabase.auth.currentUser;
+      if (user != null) {
+        final tenantFromAuth = await _getTenantFromAuthenticatedUser(user.id);
+        if (tenantFromAuth != null) {
+          debugPrint('[TenantDetection] ✅ Using authenticated user\'s tenant: ${tenantFromAuth.shopName}');
+          return tenantFromAuth;
+        }
+      }
+    }
+
     debugPrint('[TenantDetection] No tenant found for host: $host');
     return null;
+  }
+
+  /// Get tenant from authenticated user's profile
+  Future<Tenant?> _getTenantFromAuthenticatedUser(String userId) async {
+    try {
+      // First get the user's tenant_id from user_profiles
+      final profileResponse = await _supabase
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+      
+      if (profileResponse == null || profileResponse['tenant_id'] == null) {
+        debugPrint('[TenantDetection] No tenant_id in user profile');
+        return null;
+      }
+      
+      final tenantId = profileResponse['tenant_id'] as String;
+      
+      // Now fetch the full tenant record
+      final tenantResponse = await _supabase
+          .from('tenants')
+          .select()
+          .eq('id', tenantId)
+          .eq('is_active', true)
+          .maybeSingle();
+      
+      if (tenantResponse == null) {
+        debugPrint('[TenantDetection] Tenant not found or inactive: $tenantId');
+        return null;
+      }
+      
+      return Tenant.fromJson(tenantResponse);
+    } catch (e) {
+      debugPrint('[TenantDetection] Error getting tenant from auth user: $e');
+      return null;
+    }
   }
 
   /// Check if subdomain is available for registration

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -5,11 +6,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/cart_provider.dart';
+import '../providers/public_store_tenant_provider.dart';
 import '../theme/public_store_theme.dart';
 import 'floating_whatsapp_button.dart';
 import 'customer_account_menu.dart';
-import '../../modules/website/pages/odoo_style_editor_page.dart';
 import '../../modules/website/services/website_service.dart';
+import '../../modules/website/providers/website_edit_mode_provider.dart';
 
 class PublicStoreLayout extends StatefulWidget {
   final Widget child;
@@ -29,25 +31,35 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final service = context.read<WebsiteService>();
-      if (service.settings.isEmpty) {
-        service.loadSettings();
-      }
-    });
+    // Settings are loaded in main.dart after tenant detection
+    // No need to load here - just watch the service
   }
 
   @override
   Widget build(BuildContext context) {
     final supabase = Supabase.instance.client;
     final isLoggedIn = supabase.auth.currentUser != null;
+    
+    // Watch providers to rebuild when data changes
+    final tenantProvider = context.watch<PublicStoreTenantProvider>();
     final websiteService = context.watch<WebsiteService>();
+    
+    // Show loading while tenant is being detected OR settings are not yet loaded
+    // This prevents the "flash" of default blue color before real settings load
+    if (tenantProvider.isLoading || 
+        (tenantProvider.tenantId != null && websiteService.settings.isEmpty)) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     final storeName = websiteService.getSetting('store_name', 'VINABIKE');
     final storeDescription = websiteService.getSetting(
       'store_description',
       'Todo lo que necesitas para tu bicicleta en Viña del Mar',
     );
+    final logoUrl = websiteService.getSetting('logo_url', '');
+    final topBannerText = websiteService.getSetting('top_banner_text', 'Envíos a todo Chile');
     final contactEmail =
         websiteService.getSetting('contact_email', 'contacto@vinabike.cl');
     final contactPhone =
@@ -78,7 +90,20 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       Colors.white,
     );
 
-    return Scaffold(
+    // Check if in edit mode - use different layout structure
+    final editProvider = context.watch<WebsiteEditModeProvider>();
+    final isEditMode = editProvider.isEditMode;
+    
+    // In edit mode, show simplified layout with side panel
+    if (isEditMode) {
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        body: widget.child, // Child handles the edit mode UI with side panel
+      );
+    }
+
+    // Build the main content (normal view mode)
+    final mainContent = Scaffold(
       backgroundColor: backgroundColor,
       body: Stack(
         children: [
@@ -88,6 +113,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 context: context,
                 storeName: storeName,
                 storeDescription: storeDescription,
+                logoUrl: logoUrl,
+                topBannerText: topBannerText,
                 contactPhone: contactPhone,
                 contactEmail: contactEmail,
                 primaryColor: primaryColor,
@@ -129,47 +156,73 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 backgroundColor: accentColor,
               ),
             ),
-          if (isLoggedIn && widget.showEditorButton)
+          // Show "Edit Site" button ONLY on ERP domain (not on public store domain)
+          // This is for admin previewing the store from ERP, not for customers
+          if (isLoggedIn && widget.showEditorButton && !_isPublicStoreDomain())
             Positioned(
               bottom: 24,
               right: hasWhatsApp ? 104 : 24,
-              child: FloatingActionButton.extended(
-                onPressed: () {
-                  Navigator.of(context)
-                      .push(
-                    MaterialPageRoute(
-                      builder: (context) => const OdooStyleEditorPage(),
+              child: Builder(
+                builder: (context) {
+                  final editProvider = context.watch<WebsiteEditModeProvider>();
+                  final isInEditMode = editProvider.isEditMode;
+                  final websiteService = context.read<WebsiteService>();
+                  
+                  return FloatingActionButton.extended(
+                    onPressed: () {
+                      debugPrint('🎨 [Layout] Edit button pressed. isEditMode: $isInEditMode');
+                      
+                      if (isInEditMode) {
+                        editProvider.exitEditMode();
+                        debugPrint('🎨 [Layout] Exited edit mode');
+                      } else {
+                        // Enter edit mode with current blocks
+                        final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
+                        final settings = Map<String, dynamic>.from(websiteService.settings);
+                        debugPrint('🎨 [Layout] Entering edit mode with ${blocks.length} blocks');
+                        editProvider.enterEditMode(blocks, settings);
+                      }
+                    },
+                    backgroundColor: isInEditMode ? Colors.grey.shade700 : accentColor,
+                    icon: Icon(
+                      isInEditMode ? Icons.close : Icons.edit,
+                      color: Colors.white,
                     ),
-                  )
-                      .then((_) {
-                    if (!mounted) return;
-                    final service = context.read<WebsiteService>();
-                    service.loadBlocks();
-                    service.loadSettings();
-                    service.loadFeaturedProducts();
-                  });
+                    label: Text(
+                      isInEditMode ? 'Salir' : 'Editar Sitio',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    tooltip: isInEditMode ? 'Salir del modo edición' : 'Editar sitio web',
+                  );
                 },
-                backgroundColor: accentColor,
-                icon: const Icon(Icons.edit, color: Colors.white),
-                label: const Text(
-                  'Editar Sitio',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                tooltip: 'Abrir editor visual',
               ),
             ),
         ],
       ),
     );
+
+    return mainContent;
+  }
+
+  /// Check if we're on the public store domain (customer-facing)
+  bool _isPublicStoreDomain() {
+    if (!kIsWeb) return false;
+    final host = Uri.base.host.toLowerCase();
+    return host == 'vinabike-store.web.app' ||
+        host == 'vinabike-store.firebaseapp.com' ||
+        host == 'vinabike.cl' ||
+        host == 'www.vinabike.cl';
   }
 
   Widget _buildHeader({
     required BuildContext context,
     required String storeName,
     required String storeDescription,
+    required String logoUrl,
+    required String topBannerText,
     required String contactPhone,
     required String contactEmail,
     required Color primaryColor,
@@ -190,6 +243,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       ),
       child: Column(
         children: [
+          // Top banner - customizable
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -200,38 +254,38 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               spacing: 24,
               runSpacing: 8,
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.local_shipping_outlined,
-                        color: Colors.white, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Envíos a todo Chile',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                          ),
-                    ),
-                  ],
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.support_agent_outlined,
-                        color: Colors.white, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      contactPhone.isNotEmpty
-                          ? 'Contáctanos: $contactPhone'
-                          : 'Atención personalizada',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                          ),
-                    ),
-                  ],
-                ),
+                if (topBannerText.isNotEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.local_shipping_outlined,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        topBannerText,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                      ),
+                    ],
+                  ),
+                if (contactPhone.isNotEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.support_agent_outlined,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Contáctanos: $contactPhone',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                      ),
+                    ],
+                  ),
                 if (contactEmail.isNotEmpty)
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -251,35 +305,30 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               ],
             ),
           ),
+          // Main header with logo
           Container(
             constraints: const BoxConstraints(maxWidth: 1200),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Row(
               children: [
+                // Logo - uses URL if set, otherwise falls back to asset, then text
                 InkWell(
                   onTap: () => context.go('/tienda'),
                   child: SizedBox(
                     height: 48,
-                    child: Image.asset(
-                      'assets/images/vinabike_logo.png',
-                      fit: BoxFit.contain,
-                      filterQuality: FilterQuality.high,
-                      semanticLabel:
-                          storeName.isNotEmpty ? storeName : 'Vinabike',
-                      errorBuilder: (context, error, stackTrace) => Text(
-                        storeName.isNotEmpty
-                            ? storeName.toUpperCase()
-                            : 'VINABIKE',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
-                            ?.copyWith(
-                              color: primaryColor,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1,
-                            ),
-                      ),
-                    ),
+                    child: logoUrl.isNotEmpty
+                        ? Image.network(
+                            logoUrl,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
+                            errorBuilder: (context, error, stackTrace) => _buildTextLogo(context, storeName, primaryColor),
+                          )
+                        : Image.asset(
+                            'assets/images/vinabike_logo.png',
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
+                            errorBuilder: (context, error, stackTrace) => _buildTextLogo(context, storeName, primaryColor),
+                          ),
                   ),
                 ),
                 const SizedBox(width: 24),
@@ -604,6 +653,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTextLogo(BuildContext context, String storeName, Color primaryColor) {
+    return Text(
+      storeName.isNotEmpty ? storeName.toUpperCase() : 'MI TIENDA',
+      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            color: primaryColor,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
     );
   }
 

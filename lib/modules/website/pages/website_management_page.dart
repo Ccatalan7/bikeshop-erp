@@ -9,7 +9,8 @@ import 'featured_products_page.dart';
 import 'content_management_page.dart';
 import 'website_settings_page.dart';
 import 'online_orders_page.dart';
-import 'odoo_style_editor_page.dart';
+import 'page_management_page.dart';
+import 'navigation_management_page.dart';
 
 /// Main hub for website content management
 class WebsiteManagementPage extends StatefulWidget {
@@ -202,20 +203,9 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                     const SizedBox(width: 24),
                     FilledButton.icon(
                       onPressed: () {
-                        // Use workspace-aware navigation instead of Navigator.push
-                        // This prevents app freeze and respects the workspace tab system
-                        try {
-                          // Try to navigate within workspace
-                          context.go('/website/editor');
-                        } catch (e) {
-                          // Fallback to regular push if workspace not available
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const OdooStyleEditorPage(),
-                            ),
-                          );
-                        }
+                        // Navigate to /tienda and auto-enable edit mode
+                        // The inline editor is now integrated into the live preview
+                        context.go('/tienda?edit=true');
                       },
                       icon: const Icon(Icons.edit_rounded),
                       label: const Text('Abrir Editor'),
@@ -247,6 +237,38 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                 mainAxisSpacing: 16,
                 childAspectRatio: 1.5,
                 children: [
+                  // Pages - NEW! Main page management
+                  _buildManagementCard(
+                    context: context,
+                    title: 'Páginas',
+                    subtitle: 'Crea y gestiona páginas del sitio',
+                    icon: Icons.web_stories,
+                    color: Colors.indigo,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PageManagementPage(),
+                        ),
+                      );
+                    },
+                  ),
+                  // Navigation - NEW! Menu management
+                  _buildManagementCard(
+                    context: context,
+                    title: 'Navegación',
+                    subtitle: 'Configura menús y enlaces',
+                    icon: Icons.menu_book,
+                    color: Colors.teal,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NavigationManagementPage(),
+                        ),
+                      );
+                    },
+                  ),
                   // Banners module removed - use Editor instead (hero/carousel blocks)
                   _buildManagementCard(
                     context: context,

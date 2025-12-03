@@ -58,6 +58,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // Form controllers
   final _clientRequestController = TextEditingController();
   final _diagnosisController = TextEditingController();
+  final _workSummaryController = TextEditingController();
   final _technicianNotesController = TextEditingController();
   final _discountController = TextEditingController(text: '0');
   final _estimatedDurationController = TextEditingController();
@@ -106,6 +107,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   void dispose() {
     _clientRequestController.dispose();
     _diagnosisController.dispose();
+    _workSummaryController.dispose();
     _technicianNotesController.dispose();
     _discountController.dispose();
     _estimatedDurationController.dispose();
@@ -298,6 +300,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
           _clientRequestController.text = job.clientRequest ?? '';
           _diagnosisController.text = job.diagnosis ?? '';
+          _workSummaryController.text = job.workPerformed ?? '';
           _technicianNotesController.text = job.notes ?? '';
           _discountController.text = job.discountAmount.toString();
           _estimatedDurationController.text = '';
@@ -606,6 +609,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         diagnosis: _diagnosisController.text.trim().isEmpty
             ? null
             : _diagnosisController.text.trim(),
+        workPerformed: _workSummaryController.text.trim().isEmpty
+            ? null
+            : _workSummaryController.text.trim(),
         notes: _technicianNotesController.text.trim().isEmpty
             ? null
             : _technicianNotesController.text.trim(),
@@ -1702,6 +1708,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             border: OutlineInputBorder(),
             prefixIcon: Icon(Icons.description),
             hintText: 'Descripción técnica del problema...',
+          ),
+          maxLines: 3,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _workSummaryController,
+          decoration: const InputDecoration(
+            labelText: 'Trabajos a realizar',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.build),
+            hintText: 'Ej: Cambio de cadena, ajuste de frenos, lubricación...',
           ),
           maxLines: 3,
         ),

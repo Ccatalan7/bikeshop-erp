@@ -4160,6 +4160,10 @@ begin
   perform public.seed_website_settings(NEW.id);
   raise notice '  ✓ Website settings initialized';
   
+  -- Seed website pages and navigation (multi-page support)
+  perform public.seed_website_pages(NEW.id);
+  raise notice '  ✓ Website pages and navigation created';
+  
   -- Seed job roles (employee-user linking system)
   perform public.seed_job_roles_for_tenant(NEW.id);
   raise notice '  ✓ Job roles catalog created';
@@ -12812,6 +12816,7 @@ end $$;
 create table if not exists website_blocks (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
+  page_id uuid, -- References website_pages (added later via ALTER)
   block_type text not null, -- 'hero', 'products', 'services', 'about', 'testimonials', 'features', 'cta', 'gallery', 'contact'
   block_data jsonb not null default '{}'::jsonb, -- All block properties (title, subtitle, images, etc.)
   is_visible boolean default true,
@@ -12828,6 +12833,248 @@ exception
   when undefined_table then raise notice '⚠ Table website_blocks does not exist';
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in website_blocks';
 end $$;
+
+-- ============================================================================
+-- WEBSITE PAGES - Multi-page support for visual editor (Dec 2025)
+-- ============================================================================
+-- Enables creating multiple pages (Home, Services, About, Contact, etc.)
+-- Each page can have its own set of blocks, SEO settings, and publish status
+
+create table if not exists website_pages (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  
+  -- Page identification
+  slug text not null, -- URL path: 'inicio', 'servicios', 'contacto', 'mi-pagina'
+  title text not null, -- Page title for browser tab and SEO
+  
+  -- SEO fields
+  meta_title text, -- Override for <title> tag (if different from title)
+  meta_description text, -- Meta description for search engines
+  meta_keywords text, -- Comma-separated keywords
+  og_image_url text, -- Open Graph image for social sharing
+  
+  -- Page status
+  is_published boolean default false, -- Only published pages are visible to public
+  is_home boolean default false, -- Only ONE page per tenant can be home
+  is_system boolean default false, -- System pages can't be deleted (home, products, cart)
+  
+  -- Template
+  template text default 'default', -- 'default', 'landing', 'blog', 'product-list'
+  
+  -- Timestamps
+  published_at timestamp with time zone, -- When page was first published
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  
+  -- Constraints
+  unique(tenant_id, slug) -- Each tenant can have one page per slug
+);
+
+create index if not exists idx_website_pages_tenant on website_pages(tenant_id);
+create index if not exists idx_website_pages_slug on website_pages(slug);
+create index if not exists idx_website_pages_published on website_pages(is_published) where is_published = true;
+create index if not exists idx_website_pages_home on website_pages(tenant_id, is_home) where is_home = true;
+
+-- RLS for website_pages
+alter table website_pages enable row level security;
+
+drop policy if exists "website_pages_select" on website_pages;
+drop policy if exists "website_pages_insert" on website_pages;
+drop policy if exists "website_pages_update" on website_pages;
+drop policy if exists "website_pages_delete" on website_pages;
+
+create policy "website_pages_select" on website_pages
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "website_pages_insert" on website_pages
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "website_pages_update" on website_pages
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "website_pages_delete" on website_pages
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id() and is_system = false);
+
+-- Public access policy for published pages (anonymous users viewing website)
+drop policy if exists "website_pages_select_public" on website_pages;
+create policy "website_pages_select_public" on website_pages
+  for select to anon
+  using (is_published = true);
+
+-- Trigger to ensure only one home page per tenant
+create or replace function ensure_single_home_page()
+returns trigger as $$
+begin
+  if NEW.is_home = true then
+    update website_pages
+    set is_home = false, updated_at = now()
+    where tenant_id = NEW.tenant_id
+      and id != NEW.id
+      and is_home = true;
+  end if;
+  return NEW;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_ensure_single_home_page on website_pages;
+create trigger trg_ensure_single_home_page
+  before insert or update of is_home on website_pages
+  for each row
+  when (NEW.is_home = true)
+  execute function ensure_single_home_page();
+
+-- Trigger to set published_at on first publish
+create or replace function set_published_at()
+returns trigger as $$
+begin
+  if NEW.is_published = true and OLD.is_published = false and NEW.published_at is null then
+    NEW.published_at := now();
+  end if;
+  return NEW;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_set_published_at on website_pages;
+create trigger trg_set_published_at
+  before update of is_published on website_pages
+  for each row
+  execute function set_published_at();
+
+-- ============================================================================
+-- WEBSITE NAVIGATION - Menu and link management (Dec 2025)
+-- ============================================================================
+-- Enables creating header menus, footer links, and dropdown navigation
+-- Links can point to pages, external URLs, product categories, or anchors
+
+create table if not exists website_navigation (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  
+  -- Menu location
+  menu_location text not null default 'header', -- 'header', 'footer', 'sidebar'
+  
+  -- Link display
+  label text not null, -- Text shown to users
+  icon text, -- Optional icon name (e.g., 'home', 'shopping_bag')
+  
+  -- Link target
+  link_type text not null default 'page', -- 'page', 'external', 'anchor', 'category', 'action'
+  link_value text, -- page_id (uuid), URL, #anchor, category_id, or action name
+  open_in_new_tab boolean default false,
+  
+  -- Hierarchy (for dropdowns)
+  parent_id uuid references website_navigation(id) on delete cascade,
+  
+  -- Order and visibility
+  order_index integer default 0,
+  is_visible boolean default true,
+  
+  -- Responsive visibility
+  show_on_desktop boolean default true,
+  show_on_mobile boolean default true,
+  
+  -- Styling (optional)
+  css_class text, -- Custom CSS class for styling
+  highlight boolean default false, -- Makes item stand out (e.g., "Contact Us" button)
+  
+  -- Timestamps
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_website_navigation_tenant on website_navigation(tenant_id);
+create index if not exists idx_website_navigation_location on website_navigation(menu_location);
+create index if not exists idx_website_navigation_parent on website_navigation(parent_id);
+create index if not exists idx_website_navigation_order on website_navigation(menu_location, order_index);
+
+-- RLS for website_navigation
+alter table website_navigation enable row level security;
+
+drop policy if exists "website_navigation_select" on website_navigation;
+drop policy if exists "website_navigation_insert" on website_navigation;
+drop policy if exists "website_navigation_update" on website_navigation;
+drop policy if exists "website_navigation_delete" on website_navigation;
+
+create policy "website_navigation_select" on website_navigation
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "website_navigation_insert" on website_navigation
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "website_navigation_update" on website_navigation
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "website_navigation_delete" on website_navigation
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Public access policy for navigation (anonymous users viewing website)
+drop policy if exists "website_navigation_select_public" on website_navigation;
+create policy "website_navigation_select_public" on website_navigation
+  for select to anon
+  using (is_visible = true);
+
+-- ============================================================================
+-- MIGRATION: Add page_id to website_blocks (links blocks to pages)
+-- ============================================================================
+alter table website_blocks add column if not exists page_id uuid references website_pages(id) on delete cascade;
+create index if not exists idx_website_blocks_page on website_blocks(page_id);
+
+-- ============================================================================
+-- SEED DEFAULT PAGES FOR NEW TENANTS
+-- ============================================================================
+-- This function creates default pages when a new tenant is created
+-- Called from handle_new_tenant() trigger
+
+create or replace function seed_website_pages(p_tenant_id uuid)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  v_home_page_id uuid;
+  v_products_page_id uuid;
+  v_contact_page_id uuid;
+begin
+  -- Create Home page (system page, is_home = true)
+  insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
+  values (p_tenant_id, 'inicio', 'Inicio', true, true, true, 'default')
+  returning id into v_home_page_id;
+  
+  -- Create Products page (system page)
+  insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
+  values (p_tenant_id, 'productos', 'Productos', true, false, true, 'product-list')
+  returning id into v_products_page_id;
+  
+  -- Create Contact page
+  insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
+  values (p_tenant_id, 'contacto', 'Contacto', true, false, false, 'default')
+  returning id into v_contact_page_id;
+  
+  -- Migrate existing blocks to home page (for existing tenants)
+  update website_blocks
+  set page_id = v_home_page_id
+  where tenant_id = p_tenant_id and page_id is null;
+  
+  -- Create default navigation for header
+  insert into website_navigation (tenant_id, menu_location, label, link_type, link_value, order_index)
+  values 
+    (p_tenant_id, 'header', 'Inicio', 'page', v_home_page_id::text, 0),
+    (p_tenant_id, 'header', 'Productos', 'page', v_products_page_id::text, 1),
+    (p_tenant_id, 'header', 'Contacto', 'page', v_contact_page_id::text, 2);
+  
+  raise notice '✅ Seeded website pages and navigation for tenant %', p_tenant_id;
+end;
+$$;
+
 
 -- Website settings (store configuration)
 create table if not exists website_settings (
@@ -13727,9 +13974,13 @@ end $$;
 
 -- Tenants table: Users can only see their own tenant
 -- Special policy: Allow INSERT for authenticated users (for signup)
+-- Special policy: Allow anonymous SELECT for public store tenant detection (subdomain lookup)
 do $$ begin
   create policy "tenant_select_own" on tenants for select using (
     id = public.user_tenant_id()
+  );
+  create policy "tenant_select_anon" on tenants for select to anon using (
+    is_active = true
   );
   create policy "tenant_insert_authenticated" on tenants for insert with check (auth.uid() IS NOT NULL);
   create policy "tenant_update_own" on tenants for update using (
@@ -15395,12 +15646,28 @@ drop policy if exists "public_product_categories_select" on product_categories;
 drop policy if exists "public_website_banners_select" on website_banners;
 drop policy if exists "public_website_content_select" on website_content;
 drop policy if exists "public_website_settings_select" on website_settings;
+drop policy if exists "public_website_blocks_select" on website_blocks;
+drop policy if exists "public_tenants_select" on tenants;
 drop policy if exists "public_orders_insert" on orders;
 drop policy if exists "public_order_items_insert" on order_items;
 drop policy if exists "public_online_orders_insert" on online_orders;
 drop policy if exists "public_online_order_items_insert" on online_order_items;
 drop policy if exists "public_featured_products_select" on featured_products;
 drop policy if exists "public_product_brands_select" on product_brands;
+
+-- Tenants: Public read access (for subdomain lookup)
+-- Required for public store tenant detection from URL
+create policy "public_tenants_select" on tenants 
+  for select 
+  to anon
+  using (is_active = true);
+
+-- Website blocks: Public read access (for homepage content)
+-- App must filter by tenant_id explicitly
+create policy "public_website_blocks_select" on website_blocks 
+  for select 
+  to anon
+  using (is_visible = true);
 
 -- Products: Public read access (only active, in-stock products)
 -- App must filter by tenant_id explicitly

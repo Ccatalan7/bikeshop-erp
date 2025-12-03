@@ -905,13 +905,25 @@ class WebsiteBlockRegistry {
   static bool _marketplaceLoaded = false;
 
   static Future<void> ensureInitialized({AssetBundle? bundle}) async {
+    debugPrint('[WebsiteBlockRegistry] ensureInitialized called, _marketplaceLoaded=$_marketplaceLoaded');
     if (_marketplaceLoaded) {
+      debugPrint('[WebsiteBlockRegistry] Already initialized, returning');
       return;
     }
 
+    // Set loaded immediately to prevent multiple attempts
+    _marketplaceLoaded = true;
+    debugPrint('[WebsiteBlockRegistry] Starting marketplace load...');
+
     try {
-      final definitions =
-          await BlockMarketplaceLoader.loadDefinitions(bundle: bundle);
+      // Add timeout to prevent hanging
+      final definitions = await BlockMarketplaceLoader.loadDefinitions(bundle: bundle)
+          .timeout(const Duration(seconds: 3), onTimeout: () {
+        debugPrint('[WebsiteBlockRegistry] Marketplace load timed out, using fallback');
+        return <WebsiteBlockDefinition>[];
+      });
+      
+      debugPrint('[WebsiteBlockRegistry] Loaded ${definitions.length} definitions');
       if (definitions.isNotEmpty) {
         _definitions
           ..clear()
@@ -931,7 +943,7 @@ class WebsiteBlockRegistry {
         );
         _definitions.addAll(_fallbackDefinitions);
       }
-      _marketplaceLoaded = true;
+      debugPrint('[WebsiteBlockRegistry] ensureInitialized complete');
     }
   }
 

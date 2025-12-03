@@ -231,6 +231,12 @@ class _PegaDetailViewState extends State<PegaDetailView>
           _buildContentBox(widget.job.diagnosis ?? ''),
           const SizedBox(height: 24),
 
+          // Work performed summary (always show)
+          _buildSectionHeader('Trabajos a Realizar'),
+          const SizedBox(height: 12),
+          _buildContentBox(widget.job.workPerformed ?? ''),
+          const SizedBox(height: 24),
+
           // Technician notes (always show)
           _buildSectionHeader('Notas del Técnico'),
           const SizedBox(height: 12),

@@ -21,6 +21,7 @@ import '../models/website_models.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_definition.dart';
 import '../models/website_block_type.dart';
+import '../models/website_page_models.dart';
 // import '../services/website_service.dart';
 
 /// 🎨 ODOO-STYLE VISUAL EDITOR - PHASE 3
@@ -127,6 +128,11 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   List<WebsiteBlock> _blocks = [];
   String? _selectedBlockId;
 
+  // Page Management (Dec 2025 - Multi-page support)
+  List<WebsitePage> _pages = [];
+  WebsitePage? _selectedPage;
+  bool _isLoadingPages = true;
+
   // Global theme settings
   Color _primaryColor = const Color(0xFF2E7D32);
   Color _accentColor = const Color(0xFFFF6F00);
@@ -163,9 +169,167 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   @override
   void initState() {
     super.initState();
-    _loadFromDatabase();
-    _loadThemeSettings();
+    debugPrint('[OdooEditor] initState called');
+    // Defer loading to after the first frame to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      debugPrint('[OdooEditor] postFrameCallback fired');
+      if (!mounted) return;
+      // Load legacy blocks directly - multi-page support will be added later
+      _loadFromDatabase();
+      _loadThemeSettings();
+    });
     _startAutoSave();
+  }
+
+  /// Load pages and then blocks for the home page (or first page)
+  /// NOTE: Temporarily disabled - using legacy block loading instead
+  Future<void> _loadPagesAndBlocks() async {
+    if (!mounted) return;
+    // For now, just load legacy blocks to avoid freezing
+    _loadFromDatabase();
+  }
+
+  /// Load blocks for a specific page
+  Future<void> _loadBlocksForPage(String pageId) async {
+    if (!mounted) return;
+    
+    try {
+      final websiteService = context.read<WebsiteService>();
+      final inventoryService = context.read<InventoryService>();
+
+      await WebsiteBlockRegistry.ensureInitialized();
+      if (!mounted) return;
+
+      final loadedBlocks = await websiteService.loadBlocksForPage(pageId);
+      if (!mounted) return;
+      
+      await inventoryService.getProducts();
+      if (!mounted) return;
+
+      if (loadedBlocks.isEmpty) {
+        // Initialize with default blocks for new page
+        _initializeDefaultBlocksForPage();
+      } else {
+        _blocks = loadedBlocks.map((blockData) {
+          final typeRaw = (blockData['block_type'] ?? 'hero').toString();
+          final dataRaw = Map<String, dynamic>.from(blockData['block_data'] ?? {});
+          final block = WebsiteBlock(
+            id: blockData['id']?.toString() ?? _uuid.v4(),
+            type: _parseBlockType(typeRaw),
+            data: dataRaw,
+            isVisible: blockData['is_visible'] ?? true,
+          );
+          _ensureVisibilityForBlock(block);
+          return block;
+        }).toList();
+
+        if (_blocks.isNotEmpty) {
+          _selectedBlockId = _blocks.first.id;
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+        _saveToHistory();
+      }
+    } catch (e) {
+      debugPrint('[OdooEditor] Error loading blocks for page: $e');
+      _initializeDefaultBlocksForPage();
+      if (mounted) {
+        setState(() {});
+        _saveToHistory();
+      }
+    }
+  }
+
+  /// Initialize default blocks for a new page
+  void _initializeDefaultBlocksForPage() {
+    // Different defaults based on page template
+    final template = _selectedPage?.template ?? PageTemplate.defaultTemplate;
+    
+    List<WebsiteBlockType> defaultTypes;
+    switch (template) {
+      case PageTemplate.landing:
+        defaultTypes = [
+          WebsiteBlockType.hero,
+          WebsiteBlockType.services,
+          WebsiteBlockType.testimonials,
+          WebsiteBlockType.cta,
+        ];
+        break;
+      case PageTemplate.productList:
+        defaultTypes = [
+          WebsiteBlockType.products,
+        ];
+        break;
+      case PageTemplate.blog:
+        defaultTypes = [
+          WebsiteBlockType.about, // Use about block for content pages
+        ];
+        break;
+      default:
+        defaultTypes = [
+          WebsiteBlockType.hero,
+          WebsiteBlockType.products,
+          WebsiteBlockType.about,
+        ];
+    }
+
+    _blocks = defaultTypes.map((type) {
+      final definition = WebsiteBlockRegistry.definitionFor(type);
+      final block = WebsiteBlock(
+        id: _uuid.v4(),
+        type: type,
+        data: _cloneBlockData(definition.defaultData),
+      );
+      _ensureVisibilityForBlock(block);
+      return block;
+    }).toList();
+
+    if (_blocks.isNotEmpty) {
+      _selectedBlockId = _blocks.first.id;
+    }
+    
+    _hasChanges = true; // Mark as changed so new page gets saved
+  }
+
+  /// Switch to a different page
+  Future<void> _switchToPage(WebsitePage page) async {
+    if (_selectedPage?.id == page.id) return;
+    
+    // If there are unsaved changes, prompt to save
+    if (_hasChanges) {
+      final shouldSave = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Cambios sin guardar'),
+          content: Text('¿Deseas guardar los cambios en "${_selectedPage?.title}" antes de cambiar de página?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Descartar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      );
+      
+      if (shouldSave == true) {
+        await _saveChanges(showNotification: false);
+      }
+    }
+    
+    setState(() {
+      _selectedPage = page;
+      _blocks = [];
+      _selectedBlockId = null;
+      _hasChanges = false;
+    });
+    
+    await _loadBlocksForPage(page.id);
   }
 
   static const List<String> _supportedBreakpoints = [
@@ -290,9 +454,12 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   }
 
   Future<void> _loadThemeSettings() async {
+    debugPrint('[OdooEditor] _loadThemeSettings started');
     try {
       final service = context.read<WebsiteService>();
+      debugPrint('[OdooEditor] Loading settings...');
       await service.loadSettings();
+      debugPrint('[OdooEditor] Settings loaded');
       final primary = service.getSetting('theme_primary_color');
       final accent = service.getSetting('theme_accent_color');
       final background = service.getSetting('theme_background_color');
@@ -356,17 +523,34 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   }
 
   Future<void> _loadFromDatabase() async {
+    debugPrint('[OdooEditor] _loadFromDatabase started');
+    if (!mounted) return;
+    
     try {
+      // Initialize block registry with timeout
+      debugPrint('[OdooEditor] Initializing block registry...');
+      await WebsiteBlockRegistry.ensureInitialized();
+      debugPrint('[OdooEditor] Block registry initialized');
+      if (!mounted) return;
+
+      debugPrint('[OdooEditor] Getting services...');
       final websiteService = context.read<WebsiteService>();
       final inventoryService = context.read<InventoryService>();
+      debugPrint('[OdooEditor] Services obtained');
 
-      await WebsiteBlockRegistry.ensureInitialized();
-
+      // Load data with timeout to prevent hanging
+      debugPrint('[OdooEditor] Loading data...');
       await Future.wait([
-        websiteService.loadBlocks(),
-        websiteService.loadFeaturedProducts(),
-        inventoryService.getProducts(),
-      ]);
+        websiteService.loadBlocks().then((_) => debugPrint('[OdooEditor] loadBlocks done')),
+        websiteService.loadFeaturedProducts().then((_) => debugPrint('[OdooEditor] loadFeaturedProducts done')),
+        inventoryService.getProducts().then((_) => debugPrint('[OdooEditor] getProducts done')),
+      ]).timeout(const Duration(seconds: 10), onTimeout: () {
+        debugPrint('[OdooEditor] Data loading timed out');
+        return [null, null, null];
+      });
+      debugPrint('[OdooEditor] All data loaded');
+      
+      if (!mounted) return;
 
       final loadedBlocks = List<Map<String, dynamic>>.from(
         websiteService.blocks,
@@ -400,8 +584,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       }
     } catch (e) {
       debugPrint('[OdooEditor] Error loading blocks: $e');
-      _initializeDefaultBlocks();
       if (mounted) {
+        _initializeDefaultBlocks();
         setState(() {});
         _saveToHistory();
       }
@@ -544,8 +728,15 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         return;
       }
 
-      // Save to database
-      await websiteService.saveBlocks(blocksData);
+      // Save to database - use page-specific save if a page is selected
+      if (_selectedPage != null) {
+        await websiteService.saveBlocksForPage(_selectedPage!.id, blocksData);
+        debugPrint('[OdooEditor] Saved ${blocksData.length} blocks to page: ${_selectedPage!.title}');
+      } else {
+        // Fallback to legacy global save
+        await websiteService.saveBlocks(blocksData);
+        debugPrint('[OdooEditor] Saved ${blocksData.length} blocks (legacy mode)');
+      }
 
       if (mounted) {
         setState(() {
@@ -555,13 +746,14 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       }
 
       if (mounted && showNotification) {
+        final pageName = _selectedPage?.title ?? 'Sitio';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('✅ Cambios guardados exitosamente'),
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Text('✅ "$pageName" guardado exitosamente'),
               ],
             ),
             backgroundColor: Colors.green,
@@ -977,6 +1169,11 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
               fontWeight: FontWeight.w600,
             ),
           ),
+          const SizedBox(width: 16),
+          
+          // Multi-page selector temporarily disabled
+          // TODO: Re-enable when website_pages table is deployed
+          
           const SizedBox(width: 12),
           if (_hasChanges)
             Container(
@@ -1108,7 +1305,13 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                     }
 
                     if (mounted) {
-                      context.go('/tienda');
+                      // Navigate to the selected page's URL
+                      if (_selectedPage != null) {
+                        final slug = _selectedPage!.isHome ? '' : _selectedPage!.slug;
+                        context.go('/tienda${slug.isEmpty ? '' : '/$slug'}');
+                      } else {
+                        context.go('/tienda');
+                      }
                     }
                   } catch (error) {
                     if (!mounted) return;
@@ -1179,117 +1382,120 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           bottom: BorderSide(color: Colors.grey.shade300, width: 1),
         ),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(Icons.touch_app, size: 20, color: theme.colorScheme.primary),
-          const SizedBox(width: 12),
-          Text(
-            'Haz clic en los bloques para editarlos',
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
-          const Spacer(),
-
-          // Device selector
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(
-                value: 'mobile',
-                icon: Icon(Icons.smartphone, size: 16),
-                label: Text('Móvil'),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(Icons.touch_app, size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 12),
+            Text(
+              'Haz clic en los bloques para editarlos',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
               ),
-              ButtonSegment(
-                value: 'tablet',
-                icon: Icon(Icons.tablet, size: 16),
-                label: Text('Tablet'),
-              ),
-              ButtonSegment(
-                value: 'desktop',
-                icon: Icon(Icons.computer, size: 16),
-                label: Text('Desktop'),
-              ),
-            ],
-            selected: {_previewMode},
-            onSelectionChanged: (Set<String> newSelection) {
-              setState(() => _previewMode = newSelection.first);
-            },
-            style: ButtonStyle(
-              backgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return theme.colorScheme.primary;
-                }
-                return Colors.grey.shade100;
-              }),
-              foregroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return Colors.white;
-                }
-                return Colors.black87;
-              }),
             ),
-          ),
+            const SizedBox(width: 24),
 
-          const SizedBox(width: 16),
-
-          // Zoom controls
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.zoom_out, size: 18, color: Colors.black87),
-                  onPressed: () => setState(() =>
-                      _previewZoom = (_previewZoom - 0.1).clamp(0.5, 2.0)),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            // Device selector
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'mobile',
+                  icon: Icon(Icons.smartphone, size: 16),
+                  label: Text('Móvil'),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '${(_previewZoom * 100).toInt()}%',
-                  style: const TextStyle(
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
+                ButtonSegment(
+                  value: 'tablet',
+                  icon: Icon(Icons.tablet, size: 16),
+                  label: Text('Tablet'),
                 ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(Icons.zoom_in, size: 18, color: Colors.black87),
-                  onPressed: () => setState(() =>
-                      _previewZoom = (_previewZoom + 0.1).clamp(0.5, 2.0)),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                ButtonSegment(
+                  value: 'desktop',
+                  icon: Icon(Icons.computer, size: 16),
+                  label: Text('Desktop'),
                 ),
               ],
+              selected: {_previewMode},
+              onSelectionChanged: (Set<String> newSelection) {
+                setState(() => _previewMode = newSelection.first);
+              },
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return theme.colorScheme.primary;
+                  }
+                  return Colors.grey.shade100;
+                }),
+                foregroundColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return Colors.white;
+                  }
+                  return Colors.black87;
+                }),
+              ),
             ),
-          ),
 
-          const SizedBox(width: 12),
+            const SizedBox(width: 16),
 
-          Tooltip(
-            message: 'Opciones de vista',
-            child: IconButton(
-              icon: Icon(Icons.tune, color: Colors.black87, size: 20),
-              onPressed: _openPreviewOptions,
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.grey.shade100,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: Colors.grey.shade300),
+            // Zoom controls
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.zoom_out, size: 18, color: Colors.black87),
+                    onPressed: () => setState(() =>
+                        _previewZoom = (_previewZoom - 0.1).clamp(0.5, 2.0)),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${(_previewZoom * 100).toInt()}%',
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: Icon(Icons.zoom_in, size: 18, color: Colors.black87),
+                    onPressed: () => setState(() =>
+                        _previewZoom = (_previewZoom + 0.1).clamp(0.5, 2.0)),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            Tooltip(
+              message: 'Opciones de vista',
+              child: IconButton(
+                icon: Icon(Icons.tune, color: Colors.black87, size: 20),
+                onPressed: _openPreviewOptions,
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.grey.shade100,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1460,71 +1666,84 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     final previewLabel =
         '${previewWidth.round()} px · ${_breakpointLabel(_previewMode)}';
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Center(
-            child: Transform.scale(
-              scale: _previewZoom,
-              child: Container(
-                width: previewWidth,
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: _backgroundColor,
-                  borderRadius: borderRadius,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      blurRadius: 24,
-                      spreadRadius: 2,
-                      offset: const Offset(0, 12),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Calculate safe height for bottom label (avoid overflow)
+        const bottomLabelHeight = 48.0; // Label + padding
+        final availableHeight = constraints.maxHeight - bottomLabelHeight;
+        
+        return Column(
+          children: [
+            // Preview area takes available space minus bottom label
+            SizedBox(
+              height: availableHeight > 100 ? availableHeight : constraints.maxHeight * 0.85,
+              child: Center(
+                child: Transform.scale(
+                  scale: _previewZoom,
+                  child: Container(
+                    width: previewWidth,
+                    margin: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _backgroundColor,
+                      borderRadius: borderRadius,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 24,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: Colors.black.withValues(alpha: 0.05),
+                      ),
                     ),
-                  ],
-                  border: Border.all(
-                    color: Colors.black.withValues(alpha: 0.05),
+                    child: ClipRRect(
+                      borderRadius: borderRadius,
+                      child: Stack(
+                        children: [
+                          _buildClickablePreview(context),
+                          if (_showSafeAreaGuides)
+                            _buildSafeAreaOverlay(_previewMode),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                child: ClipRRect(
-                  borderRadius: borderRadius,
-                  child: Stack(
-                    children: [
-                      _buildClickablePreview(context),
-                      if (_showSafeAreaGuides)
-                        _buildSafeAreaOverlay(_previewMode),
+              ),
+            ),
+            // Bottom label with fixed height
+            SizedBox(
+              height: bottomLabelHeight,
+              child: Center(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: theme.colorScheme.outlineVariant),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
                     ],
                   ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      previewLabel,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              previewLabel,
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-      ],
+          ],
+        );
+      },
     );
   }
 

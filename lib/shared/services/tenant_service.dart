@@ -9,26 +9,55 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// - Tenant-aware data operations
 class TenantService extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
+  
+  // Cache for tenant_id to avoid repeated database queries
+  String? _cachedTenantId;
+  String? _cachedUserId;
 
   /// Get the current user's tenant_id from user_profiles table
   /// This is the single source of truth for tenant_id
   Future<String?> getTenantId() async {
+    debugPrint('[TenantService] getTenantId called');
     final user = _supabase.auth.currentUser;
-    if (user == null) return null;
+    if (user == null) {
+      debugPrint('[TenantService] No current user');
+      return null;
+    }
+    
+    // Return cached value if same user
+    if (_cachedTenantId != null && _cachedUserId == user.id) {
+      debugPrint('[TenantService] Returning cached tenant_id: $_cachedTenantId');
+      return _cachedTenantId;
+    }
     
     try {
+      debugPrint('[TenantService] Querying user_profiles...');
       final response = await _supabase
           .from('user_profiles')
           .select('tenant_id')
           .eq('user_id', user.id)
           .maybeSingle();
       
-      if (response == null) return null;
-      return response['tenant_id'] as String?;
+      if (response == null) {
+        debugPrint('[TenantService] No profile found');
+        return null;
+      }
+      
+      // Cache the result
+      _cachedTenantId = response['tenant_id'] as String?;
+      _cachedUserId = user.id;
+      debugPrint('[TenantService] Got tenant_id: $_cachedTenantId');
+      return _cachedTenantId;
     } catch (e) {
       debugPrint('❌ Error getting tenant_id: $e');
       return null;
     }
+  }
+  
+  /// Clear the cached tenant_id (call on logout)
+  void clearCache() {
+    _cachedTenantId = null;
+    _cachedUserId = null;
   }
 
   /// Get the current user's tenant_id (synchronous - from cache)

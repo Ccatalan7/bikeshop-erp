@@ -2003,8 +2003,9 @@ class WebsiteBlockRenderer {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Image takes fixed aspect ratio
             AspectRatio(
-              aspectRatio: 1,
+              aspectRatio: 1.2, // Slightly wider to leave room for content
               child: Container(
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surfaceContainerHighest,
@@ -2040,65 +2041,60 @@ class WebsiteBlockRenderer {
                       ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontFamily: bodyFont,
+            // Content section fills remaining space
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      product.name,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontFamily: bodyFont,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    ChileanUtils.formatCurrency(product.price),
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontFamily: bodyFont,
-                      color: primaryColor,
-                      fontWeight: FontWeight.bold,
+                    const SizedBox(height: 4),
+                    Text(
+                      ChileanUtils.formatCurrency(product.price),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontFamily: bodyFont,
+                        color: primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  Text(
-                    product.stockQuantity > 0
-                        ? 'Stock disponible'
-                        : 'Sin stock',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontFamily: bodyFont,
-                      color: product.stockQuantity > 0
-                          ? Colors.green
-                          : theme.colorScheme.error,
+                    const Spacer(),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: previewMode
+                            ? () {}
+                            : () {
+                                if (onNavigate != null) {
+                                  onNavigate('/tienda/producto/${product.id}');
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentColor,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 36),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ),
+                        child: const Text('VER', style: TextStyle(fontSize: 12)),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed: previewMode
-                        ? () {}
-                        : () {
-                            if (onNavigate != null) {
-                              onNavigate('/tienda/producto/${product.id}');
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentColor,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 42),
-                    ),
-                    child: const Text('VER DETALLE'),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  static Widget _buildFeatureCard(
+  }  static Widget _buildFeatureCard(
     BuildContext context, {
     required IconData icon,
     required String title,
