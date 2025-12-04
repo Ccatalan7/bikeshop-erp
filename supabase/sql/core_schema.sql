@@ -13095,6 +13095,236 @@ exception
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in website_settings';
 end $$;
 
+-- ============================================================================
+-- WEBSITE BACKUPS - Snapshot/restore system for website blocks (Dec 2025)
+-- ============================================================================
+-- Allows saving complete snapshots of website content that can be restored later
+-- Useful for: before major redesigns, seasonal versions, recovering from mistakes
+
+create table if not exists website_backups (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  
+  -- Backup metadata
+  name text not null, -- User-friendly name: "Before holiday redesign", "V1 Launch"
+  description text, -- Optional notes about this backup
+  
+  -- Snapshot data (complete copy of website state)
+  blocks_snapshot jsonb not null default '[]'::jsonb, -- Array of all website_blocks
+  settings_snapshot jsonb not null default '{}'::jsonb, -- All website_settings as key-value pairs
+  pages_snapshot jsonb default '[]'::jsonb, -- Array of website_pages (for multi-page support)
+  
+  -- Metadata
+  block_count integer default 0, -- How many blocks in this backup
+  is_auto_backup boolean default false, -- True if system-generated (e.g., before restore)
+  
+  -- Timestamps
+  created_at timestamp with time zone not null default now(),
+  created_by uuid references auth.users(id) on delete set null -- Who created the backup
+);
+
+create index if not exists idx_website_backups_tenant on website_backups(tenant_id);
+create index if not exists idx_website_backups_created on website_backups(created_at desc);
+create index if not exists idx_website_backups_auto on website_backups(is_auto_backup);
+
+-- RLS for website_backups
+alter table website_backups enable row level security;
+
+drop policy if exists "website_backups_select" on website_backups;
+drop policy if exists "website_backups_insert" on website_backups;
+drop policy if exists "website_backups_update" on website_backups;
+drop policy if exists "website_backups_delete" on website_backups;
+
+create policy "website_backups_select" on website_backups
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "website_backups_insert" on website_backups
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "website_backups_update" on website_backups
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "website_backups_delete" on website_backups
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Function to create a website backup
+create or replace function public.create_website_backup(
+  p_name text,
+  p_description text default null,
+  p_is_auto boolean default false
+)
+returns uuid
+language plpgsql
+security definer
+as $$
+declare
+  v_tenant_id uuid;
+  v_backup_id uuid;
+  v_blocks jsonb;
+  v_settings jsonb;
+  v_pages jsonb;
+  v_block_count integer;
+begin
+  -- Get current user's tenant
+  v_tenant_id := public.user_tenant_id();
+  if v_tenant_id is null then
+    raise exception 'No tenant found for current user';
+  end if;
+  
+  -- Snapshot all blocks
+  select coalesce(jsonb_agg(
+    jsonb_build_object(
+      'id', id,
+      'block_type', block_type,
+      'block_data', block_data,
+      'is_visible', is_visible,
+      'order_index', order_index,
+      'page_id', page_id
+    ) order by order_index
+  ), '[]'::jsonb)
+  into v_blocks
+  from website_blocks
+  where tenant_id = v_tenant_id;
+  
+  -- Count blocks
+  select count(*) into v_block_count from website_blocks where tenant_id = v_tenant_id;
+  
+  -- Snapshot all settings as key-value object
+  select coalesce(jsonb_object_agg(key, value), '{}'::jsonb)
+  into v_settings
+  from website_settings
+  where tenant_id = v_tenant_id;
+  
+  -- Snapshot all pages
+  select coalesce(jsonb_agg(
+    jsonb_build_object(
+      'id', id,
+      'slug', slug,
+      'title', title,
+      'meta_title', meta_title,
+      'meta_description', meta_description,
+      'is_published', is_published,
+      'is_home', is_home,
+      'template', template
+    ) order by created_at
+  ), '[]'::jsonb)
+  into v_pages
+  from website_pages
+  where tenant_id = v_tenant_id;
+  
+  -- Insert backup
+  insert into website_backups (
+    tenant_id,
+    name,
+    description,
+    blocks_snapshot,
+    settings_snapshot,
+    pages_snapshot,
+    block_count,
+    is_auto_backup,
+    created_by
+  ) values (
+    v_tenant_id,
+    p_name,
+    p_description,
+    v_blocks,
+    v_settings,
+    v_pages,
+    v_block_count,
+    p_is_auto,
+    auth.uid()
+  )
+  returning id into v_backup_id;
+  
+  return v_backup_id;
+end;
+$$;
+
+-- Function to restore a website backup
+create or replace function public.restore_website_backup(
+  p_backup_id uuid,
+  p_create_safety_backup boolean default true
+)
+returns boolean
+language plpgsql
+security definer
+as $$
+declare
+  v_tenant_id uuid;
+  v_backup record;
+  v_block record;
+begin
+  -- Get current user's tenant
+  v_tenant_id := public.user_tenant_id();
+  if v_tenant_id is null then
+    raise exception 'No tenant found for current user';
+  end if;
+  
+  -- Get the backup
+  select * into v_backup
+  from website_backups
+  where id = p_backup_id and tenant_id = v_tenant_id;
+  
+  if not found then
+    raise exception 'Backup not found or access denied';
+  end if;
+  
+  -- Create safety backup before restoring (so user can undo)
+  if p_create_safety_backup then
+    perform public.create_website_backup(
+      'Auto-backup before restore: ' || v_backup.name,
+      'Automatic backup created before restoring to: ' || v_backup.name,
+      true -- is_auto_backup
+    );
+  end if;
+  
+  -- Delete current blocks
+  delete from website_blocks where tenant_id = v_tenant_id;
+  
+  -- Restore blocks from snapshot
+  for v_block in select * from jsonb_array_elements(v_backup.blocks_snapshot)
+  loop
+    insert into website_blocks (
+      id,
+      tenant_id,
+      block_type,
+      block_data,
+      is_visible,
+      order_index,
+      page_id
+    ) values (
+      coalesce((v_block.value->>'id')::uuid, gen_random_uuid()),
+      v_tenant_id,
+      v_block.value->>'block_type',
+      (v_block.value->'block_data')::jsonb,
+      coalesce((v_block.value->>'is_visible')::boolean, true),
+      coalesce((v_block.value->>'order_index')::integer, 0),
+      (v_block.value->>'page_id')::uuid
+    );
+  end loop;
+  
+  -- Restore settings (upsert each key-value pair)
+  -- First, get all keys from the snapshot
+  insert into website_settings (tenant_id, key, value)
+  select 
+    v_tenant_id,
+    key,
+    value
+  from jsonb_each_text(v_backup.settings_snapshot)
+  on conflict (tenant_id, key) do update
+  set value = excluded.value, updated_at = now();
+  
+  return true;
+end;
+$$;
+
+grant execute on function public.create_website_backup(text, text, boolean) to authenticated;
+grant execute on function public.restore_website_backup(uuid, boolean) to authenticated;
+
 -- Online orders (customer orders from website, separate from POS orders)
 create table if not exists online_orders (
   id uuid primary key default gen_random_uuid(),
@@ -15669,12 +15899,13 @@ create policy "public_website_blocks_select" on website_blocks
   to anon
   using (is_visible = true);
 
--- Products: Public read access (only active, in-stock products)
+-- Products: Public read access (only active products)
 -- App must filter by tenant_id explicitly
+-- Note: We allow products with 0 stock to be displayed (can show as "out of stock")
 create policy "public_products_select" on products 
   for select 
   to anon
-  using (is_active = true and inventory_qty > 0);
+  using (is_active = true);
 
 -- Product Categories: Public read access (hierarchical categories)
 -- App must filter by tenant_id explicitly

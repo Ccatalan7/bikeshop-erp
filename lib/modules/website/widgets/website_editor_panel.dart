@@ -1,6 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../shared/constants/storage_constants.dart';
 import '../providers/website_edit_mode_provider.dart';
+import '../services/website_backup_service.dart';
 import '../services/website_service.dart';
 
 /// Professional side panel editor for website blocks
@@ -68,7 +74,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel> with SingleTick
 
   Widget _buildHeader(WebsiteEditModeProvider editProvider) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF2D2D2D),
         border: Border(
@@ -80,7 +86,8 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel> with SingleTick
           // Undo/Redo buttons
           _buildIconButton(Icons.undo, 'Deshacer', null),
           _buildIconButton(Icons.redo, 'Rehacer', null),
-          const SizedBox(width: 8),
+          // Backup button
+          _buildIconButton(Icons.backup, 'Copias de seguridad', () => _showBackupsDialog(context)),
           // Preview button
           _buildIconButton(Icons.phone_android, 'Vista móvil', () {}),
           const Spacer(),
@@ -89,11 +96,13 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel> with SingleTick
             onPressed: widget.onDiscard,
             style: TextButton.styleFrom(
               foregroundColor: Colors.white70,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text('Descartar'),
+            child: const Text('Descartar', style: TextStyle(fontSize: 13)),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           // Save button
           ElevatedButton(
             onPressed: editProvider.hasUnsavedChanges ? widget.onSave : null,
@@ -101,12 +110,26 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel> with SingleTick
               backgroundColor: const Color(0xFF00A09D),
               foregroundColor: Colors.white,
               disabledBackgroundColor: const Color(0xFF00A09D).withValues(alpha: 0.5),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
             ),
-            child: const Text('Guardar'),
+            child: const Text('Guardar', style: TextStyle(fontSize: 13)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showBackupsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => _BackupsDialog(
+        onRestoreComplete: () {
+          // Signal that restore happened - caller should reload
+          widget.onSave?.call(); // Re-use save callback to trigger reload
+        },
       ),
     );
   }
@@ -216,12 +239,18 @@ class _AddBlocksTab extends StatelessWidget {
           _buildSection('Estructura', [
             _BlockOption('hero', 'Hero', Icons.view_carousel_rounded),
             _BlockOption('carousel', 'Carrusel', Icons.view_array_rounded),
+            _BlockOption('categoryGrid', 'Categorías', Icons.grid_view_rounded),
           ]),
           _buildSection('Contenido', [
             _BlockOption('products', 'Productos', Icons.shopping_bag_rounded),
             _BlockOption('about', 'Nosotros', Icons.info_rounded),
             _BlockOption('services', 'Servicios', Icons.build_rounded),
             _BlockOption('features', 'Beneficios', Icons.star_rounded),
+          ]),
+          _buildSection('Media', [
+            _BlockOption('gallery', 'Galería', Icons.photo_library_rounded),
+            _BlockOption('videoBanner', 'Video Banner', Icons.play_circle_outline_rounded),
+            _BlockOption('partnersBanner', 'Partners', Icons.handshake_rounded),
           ]),
           _buildSection('Social', [
             _BlockOption('testimonials', 'Testimonios', Icons.format_quote_rounded),
@@ -233,9 +262,6 @@ class _AddBlocksTab extends StatelessWidget {
             _BlockOption('pricing', 'Precios', Icons.payments_rounded),
             _BlockOption('contact', 'Contacto', Icons.contact_mail_rounded),
             _BlockOption('faq', 'FAQ', Icons.help_outline_rounded),
-          ]),
-          _buildSection('Media', [
-            _BlockOption('gallery', 'Galería', Icons.photo_library_rounded),
           ]),
         ],
       ),
@@ -363,6 +389,7 @@ class _BlockOption {
 }
 
 /// Tab for editing selected block - shows controls based on block type
+/// Also handles special elements: 'header' and 'footer'
 class _EditBlockTab extends StatelessWidget {
   final WebsiteEditModeProvider editProvider;
 
@@ -374,6 +401,14 @@ class _EditBlockTab extends StatelessWidget {
     
     if (selectedId == null) {
       return _buildNoSelection();
+    }
+
+    // Handle special elements (header/footer) - these are not blocks
+    if (selectedId == 'header') {
+      return _HeaderBlockControls(provider: editProvider);
+    }
+    if (selectedId == 'footer') {
+      return _FooterBlockControls(provider: editProvider);
     }
 
     final block = editProvider.getBlock(selectedId);
@@ -525,6 +560,9 @@ class _EditBlockTab extends StatelessWidget {
       'contact' => Icons.contact_mail_rounded,
       'cta' => Icons.touch_app_rounded,
       'gallery' => Icons.photo_library_rounded,
+      'categoryGrid' => Icons.grid_view_rounded,
+      'videoBanner' => Icons.play_circle_outline_rounded,
+      'partnersBanner' => Icons.handshake_rounded,
       _ => Icons.widgets_rounded,
     };
   }
@@ -534,6 +572,8 @@ class _EditBlockTab extends StatelessWidget {
     switch (blockType) {
       case 'hero':
         return _HeroBlockControls(data: data, blockId: blockId, provider: editProvider);
+      case 'carousel':
+        return _CarouselBlockControls(data: data, blockId: blockId, provider: editProvider);
       case 'products':
         return _ProductsBlockControls(data: data, blockId: blockId, provider: editProvider);
       case 'about':
@@ -542,6 +582,12 @@ class _EditBlockTab extends StatelessWidget {
         return _CtaBlockControls(data: data, blockId: blockId, provider: editProvider);
       case 'features':
         return _FeaturesBlockControls(data: data, blockId: blockId, provider: editProvider);
+      case 'categoryGrid':
+        return _CategoryGridBlockControls(data: data, blockId: blockId, provider: editProvider);
+      case 'videoBanner':
+        return _VideoBannerBlockControls(data: data, blockId: blockId, provider: editProvider);
+      case 'partnersBanner':
+        return _PartnersBannerBlockControls(data: data, blockId: blockId, provider: editProvider);
       default:
         return _GenericBlockControls(data: data, blockId: blockId, provider: editProvider);
     }
@@ -635,8 +681,317 @@ class _HeroBlockControls extends StatelessWidget {
   }
 }
 
-/// Products block controls
-class _ProductsBlockControls extends StatelessWidget {
+/// Carousel block controls with slides management
+class _CarouselBlockControls extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final String blockId;
+  final WebsiteEditModeProvider provider;
+
+  const _CarouselBlockControls({
+    required this.data,
+    required this.blockId,
+    required this.provider,
+  });
+
+  @override
+  State<_CarouselBlockControls> createState() => _CarouselBlockControlsState();
+}
+
+class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
+  int _selectedSlideIndex = 0;
+
+  List<Map<String, dynamic>> get _slides {
+    final rawSlides = widget.data['slides'];
+    if (rawSlides is List) {
+      return rawSlides.map((s) => Map<String, dynamic>.from(s as Map)).toList();
+    }
+    return [];
+  }
+
+  void _updateSlides(List<Map<String, dynamic>> newSlides) {
+    widget.provider.updateBlockData(widget.blockId, 'slides', newSlides);
+  }
+
+  void _updateSlide(int index, String key, dynamic value) {
+    final slides = List<Map<String, dynamic>>.from(_slides);
+    if (index >= 0 && index < slides.length) {
+      slides[index] = {...slides[index], key: value};
+      _updateSlides(slides);
+    }
+  }
+
+  void _addSlide() {
+    final slides = List<Map<String, dynamic>>.from(_slides);
+    slides.add({
+      'title': 'Nuevo Slide',
+      'subtitle': 'Descripción del slide',
+      'imageUrl': '',
+      'ctaText': 'Ver más',
+      'ctaLink': '/tienda/productos',
+      'showOverlay': true,
+      'overlayOpacity': 0.55,
+    });
+    _updateSlides(slides);
+    setState(() => _selectedSlideIndex = slides.length - 1);
+  }
+
+  void _removeSlide(int index) {
+    final slides = List<Map<String, dynamic>>.from(_slides);
+    if (slides.length > 1 && index >= 0 && index < slides.length) {
+      slides.removeAt(index);
+      _updateSlides(slides);
+      setState(() {
+        if (_selectedSlideIndex >= slides.length) {
+          _selectedSlideIndex = slides.length - 1;
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final slides = _slides;
+    final autoPlay = widget.data['autoPlay'] ?? true;
+    final intervalSeconds = (widget.data['intervalSeconds'] as num?)?.toInt() ?? 5;
+    final showIndicators = widget.data['showIndicators'] ?? true;
+    final showArrows = widget.data['showArrows'] ?? true;
+    final animation = widget.data['animation']?.toString() ?? 'slide';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Carousel Settings Section
+        _SectionHeader('Configuración'),
+        const SizedBox(height: 12),
+        _EditorToggle(
+          label: 'Reproducción automática',
+          value: autoPlay,
+          onChanged: (v) => widget.provider.updateBlockData(widget.blockId, 'autoPlay', v),
+        ),
+        const SizedBox(height: 12),
+        if (autoPlay) ...[
+          _EditorSlider(
+            label: 'Intervalo (segundos)',
+            value: intervalSeconds.toDouble(),
+            min: 2,
+            max: 15,
+            divisions: 13,
+            onChanged: (v) => widget.provider.updateBlockData(widget.blockId, 'intervalSeconds', v.toInt()),
+          ),
+          const SizedBox(height: 12),
+        ],
+        _EditorDropdown(
+          label: 'Animación',
+          value: animation,
+          options: const [
+            ('slide', 'Deslizar'),
+            ('fade', 'Desvanecer'),
+            ('zoom', 'Zoom'),
+          ],
+          onChanged: (v) => widget.provider.updateBlockData(widget.blockId, 'animation', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorToggle(
+          label: 'Mostrar indicadores',
+          value: showIndicators,
+          onChanged: (v) => widget.provider.updateBlockData(widget.blockId, 'showIndicators', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorToggle(
+          label: 'Mostrar flechas',
+          value: showArrows,
+          onChanged: (v) => widget.provider.updateBlockData(widget.blockId, 'showArrows', v),
+        ),
+        
+        const SizedBox(height: 24),
+        // Slides Section
+        Row(
+          children: [
+            const Expanded(child: _SectionHeader('Slides')),
+            InkWell(
+              onTap: _addSlide,
+              borderRadius: BorderRadius.circular(4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00A09D).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, size: 14, color: Color(0xFF00A09D)),
+                    SizedBox(width: 4),
+                    Text('Agregar', style: TextStyle(color: Color(0xFF00A09D), fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        
+        // Slide tabs
+        if (slides.isNotEmpty) ...[
+          SizedBox(
+            height: 40,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: slides.length,
+              itemBuilder: (context, index) {
+                final isSelected = index == _selectedSlideIndex;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedSlideIndex = index),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFF00A09D) : Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Slide ${index + 1}',
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.white70,
+                            fontSize: 13,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                        if (slides.length > 1) ...[
+                          const SizedBox(width: 6),
+                          InkWell(
+                            onTap: () => _removeSlide(index),
+                            child: Icon(
+                              Icons.close,
+                              size: 14,
+                              color: isSelected ? Colors.white70 : Colors.white38,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Selected slide editor - key forces rebuild when switching slides
+          if (_selectedSlideIndex < slides.length)
+            _SlideEditor(
+              key: ValueKey('slide_$_selectedSlideIndex'),
+              slide: slides[_selectedSlideIndex],
+              onUpdate: (key, value) => _updateSlide(_selectedSlideIndex, key, value),
+            ),
+        ] else
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Icon(Icons.image_outlined, size: 40, color: Colors.white.withValues(alpha: 0.3)),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No hay slides',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: _addSlide,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Agregar slide'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Individual slide editor
+class _SlideEditor extends StatelessWidget {
+  final Map<String, dynamic> slide;
+  final void Function(String key, dynamic value) onUpdate;
+
+  const _SlideEditor({
+    super.key,
+    required this.slide,
+    required this.onUpdate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final showOverlay = slide['showOverlay'] ?? true;
+    final overlayOpacity = (slide['overlayOpacity'] as num?)?.toDouble() ?? 0.55;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _EditorTextField(
+          label: 'Título',
+          value: slide['title']?.toString() ?? '',
+          onChanged: (v) => onUpdate('title', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Subtítulo',
+          value: slide['subtitle']?.toString() ?? '',
+          onChanged: (v) => onUpdate('subtitle', v),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 16),
+        _SectionHeader('Imagen de fondo'),
+        const SizedBox(height: 8),
+        _ImagePicker(
+          currentUrl: slide['imageUrl']?.toString(),
+          onChanged: (url) => onUpdate('imageUrl', url),
+        ),
+        const SizedBox(height: 16),
+        _EditorToggle(
+          label: 'Mostrar overlay oscuro',
+          value: showOverlay,
+          onChanged: (v) => onUpdate('showOverlay', v),
+        ),
+        if (showOverlay) ...[
+          const SizedBox(height: 12),
+          _EditorSlider(
+            label: 'Opacidad del overlay',
+            value: overlayOpacity,
+            min: 0.1,
+            max: 0.9,
+            divisions: 8,
+            onChanged: (v) => onUpdate('overlayOpacity', v),
+          ),
+        ],
+        const SizedBox(height: 16),
+        _SectionHeader('Botón'),
+        const SizedBox(height: 8),
+        _EditorTextField(
+          label: 'Texto del botón',
+          value: slide['ctaText']?.toString() ?? '',
+          onChanged: (v) => onUpdate('ctaText', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Enlace',
+          value: slide['ctaLink']?.toString() ?? '',
+          onChanged: (v) => onUpdate('ctaLink', v),
+          hint: '/tienda/productos',
+        ),
+      ],
+    );
+  }
+}
+
+/// Products block controls - Enhanced with product selection, layout, and display options
+class _ProductsBlockControls extends StatefulWidget {
   final Map<String, dynamic> data;
   final String blockId;
   final WebsiteEditModeProvider provider;
@@ -648,37 +1003,614 @@ class _ProductsBlockControls extends StatelessWidget {
   });
 
   @override
+  State<_ProductsBlockControls> createState() => _ProductsBlockControlsState();
+}
+
+class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
+  List<Map<String, dynamic>> _availableProducts = [];
+  List<Map<String, dynamic>> _availableCategories = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final supabase = Supabase.instance.client;
+      
+      // Load products
+      final productsResponse = await supabase
+          .from('products')
+          .select('id, name, sku, price, image_url, category_id, is_active, is_published')
+          .eq('is_active', true)
+          .order('name');
+      
+      // Load categories
+      final categoriesResponse = await supabase
+          .from('product_categories')
+          .select('id, name')
+          .order('name');
+      
+      if (mounted) {
+        setState(() {
+          _availableProducts = List<Map<String, dynamic>>.from(productsResponse);
+          _availableCategories = List<Map<String, dynamic>>.from(categoriesResponse);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading products: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _updateField(String field, dynamic value) {
+    widget.provider.updateBlockData(widget.blockId, field, value);
+  }
+
+  List<String> get _selectedProductIds {
+    final raw = widget.data['selectedProducts'];
+    if (raw is List) return raw.cast<String>();
+    return [];
+  }
+
+  String get _productSource => widget.data['productSource']?.toString() ?? 'featured';
+  String? get _selectedCategoryId => widget.data['categoryId']?.toString();
+  int get _itemsPerRow => (widget.data['itemsPerRow'] as num?)?.toInt() ?? 3;
+  int get _maxProducts => (widget.data['maxProducts'] as num?)?.toInt() ?? 8;
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _EditorTextField(
-          label: 'Título',
-          value: data['title']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'title', v),
+          label: 'Título de sección',
+          value: widget.data['title']?.toString() ?? '',
+          onChanged: (v) => _updateField('title', v),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         _EditorTextField(
           label: 'Subtítulo',
-          value: data['subtitle']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'subtitle', v),
+          value: widget.data['subtitle']?.toString() ?? '',
+          onChanged: (v) => _updateField('subtitle', v),
         ),
+        
+        const SizedBox(height: 20),
+        _SectionHeader('FUENTE DE PRODUCTOS'),
+        const SizedBox(height: 12),
+        
+        // Product source selector
+        _buildSourceSelector(),
+        
+        const SizedBox(height: 16),
+        
+        // Conditional content based on source
+        if (_productSource == 'category') _buildCategorySelector(),
+        if (_productSource == 'manual') _buildProductSelector(),
+        
+        const SizedBox(height: 20),
+        _SectionHeader('DISEÑO'),
+        const SizedBox(height: 12),
+        
+        // Items per row
+        Text('Productos por fila', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Row(
+          children: [2, 3, 4].map((count) {
+            final isSelected = _itemsPerRow == count;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () => _updateField('itemsPerRow', count),
+                child: Container(
+                  width: 44,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : Colors.white70,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        
         const SizedBox(height: 16),
         _EditorSlider(
           label: 'Máximo de productos',
-          value: (data['maxProducts'] as num?)?.toDouble() ?? 8,
+          value: _maxProducts.toDouble(),
           min: 4,
           max: 16,
-          divisions: 3,
-          onChanged: (v) => provider.updateBlockData(blockId, 'maxProducts', v.toInt()),
+          divisions: 6,
+          onChanged: (v) => _updateField('maxProducts', v.toInt()),
         ),
-        const SizedBox(height: 16),
+        
+        const SizedBox(height: 20),
+        _SectionHeader('MOSTRAR'),
+        const SizedBox(height: 12),
+        
         _EditorToggle(
           label: 'Mostrar precios',
-          value: data['showPrice'] ?? true,
-          onChanged: (v) => provider.updateBlockData(blockId, 'showPrice', v),
+          value: widget.data['showPrice'] ?? true,
+          onChanged: (v) => _updateField('showPrice', v),
+        ),
+        const SizedBox(height: 8),
+        _EditorToggle(
+          label: 'Mostrar botón "Ver todos"',
+          value: widget.data['showViewAll'] ?? true,
+          onChanged: (v) => _updateField('showViewAll', v),
+        ),
+        const SizedBox(height: 8),
+        _EditorToggle(
+          label: 'Mostrar SKU',
+          value: widget.data['showSku'] ?? false,
+          onChanged: (v) => _updateField('showSku', v),
+        ),
+        const SizedBox(height: 8),
+        _EditorToggle(
+          label: 'Mostrar marca',
+          value: widget.data['showBrand'] ?? false,
+          onChanged: (v) => _updateField('showBrand', v),
+        ),
+        
+        // View all link
+        if (widget.data['showViewAll'] != false) ...[
+          const SizedBox(height: 16),
+          _EditorTextField(
+            label: 'Link "Ver todos"',
+            value: widget.data['viewAllLink']?.toString() ?? '/tienda/productos',
+            onChanged: (v) => _updateField('viewAllLink', v),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSourceSelector() {
+    final sources = [
+      {'id': 'featured', 'label': 'Destacados', 'icon': Icons.star},
+      {'id': 'category', 'label': 'Categoría', 'icon': Icons.category},
+      {'id': 'manual', 'label': 'Selección manual', 'icon': Icons.checklist},
+      {'id': 'newest', 'label': 'Más recientes', 'icon': Icons.schedule},
+    ];
+    
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: sources.map((source) {
+        final isSelected = _productSource == source['id'];
+        return GestureDetector(
+          onTap: () => _updateField('productSource', source['id']),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  source['icon'] as IconData,
+                  size: 14,
+                  color: isSelected ? Colors.white : Colors.white54,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  source['label'] as String,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white70,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildCategorySelector() {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Text('Seleccionar categoría', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF2D2D2D),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedCategoryId,
+              hint: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Text('Seleccionar...', style: TextStyle(color: Colors.white54, fontSize: 13)),
+              ),
+              isExpanded: true,
+              dropdownColor: const Color(0xFF2D2D2D),
+              icon: const Icon(Icons.expand_more, color: Colors.white54),
+              items: _availableCategories.map((cat) {
+                return DropdownMenuItem<String>(
+                  value: cat['id'].toString(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      cat['name']?.toString() ?? 'Sin nombre',
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                    ),
+                  ),
+                );
+              }).toList(),
+              onChanged: (value) => _updateField('categoryId', value),
+            ),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildProductSelector() {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Text(
+              'Productos seleccionados (${_selectedProductIds.length})',
+              style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => _showProductPicker(context),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF00A09D),
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Agregar', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_selectedProductIds.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: const Center(
+              child: Text(
+                'No hay productos seleccionados\nToca "Agregar" para elegir productos',
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          )
+        else
+          ...(_selectedProductIds.map((productId) {
+            final product = _availableProducts.firstWhere(
+              (p) => p['id'].toString() == productId,
+              orElse: () => <String, dynamic>{},
+            );
+            if (product.isEmpty) return const SizedBox.shrink();
+            
+            return Container(
+              margin: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2D2D2D),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: [
+                  // Product image
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3D3D3D),
+                      borderRadius: BorderRadius.circular(4),
+                      image: product['image_url'] != null
+                          ? DecorationImage(
+                              image: NetworkImage(product['image_url']),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: product['image_url'] == null
+                        ? const Icon(Icons.image, size: 16, color: Colors.white24)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product['name']?.toString() ?? '',
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          product['sku']?.toString() ?? '',
+                          style: const TextStyle(color: Colors.white38, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 16),
+                    color: Colors.white38,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      final newList = List<String>.from(_selectedProductIds)..remove(productId);
+                      _updateField('selectedProducts', newList);
+                    },
+                  ),
+                ],
+              ),
+            );
+          })),
+      ],
+    );
+  }
+
+  void _showProductPicker(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _ProductPickerDialog(
+        availableProducts: _availableProducts,
+        selectedIds: _selectedProductIds,
+        onConfirm: (selectedIds) {
+          _updateField('selectedProducts', selectedIds);
+        },
+      ),
+    );
+  }
+}
+
+/// Product picker dialog
+class _ProductPickerDialog extends StatefulWidget {
+  final List<Map<String, dynamic>> availableProducts;
+  final List<String> selectedIds;
+  final Function(List<String>) onConfirm;
+
+  const _ProductPickerDialog({
+    required this.availableProducts,
+    required this.selectedIds,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_ProductPickerDialog> createState() => _ProductPickerDialogState();
+}
+
+class _ProductPickerDialogState extends State<_ProductPickerDialog> {
+  late Set<String> _selected;
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set<String>.from(widget.selectedIds);
+  }
+
+  List<Map<String, dynamic>> get _filteredProducts {
+    if (_searchQuery.isEmpty) return widget.availableProducts;
+    final query = _searchQuery.toLowerCase();
+    return widget.availableProducts.where((p) {
+      final name = (p['name']?.toString() ?? '').toLowerCase();
+      final sku = (p['sku']?.toString() ?? '').toLowerCase();
+      return name.contains(query) || sku.contains(query);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Container(
+        width: 400,
+        height: 500,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'Seleccionar productos',
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white54),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Search field
+            TextField(
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Buscar por nombre o SKU...',
+                hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                prefixIcon: const Icon(Icons.search, color: Colors.white38, size: 20),
+                filled: true,
+                fillColor: const Color(0xFF2D2D2D),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(4),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onChanged: (v) => setState(() => _searchQuery = v),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${_selected.length} productos seleccionados',
+              style: const TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _filteredProducts.length,
+                itemBuilder: (context, index) {
+                  final product = _filteredProducts[index];
+                  final productId = product['id'].toString();
+                  final isSelected = _selected.contains(productId);
+                  
+                  return InkWell(
+                    onTap: () {
+                      setState(() {
+                        if (isSelected) {
+                          _selected.remove(productId);
+                        } else {
+                          _selected.add(productId);
+                        }
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFF00A09D).withValues(alpha: 0.2) : Colors.transparent,
+                        border: Border(
+                          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          // Checkbox
+                          Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
+                              ),
+                            ),
+                            child: isSelected
+                                ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                : null,
+                          ),
+                          const SizedBox(width: 12),
+                          // Image
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF3D3D3D),
+                              borderRadius: BorderRadius.circular(4),
+                              image: product['image_url'] != null
+                                  ? DecorationImage(
+                                      image: NetworkImage(product['image_url']),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
+                            child: product['image_url'] == null
+                                ? const Icon(Icons.image, size: 20, color: Colors.white24)
+                                : null,
+                          ),
+                          const SizedBox(width: 12),
+                          // Details
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  product['name']?.toString() ?? '',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  'SKU: ${product['sku'] ?? '-'} · \$${NumberFormat('#,###', 'es_CL').format(product['price'] ?? 0)}',
+                                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(foregroundColor: Colors.white54),
+                  child: const Text('Cancelar'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    widget.onConfirm(_selected.toList());
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00A09D),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Confirmar'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -950,23 +1882,38 @@ class _GenericBlockControls extends StatelessWidget {
   }
 }
 
-/// Theme tab for global settings
+/// Theme tab for global site-wide settings (colors, typography, button styles)
+/// Header and Footer are edited via the "Editar" tab when selected
 class _ThemeTab extends StatefulWidget {
   @override
   State<_ThemeTab> createState() => _ThemeTabState();
 }
 
 class _ThemeTabState extends State<_ThemeTab> {
-  final _storeNameController = TextEditingController();
+  // Colors
   final _primaryColorController = TextEditingController();
   final _accentColorController = TextEditingController();
-  final _logoUrlController = TextEditingController();
-  final _topBannerController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _whatsappController = TextEditingController();
+  
+  // Typography
+  String _headingFont = 'Inter';
+  String _bodyFont = 'Inter';
+  String _headingSize = 'normal';
+  String _bodySize = 'normal';
+  
+  // Button styles
+  String _buttonStyle = 'rounded';
+  String _buttonSize = 'medium';
+  
+  // Background
+  String _pageBackground = 'white';
   
   bool _loaded = false;
+
+  final _fonts = ['Inter', 'Roboto', 'Open Sans', 'Montserrat', 'Poppins', 'Lato', 'Oswald', 'Playfair Display'];
+  final _sizes = {'small': 'Pequeño', 'normal': 'Normal', 'large': 'Grande'};
+  final _buttonStyles = {'rounded': 'Redondeado', 'square': 'Cuadrado', 'pill': 'Pill'};
+  final _buttonSizes = {'small': 'Pequeño', 'medium': 'Mediano', 'large': 'Grande'};
+  final _backgrounds = {'white': 'Blanco', 'light': 'Gris claro', 'dark': 'Oscuro'};
 
   @override
   void didChangeDependencies() {
@@ -979,33 +1926,35 @@ class _ThemeTabState extends State<_ThemeTab> {
 
   void _loadSettings() {
     final service = context.read<WebsiteService>();
-    _storeNameController.text = service.getSetting('store_name', '');
     _primaryColorController.text = service.getSetting('theme_primary_color', '#1B5E20');
     _accentColorController.text = service.getSetting('theme_accent_color', '#FF6D00');
-    _logoUrlController.text = service.getSetting('logo_url', '');
-    _topBannerController.text = service.getSetting('top_banner_text', 'Envíos a todo Chile');
-    _emailController.text = service.getSetting('contact_email', '');
-    _phoneController.text = service.getSetting('contact_phone', '');
-    _whatsappController.text = service.getSetting('whatsapp', '');
+    _headingFont = service.getSetting('heading_font', 'Inter');
+    _bodyFont = service.getSetting('body_font', 'Inter');
+    _headingSize = service.getSetting('heading_size', 'normal');
+    _bodySize = service.getSetting('body_size', 'normal');
+    _buttonStyle = service.getSetting('button_style', 'rounded');
+    _buttonSize = service.getSetting('button_size', 'medium');
+    _pageBackground = service.getSetting('page_background', 'white');
   }
 
   Future<void> _saveSettings() async {
     final service = context.read<WebsiteService>();
     await service.saveSettings({
-      'store_name': _storeNameController.text,
       'theme_primary_color': _primaryColorController.text,
       'theme_accent_color': _accentColorController.text,
-      'logo_url': _logoUrlController.text,
-      'top_banner_text': _topBannerController.text,
-      'contact_email': _emailController.text,
-      'contact_phone': _phoneController.text,
-      'whatsapp': _whatsappController.text,
+      'heading_font': _headingFont,
+      'body_font': _bodyFont,
+      'heading_size': _headingSize,
+      'body_size': _bodySize,
+      'button_style': _buttonStyle,
+      'button_size': _buttonSize,
+      'page_background': _pageBackground,
     });
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✅ Configuración guardada'),
+          content: Text('✅ Tema guardado'),
           backgroundColor: Color(0xFF00A09D),
         ),
       );
@@ -1014,14 +1963,8 @@ class _ThemeTabState extends State<_ThemeTab> {
 
   @override
   void dispose() {
-    _storeNameController.dispose();
     _primaryColorController.dispose();
     _accentColorController.dispose();
-    _logoUrlController.dispose();
-    _topBannerController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose();
-    _whatsappController.dispose();
     super.dispose();
   }
 
@@ -1032,31 +1975,31 @@ class _ThemeTabState extends State<_ThemeTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader('Identidad'),
-          const SizedBox(height: 12),
-          _EditorTextField(
-            label: 'Nombre de la tienda',
-            value: _storeNameController.text,
-            controller: _storeNameController,
-            onChanged: (_) {},
-          ),
-          const SizedBox(height: 16),
-          _EditorTextField(
-            label: 'URL del logo',
-            value: _logoUrlController.text,
-            controller: _logoUrlController,
-            onChanged: (_) {},
-            hint: 'https://...',
-          ),
-          const SizedBox(height: 16),
-          _EditorTextField(
-            label: 'Texto del banner',
-            value: _topBannerController.text,
-            controller: _topBannerController,
-            onChanged: (_) {},
+          // Info banner
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue.shade300, size: 20),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Para editar el header o footer, haz clic directamente sobre ellos en la página.',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
           ),
           
           const SizedBox(height: 24),
+          
+          // ========== COLORS SECTION ==========
           _SectionHeader('Colores'),
           const SizedBox(height: 12),
           _ColorField(
@@ -1070,44 +2013,302 @@ class _ThemeTabState extends State<_ThemeTab> {
           ),
           
           const SizedBox(height: 24),
-          _SectionHeader('Contacto'),
+          
+          // ========== TYPOGRAPHY SECTION ==========
+          _SectionHeader('Tipografía'),
           const SizedBox(height: 12),
-          _EditorTextField(
-            label: 'Email',
-            value: _emailController.text,
-            controller: _emailController,
-            onChanged: (_) {},
+          
+          _buildDropdown(
+            label: 'Fuente de títulos',
+            value: _headingFont,
+            items: _fonts,
+            onChanged: (v) => setState(() => _headingFont = v!),
+          ),
+          const SizedBox(height: 12),
+          
+          _buildDropdown(
+            label: 'Tamaño de títulos',
+            value: _headingSize,
+            items: _sizes.keys.toList(),
+            labels: _sizes,
+            onChanged: (v) => setState(() => _headingSize = v!),
           ),
           const SizedBox(height: 16),
-          _EditorTextField(
-            label: 'Teléfono',
-            value: _phoneController.text,
-            controller: _phoneController,
-            onChanged: (_) {},
+          
+          _buildDropdown(
+            label: 'Fuente de texto',
+            value: _bodyFont,
+            items: _fonts,
+            onChanged: (v) => setState(() => _bodyFont = v!),
           ),
-          const SizedBox(height: 16),
-          _EditorTextField(
-            label: 'WhatsApp',
-            value: _whatsappController.text,
-            controller: _whatsappController,
-            onChanged: (_) {},
-            hint: '+56912345678',
+          const SizedBox(height: 12),
+          
+          _buildDropdown(
+            label: 'Tamaño de texto',
+            value: _bodySize,
+            items: _sizes.keys.toList(),
+            labels: _sizes,
+            onChanged: (v) => setState(() => _bodySize = v!),
           ),
           
           const SizedBox(height: 24),
+          
+          // ========== BUTTON STYLES SECTION ==========
+          _SectionHeader('Estilo de botones'),
+          const SizedBox(height: 12),
+          
+          _buildDropdown(
+            label: 'Forma',
+            value: _buttonStyle,
+            items: _buttonStyles.keys.toList(),
+            labels: _buttonStyles,
+            onChanged: (v) => setState(() => _buttonStyle = v!),
+          ),
+          const SizedBox(height: 12),
+          
+          _buildDropdown(
+            label: 'Tamaño',
+            value: _buttonSize,
+            items: _buttonSizes.keys.toList(),
+            labels: _buttonSizes,
+            onChanged: (v) => setState(() => _buttonSize = v!),
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // ========== BACKGROUND SECTION ==========
+          _SectionHeader('Fondo de página'),
+          const SizedBox(height: 12),
+          
+          _buildDropdown(
+            label: 'Color de fondo',
+            value: _pageBackground,
+            items: _backgrounds.keys.toList(),
+            labels: _backgrounds,
+            onChanged: (v) => setState(() => _pageBackground = v!),
+          ),
+          
+          const SizedBox(height: 32),
+          
+          // Save button
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
+            child: ElevatedButton.icon(
               onPressed: _saveSettings,
+              icon: const Icon(Icons.save, size: 18),
+              label: const Text('Guardar tema'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00A09D),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-              child: const Text('Guardar configuración'),
             ),
           ),
         ],
+      ),
+    );
+  }
+  
+  Widget _buildDropdown({
+    required String label,
+    required String value,
+    required List<String> items,
+    Map<String, String>? labels,
+    required void Function(String?) onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF2D2D2D),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              dropdownColor: const Color(0xFF2D2D2D),
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              items: items.map((item) {
+                return DropdownMenuItem(
+                  value: item,
+                  child: Text(labels?[item] ?? item),
+                );
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Logo uploader widget with image preview
+class _LogoUploader extends StatefulWidget {
+  final String? currentUrl;
+  final Function(String) onChanged;
+
+  const _LogoUploader({
+    this.currentUrl,
+    required this.onChanged,
+  });
+
+  @override
+  State<_LogoUploader> createState() => _LogoUploaderState();
+}
+
+class _LogoUploaderState extends State<_LogoUploader> {
+  bool _isUploading = false;
+
+  Future<void> _pickAndUploadLogo() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 500,
+        maxHeight: 200,
+        imageQuality: 90,
+      );
+
+      if (image == null) return;
+
+      setState(() => _isUploading = true);
+
+      final bytes = await image.readAsBytes();
+      final fileName = 'logo_${DateTime.now().millisecondsSinceEpoch}_${image.name}';
+      final filePath = 'website-images/$fileName';
+
+      final supabase = Supabase.instance.client;
+      
+      await supabase.storage.from(StorageConfig.defaultBucket).uploadBinary(
+        filePath,
+        bytes,
+        fileOptions: FileOptions(
+          contentType: _getContentType(image.name),
+          upsert: true,
+        ),
+      );
+
+      final publicUrl = supabase.storage.from(StorageConfig.defaultBucket).getPublicUrl(filePath);
+
+      setState(() => _isUploading = false);
+      widget.onChanged(publicUrl);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Logo actualizado'),
+            backgroundColor: Color(0xFF00A09D),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isUploading = false);
+      debugPrint('Error uploading logo: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String _getContentType(String fileName) {
+    final ext = fileName.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'png': return 'image/png';
+      case 'jpg':
+      case 'jpeg': return 'image/jpeg';
+      case 'webp': return 'image/webp';
+      case 'svg': return 'image/svg+xml';
+      default: return 'image/png';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLogo = widget.currentUrl != null && widget.currentUrl!.isNotEmpty;
+    
+    return InkWell(
+      onTap: _isUploading ? null : _pickAndUploadLogo,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 80,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _isUploading 
+                ? const Color(0xFF00A09D) 
+                : Colors.white.withValues(alpha: 0.1),
+          ),
+        ),
+        child: _isUploading
+            ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+            : hasLogo
+                ? Row(
+                    children: [
+                      const SizedBox(width: 16),
+                      Container(
+                        height: 50,
+                        constraints: const BoxConstraints(maxWidth: 150),
+                        child: Image.network(
+                          widget.currentUrl!,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.broken_image,
+                            color: Colors.white38,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.edit, color: Colors.white38, size: 18),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Cambiar',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.5),
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.add_photo_alternate, color: Colors.white38, size: 28),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Subir logo',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
       ),
     );
   }
@@ -1317,7 +2518,54 @@ class _EditorSlider extends StatelessWidget {
   }
 }
 
-class _ImagePicker extends StatelessWidget {
+class _EditorDropdown extends StatelessWidget {
+  final String label;
+  final String value;
+  final List<(String, String)> options; // (value, label)
+  final Function(String) onChanged;
+
+  const _EditorDropdown({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2D2D2D),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              dropdownColor: const Color(0xFF2D2D2D),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              icon: const Icon(Icons.expand_more, color: Colors.white54, size: 18),
+              items: options.map((opt) => DropdownMenuItem(
+                value: opt.$1,
+                child: Text(opt.$2),
+              )).toList(),
+              onChanged: (v) => onChanged(v ?? value),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ImagePicker extends StatefulWidget {
   final String? currentUrl;
   final Function(String) onChanged;
 
@@ -1327,77 +2575,238 @@ class _ImagePicker extends StatelessWidget {
   });
 
   @override
+  State<_ImagePicker> createState() => _ImagePickerState();
+}
+
+class _ImagePickerState extends State<_ImagePicker> {
+  bool _isUploading = false;
+  double _uploadProgress = 0;
+
+  Future<void> _pickAndUploadImage() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (image == null) return;
+
+      setState(() {
+        _isUploading = true;
+        _uploadProgress = 0;
+      });
+
+      // Read file bytes
+      final bytes = await image.readAsBytes();
+      final fileName = 'website_${DateTime.now().millisecondsSinceEpoch}_${image.name}';
+      final filePath = 'website-images/$fileName';
+
+      // Upload to Supabase Storage
+      final supabase = Supabase.instance.client;
+      
+      // Use the standard vinabike-assets bucket
+      await supabase.storage.from(StorageConfig.defaultBucket).uploadBinary(
+        filePath,
+        bytes,
+        fileOptions: FileOptions(
+          contentType: _getContentType(image.name),
+          upsert: true,
+        ),
+      );
+
+      setState(() => _uploadProgress = 0.8);
+
+      // Get public URL
+      final publicUrl = supabase.storage.from(StorageConfig.defaultBucket).getPublicUrl(filePath);
+
+      setState(() {
+        _isUploading = false;
+        _uploadProgress = 1;
+      });
+
+      widget.onChanged(publicUrl);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Imagen subida correctamente'),
+            backgroundColor: Color(0xFF00A09D),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isUploading = false);
+      debugPrint('Error uploading image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al subir imagen: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String _getContentType(String fileName) {
+    final ext = fileName.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return 'image/jpeg';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final hasImage = currentUrl != null && currentUrl!.isNotEmpty;
+    final hasImage = widget.currentUrl != null && widget.currentUrl!.isNotEmpty;
     
     return Column(
       children: [
-        Container(
-          height: 120,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: const Color(0xFF2D2D2D),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            image: hasImage
-                ? DecorationImage(
-                    image: NetworkImage(currentUrl!),
-                    fit: BoxFit.cover,
-                  )
-                : null,
-          ),
-          child: hasImage
-              ? null
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.image_outlined, color: Colors.white.withValues(alpha: 0.3), size: 32),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Sin imagen',
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
-                    ),
-                  ],
-                ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                initialValue: currentUrl ?? '',
-                style: const TextStyle(color: Colors.white, fontSize: 11),
-                decoration: InputDecoration(
-                  hintText: 'URL de imagen',
-                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 11),
-                  filled: true,
-                  fillColor: const Color(0xFF2D2D2D),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onChanged: onChanged,
+        // Image preview / upload area
+        InkWell(
+          onTap: _isUploading ? null : _pickAndUploadImage,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            height: 140,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _isUploading 
+                    ? const Color(0xFF00A09D) 
+                    : Colors.white.withValues(alpha: 0.1),
+                width: _isUploading ? 2 : 1,
               ),
+              image: hasImage && !_isUploading
+                  ? DecorationImage(
+                      image: NetworkImage(widget.currentUrl!),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
             ),
-            if (hasImage) ...[
-              const SizedBox(width: 8),
-              InkWell(
-                onTap: () => onChanged(''),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade700,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Icon(Icons.close, color: Colors.white, size: 16),
-                ),
-              ),
-            ],
-          ],
+            child: _isUploading
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00A09D)),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Subiendo imagen...',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  )
+                : hasImage
+                    ? Stack(
+                        children: [
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Row(
+                              children: [
+                                _buildActionButton(
+                                  icon: Icons.edit,
+                                  tooltip: 'Cambiar imagen',
+                                  onTap: _pickAndUploadImage,
+                                ),
+                                const SizedBox(width: 4),
+                                _buildActionButton(
+                                  icon: Icons.delete,
+                                  tooltip: 'Eliminar',
+                                  onTap: () => widget.onChanged(''),
+                                  isDestructive: true,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00A09D).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(50),
+                            ),
+                            child: const Icon(
+                              Icons.cloud_upload_outlined,
+                              color: Color(0xFF00A09D),
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Haz clic para subir imagen',
+                            style: TextStyle(
+                              color: Color(0xFF00A09D),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'JPG, PNG, WebP • Máx 1920x1080',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.4),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: isDestructive 
+                ? Colors.red.shade700.withValues(alpha: 0.9)
+                : Colors.black.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Icon(icon, color: Colors.white, size: 16),
+        ),
+      ),
     );
   }
 }
@@ -1471,6 +2880,795 @@ class _ColorField extends StatelessWidget {
   }
 }
 
+// ============================================================================
+// CATEGORY GRID BLOCK CONTROLS
+// ============================================================================
+class _CategoryGridBlockControls extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final String blockId;
+  final WebsiteEditModeProvider provider;
+
+  const _CategoryGridBlockControls({
+    required this.data,
+    required this.blockId,
+    required this.provider,
+  });
+
+  @override
+  State<_CategoryGridBlockControls> createState() => _CategoryGridBlockControlsState();
+}
+
+class _CategoryGridBlockControlsState extends State<_CategoryGridBlockControls> {
+  int _selectedCategoryIndex = 0;
+
+  List<Map<String, dynamic>> get _categories {
+    final raw = widget.data['categories'];
+    if (raw is List) {
+      return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return [];
+  }
+
+  void _updateField(String field, dynamic value) {
+    widget.provider.updateBlockData(widget.blockId, field, value);
+  }
+
+  void _updateCategory(int index, String field, dynamic value) {
+    final categories = List<Map<String, dynamic>>.from(_categories);
+    if (index < categories.length) {
+      categories[index] = Map<String, dynamic>.from(categories[index]);
+      categories[index][field] = value;
+      _updateField('categories', categories);
+    }
+  }
+
+  void _addCategory() {
+    final categories = List<Map<String, dynamic>>.from(_categories);
+    categories.add({
+      'title': 'Nueva Categoría',
+      'subtitle': 'Descripción breve',
+      'imageUrl': '',
+      'ctaText': 'Ver más',
+      'ctaLink': '/tienda/productos',
+      'size': categories.length < 2 ? 'large' : 'medium',
+    });
+    _updateField('categories', categories);
+    setState(() => _selectedCategoryIndex = categories.length - 1);
+  }
+
+  void _removeCategory(int index) {
+    final categories = List<Map<String, dynamic>>.from(_categories);
+    if (categories.length > 1) {
+      categories.removeAt(index);
+      _updateField('categories', categories);
+      setState(() {
+        if (_selectedCategoryIndex >= categories.length) {
+          _selectedCategoryIndex = categories.length - 1;
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _EditorTextField(
+          label: 'Título de sección',
+          value: widget.data['title']?.toString() ?? '',
+          onChanged: (v) => _updateField('title', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Subtítulo',
+          value: widget.data['subtitle']?.toString() ?? '',
+          onChanged: (v) => _updateField('subtitle', v),
+        ),
+        const SizedBox(height: 20),
+        Text('Categorías', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+        const SizedBox(height: 8),
+        // Category selector chips
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              ..._categories.asMap().entries.map((entry) {
+                final index = entry.key;
+                final cat = entry.value;
+                final isSelected = index == _selectedCategoryIndex;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedCategoryIndex = index),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
+                        ),
+                      ),
+                      child: Text(
+                        cat['title']?.toString() ?? 'Cat ${index + 1}',
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              GestureDetector(
+                onTap: _addCategory,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2D2D2D),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: const Icon(Icons.add, color: Color(0xFF00A09D), size: 16),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Selected category editor
+        if (_categories.isNotEmpty && _selectedCategoryIndex < _categories.length) ...[
+          // Image picker for this category
+          _SectionHeader('Imagen de categoría'),
+          const SizedBox(height: 8),
+          _ImagePicker(
+            currentUrl: _categories[_selectedCategoryIndex]['imageUrl']?.toString(),
+            onChanged: (url) => _updateCategory(_selectedCategoryIndex, 'imageUrl', url),
+          ),
+          const SizedBox(height: 16),
+          _EditorTextField(
+            label: 'Título categoría',
+            value: _categories[_selectedCategoryIndex]['title']?.toString() ?? '',
+            onChanged: (v) => _updateCategory(_selectedCategoryIndex, 'title', v),
+          ),
+          const SizedBox(height: 12),
+          _EditorTextField(
+            label: 'Subtítulo',
+            value: _categories[_selectedCategoryIndex]['subtitle']?.toString() ?? '',
+            onChanged: (v) => _updateCategory(_selectedCategoryIndex, 'subtitle', v),
+          ),
+          const SizedBox(height: 12),
+          _EditorTextField(
+            label: 'Texto botón',
+            value: _categories[_selectedCategoryIndex]['ctaText']?.toString() ?? '',
+            onChanged: (v) => _updateCategory(_selectedCategoryIndex, 'ctaText', v),
+          ),
+          const SizedBox(height: 12),
+          _EditorTextField(
+            label: 'Link botón',
+            value: _categories[_selectedCategoryIndex]['ctaLink']?.toString() ?? '',
+            onChanged: (v) => _updateCategory(_selectedCategoryIndex, 'ctaLink', v),
+          ),
+          const SizedBox(height: 12),
+          // Size selector
+          Text('Tamaño', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+          const SizedBox(height: 8),
+          Row(
+            children: ['large', 'medium'].map((size) {
+              final isSelected = _categories[_selectedCategoryIndex]['size'] == size;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => _updateCategory(_selectedCategoryIndex, 'size', size),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      size == 'large' ? 'Grande' : 'Mediano',
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          // Delete category button
+          if (_categories.length > 1)
+            TextButton.icon(
+              onPressed: () => _removeCategory(_selectedCategoryIndex),
+              icon: const Icon(Icons.delete_outline, size: 16),
+              label: const Text('Eliminar categoría'),
+              style: TextButton.styleFrom(foregroundColor: Colors.red.shade300),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// VIDEO BANNER BLOCK CONTROLS
+// ============================================================================
+class _VideoBannerBlockControls extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String blockId;
+  final WebsiteEditModeProvider provider;
+
+  const _VideoBannerBlockControls({
+    required this.data,
+    required this.blockId,
+    required this.provider,
+  });
+
+  void _updateField(String field, dynamic value) {
+    provider.updateBlockData(blockId, field, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _EditorTextField(
+          label: 'Título',
+          value: data['title']?.toString() ?? '',
+          onChanged: (v) => _updateField('title', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Subtítulo',
+          value: data['subtitle']?.toString() ?? '',
+          onChanged: (v) => _updateField('subtitle', v),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'URL Imagen de fondo',
+          value: data['imageUrl']?.toString() ?? '',
+          onChanged: (v) => _updateField('imageUrl', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'URL Video (opcional)',
+          value: data['videoUrl']?.toString() ?? '',
+          onChanged: (v) => _updateField('videoUrl', v),
+        ),
+        const SizedBox(height: 16),
+        // Show CTA toggle
+        Row(
+          children: [
+            const Text('Mostrar botón', style: TextStyle(color: Colors.white70, fontSize: 13)),
+            const Spacer(),
+            Switch(
+              value: data['showCta'] != false,
+              onChanged: (v) => _updateField('showCta', v),
+              activeColor: const Color(0xFF00A09D),
+            ),
+          ],
+        ),
+        if (data['showCta'] != false) ...[
+          const SizedBox(height: 12),
+          _EditorTextField(
+            label: 'Texto botón',
+            value: data['ctaText']?.toString() ?? '',
+            onChanged: (v) => _updateField('ctaText', v),
+          ),
+          const SizedBox(height: 12),
+          _EditorTextField(
+            label: 'Link botón',
+            value: data['ctaLink']?.toString() ?? '',
+            onChanged: (v) => _updateField('ctaLink', v),
+          ),
+        ],
+        const SizedBox(height: 16),
+        Text('Opacidad overlay', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+        Slider(
+          value: (data['overlayOpacity'] as num?)?.toDouble() ?? 0.5,
+          min: 0,
+          max: 1,
+          divisions: 10,
+          activeColor: const Color(0xFF00A09D),
+          onChanged: (v) => _updateField('overlayOpacity', v),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// PARTNERS BANNER BLOCK CONTROLS
+// ============================================================================
+class _PartnersBannerBlockControls extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final String blockId;
+  final WebsiteEditModeProvider provider;
+
+  const _PartnersBannerBlockControls({
+    required this.data,
+    required this.blockId,
+    required this.provider,
+  });
+
+  @override
+  State<_PartnersBannerBlockControls> createState() => _PartnersBannerBlockControlsState();
+}
+
+class _PartnersBannerBlockControlsState extends State<_PartnersBannerBlockControls> {
+  List<String> get _items {
+    final raw = widget.data['items'];
+    if (raw is List) {
+      return raw.map((e) => e.toString()).toList();
+    }
+    return [];
+  }
+
+  void _updateField(String field, dynamic value) {
+    widget.provider.updateBlockData(widget.blockId, field, value);
+  }
+
+  void _updateItem(int index, String value) {
+    final items = List<String>.from(_items);
+    if (index < items.length) {
+      items[index] = value;
+      _updateField('items', items);
+    }
+  }
+
+  void _addItem() {
+    final items = List<String>.from(_items);
+    items.add('Nuevo elemento');
+    _updateField('items', items);
+  }
+
+  void _removeItem(int index) {
+    final items = List<String>.from(_items);
+    if (items.length > 1) {
+      items.removeAt(index);
+      _updateField('items', items);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _EditorTextField(
+          label: 'Título superior',
+          value: widget.data['title']?.toString() ?? '',
+          onChanged: (v) => _updateField('title', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'URL Imagen de fondo',
+          value: widget.data['imageUrl']?.toString() ?? '',
+          onChanged: (v) => _updateField('imageUrl', v),
+        ),
+        const SizedBox(height: 20),
+        Text('Elementos de lista', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+        const SizedBox(height: 8),
+        ..._items.asMap().entries.map((entry) {
+          final index = entry.key;
+          final item = entry.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _EditorTextField(
+                    label: 'Elemento ${index + 1}',
+                    value: item,
+                    onChanged: (v) => _updateItem(index, v),
+                  ),
+                ),
+                if (_items.length > 1)
+                  IconButton(
+                    icon: Icon(Icons.remove_circle_outline, color: Colors.red.shade300, size: 20),
+                    onPressed: () => _removeItem(index),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+              ],
+            ),
+          );
+        }),
+        const SizedBox(height: 8),
+        _AddItemButton(
+          label: 'Agregar elemento',
+          onPressed: _addItem,
+        ),
+      ],
+    );
+  }
+}
+
+/// Controls for editing the site header (special element, not a block)
+class _HeaderBlockControls extends StatefulWidget {
+  final WebsiteEditModeProvider provider;
+
+  const _HeaderBlockControls({required this.provider});
+
+  @override
+  State<_HeaderBlockControls> createState() => _HeaderBlockControlsState();
+}
+
+class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
+  final _storeNameController = TextEditingController();
+  final _logoUrlController = TextEditingController();
+  final _topBannerController = TextEditingController();
+  bool _loaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_loaded) {
+      _loadSettings();
+      _loaded = true;
+    }
+  }
+
+  void _loadSettings() {
+    final service = context.read<WebsiteService>();
+    _storeNameController.text = service.getSetting('store_name', '');
+    _logoUrlController.text = service.getSetting('logo_url', '');
+    _topBannerController.text = service.getSetting('top_banner_text', 'Envíos a todo Chile');
+  }
+
+  Future<void> _saveSettings() async {
+    final service = context.read<WebsiteService>();
+    await service.saveSettings({
+      'store_name': _storeNameController.text,
+      'logo_url': _logoUrlController.text,
+      'top_banner_text': _topBannerController.text,
+    });
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Header guardado'),
+          backgroundColor: Color(0xFF00A09D),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _storeNameController.dispose();
+    _logoUrlController.dispose();
+    _topBannerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with icon and title
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.web_asset, color: Colors.blue, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Header',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Encabezado del sitio',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Logo section
+          _SectionHeader('Logo'),
+          const SizedBox(height: 12),
+          _LogoUploader(
+            currentUrl: _logoUrlController.text,
+            onChanged: (url) {
+              _logoUrlController.text = url;
+              setState(() {});
+            },
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Store name
+          _EditorTextField(
+            label: 'Nombre de la tienda',
+            value: _storeNameController.text,
+            controller: _storeNameController,
+            onChanged: (_) {},
+            hint: 'Mi Tienda',
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Top banner text
+          _EditorTextField(
+            label: 'Texto del banner superior',
+            value: _topBannerController.text,
+            controller: _topBannerController,
+            onChanged: (_) {},
+            hint: 'Envíos gratis en compras sobre \$50.000',
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Save button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _saveSettings,
+              icon: const Icon(Icons.save, size: 18),
+              label: const Text('Guardar header'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00A09D),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Controls for editing the site footer (special element, not a block)
+class _FooterBlockControls extends StatefulWidget {
+  final WebsiteEditModeProvider provider;
+
+  const _FooterBlockControls({required this.provider});
+
+  @override
+  State<_FooterBlockControls> createState() => _FooterBlockControlsState();
+}
+
+class _FooterBlockControlsState extends State<_FooterBlockControls> {
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _whatsappController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _facebookController = TextEditingController();
+  final _instagramController = TextEditingController();
+  final _twitterController = TextEditingController();
+  final _youtubeController = TextEditingController();
+  bool _loaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_loaded) {
+      _loadSettings();
+      _loaded = true;
+    }
+  }
+
+  void _loadSettings() {
+    final service = context.read<WebsiteService>();
+    _emailController.text = service.getSetting('contact_email', '');
+    _phoneController.text = service.getSetting('contact_phone', '');
+    _whatsappController.text = service.getSetting('whatsapp', '');
+    _addressController.text = service.getSetting('contact_address', '');
+    _facebookController.text = service.getSetting('facebook_handle', '');
+    _instagramController.text = service.getSetting('instagram_handle', '');
+    _twitterController.text = service.getSetting('twitter_handle', '');
+    _youtubeController.text = service.getSetting('youtube_handle', '');
+  }
+
+  Future<void> _saveSettings() async {
+    final service = context.read<WebsiteService>();
+    await service.saveSettings({
+      'contact_email': _emailController.text,
+      'contact_phone': _phoneController.text,
+      'whatsapp': _whatsappController.text,
+      'contact_address': _addressController.text,
+      'facebook_handle': _facebookController.text,
+      'instagram_handle': _instagramController.text,
+      'twitter_handle': _twitterController.text,
+      'youtube_handle': _youtubeController.text,
+    });
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Footer guardado'),
+          backgroundColor: Color(0xFF00A09D),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _phoneController.dispose();
+    _whatsappController.dispose();
+    _addressController.dispose();
+    _facebookController.dispose();
+    _instagramController.dispose();
+    _twitterController.dispose();
+    _youtubeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with icon and title
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.web_asset_off, color: Colors.green, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Footer',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Pie de página del sitio',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Contact section
+          _SectionHeader('Contacto'),
+          const SizedBox(height: 12),
+          
+          _EditorTextField(
+            label: 'Email',
+            value: _emailController.text,
+            controller: _emailController,
+            onChanged: (_) {},
+            hint: 'contacto@mitienda.cl',
+          ),
+          const SizedBox(height: 12),
+          
+          _EditorTextField(
+            label: 'Teléfono',
+            value: _phoneController.text,
+            controller: _phoneController,
+            onChanged: (_) {},
+            hint: '+56 2 1234 5678',
+          ),
+          const SizedBox(height: 12),
+          
+          _EditorTextField(
+            label: 'WhatsApp',
+            value: _whatsappController.text,
+            controller: _whatsappController,
+            onChanged: (_) {},
+            hint: '+56912345678',
+          ),
+          const SizedBox(height: 12),
+          
+          _EditorTextField(
+            label: 'Dirección',
+            value: _addressController.text,
+            controller: _addressController,
+            onChanged: (_) {},
+            hint: 'Av. Principal 123, Santiago',
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Social media section
+          _SectionHeader('Redes sociales'),
+          const SizedBox(height: 12),
+          
+          _EditorTextField(
+            label: 'Facebook',
+            value: _facebookController.text,
+            controller: _facebookController,
+            onChanged: (_) {},
+            hint: 'mitienda',
+          ),
+          const SizedBox(height: 12),
+          
+          _EditorTextField(
+            label: 'Instagram',
+            value: _instagramController.text,
+            controller: _instagramController,
+            onChanged: (_) {},
+            hint: '@mitienda',
+          ),
+          const SizedBox(height: 12),
+          
+          _EditorTextField(
+            label: 'Twitter/X',
+            value: _twitterController.text,
+            controller: _twitterController,
+            onChanged: (_) {},
+            hint: '@mitienda',
+          ),
+          const SizedBox(height: 12),
+          
+          _EditorTextField(
+            label: 'YouTube',
+            value: _youtubeController.text,
+            controller: _youtubeController,
+            onChanged: (_) {},
+            hint: 'mitienda',
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Save button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _saveSettings,
+              icon: const Icon(Icons.save, size: 18),
+              label: const Text('Guardar footer'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00A09D),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AddItemButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
@@ -1502,6 +3700,505 @@ class _AddItemButton extends StatelessWidget {
             Text(
               label,
               style: const TextStyle(color: Color(0xFF00A09D), fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Dialog for managing website backups
+class _BackupsDialog extends StatefulWidget {
+  final VoidCallback? onRestoreComplete;
+
+  const _BackupsDialog({this.onRestoreComplete});
+
+  @override
+  State<_BackupsDialog> createState() => _BackupsDialogState();
+}
+
+class _BackupsDialogState extends State<_BackupsDialog> {
+  final WebsiteBackupService _backupService = WebsiteBackupService();
+  List<WebsiteBackup> _backups = [];
+  bool _isLoading = true;
+  bool _isCreating = false;
+  bool _isRestoring = false;
+  String? _error;
+
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBackups();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBackups() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final backups = await _backupService.loadBackups();
+      if (mounted) {
+        setState(() {
+          _backups = backups;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _createBackup() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El nombre es requerido')),
+      );
+      return;
+    }
+
+    setState(() => _isCreating = true);
+
+    try {
+      await _backupService.createBackup(
+        name: name,
+        description: _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
+      );
+
+      _nameController.clear();
+      _descriptionController.clear();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Copia de seguridad creada'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        await _loadBackups();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCreating = false);
+      }
+    }
+  }
+
+  Future<void> _restoreBackup(WebsiteBackup backup) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Restaurar copia de seguridad?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Se restaurará: "${backup.name}"'),
+            const SizedBox(height: 12),
+            const Text(
+              'Se creará automáticamente una copia de seguridad del estado actual antes de restaurar.',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00A09D),
+            ),
+            child: const Text('Restaurar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isRestoring = true);
+
+    try {
+      await _backupService.restoreBackup(backup.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Copia de seguridad restaurada'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        widget.onRestoreComplete?.call();
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() => _isRestoring = false);
+      }
+    }
+  }
+
+  Future<void> _deleteBackup(WebsiteBackup backup) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar copia de seguridad?'),
+        content: Text('Se eliminará: "${backup.name}"'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _backupService.deleteBackup(backup.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Copia de seguridad eliminada'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        await _loadBackups();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        width: 500,
+        constraints: const BoxConstraints(maxHeight: 600),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.backup, color: Color(0xFF00A09D)),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Copias de Seguridad',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+
+            // Create new backup section
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: const Color(0xFF2D2D2D),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Nueva copia de seguridad',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _nameController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Nombre (ej: "Antes de rediseño")',
+                      hintStyle: TextStyle(color: Colors.white38),
+                      filled: true,
+                      fillColor: const Color(0xFF1E1E1E),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _descriptionController,
+                    style: const TextStyle(color: Colors.white),
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Descripción (opcional)',
+                      hintStyle: TextStyle(color: Colors.white38),
+                      filled: true,
+                      fillColor: const Color(0xFF1E1E1E),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _isCreating ? null : _createBackup,
+                      icon: _isCreating
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.add),
+                      label: Text(_isCreating ? 'Creando...' : 'Crear copia de seguridad'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00A09D),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Divider
+            const Divider(height: 1, color: Colors.white12),
+
+            // Backups list
+            Expanded(
+              child: Container(
+                color: const Color(0xFF1E1E1E),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.error_outline, color: Colors.red, size: 48),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Error cargando copias',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                                TextButton(
+                                  onPressed: _loadBackups,
+                                  child: const Text('Reintentar'),
+                                ),
+                              ],
+                            ),
+                          )
+                        : _backups.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.inventory_2_outlined, color: Colors.white24, size: 48),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'No hay copias de seguridad',
+                                      style: TextStyle(color: Colors.white38),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              itemCount: _backups.length,
+                              itemBuilder: (context, index) {
+                                final backup = _backups[index];
+                                return _BackupListItem(
+                                  backup: backup,
+                                  onRestore: () => _restoreBackup(backup),
+                                  onDelete: () => _deleteBackup(backup),
+                                  isRestoring: _isRestoring,
+                                );
+                              },
+                            ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BackupListItem extends StatelessWidget {
+  final WebsiteBackup backup;
+  final VoidCallback onRestore;
+  final VoidCallback onDelete;
+  final bool isRestoring;
+
+  const _BackupListItem({
+    required this.backup,
+    required this.onRestore,
+    required this.onDelete,
+    required this.isRestoring,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D2D2D),
+        borderRadius: BorderRadius.circular(8),
+        border: backup.isAutoBackup
+            ? Border.all(color: Colors.orange.withValues(alpha: 0.3))
+            : null,
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        leading: CircleAvatar(
+          backgroundColor: backup.isAutoBackup ? Colors.orange.withValues(alpha: 0.2) : const Color(0xFF00A09D).withValues(alpha: 0.2),
+          child: Icon(
+            backup.isAutoBackup ? Icons.autorenew : Icons.backup,
+            color: backup.isAutoBackup ? Colors.orange : const Color(0xFF00A09D),
+            size: 20,
+          ),
+        ),
+        title: Text(
+          backup.name,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (backup.description != null && backup.description!.isNotEmpty)
+              Text(
+                backup.description!,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                if (backup.isAutoBackup)
+                  Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'AUTO',
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                Text(
+                  dateFormat.format(backup.createdAt.toLocal()),
+                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+              ],
+            ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: isRestoring
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.restore, size: 20),
+              color: const Color(0xFF00A09D),
+              tooltip: 'Restaurar',
+              onPressed: isRestoring ? null : onRestore,
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 20),
+              color: Colors.red.shade300,
+              tooltip: 'Eliminar',
+              onPressed: isRestoring ? null : onDelete,
             ),
           ],
         ),

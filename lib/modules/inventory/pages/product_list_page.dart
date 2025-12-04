@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -1148,11 +1149,36 @@ class _ProductListPageState extends State<ProductListPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'SKU: ${product.sku}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        'SKU: ${product.sku}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      InkWell(
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(text: product.sku));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('SKU copiado'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.copy,
+                            size: 14,
+                            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   if (!product.isActive) ...[
                     const SizedBox(height: 8),

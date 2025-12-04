@@ -19,6 +19,10 @@ enum WebsiteBlockType {
   team,
   stats,
   footer,
+  // New modern blocks
+  categoryGrid,    // Large image cards for categories (MTB, Road, Kids, etc.)
+  videoBanner,     // Full-width video/image banner section
+  partnersBanner,  // Dark banner with text list (partners, locations)
 }
 
 extension WebsiteBlockTypeX on WebsiteBlockType {
@@ -40,6 +44,9 @@ extension WebsiteBlockTypeX on WebsiteBlockType {
         WebsiteBlockType.team => Icons.groups,
         WebsiteBlockType.stats => Icons.insights,
         WebsiteBlockType.footer => Icons.web_asset,
+        WebsiteBlockType.categoryGrid => Icons.grid_view_rounded,
+        WebsiteBlockType.videoBanner => Icons.play_circle_outline,
+        WebsiteBlockType.partnersBanner => Icons.handshake_outlined,
       };
 }
 
@@ -47,9 +54,10 @@ WebsiteBlockType parseWebsiteBlockType(
   String raw, {
   WebsiteBlockType fallback = WebsiteBlockType.hero,
 }) {
-  final normalised = raw.toLowerCase().trim();
+  final normalised = raw.trim();
   for (final value in WebsiteBlockType.values) {
-    if (value.name == normalised) {
+    // Case-insensitive comparison to handle both "categoryGrid" and "categorygrid"
+    if (value.name.toLowerCase() == normalised.toLowerCase()) {
       return value;
     }
   }

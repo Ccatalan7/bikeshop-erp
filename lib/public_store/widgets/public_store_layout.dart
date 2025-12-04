@@ -12,6 +12,7 @@ import 'floating_whatsapp_button.dart';
 import 'customer_account_menu.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/widgets/website_editor_panel.dart';
 
 class PublicStoreLayout extends StatefulWidget {
   final Widget child;
@@ -93,12 +94,93 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Check if in edit mode - use different layout structure
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
+    final isPreviewMode = editProvider.isPreviewMode;
     
-    // In edit mode, show simplified layout with side panel
+    // Build the main page content (with header/footer)
+    final pageContent = Column(
+      children: [
+        // Header - with edit indicator if in edit mode
+        _buildHeader(
+          context: context,
+          storeName: storeName,
+          storeDescription: storeDescription,
+          logoUrl: logoUrl,
+          topBannerText: topBannerText,
+          contactPhone: contactPhone,
+          contactEmail: contactEmail,
+          primaryColor: primaryColor,
+          accentColor: accentColor,
+          isEditMode: isEditMode,
+        ),
+        // Main content area
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                widget.child,
+                // Footer - with edit indicator if in edit mode
+                _buildFooter(
+                  context: context,
+                  storeName: storeName,
+                  storeDescription: storeDescription,
+                  contactEmail: contactEmail,
+                  contactPhone: contactPhone,
+                  contactAddress: contactAddress,
+                  facebookHandle: facebookHandle,
+                  instagramHandle: instagramHandle,
+                  twitterHandle: twitterHandle,
+                  youtubeHandle: youtubeHandle,
+                  primaryColor: primaryColor,
+                  accentColor: accentColor,
+                  isEditMode: isEditMode,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+
+    // In full edit mode, use Row layout with side panel
     if (isEditMode) {
       return Scaffold(
         backgroundColor: backgroundColor,
-        body: widget.child, // Child handles the edit mode UI with side panel
+        body: Row(
+          children: [
+            // Main content area
+            Expanded(child: pageContent),
+            // Side panel for editing
+            WebsiteEditorPanel(
+              onSave: () async {
+                // Actually save the changes to the database
+                await _saveChanges(context, editProvider, websiteService);
+                // After save, go back to preview mode
+                if (context.mounted) {
+                  editProvider.switchToPreviewMode();
+                }
+              },
+              onDiscard: () {
+                // After discard, go back to preview mode
+                editProvider.switchToPreviewMode();
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    // In preview mode, show top bar with "Editar" button
+    if (isPreviewMode) {
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        body: Column(
+          children: [
+            // Preview top bar (Odoo-style)
+            _buildPreviewTopBar(context, editProvider, websiteService, storeName),
+            // Page content
+            Expanded(child: pageContent),
+          ],
+        ),
       );
     }
 
@@ -107,44 +189,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       backgroundColor: backgroundColor,
       body: Stack(
         children: [
-          Column(
-            children: [
-              _buildHeader(
-                context: context,
-                storeName: storeName,
-                storeDescription: storeDescription,
-                logoUrl: logoUrl,
-                topBannerText: topBannerText,
-                contactPhone: contactPhone,
-                contactEmail: contactEmail,
-                primaryColor: primaryColor,
-                accentColor: accentColor,
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      widget.child,
-                      _buildFooter(
-                        context: context,
-                        storeName: storeName,
-                        storeDescription: storeDescription,
-                        contactEmail: contactEmail,
-                        contactPhone: contactPhone,
-                        contactAddress: contactAddress,
-                        facebookHandle: facebookHandle,
-                        instagramHandle: instagramHandle,
-                        twitterHandle: twitterHandle,
-                        youtubeHandle: youtubeHandle,
-                        primaryColor: primaryColor,
-                        accentColor: accentColor,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+          pageContent,
           if (hasWhatsApp)
             Positioned(
               bottom: 24,
@@ -165,37 +210,31 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               child: Builder(
                 builder: (context) {
                   final editProvider = context.watch<WebsiteEditModeProvider>();
-                  final isInEditMode = editProvider.isEditMode;
+                  final isInEditorContext = editProvider.isInEditorContext;
                   final websiteService = context.read<WebsiteService>();
+                  
+                  // Don't show the floating button if we're already in editor context
+                  if (isInEditorContext) return const SizedBox.shrink();
                   
                   return FloatingActionButton.extended(
                     onPressed: () {
-                      debugPrint('🎨 [Layout] Edit button pressed. isEditMode: $isInEditMode');
-                      
-                      if (isInEditMode) {
-                        editProvider.exitEditMode();
-                        debugPrint('🎨 [Layout] Exited edit mode');
-                      } else {
-                        // Enter edit mode with current blocks
-                        final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
-                        final settings = Map<String, dynamic>.from(websiteService.settings);
-                        debugPrint('🎨 [Layout] Entering edit mode with ${blocks.length} blocks');
-                        editProvider.enterEditMode(blocks, settings);
-                      }
+                      debugPrint('🎨 [Layout] Edit button pressed. Entering preview mode');
+                      // Enter preview mode first (shows top bar with Editar button)
+                      final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
+                      final settings = Map<String, dynamic>.from(websiteService.settings);
+                      debugPrint('🎨 [Layout] Entering preview mode with ${blocks.length} blocks');
+                      editProvider.enterPreviewMode(blocks, settings);
                     },
-                    backgroundColor: isInEditMode ? Colors.grey.shade700 : accentColor,
-                    icon: Icon(
-                      isInEditMode ? Icons.close : Icons.edit,
-                      color: Colors.white,
-                    ),
-                    label: Text(
-                      isInEditMode ? 'Salir' : 'Editar Sitio',
-                      style: const TextStyle(
+                    backgroundColor: accentColor,
+                    icon: const Icon(Icons.edit, color: Colors.white),
+                    label: const Text(
+                      'Editar Sitio',
+                      style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    tooltip: isInEditMode ? 'Salir del modo edición' : 'Editar sitio web',
+                    tooltip: 'Editar sitio web',
                   );
                 },
               ),
@@ -205,6 +244,148 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
 
     return mainContent;
+  }
+
+  /// Build the preview top bar (Odoo-style) with "Editar" button
+  Widget _buildPreviewTopBar(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+    WebsiteService websiteService,
+    String storeName,
+  ) {
+    return Container(
+      height: 48,
+      color: const Color(0xFF1E1E1E),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          // Logo/brand
+          Row(
+            children: [
+              Icon(Icons.language, color: Colors.white.withValues(alpha: 0.8), size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Sitio web',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 24),
+          // Navigation items
+          _buildPreviewNavItem('Sitio', true),
+          _buildPreviewNavItem('Comercio electrónico', false),
+          _buildPreviewNavItem('Reportes', false),
+          _buildPreviewNavItem('Configuración', false),
+          
+          const Spacer(),
+          
+          // Store name dropdown
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.white24),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  storeName.isNotEmpty ? storeName : 'Mi Tienda',
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_drop_down, color: Colors.white, size: 18),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          
+          // Published toggle
+          Row(
+            children: [
+              Text(
+                'Publicado',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13),
+              ),
+              const SizedBox(width: 8),
+              Switch(
+                value: true,
+                onChanged: (v) {},
+                activeColor: Colors.green,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ],
+          ),
+          const SizedBox(width: 16),
+          
+          // Mobile preview button
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.phone_android, color: Colors.white70, size: 20),
+            tooltip: 'Vista móvil',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+          const SizedBox(width: 8),
+          
+          // New page button
+          TextButton(
+            onPressed: () {},
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            child: const Text('Nuevo', style: TextStyle(fontSize: 13)),
+          ),
+          const SizedBox(width: 8),
+          
+          // EDIT button (main action)
+          ElevatedButton(
+            onPressed: () {
+              editProvider.switchToEditMode();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            ),
+            child: const Text(
+              'Editar',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+          const SizedBox(width: 8),
+          
+          // Close/exit button
+          IconButton(
+            onPressed: () => editProvider.exitEditMode(),
+            icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+            tooltip: 'Salir',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreviewNavItem(String label, bool isActive) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.6),
+          fontSize: 13,
+          fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
+        ),
+      ),
+    );
   }
 
   /// Check if we're on the public store domain (customer-facing)
@@ -217,6 +398,85 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         host == 'www.vinabike.cl';
   }
 
+  /// Save changes to the database
+  Future<void> _saveChanges(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+    WebsiteService websiteService,
+  ) async {
+    try {
+      // Get tenant ID
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      final tenantId = tenantProvider.tenantId;
+      
+      if (tenantId == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: No se pudo identificar el tenant')),
+          );
+        }
+        return;
+      }
+
+      // Show saving indicator
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Guardando cambios...')),
+        );
+      }
+
+      // Convert blocks to the format expected by saveBlocks
+      final blocks = editProvider.blocks;
+      debugPrint('🔄 [SaveChanges] Saving ${blocks.length} blocks');
+      
+      final blocksForSave = blocks.asMap().entries.map((entry) {
+        final index = entry.key;
+        final block = entry.value;
+        debugPrint('  Block ${index}: id=${block['id']}, type=${block['block_type']}');
+        return {
+          'id': block['id'],
+          'type': block['block_type'],
+          'data': block['block_data'],
+          'isVisible': block['is_visible'] ?? true,
+          'order_index': index,
+        };
+      }).toList();
+
+      // Save all blocks
+      await websiteService.saveBlocks(blocksForSave);
+      debugPrint('✅ [SaveChanges] Blocks saved to database');
+
+      // Mark as saved
+      editProvider.markAsSaved();
+      
+      // Reload blocks to get fresh data and update provider
+      final freshBlocks = await websiteService.loadBlocksForTenant(tenantId);
+      debugPrint('✅ [SaveChanges] Reloaded ${freshBlocks.length} blocks');
+      
+      // Update the edit provider with fresh blocks from database
+      editProvider.updateBlocksAfterSave(freshBlocks);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Cambios guardados'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ [SaveChanges] Error: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildHeader({
     required BuildContext context,
     required String storeName,
@@ -227,10 +487,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required String contactEmail,
     required Color primaryColor,
     required Color accentColor,
+    bool isEditMode = false,
   }) {
     final cart = context.watch<CartProvider>();
 
-    return Container(
+    final headerContent = Container(
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -398,6 +659,63 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         ],
       ),
     );
+
+    // Wrap with edit mode indicator if in edit mode
+    if (isEditMode) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          // Select header for editing in the "Editar" tab
+          final editProvider = context.read<WebsiteEditModeProvider>();
+          editProvider.selectBlock('header');
+        },
+        child: Stack(
+          children: [
+            headerContent,
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Colors.blue.withOpacity(0.5),
+                      width: 2,
+                    ),
+                  ),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: Container(
+                      margin: const EdgeInsets.all(4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.edit, color: Colors.white, size: 14),
+                          SizedBox(width: 4),
+                          Text(
+                            'Header',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return headerContent;
   }
 
   Widget _buildFooter({
@@ -413,6 +731,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required String youtubeHandle,
     required Color primaryColor,
     required Color accentColor,
+    bool isEditMode = false,
   }) {
     final facebookUrl =
         _buildSocialUrl(facebookHandle, 'https://facebook.com/');
@@ -421,7 +740,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final twitterUrl = _buildSocialUrl(twitterHandle, 'https://twitter.com/');
     final youtubeUrl = _buildSocialUrl(youtubeHandle, 'https://youtube.com/');
 
-    return Container(
+    final footerContent = Container(
       width: double.infinity,
       color: PublicStoreTheme.textPrimary,
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
@@ -654,6 +973,63 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         ),
       ),
     );
+
+    // Wrap with edit mode indicator if in edit mode
+    if (isEditMode) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          // Select footer for editing in the "Editar" tab
+          final editProvider = context.read<WebsiteEditModeProvider>();
+          editProvider.selectBlock('footer');
+        },
+        child: Stack(
+          children: [
+            footerContent,
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Colors.green.withOpacity(0.5),
+                      width: 2,
+                    ),
+                  ),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: Container(
+                      margin: const EdgeInsets.all(4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.edit, color: Colors.white, size: 14),
+                          SizedBox(width: 4),
+                          Text(
+                            'Footer',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return footerContent;
   }
 
   Widget _buildTextLogo(BuildContext context, String storeName, Color primaryColor) {

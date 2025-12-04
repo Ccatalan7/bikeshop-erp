@@ -9,8 +9,7 @@ import '../../modules/website/models/website_models.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../modules/website/widgets/editable_block_renderer.dart';
-import '../../modules/website/widgets/inline_edit_toolbar.dart';
-import '../../modules/website/widgets/website_editor_panel.dart';
+import '../../modules/website/widgets/inline_edit_toolbar.dart' show AddBlockDialog;
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/models/product.dart';
 import '../../shared/widgets/branded_loading.dart';
@@ -90,11 +89,12 @@ class _PublicHomePageState extends State<PublicHomePage> {
       final editProvider = context.read<WebsiteEditModeProvider>();
       final websiteService = context.read<WebsiteService>();
       
-      if (!editProvider.isEditMode) {
+      // If not already in editor context, enter preview mode first
+      if (!editProvider.isInEditorContext) {
         final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
         final settings = Map<String, dynamic>.from(websiteService.settings);
-        debugPrint('[PublicHomePage] Entering edit mode with ${blocks.length} blocks');
-        editProvider.enterEditMode(blocks, settings);
+        debugPrint('[PublicHomePage] Entering preview mode with ${blocks.length} blocks');
+        editProvider.enterPreviewMode(blocks, settings);
       }
     }
   }
@@ -459,18 +459,19 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
     final currentBreakpoint = _currentBreakpoint(context);
     
-    // Check if we're in edit mode
+    // Check if we're in editor context (preview or edit mode)
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
+    final isInEditorContext = editProvider.isInEditorContext;
 
-    // Use edit provider blocks if in edit mode, otherwise use loaded blocks
-    final blocksToRender = isEditMode ? editProvider.blocks : _allBlocks;
+    // Use edit provider blocks if in editor context, otherwise use loaded blocks
+    final blocksToRender = isInEditorContext ? editProvider.blocks : _allBlocks;
 
-    // In edit mode, show all blocks (even hidden ones, with opacity)
+    // In editor context, show all blocks (even hidden ones, with opacity)
     // In normal mode, filter by visibility
     final visibleBlocks = List<Map<String, dynamic>>.from(
       blocksToRender.where((block) {
-        if (isEditMode) return true; // Show all blocks in edit mode
+        if (isInEditorContext) return true; // Show all blocks in editor context
         
         final isGloballyVisible = block['is_visible'] ?? true;
         if (!isGloballyVisible) {
@@ -500,18 +501,10 @@ class _PublicHomePageState extends State<PublicHomePage> {
       textColor: textColor,
       sectionSpacing: sectionSpacing,
       containerPadding: containerPadding,
+      tenantId: tenantProvider.tenantId,
     );
 
-    // In edit mode, use side panel layout (Odoo-style)
-    if (isEditMode) {
-      return _buildEditModeLayout(
-        context: context,
-        pageContent: pageContent,
-        editProvider: editProvider,
-        websiteService: websiteService,
-      );
-    }
-
+    // Just return the page content - toolbar and side panel are handled by PublicStoreLayout
     return pageContent;
   }
 
@@ -530,14 +523,12 @@ class _PublicHomePageState extends State<PublicHomePage> {
     required Color textColor,
     required double sectionSpacing,
     required double containerPadding,
+    String? tenantId,
   }) {
     if (visibleBlocks.isNotEmpty) {
       return SingleChildScrollView(
         child: Column(
           children: [
-            // Add space for toolbar in edit mode
-            if (isEditMode) const SizedBox(height: 60),
-            
             for (final block in visibleBlocks)
               _buildBlockFromData(
                 block,
@@ -551,6 +542,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
                 sectionSpacing: sectionSpacing,
                 containerPadding: containerPadding,
                 isEditMode: isEditMode,
+                tenantId: tenantId,
               ),
             SizedBox(height: sectionSpacing),
             
@@ -570,7 +562,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
       return SingleChildScrollView(
         child: Column(
           children: [
-            const SizedBox(height: 80), // Space for toolbar
             Container(
               padding: const EdgeInsets.all(48),
               child: Column(
@@ -644,122 +635,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
     }
   }
 
-  /// Build the edit mode layout with side panel (Odoo-style)
-  Widget _buildEditModeLayout({
-    required BuildContext context,
-    required Widget pageContent,
-    required WebsiteEditModeProvider editProvider,
-    required WebsiteService websiteService,
-  }) {
-    return Row(
-      children: [
-        // Main content area (preview)
-        Expanded(
-          child: Stack(
-            children: [
-              // Page content
-              pageContent,
-              // Top toolbar
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: InlineEditToolbar(
-                  onSave: () => _saveChanges(context, editProvider, websiteService),
-                  onCancel: () => editProvider.exitEditMode(),
-                  onAddBlock: () => _showAddBlockDialog(context, editProvider),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Side panel for editing
-        WebsiteEditorPanel(
-          onSave: () => _saveChanges(context, editProvider, websiteService),
-          onDiscard: () => editProvider.exitEditMode(),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _saveChanges(
-    BuildContext context,
-    WebsiteEditModeProvider editProvider,
-    WebsiteService websiteService,
-  ) async {
-    try {
-      // Get tenant ID
-      final tenantProvider = context.read<PublicStoreTenantProvider>();
-      final tenantId = tenantProvider.tenantId;
-      
-      if (tenantId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error: No se pudo identificar el tenant')),
-        );
-        return;
-      }
-
-      // Show saving indicator
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Guardando cambios...')),
-      );
-
-      // Convert blocks to the format expected by saveBlocks
-      final blocks = editProvider.blocks;
-      final blocksForSave = blocks.asMap().entries.map((entry) {
-        final index = entry.key;
-        final block = entry.value;
-        return {
-          'id': block['id'],
-          'type': block['block_type'],
-          'data': block['block_data'],
-          'isVisible': block['is_visible'] ?? true,
-          'order_index': index,
-        };
-      }).toList();
-
-      // Save all blocks
-      await websiteService.saveBlocks(blocksForSave);
-
-      // Mark as saved
-      editProvider.markAsSaved();
-      
-      // Reload blocks
-      _allBlocks = await websiteService.loadBlocksForTenant(tenantId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Cambios guardados'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _showAddBlockDialog(
-    BuildContext context,
-    WebsiteEditModeProvider editProvider,
-  ) async {
-    final blockType = await showDialog<String>(
-      context: context,
-      builder: (context) => const AddBlockDialog(),
-    );
-    if (blockType != null) {
-      editProvider.addBlock(blockType);
-    }
-  }
-
   Widget _buildBlockFromData(
     Map<String, dynamic> blockData,
     Color primaryColor,
@@ -772,11 +647,15 @@ class _PublicHomePageState extends State<PublicHomePage> {
     required double sectionSpacing,
     required double containerPadding,
     bool isEditMode = false,
+    String? tenantId,
   }) {
     final blockId = blockData['id']?.toString() ?? '';
     final blockType = (blockData['block_type'] ?? '').toString();
     final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
     final isVisible = blockData['is_visible'] ?? true;
+    
+    debugPrint('🧱 [PublicHomePage] Rendering block: type=$blockType, id=$blockId, isEditMode=$isEditMode');
+    
     data.remove('visibility');
     final resolvedHeadingFont = headingFont.isNotEmpty ? headingFont : null;
     final resolvedBodyFont = bodyFont.isNotEmpty ? bodyFont : null;
@@ -787,8 +666,19 @@ class _PublicHomePageState extends State<PublicHomePage> {
       displayColor: textColor,
     );
 
-    final horizontalPadding = containerPadding.clamp(0.0, 200.0).toDouble();
     final verticalPadding = (sectionSpacing / 2).clamp(0.0, 200.0).toDouble();
+    
+    // Full-width blocks (like Commencal's edge-to-edge banners) get no horizontal padding
+    final blockTypeNormalized = blockType.toLowerCase();
+    final isFullWidthBlock = const [
+      'hero',
+      'carousel',
+      'videobanner',
+      'categorygrid',
+      'partnersbanner',
+    ].contains(blockTypeNormalized);
+    
+    final horizontalPadding = isFullWidthBlock ? 0.0 : containerPadding.clamp(0.0, 200.0).toDouble();
 
     // Use editable renderer if in edit mode
     final content = isEditMode
@@ -820,12 +710,13 @@ class _PublicHomePageState extends State<PublicHomePage> {
             headingSize: headingSize,
             bodySize: bodySize,
             onNavigate: (route) => context.go(route),
+            tenantId: tenantId,
           );
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
         horizontalPadding,
-        verticalPadding,
+        isFullWidthBlock ? 0.0 : verticalPadding, // Full-width blocks handle their own spacing
         horizontalPadding,
         verticalPadding,
       ),

@@ -181,21 +181,6 @@ class _EditableBlockWrapper extends StatelessWidget {
                 onToggleVisibility: () => editProvider.toggleBlockVisibility(blockId),
               ),
             ),
-
-          // Add block button between blocks
-          if (isSelected)
-            Positioned(
-              bottom: -20,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: _AddBlockButton(
-                  onAdd: (type) {
-                    editProvider.addBlock(type, atIndex: blockIndex + 1);
-                  },
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -551,51 +536,6 @@ class _EditableBlockWrapper extends StatelessWidget {
             child: const Text('Eliminar'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _AddBlockButton extends StatelessWidget {
-  final void Function(String blockType) onAdd;
-
-  const _AddBlockButton({required this.onAdd});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.blue,
-      borderRadius: BorderRadius.circular(20),
-      elevation: 4,
-      child: InkWell(
-        onTap: () async {
-          final blockType = await showDialog<String>(
-            context: context,
-            builder: (context) => const AddBlockDialog(),
-          );
-          if (blockType != null) {
-            onAdd(blockType);
-          }
-        },
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.add, color: Colors.white, size: 18),
-              SizedBox(width: 4),
-              Text(
-                'Agregar bloque aquí',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -53,7 +53,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
       final publicInventoryService = context.read<PublicInventoryService>();
       _allProducts = await publicInventoryService.getProductsForTenant(
         tenantId: tenantId,
-        onlyInStock: true, // Only show products with inventory
+        onlyInStock: false, // Show all products
       );
 
       debugPrint('[ProductCatalogPage] Loaded ${_allProducts.length} products');
@@ -95,11 +95,6 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
           return false;
         }
 
-        // Price range filter
-        if (product.price < _minPrice || product.price > _maxPrice) {
-          return false;
-        }
-
         return true;
       }).toList();
 
@@ -128,137 +123,93 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
     }
 
     return Container(
-      constraints: const BoxConstraints(maxWidth: 1400),
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Sidebar Filters
-          SizedBox(
-            width: 280,
-            child: _buildFilters(),
-          ),
-
-          const SizedBox(width: 32),
-
-          // Main Content
-          Expanded(
-            child: Column(
+      color: Colors.white,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1400),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildHeader(),
-                const SizedBox(height: 24),
-                _buildProductGrid(),
+                // Sidebar Filters
+                SizedBox(
+                  width: 260,
+                  child: _buildFilters(),
+                ),
+
+                const SizedBox(width: 40),
+
+                // Main Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 32),
+                      _buildProductGrid(),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildFilters() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Filtros',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 24),
-
-            // Search
-            TextField(
-              decoration: const InputDecoration(
-                labelText: 'Buscar productos',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (value) {
-                _searchQuery = value;
-                _applyFilters();
-              },
-            ),
-
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 24),
-
-            // Categories
-            Text(
-              'Categorías',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            _buildCategoryFilters(),
-
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 24),
-
-            // Price Range
-            Text(
-              'Rango de Precio',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '${ChileanUtils.formatCurrency(_minPrice)} - ${ChileanUtils.formatCurrency(_maxPrice)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: PublicStoreTheme.textSecondary,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            RangeSlider(
-              values: RangeValues(_minPrice, _maxPrice),
-              min: 0,
-              max: _allProducts.isNotEmpty
-                  ? _allProducts
-                      .map((p) => p.price)
-                      .reduce((a, b) => a > b ? a : b)
-                  : 1000000,
-              divisions: 20,
-              labels: RangeLabels(
-                ChileanUtils.formatCurrency(_minPrice),
-                ChileanUtils.formatCurrency(_maxPrice),
-              ),
-              onChanged: (RangeValues values) {
-                setState(() {
-                  _minPrice = values.start;
-                  _maxPrice = values.end;
-                });
-                _applyFilters();
-              },
-            ),
-
-            const SizedBox(height: 24),
-
-            // Reset Filters
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () {
-                  setState(() {
-                    _searchQuery = '';
-                    _selectedCategoryId = null;
-                    _minPrice = 0;
-                    _maxPrice = _allProducts.isNotEmpty
-                        ? _allProducts
-                            .map((p) => p.price)
-                            .reduce((a, b) => a > b ? a : b)
-                        : 1000000;
-                  });
-                  _applyFilters();
-                },
-                child: const Text('Limpiar Filtros'),
-              ),
-            ),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Filtros',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
         ),
-      ),
+        const SizedBox(height: 24),
+
+        // Search
+        TextField(
+          decoration: InputDecoration(
+            hintText: 'Buscar productos',
+            hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+            prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 20),
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(0),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          style: const TextStyle(fontSize: 14),
+          onChanged: (value) {
+            _searchQuery = value;
+            _applyFilters();
+          },
+        ),
+
+        const SizedBox(height: 32),
+        Container(height: 1, color: Colors.grey.shade200),
+        const SizedBox(height: 24),
+
+        // Categories
+        const Text(
+          'Categorías',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildCategoryFilters(),
+      ],
     );
   }
 
@@ -270,91 +221,138 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
         .toSet()
         .toList();
 
-    if (categories.isEmpty) {
-      return Text(
-        'No hay categorías disponibles',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: PublicStoreTheme.textMuted,
-            ),
-      );
-    }
-
     return Column(
       children: [
-        RadioListTile<String?>(
-          title: const Text('Todas'),
-          value: null,
-          groupValue: _selectedCategoryId,
-          onChanged: (value) {
-            setState(() => _selectedCategoryId = value);
-            _applyFilters();
-          },
-          contentPadding: EdgeInsets.zero,
-        ),
+        _buildCategoryOption(null, 'Todas', _allProducts.length),
         ...categories.map((category) {
           final count =
               _allProducts.where((p) => p.categoryId == category['id']).length;
-
-          return RadioListTile<String>(
-            title: Text('${category['name']} ($count)'),
-            value: category['id'] as String,
-            groupValue: _selectedCategoryId,
-            onChanged: (value) {
-              setState(() => _selectedCategoryId = value);
-              _applyFilters();
-            },
-            contentPadding: EdgeInsets.zero,
+          return _buildCategoryOption(
+            category['id'] as String,
+            category['name'] as String,
+            count,
           );
         }).toList(),
       ],
     );
   }
 
+  Widget _buildCategoryOption(String? id, String name, int count) {
+    final isSelected = _selectedCategoryId == id;
+    return InkWell(
+      onTap: () {
+        setState(() => _selectedCategoryId = id);
+        _applyFilters();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? Colors.black : Colors.grey.shade400,
+                  width: isSelected ? 5 : 1,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '$name ($count)',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isSelected ? Colors.black : Colors.grey.shade700,
+                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Todos los Productos',
-              style: Theme.of(context).textTheme.displaySmall,
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 24,
+                  color: Colors.black,
+                  margin: const EdgeInsets.only(right: 12),
+                ),
+                const Text(
+                  'PRODUCTOS',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: Colors.black,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Text(
               '${_filteredProducts.length} productos encontrados',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: PublicStoreTheme.textSecondary,
-                  ),
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
             ),
           ],
         ),
 
         // Sort Dropdown
-        SizedBox(
-          width: 200,
-          child: DropdownButtonFormField<String>(
-            value: _sortBy,
-            decoration: const InputDecoration(
-              labelText: 'Ordenar por',
-              border: OutlineInputBorder(),
+        Row(
+          children: [
+            Text(
+              'Ordenar por',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
             ),
-            items: const [
-              DropdownMenuItem(value: 'name', child: Text('Nombre')),
-              DropdownMenuItem(
-                  value: 'price_asc', child: Text('Precio: Menor a Mayor')),
-              DropdownMenuItem(
-                  value: 'price_desc', child: Text('Precio: Mayor a Menor')),
-              DropdownMenuItem(value: 'newest', child: Text('Más Recientes')),
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _sortBy = value);
-                _applyFilters();
-              }
-            },
-          ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _sortBy,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black87,
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'name', child: Text('Nombre')),
+                    DropdownMenuItem(value: 'price_asc', child: Text('Precio: Menor a Mayor')),
+                    DropdownMenuItem(value: 'price_desc', child: Text('Precio: Mayor a Menor')),
+                    DropdownMenuItem(value: 'newest', child: Text('Más Recientes')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _sortBy = value);
+                      _applyFilters();
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -364,27 +362,30 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
     if (_filteredProducts.isEmpty) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(48),
+          padding: const EdgeInsets.all(64),
           child: Column(
             children: [
               Icon(
                 Icons.inventory_2_outlined,
-                size: 64,
-                color: PublicStoreTheme.textMuted,
+                size: 48,
+                color: Colors.grey.shade400,
               ),
               const SizedBox(height: 16),
-              Text(
+              const Text(
                 'No se encontraron productos',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: PublicStoreTheme.textSecondary,
-                    ),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black54,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Intenta ajustar los filtros de búsqueda',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: PublicStoreTheme.textMuted,
-                    ),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade500,
+                ),
               ),
             ],
           ),
@@ -397,179 +398,192 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        childAspectRatio: 0.75,
-        crossAxisSpacing: 24,
-        mainAxisSpacing: 24,
+        childAspectRatio: 0.72,
+        crossAxisSpacing: 20,
+        mainAxisSpacing: 20,
       ),
       itemCount: _filteredProducts.length,
       itemBuilder: (context, index) {
-        return _buildProductCard(_filteredProducts[index]);
+        return _CatalogProductCard(product: _filteredProducts[index]);
       },
     );
   }
+}
 
-  Widget _buildProductCard(Product product) {
-    final cart = context.watch<CartProvider>();
-    final inCart = cart.hasProduct(product.id);
+// Premium product card for catalog page
+class _CatalogProductCard extends StatefulWidget {
+  final Product product;
+  
+  const _CatalogProductCard({required this.product});
+  
+  @override
+  State<_CatalogProductCard> createState() => _CatalogProductCardState();
+}
 
-    return InkWell(
-      onTap: () => context.go('/tienda/producto/${product.id}'),
-      child: Card(
-        elevation: 2,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Product Image
-            AspectRatio(
-              aspectRatio: 1,
-              child: Stack(
-                children: [
-                  Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: PublicStoreTheme.surface,
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(12),
-                      ),
-                    ),
-                    child: product.imageUrl != null
-                        ? ClipRRect(
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(12),
-                            ),
-                            child: Image.network(
+class _CatalogProductCardState extends State<_CatalogProductCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final product = widget.product;
+    final hasImage = product.imageUrl != null && product.imageUrl!.isNotEmpty;
+    final inStock = product.stockQuantity > 0;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => context.go('/tienda/producto/${product.id}'),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(
+              color: _isHovered ? Colors.grey.shade300 : Colors.grey.shade200,
+              width: 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Product Image
+              Expanded(
+                flex: 5,
+                child: Stack(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      color: const Color(0xFFF8F8F8),
+                      padding: const EdgeInsets.all(16),
+                      child: hasImage
+                          ? Image.network(
                               product.imageUrl!,
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) {
-                                return const Center(
+                                return Center(
                                   child: Icon(
-                                    Icons.image_not_supported,
+                                    Icons.pedal_bike_outlined,
                                     size: 48,
-                                    color: PublicStoreTheme.textMuted,
+                                    color: Colors.grey.shade400,
                                   ),
                                 );
                               },
+                            )
+                          : Center(
+                              child: Icon(
+                                Icons.pedal_bike_outlined,
+                                size: 48,
+                                color: Colors.grey.shade400,
+                              ),
                             ),
-                          )
-                        : const Center(
-                            child: Icon(
-                              Icons.pedal_bike,
-                              size: 64,
-                              color: PublicStoreTheme.textMuted,
+                    ),
+                    // Out of stock badge
+                    if (!inStock)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          color: Colors.black87,
+                          child: const Text(
+                            'AGOTADO',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
                             ),
                           ),
-                  ),
-
-                  // Stock Badge
-                  if (product.stockQuantity == 0)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: PublicStoreTheme.error,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'Agotado',
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
                         ),
                       ),
-                    ),
-
-                  // In Cart Badge
-                  if (inCart)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: PublicStoreTheme.success,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            // Product Info
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product.name,
-                      style: Theme.of(context).textTheme.titleMedium,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    if (product.brand != null)
-                      Text(
-                        product.brand!,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: PublicStoreTheme.textMuted,
+                    // Hover overlay
+                    if (_isHovered)
+                      Positioned(
+                        bottom: 12,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            color: Colors.black,
+                            child: const Text(
+                              'VER PRODUCTO',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
                             ),
-                      ),
-                    const Spacer(),
-                    Text(
-                      ChileanUtils.formatCurrency(product.price),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: PublicStoreTheme.primaryBlue,
-                            fontWeight: FontWeight.bold,
                           ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: product.stockQuantity > 0
-                              ? Text(
-                                  'Stock: ${product.stockQuantity}',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: PublicStoreTheme.success,
-                                      ),
-                                )
-                              : Text(
-                                  'Sin stock',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: PublicStoreTheme.error,
-                                      ),
-                                ),
                         ),
-                        Icon(
-                          Icons.arrow_forward,
-                          size: 16,
-                          color: PublicStoreTheme.primaryBlue,
-                        ),
-                      ],
-                    ),
+                      ),
                   ],
                 ),
               ),
-            ),
-          ],
+              // Product Info
+              Expanded(
+                flex: 3,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Brand
+                      if (product.brand != null && product.brand!.isNotEmpty)
+                        Text(
+                          product.brand!.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade500,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      const SizedBox(height: 4),
+                      // Product name
+                      Expanded(
+                        child: Text(
+                          product.name,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87,
+                            height: 1.3,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Price
+                      Text(
+                        ChileanUtils.formatCurrency(product.price),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black,
+                        ),
+                      ),
+                      if (inStock)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Stock: ${product.stockQuantity}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

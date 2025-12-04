@@ -5,22 +5,41 @@ const _uuid = Uuid();
 
 /// Provider for website inline edit mode state.
 /// Tracks edit mode, selected block, and pending changes.
+/// 
+/// Two modes:
+/// - Preview mode: Shows the site with a top "Editar" bar (isPreviewMode = true, isEditMode = false)
+/// - Edit mode: Shows the site with the side panel editor (isEditMode = true)
 class WebsiteEditModeProvider extends ChangeNotifier {
-  bool _isEditMode = false;
+  bool _isPreviewMode = false; // Preview with top bar
+  bool _isEditMode = false;    // Full edit with side panel
   String? _selectedBlockId;
   bool _hasUnsavedChanges = false;
   List<Map<String, dynamic>> _blocks = [];
   Map<String, dynamic> _settings = {};
   
   // Getters
+  bool get isPreviewMode => _isPreviewMode;
   bool get isEditMode => _isEditMode;
+  bool get isInEditorContext => _isPreviewMode || _isEditMode; // Either preview or edit
   String? get selectedBlockId => _selectedBlockId;
   bool get hasUnsavedChanges => _hasUnsavedChanges;
   List<Map<String, dynamic>> get blocks => _blocks;
   Map<String, dynamic> get settings => _settings;
 
-  /// Enter edit mode with current blocks and settings
+  /// Enter preview mode (shows top bar with "Editar" button)
+  void enterPreviewMode(List<Map<String, dynamic>> blocks, Map<String, dynamic> settings) {
+    _isPreviewMode = true;
+    _isEditMode = false;
+    _blocks = blocks.map((b) => Map<String, dynamic>.from(b)).toList();
+    _settings = Map<String, dynamic>.from(settings);
+    _hasUnsavedChanges = false;
+    _selectedBlockId = null;
+    notifyListeners();
+  }
+
+  /// Enter edit mode (shows side panel editor)
   void enterEditMode(List<Map<String, dynamic>> blocks, Map<String, dynamic> settings) {
+    _isPreviewMode = false;
     _isEditMode = true;
     _blocks = blocks.map((b) => Map<String, dynamic>.from(b)).toList();
     _settings = Map<String, dynamic>.from(settings);
@@ -29,13 +48,36 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Exit edit mode, discarding changes if not saved
+  /// Switch from preview to edit mode (keeps blocks)
+  void switchToEditMode() {
+    _isPreviewMode = false;
+    _isEditMode = true;
+    notifyListeners();
+  }
+
+  /// Switch from edit mode back to preview (after save/discard)
+  void switchToPreviewMode() {
+    _isEditMode = false;
+    _isPreviewMode = true;
+    _selectedBlockId = null;
+    notifyListeners();
+  }
+
+  /// Exit completely (back to normal visitor view)
   void exitEditMode() {
+    _isPreviewMode = false;
     _isEditMode = false;
     _selectedBlockId = null;
     _hasUnsavedChanges = false;
     _blocks = [];
     _settings = {};
+    notifyListeners();
+  }
+
+  /// Update blocks after successful save (refresh with database data)
+  void updateBlocksAfterSave(List<Map<String, dynamic>> freshBlocks) {
+    _blocks = freshBlocks.map((b) => Map<String, dynamic>.from(b)).toList();
+    _hasUnsavedChanges = false;
     notifyListeners();
   }
 
@@ -211,10 +253,30 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       case 'carousel':
         return {
           'slides': [
-            {'title': 'Slide 1', 'subtitle': 'Descripción', 'image': '', 'buttonText': 'Ver más', 'buttonLink': '/tienda/productos'},
+            {
+              'title': 'Bienvenido a nuestra tienda',
+              'subtitle': 'Descubre los mejores productos para tu bicicleta',
+              'imageUrl': '',
+              'ctaText': 'Ver catálogo',
+              'ctaLink': '/tienda/productos',
+              'showOverlay': true,
+              'overlayOpacity': 0.55,
+            },
+            {
+              'title': 'Servicio técnico certificado',
+              'subtitle': 'Agenda tu mantención sin salir de casa',
+              'imageUrl': '',
+              'ctaText': 'Agendar ahora',
+              'ctaLink': '/tienda/servicios',
+              'showOverlay': true,
+              'overlayOpacity': 0.55,
+            },
           ],
           'autoPlay': true,
-          'interval': 5,
+          'intervalSeconds': 5,
+          'showIndicators': true,
+          'showArrows': true,
+          'animation': 'slide',
         };
       case 'products':
         return {
@@ -304,6 +366,66 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         return {
           'title': 'Galería',
           'images': [],
+        };
+      case 'categoryGrid':
+        return {
+          'title': 'Explora Nuestras Categorías',
+          'subtitle': 'Encuentra lo que buscas',
+          'categories': [
+            {
+              'title': 'Mountain Bike',
+              'subtitle': 'Conquista cualquier terreno',
+              'imageUrl': '',
+              'ctaText': 'Ver colección',
+              'ctaLink': '/tienda/productos?categoria=mtb',
+              'size': 'large',
+            },
+            {
+              'title': 'Ruta',
+              'subtitle': 'Velocidad y rendimiento',
+              'imageUrl': '',
+              'ctaText': 'Ver colección',
+              'ctaLink': '/tienda/productos?categoria=ruta',
+              'size': 'large',
+            },
+            {
+              'title': 'Urbano',
+              'subtitle': 'Movilidad en la ciudad',
+              'imageUrl': '',
+              'ctaText': 'Ver gama',
+              'ctaLink': '/tienda/productos?categoria=urbano',
+              'size': 'medium',
+            },
+            {
+              'title': 'Accesorios',
+              'subtitle': 'Todo lo que necesitas',
+              'imageUrl': '',
+              'ctaText': 'Explorar',
+              'ctaLink': '/tienda/productos?categoria=accesorios',
+              'size': 'medium',
+            },
+          ],
+        };
+      case 'videoBanner':
+        return {
+          'title': 'Vive la Aventura',
+          'subtitle': 'La experiencia de rodar sin límites',
+          'imageUrl': '',
+          'videoUrl': '',
+          'ctaText': 'Descubrir más',
+          'ctaLink': '/tienda/productos',
+          'showCta': true,
+          'overlayOpacity': 0.5,
+        };
+      case 'partnersBanner':
+        return {
+          'title': 'Nuestras Ubicaciones',
+          'imageUrl': '',
+          'items': [
+            'Santiago, Chile',
+            'Viña del Mar, Chile',
+            'Concepción, Chile',
+          ],
         };
       default:
         return {};
