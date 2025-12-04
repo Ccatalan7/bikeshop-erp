@@ -319,14 +319,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       return Container(
         height: 500,
         decoration: BoxDecoration(
-          color: PublicStoreTheme.surface,
-          borderRadius: BorderRadius.circular(12),
+          color: const Color(0xFFF8F8F8),
+          border: Border.all(color: Colors.grey.shade200),
         ),
         child: const Center(
           child: Icon(
-            Icons.pedal_bike,
-            size: 128,
-            color: PublicStoreTheme.textMuted,
+            Icons.pedal_bike_outlined,
+            size: 100,
+            color: Colors.grey,
           ),
         ),
       );
@@ -334,33 +334,30 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     return Column(
       children: [
-        // Main Image
+        // Main Image - Clean, minimal border
         Container(
           height: 500,
           decoration: BoxDecoration(
-            color: PublicStoreTheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: PublicStoreTheme.cardShadow,
+            color: const Color(0xFFF8F8F8),
+            border: Border.all(color: Colors.grey.shade200),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              images[_selectedImageIndex],
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return const Center(
-                  child: Icon(
-                    Icons.broken_image,
-                    size: 64,
-                    color: PublicStoreTheme.textMuted,
-                  ),
-                );
-              },
-            ),
+          padding: const EdgeInsets.all(24),
+          child: Image.network(
+            images[_selectedImageIndex],
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return const Center(
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  size: 64,
+                  color: Colors.grey,
+                ),
+              );
+            },
           ),
         ),
 
-        // Thumbnail Gallery
+        // Thumbnail Gallery - Minimal styling
         if (images.length > 1) ...[
           const SizedBox(height: 16),
           SizedBox(
@@ -379,21 +376,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       decoration: BoxDecoration(
                         border: Border.all(
                           color: isSelected
-                              ? PublicStoreTheme.primaryBlue
-                              : PublicStoreTheme.border,
-                          width: isSelected ? 3 : 1,
+                              ? Colors.black
+                              : Colors.grey.shade300,
+                          width: isSelected ? 2 : 1,
                         ),
-                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          images[index],
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Icon(Icons.broken_image, size: 24);
-                          },
-                        ),
+                      padding: const EdgeInsets.all(4),
+                      child: Image.network(
+                        images[index],
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(Icons.broken_image, size: 24);
+                        },
                       ),
                     ),
                   ),
@@ -409,208 +403,284 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Widget _buildProductInfo() {
     final cart = context.watch<CartProvider>();
     final inCart = cart.hasProduct(_product!.id);
+    final inStock = _product!.stockQuantity > 0;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Product Name
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Product Name - Clean uppercase style
+          Text(
+            _product!.name,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              color: Colors.black87,
+              height: 1.3,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Brand
+          if (_product!.brand != null && _product!.brand!.isNotEmpty)
             Text(
-              _product!.name,
-              style: Theme.of(context).textTheme.displaySmall,
+              _product!.brand!,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
             ),
 
-            const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
-            // Brand
-            if (_product!.brand != null)
-              Text(
-                _product!.brand!,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: PublicStoreTheme.textSecondary,
-                    ),
-              ),
+          // SKU - Minimal
+          Text(
+            'SKU: ${_product!.sku}',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade500,
+            ),
+          ),
 
-            const SizedBox(height: 16),
+          const SizedBox(height: 24),
+          Divider(color: Colors.grey.shade200),
+          const SizedBox(height: 24),
 
-            // SKU
+          // Price - Bold and prominent
+          Text(
+            ChileanUtils.formatCurrency(_product!.price),
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+              color: PublicStoreTheme.primaryBlue,
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            '+ IVA incluido',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade500,
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Stock Status - Clean badge style
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: inStock
+                  ? Colors.green.shade50
+                  : Colors.red.shade50,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  inStock ? Icons.check_circle_outline : Icons.cancel_outlined,
+                  color: inStock ? Colors.green.shade700 : Colors.red.shade700,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  inStock ? 'Disponible' : 'Agotado',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: inStock ? Colors.green.shade700 : Colors.red.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // Quantity & Add to Cart
+          if (inStock) ...[
+            // Quantity Selector - Minimal
             Row(
               children: [
                 Text(
-                  'SKU: ',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: PublicStoreTheme.textMuted,
-                      ),
+                  'Cantidad:',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade700,
+                  ),
                 ),
-                Text(
-                  _product!.sku,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: PublicStoreTheme.textSecondary,
-                        fontWeight: FontWeight.w600,
+                const SizedBox(width: 16),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      InkWell(
+                        onTap: _quantity > 1
+                            ? () => setState(() => _quantity--)
+                            : null,
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          child: Icon(
+                            Icons.remove,
+                            size: 18,
+                            color: _quantity > 1 ? Colors.black87 : Colors.grey.shade400,
+                          ),
+                        ),
                       ),
+                      Container(
+                        width: 50,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          border: Border.symmetric(
+                            vertical: BorderSide(color: Colors.grey.shade300),
+                          ),
+                        ),
+                        child: Text(
+                          '$_quantity',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: _quantity < _product!.stockQuantity
+                            ? () => setState(() => _quantity++)
+                            : null,
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          child: Icon(
+                            Icons.add,
+                            size: 18,
+                            color: _quantity < _product!.stockQuantity 
+                                ? Colors.black87 
+                                : Colors.grey.shade400,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
 
             const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 24),
 
-            // Price
-            Text(
-              ChileanUtils.formatCurrency(_product!.price),
-              style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                    color: PublicStoreTheme.primaryBlue,
-                    fontWeight: FontWeight.bold,
+            // Add to Cart Button - Clean, minimal
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _addToCart,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: inCart ? Colors.green.shade600 : Colors.black,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(0),
                   ),
-            ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              '+ IVA incluido',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: PublicStoreTheme.textMuted,
-                  ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Stock Status
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: _product!.stockQuantity > 0
-                    ? PublicStoreTheme.success.withOpacity(0.1)
-                    : PublicStoreTheme.error.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _product!.stockQuantity > 0
-                      ? PublicStoreTheme.success
-                      : PublicStoreTheme.error,
+                  elevation: 0,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      inCart ? Icons.check : Icons.shopping_bag_outlined,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      inCart ? 'AGREGADO AL CARRITO' : 'AGREGAR AL CARRITO',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    _product!.stockQuantity > 0
-                        ? Icons.check_circle
-                        : Icons.cancel,
-                    color: _product!.stockQuantity > 0
-                        ? PublicStoreTheme.success
-                        : PublicStoreTheme.error,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _product!.stockQuantity > 0
-                        ? 'En stock (${_product!.stockQuantity} disponibles)'
-                        : 'Agotado',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: _product!.stockQuantity > 0
-                              ? PublicStoreTheme.success
-                              : PublicStoreTheme.error,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ],
-              ),
             ),
 
-            const SizedBox(height: 32),
-
-            // Quantity Selector
-            if (_product!.stockQuantity > 0) ...[
-              Text(
-                'Cantidad',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+            // View Cart Link
+            if (inCart) ...[
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: _quantity > 1
-                        ? () => setState(() => _quantity--)
-                        : null,
-                    icon: const Icon(Icons.remove),
-                    style: IconButton.styleFrom(
-                      backgroundColor: PublicStoreTheme.surface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: PublicStoreTheme.border),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    width: 80,
-                    alignment: Alignment.center,
-                    child: Text(
-                      '$_quantity',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _quantity < _product!.stockQuantity
-                        ? () => setState(() => _quantity++)
-                        : null,
-                    icon: const Icon(Icons.add),
-                    style: IconButton.styleFrom(
-                      backgroundColor: PublicStoreTheme.surface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: PublicStoreTheme.border),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 32),
-
-              // Add to Cart Button
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _addToCart,
-                  icon: Icon(inCart ? Icons.check : Icons.shopping_cart),
-                  label: Text(
-                      inCart ? 'AGREGADO AL CARRITO' : 'AGREGAR AL CARRITO'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    backgroundColor: inCart
-                        ? PublicStoreTheme.success
-                        : PublicStoreTheme.primaryBlue,
+                child: OutlinedButton(
+                  onPressed: () => context.go('/tienda/carrito'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.black87,
+                    side: const BorderSide(color: Colors.black87, width: 1),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(0),
+                    ),
+                  ),
+                  child: const Text(
+                    'VER CARRITO',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1,
+                    ),
                   ),
                 ),
               ),
-
-              const SizedBox(height: 12),
-
-              // View Cart Button
-              if (inCart)
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => context.go('/tienda/carrito'),
-                    child: const Text('VER CARRITO'),
-                  ),
-                ),
             ],
-
-            const SizedBox(height: 32),
-            const Divider(),
-            const SizedBox(height: 24),
-
-            // Quick Info
-            _buildInfoRow(Icons.local_shipping_outlined, 'Envío a todo Chile'),
-            const SizedBox(height: 12),
-            _buildInfoRow(Icons.store_outlined, 'Retiro en tienda disponible'),
-            const SizedBox(height: 12),
-            _buildInfoRow(Icons.verified_user_outlined, 'Garantía oficial'),
+          ] else ...[
+            // Out of stock message
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.cancel_outlined, color: Colors.red.shade700, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Agotado',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.red.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
-        ),
+
+          const SizedBox(height: 32),
+          Divider(color: Colors.grey.shade200),
+          const SizedBox(height: 24),
+
+          // Quick Info - Clean icons
+          _buildInfoRow(Icons.local_shipping_outlined, 'Envío a todo Chile'),
+          const SizedBox(height: 12),
+          _buildInfoRow(Icons.storefront_outlined, 'Retiro en tienda disponible'),
+          const SizedBox(height: 12),
+          _buildInfoRow(Icons.verified_outlined, 'Garantía oficial'),
+        ],
       ),
     );
   }
@@ -620,13 +690,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       children: [
         Icon(
           icon,
-          size: 20,
-          color: PublicStoreTheme.primaryBlue,
+          size: 18,
+          color: Colors.grey.shade600,
         ),
         const SizedBox(width: 12),
         Text(
           text,
-          style: Theme.of(context).textTheme.bodyMedium,
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey.shade700,
+          ),
         ),
       ],
     );
@@ -636,84 +709,115 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Detalles del Producto',
-          style: Theme.of(context).textTheme.headlineMedium,
+        // Section header with vertical bar
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 28,
+              color: Colors.black,
+              margin: const EdgeInsets.only(right: 12),
+            ),
+            const Text(
+              'DETALLES DEL PRODUCTO',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+                color: Colors.black,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 24),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Description
-                if (_product!.description != null) ...[
-                  Text(
-                    'Descripción',
-                    style: Theme.of(context).textTheme.titleLarge,
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Description
+              if (_product!.description != null && _product!.description!.isNotEmpty) ...[
+                const Text(
+                  'Descripción',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _product!.description!,
-                    style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _product!.description!,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade700,
+                    height: 1.6,
                   ),
-                  const SizedBox(height: 32),
-                ],
-
-                // Specifications
-                if (_product!.specifications.isNotEmpty) ...[
-                  Text(
-                    'Especificaciones',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 16),
-                  ..._product!.specifications.entries.map((entry) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 200,
-                            child: Text(
-                              '${entry.key}:',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: PublicStoreTheme.textSecondary,
-                                  ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              entry.value,
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ],
-
-                // General Info
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 16),
-
-                _buildDetailRow(
-                    'Categoría', _product!.categoryName ?? 'Sin categoría'),
-                if (_product!.brand != null)
-                  _buildDetailRow('Marca', _product!.brand!),
-                if (_product!.model != null)
-                  _buildDetailRow('Modelo', _product!.model!),
-                if (_product!.weight > 0)
-                  _buildDetailRow('Peso', '${_product!.weight} kg'),
+                ),
+                const SizedBox(height: 24),
+                Divider(color: Colors.grey.shade200),
+                const SizedBox(height: 24),
               ],
-            ),
+
+              // Specifications
+              if (_product!.specifications.isNotEmpty) ...[
+                const Text(
+                  'Especificaciones',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ..._product!.specifications.entries.map((entry) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 180,
+                          child: Text(
+                            entry.key,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            entry.value,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 16),
+                Divider(color: Colors.grey.shade200),
+                const SizedBox(height: 16),
+              ],
+
+              // General Info
+              _buildDetailRow('Categoría', _product!.categoryName ?? 'Sin categoría'),
+              if (_product!.brand != null && _product!.brand!.isNotEmpty)
+                _buildDetailRow('Marca', _product!.brand!),
+              if (_product!.model != null && _product!.model!.isNotEmpty)
+                _buildDetailRow('Modelo', _product!.model!),
+              if (_product!.weight > 0)
+                _buildDetailRow('Peso', '${_product!.weight} kg'),
+            ],
           ),
         ),
       ],
@@ -722,23 +826,26 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
           SizedBox(
-            width: 200,
+            width: 180,
             child: Text(
-              '$label:',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: PublicStoreTheme.textSecondary,
-                  ),
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+              ),
             ),
           ),
         ],
@@ -750,19 +857,35 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Productos Relacionados',
-          style: Theme.of(context).textTheme.headlineMedium,
+        // Section header with vertical bar (like product cards section)
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 28,
+              color: Colors.black,
+              margin: const EdgeInsets.only(right: 12),
+            ),
+            const Text(
+              'PRODUCTOS RELACIONADOS',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+                color: Colors.black,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 4,
             childAspectRatio: 0.75,
-            crossAxisSpacing: 24,
-            mainAxisSpacing: 24,
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 20,
           ),
           itemCount: _relatedProducts.length,
           itemBuilder: (context, index) {
@@ -774,84 +897,94 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Widget _buildRelatedProductCard(Product product) {
-    return InkWell(
-      onTap: () {
-        // Navigate to this product's detail page
-        context.go('/tienda/producto/${product.id}');
-        // Reload data for new product
-        setState(() {
-          _selectedImageIndex = 0;
-          _quantity = 1;
-        });
-        _loadProduct();
-      },
-      child: Card(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image
-            AspectRatio(
-              aspectRatio: 1,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: PublicStoreTheme.surface,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(12),
-                  ),
-                ),
-                child: product.imageUrl != null
-                    ? ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(12),
-                        ),
-                        child: Image.network(
+    final hasImage = product.imageUrl != null && product.imageUrl!.isNotEmpty;
+    
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () {
+          context.go('/tienda/producto/${product.id}');
+          setState(() {
+            _selectedImageIndex = 0;
+            _quantity = 1;
+          });
+          _loadProduct();
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Image - takes most of the space
+              Expanded(
+                flex: 4,
+                child: Container(
+                  width: double.infinity,
+                  color: const Color(0xFFF8F8F8),
+                  padding: const EdgeInsets.all(12),
+                  child: hasImage
+                      ? Image.network(
                           product.imageUrl!,
-                          fit: BoxFit.cover,
+                          fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) {
-                            return const Center(
+                            return Center(
                               child: Icon(
-                                Icons.image_not_supported,
-                                size: 48,
-                                color: PublicStoreTheme.textMuted,
+                                Icons.pedal_bike_outlined,
+                                size: 40,
+                                color: Colors.grey.shade400,
                               ),
                             );
                           },
+                        )
+                      : Center(
+                          child: Icon(
+                            Icons.pedal_bike_outlined,
+                            size: 48,
+                            color: Colors.grey.shade400,
+                          ),
                         ),
-                      )
-                    : const Center(
-                        child: Icon(
-                          Icons.pedal_bike,
-                          size: 64,
-                          color: PublicStoreTheme.textMuted,
+                ),
+              ),
+              // Product info
+              Expanded(
+                flex: 2,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        product.name.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.3,
+                          color: Colors.black87,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        ChileanUtils.formatCurrency(product.price),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black,
                         ),
                       ),
-              ),
-            ),
-
-            // Info
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    style: Theme.of(context).textTheme.titleSmall,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    ChileanUtils.formatCurrency(product.price),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: PublicStoreTheme.primaryBlue,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -2448,27 +2448,22 @@ class WebsiteBlockRenderer {
     final title = (data['title'] ?? 'MARCAS').toString().trim();
     final accentColor = _parseColor(data['accentColor']?.toString()) ?? primaryColor;
     
-    // Logo size: small, medium, large, xlarge - BIG logos
+    // Logo height only - width will be calculated to fill available space
     final logoSizeStr = (data['logoSize'] ?? 'medium').toString();
-    double logoWidth;
     double logoHeight;
     switch (logoSizeStr) {
       case 'small':
-        logoWidth = 160;
-        logoHeight = 70;
+        logoHeight = 50;
         break;
       case 'large':
-        logoWidth = 260;
-        logoHeight = 120;
+        logoHeight = 100;
         break;
       case 'xlarge':
-        logoWidth = 280;
         logoHeight = 130;
         break;
       case 'medium':
       default:
-        logoWidth = 200;
-        logoHeight = 90;
+        logoHeight = 80;
         break;
     }
     
@@ -2492,13 +2487,13 @@ class WebsiteBlockRenderer {
       ];
     }
 
-    // Gap between logos - ultra tight
-    const double gap = 10;
+    // Gap between logos
+    const double gap = 80;
 
     return Container(
       width: double.infinity,
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 48),
       child: Column(
         children: [
           // Title with accent underline
@@ -2520,13 +2515,15 @@ class WebsiteBlockRenderer {
             color: accentColor,
           ),
           const SizedBox(height: 32),
-          // Brand logos - carousel with minimalistic pagination
-          _BrandLogosCarousel(
-            brands: brands,
-            bodyFont: bodyFont,
-            logoWidth: logoWidth,
-            logoHeight: logoHeight,
-            gap: gap,
+          // Brand logos - full width carousel
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _BrandLogosCarousel(
+              brands: brands,
+              bodyFont: bodyFont,
+              logoHeight: logoHeight,
+              gap: gap,
+            ),
           ),
         ],
       ),
@@ -2551,16 +2548,14 @@ class WebsiteBlockRenderer {
 class _BrandLogosCarousel extends StatefulWidget {
   final List<Map<String, dynamic>> brands;
   final String? bodyFont;
-  final double logoWidth;
   final double logoHeight;
   final double gap;
 
   const _BrandLogosCarousel({
     required this.brands,
     this.bodyFont,
-    this.logoWidth = 140,
     this.logoHeight = 90,
-    this.gap = 10,
+    this.gap = 40,
   });
 
   @override
@@ -2570,15 +2565,6 @@ class _BrandLogosCarousel extends StatefulWidget {
 class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
   final PageController _pageController = PageController(viewportFraction: 1);
   int _currentPage = 0;
-
-  int get _logosPerPage {
-    final width = MediaQuery.of(context).size.width;
-    final slot = widget.logoWidth + widget.gap;
-    final perPage = (width / slot).floor();
-    return perPage.clamp(1, 5);
-  }
-
-  int get _totalPages => (widget.brands.length / _logosPerPage).ceil();
 
   @override
   void dispose() {
@@ -2590,65 +2576,85 @@ class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
   Widget build(BuildContext context) {
     if (widget.brands.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      children: [
-        SizedBox(
-          height: widget.logoHeight,
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: _totalPages,
-            onPageChanged: (i) => setState(() => _currentPage = i),
-            itemBuilder: (_, page) {
-              final start = page * _logosPerPage;
-              final end = (start + _logosPerPage).clamp(0, widget.brands.length);
-              final items = widget.brands.sublist(start, end);
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (int i = 0; i < items.length; i++) ...[
-                    _BrandLogoItem(
-                      brand: items[i],
-                      bodyFont: widget.bodyFont,
-                      width: widget.logoWidth,
-                      height: widget.logoHeight,
-                    ),
-                    if (i < items.length - 1) SizedBox(width: widget.gap),
-                  ],
-                ],
-              );
-            },
-          ),
-        ),
-        if (_totalPages > 1) ...[
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(_totalPages, (i) {
-              final active = i == _currentPage;
-              return GestureDetector(
-                onTap: () {
-                  _pageController.animateToPage(
-                    i,
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOut,
+    final brandCount = widget.brands.length;
+
+    // Use LayoutBuilder to get ACTUAL available width
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        
+        // Items per page = total brands (show all on one page, like reference site)
+        // Only paginate if we truly can't fit them all
+        final minLogoWidth = 100.0; // Minimum width per logo
+        final maxItemsPerPage = ((availableWidth) / (minLogoWidth + widget.gap)).floor();
+        
+        // Show as many as we can fit, up to all brands
+        final itemsPerPage = maxItemsPerPage.clamp(1, brandCount);
+        final totalPages = (brandCount / itemsPerPage).ceil();
+
+        return Column(
+          children: [
+            SizedBox(
+              height: widget.logoHeight,
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: totalPages,
+                onPageChanged: (i) => setState(() => _currentPage = i),
+                itemBuilder: (_, page) {
+                  final start = page * itemsPerPage;
+                  final end = (start + itemsPerPage).clamp(0, brandCount);
+                  final items = widget.brands.sublist(start, end);
+                  
+                  // Use Expanded to fill all available width evenly
+                  return Row(
+                    children: [
+                      for (int i = 0; i < items.length; i++) ...[
+                        Expanded(
+                          child: _BrandLogoItem(
+                            brand: items[i],
+                            bodyFont: widget.bodyFont,
+                            width: double.infinity,
+                            height: widget.logoHeight,
+                          ),
+                        ),
+                        if (i < items.length - 1) SizedBox(width: widget.gap),
+                      ],
+                    ],
                   );
-                  setState(() => _currentPage = i);
                 },
-                child: Container(
-                  width: active ? 18 : 8,
-                  height: 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: active ? const Color(0xFF00A09D) : Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ],
-      ],
+              ),
+            ),
+            if (totalPages > 1) ...[
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(totalPages, (i) {
+                  final active = i == _currentPage;
+                  return GestureDetector(
+                    onTap: () {
+                      _pageController.animateToPage(
+                        i,
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeOut,
+                      );
+                      setState(() => _currentPage = i);
+                    },
+                    child: Container(
+                      width: active ? 20 : 10,
+                      height: 10,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: active ? const Color(0xFF00A09D) : Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -2676,8 +2682,8 @@ class _BrandLogoItem extends StatelessWidget {
     final imageUrl = brand['imageUrl']?.toString() ?? '';
     final link = brand['link']?.toString() ?? '';
 
-    Widget content = SizedBox(
-      width: width,
+    Widget content = Container(
+      constraints: BoxConstraints(maxWidth: width, minWidth: 40),
       height: height,
       child: imageUrl.isNotEmpty
           ? Image.network(
