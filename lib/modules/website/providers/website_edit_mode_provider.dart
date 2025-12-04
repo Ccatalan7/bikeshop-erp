@@ -427,6 +427,16 @@ class WebsiteEditModeProvider extends ChangeNotifier {
             'Concepción, Chile',
           ],
         };
+      case 'brandLogos':
+        return {
+          'title': 'MARCAS',
+          'accentColor': '#E53935',
+          'brands': [
+            {'name': 'Marca 1', 'imageUrl': '', 'link': ''},
+            {'name': 'Marca 2', 'imageUrl': '', 'link': ''},
+            {'name': 'Marca 3', 'imageUrl': '', 'link': ''},
+          ],
+        };
       default:
         return {};
     }

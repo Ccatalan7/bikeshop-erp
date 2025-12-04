@@ -204,6 +204,14 @@ class WebsiteBlockRenderer {
           headingFont: headingFont,
           bodyFont: bodyFont,
         );
+      case WebsiteBlockType.brandLogos:
+        return _buildBrandLogos(
+          context: context,
+          data: data,
+          primaryColor: primaryColor,
+          headingFont: headingFont,
+          bodyFont: bodyFont,
+        );
     }
   }
 
@@ -2420,6 +2428,300 @@ class WebsiteBlockRenderer {
                   )),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================================
+  // BRAND LOGOS BLOCK
+  // Clean white background with brand logos in a scrollable row
+  // Like Commencal's "ACCESSORY BRANDS" section
+  // ============================================================================
+  static Widget _buildBrandLogos({
+    required BuildContext context,
+    required Map<String, dynamic> data,
+    required Color primaryColor,
+    String? headingFont,
+    String? bodyFont,
+  }) {
+    final title = (data['title'] ?? 'MARCAS').toString().trim();
+    final accentColor = _parseColor(data['accentColor']?.toString()) ?? primaryColor;
+    
+    // Logo size: small, medium, large, xlarge - BIG logos
+    final logoSizeStr = (data['logoSize'] ?? 'medium').toString();
+    double logoWidth;
+    double logoHeight;
+    switch (logoSizeStr) {
+      case 'small':
+        logoWidth = 160;
+        logoHeight = 70;
+        break;
+      case 'large':
+        logoWidth = 260;
+        logoHeight = 120;
+        break;
+      case 'xlarge':
+        logoWidth = 280;
+        logoHeight = 130;
+        break;
+      case 'medium':
+      default:
+        logoWidth = 200;
+        logoHeight = 90;
+        break;
+    }
+    
+    // Parse brand logos list
+    List<Map<String, dynamic>> brands = [];
+    final rawBrands = data['brands'];
+    if (rawBrands is List) {
+      brands = rawBrands
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+
+    // If no brands configured, show placeholder
+    if (brands.isEmpty) {
+      brands = [
+        {'name': 'Marca 1', 'imageUrl': ''},
+        {'name': 'Marca 2', 'imageUrl': ''},
+        {'name': 'Marca 3', 'imageUrl': ''},
+        {'name': 'Marca 4', 'imageUrl': ''},
+      ];
+    }
+
+    // Gap between logos - ultra tight
+    const double gap = 10;
+
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 16),
+      child: Column(
+        children: [
+          // Title with accent underline
+          Text(
+            title.toUpperCase(),
+            style: TextStyle(
+              fontFamily: headingFont,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 2,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: 40,
+            height: 3,
+            color: accentColor,
+          ),
+          const SizedBox(height: 32),
+          // Brand logos - carousel with minimalistic pagination
+          _BrandLogosCarousel(
+            brands: brands,
+            bodyFont: bodyFont,
+            logoWidth: logoWidth,
+            logoHeight: logoHeight,
+            gap: gap,
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Color? _parseColor(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final cleaned = raw.replaceAll('#', '').replaceAll('0x', '');
+    final intValue = int.tryParse(cleaned, radix: 16);
+    if (intValue != null) {
+      return Color(intValue | 0xFF000000);
+    }
+    return null;
+  }
+}
+
+// ============================================================================
+// BRAND LOGOS CAROUSEL WIDGET
+// Horizontal scrolling row of brand logos with pagination dots
+// ============================================================================
+class _BrandLogosCarousel extends StatefulWidget {
+  final List<Map<String, dynamic>> brands;
+  final String? bodyFont;
+  final double logoWidth;
+  final double logoHeight;
+  final double gap;
+
+  const _BrandLogosCarousel({
+    required this.brands,
+    this.bodyFont,
+    this.logoWidth = 140,
+    this.logoHeight = 90,
+    this.gap = 10,
+  });
+
+  @override
+  State<_BrandLogosCarousel> createState() => _BrandLogosCarouselState();
+}
+
+class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
+  final PageController _pageController = PageController(viewportFraction: 1);
+  int _currentPage = 0;
+
+  int get _logosPerPage {
+    final width = MediaQuery.of(context).size.width;
+    final slot = widget.logoWidth + widget.gap;
+    final perPage = (width / slot).floor();
+    return perPage.clamp(1, 5);
+  }
+
+  int get _totalPages => (widget.brands.length / _logosPerPage).ceil();
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.brands.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        SizedBox(
+          height: widget.logoHeight,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: _totalPages,
+            onPageChanged: (i) => setState(() => _currentPage = i),
+            itemBuilder: (_, page) {
+              final start = page * _logosPerPage;
+              final end = (start + _logosPerPage).clamp(0, widget.brands.length);
+              final items = widget.brands.sublist(start, end);
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (int i = 0; i < items.length; i++) ...[
+                    _BrandLogoItem(
+                      brand: items[i],
+                      bodyFont: widget.bodyFont,
+                      width: widget.logoWidth,
+                      height: widget.logoHeight,
+                    ),
+                    if (i < items.length - 1) SizedBox(width: widget.gap),
+                  ],
+                ],
+              );
+            },
+          ),
+        ),
+        if (_totalPages > 1) ...[
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(_totalPages, (i) {
+              final active = i == _currentPage;
+              return GestureDetector(
+                onTap: () {
+                  _pageController.animateToPage(
+                    i,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                  );
+                  setState(() => _currentPage = i);
+                },
+                child: Container(
+                  width: active ? 18 : 8,
+                  height: 8,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: active ? const Color(0xFF00A09D) : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// BRAND LOGO ITEM
+// Single brand logo with optional name
+// ============================================================================
+class _BrandLogoItem extends StatelessWidget {
+  final Map<String, dynamic> brand;
+  final String? bodyFont;
+  final double width;
+  final double height;
+
+  const _BrandLogoItem({
+    required this.brand,
+    this.bodyFont,
+    this.width = 140,
+    this.height = 90,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name = brand['name']?.toString() ?? '';
+    final imageUrl = brand['imageUrl']?.toString() ?? '';
+    final link = brand['link']?.toString() ?? '';
+
+    Widget content = SizedBox(
+      width: width,
+      height: height,
+      child: imageUrl.isNotEmpty
+          ? Image.network(
+              imageUrl,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return _buildPlaceholder(name);
+              },
+            )
+          : _buildPlaceholder(name),
+    );
+
+    if (link.isNotEmpty) {
+      content = MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () {
+            // Could open link in browser
+          },
+          child: content,
+        ),
+      );
+    }
+
+    return content;
+  }
+
+  Widget _buildPlaceholder(String name) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Center(
+        child: Text(
+          name.isNotEmpty ? name : 'Logo',
+          style: TextStyle(
+            fontFamily: bodyFont,
+            fontSize: width > 150 ? 14 : 12,
+            color: Colors.grey.shade500,
+            fontWeight: FontWeight.w500,
+          ),
+          textAlign: TextAlign.center,
         ),
       ),
     );

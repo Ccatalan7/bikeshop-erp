@@ -23,6 +23,7 @@ enum WebsiteBlockType {
   categoryGrid,    // Large image cards for categories (MTB, Road, Kids, etc.)
   videoBanner,     // Full-width video/image banner section
   partnersBanner,  // Dark banner with text list (partners, locations)
+  brandLogos,      // Brand logos carousel/grid (like Commencal's accessory brands)
 }
 
 extension WebsiteBlockTypeX on WebsiteBlockType {
@@ -47,6 +48,7 @@ extension WebsiteBlockTypeX on WebsiteBlockType {
         WebsiteBlockType.categoryGrid => Icons.grid_view_rounded,
         WebsiteBlockType.videoBanner => Icons.play_circle_outline,
         WebsiteBlockType.partnersBanner => Icons.handshake_outlined,
+        WebsiteBlockType.brandLogos => Icons.branding_watermark,
       };
 }
 
