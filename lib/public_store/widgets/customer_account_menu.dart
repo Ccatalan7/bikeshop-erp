@@ -7,11 +7,17 @@ import '../theme/public_store_theme.dart';
 /// Account menu widget for the public store header
 /// Shows login button when not authenticated, or account menu when logged in
 class CustomerAccountMenu extends StatelessWidget {
-  const CustomerAccountMenu({super.key});
+  final Color? textColor;
+  
+  const CustomerAccountMenu({
+    super.key,
+    this.textColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     final accountService = context.watch<CustomerAccountService>();
+    final effectiveTextColor = textColor ?? Colors.black87;
 
     if (!accountService.isAuthenticated) {
       return FilledButton.icon(
@@ -37,11 +43,12 @@ class CustomerAccountMenu extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: PublicStoreTheme.primaryBlue.withOpacity(0.1),
+            backgroundColor: textColor?.withValues(alpha: 0.1) ?? 
+                PublicStoreTheme.primaryBlue.withOpacity(0.1),
             child: Text(
               userInitial,
-              style: const TextStyle(
-                color: PublicStoreTheme.primaryBlue,
+              style: TextStyle(
+                color: textColor ?? PublicStoreTheme.primaryBlue,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -53,21 +60,22 @@ class CustomerAccountMenu extends StatelessWidget {
             children: [
               Text(
                 userName,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
+                  color: effectiveTextColor,
                 ),
               ),
               Text(
                 'Mi Cuenta',
                 style: TextStyle(
                   fontSize: 11,
-                  color: Colors.grey[600],
+                  color: effectiveTextColor.withValues(alpha: 0.6),
                 ),
               ),
             ],
           ),
-          const Icon(Icons.arrow_drop_down),
+          Icon(Icons.arrow_drop_down, color: effectiveTextColor),
         ],
       ),
       itemBuilder: (context) => [

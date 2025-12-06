@@ -314,20 +314,20 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Container(
                         height: 80,
-                        color: Colors.grey[300],
+                        color: Colors.white,
                         child: const Center(
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       ),
                       errorWidget: (context, url, error) => Container(
                         height: 80,
-                        color: Colors.grey[300],
+                        color: Colors.white,
                         child: const Icon(Icons.image, color: Colors.grey),
                       ),
                     )
                   : Container(
                       height: 80,
-                      color: Colors.grey[300],
+                      color: Colors.white,
                       child: const Icon(Icons.image, color: Colors.grey),
                     ),
             ),

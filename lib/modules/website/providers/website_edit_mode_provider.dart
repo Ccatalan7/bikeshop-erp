@@ -14,17 +14,44 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   bool _isEditMode = false;    // Full edit with side panel
   String? _selectedBlockId;
   bool _hasUnsavedChanges = false;
+  bool _hasHeaderChanges = false; // Track header-specific changes
   List<Map<String, dynamic>> _blocks = [];
   Map<String, dynamic> _settings = {};
+  
+  // Pending header settings (to be saved with main save button)
+  Map<String, String> _pendingHeaderSettings = {};
   
   // Getters
   bool get isPreviewMode => _isPreviewMode;
   bool get isEditMode => _isEditMode;
   bool get isInEditorContext => _isPreviewMode || _isEditMode; // Either preview or edit
   String? get selectedBlockId => _selectedBlockId;
-  bool get hasUnsavedChanges => _hasUnsavedChanges;
+  bool get hasUnsavedChanges => _hasUnsavedChanges || _hasHeaderChanges;
+  bool get hasHeaderChanges => _hasHeaderChanges;
   List<Map<String, dynamic>> get blocks => _blocks;
   Map<String, dynamic> get settings => _settings;
+  Map<String, String> get pendingHeaderSettings => _pendingHeaderSettings;
+
+  /// Mark header as having unsaved changes
+  void markHeaderChanged() {
+    _hasHeaderChanges = true;
+    notifyListeners();
+  }
+  
+  /// Update pending header settings (will be saved with main save button)
+  void updateHeaderSettings(Map<String, String> settings) {
+    _pendingHeaderSettings = Map<String, String>.from(settings);
+    _hasHeaderChanges = true;
+    debugPrint('📝 [EditProvider] Header settings updated: ${settings.keys.join(', ')}');
+    notifyListeners();
+  }
+  
+  /// Clear header changed flag (after save)
+  void clearHeaderChanged() {
+    _hasHeaderChanges = false;
+    _pendingHeaderSettings = {};
+    notifyListeners();
+  }
 
   /// Enter preview mode (shows top bar with "Editar" button)
   void enterPreviewMode(List<Map<String, dynamic>> blocks, Map<String, dynamic> settings) {
@@ -33,6 +60,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _blocks = blocks.map((b) => Map<String, dynamic>.from(b)).toList();
     _settings = Map<String, dynamic>.from(settings);
     _hasUnsavedChanges = false;
+    _hasHeaderChanges = false;
     _selectedBlockId = null;
     notifyListeners();
   }
@@ -44,6 +72,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _blocks = blocks.map((b) => Map<String, dynamic>.from(b)).toList();
     _settings = Map<String, dynamic>.from(settings);
     _hasUnsavedChanges = false;
+    _hasHeaderChanges = false;
     _selectedBlockId = null;
     notifyListeners();
   }
@@ -69,6 +98,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _isEditMode = false;
     _selectedBlockId = null;
     _hasUnsavedChanges = false;
+    _hasHeaderChanges = false;
     _blocks = [];
     _settings = {};
     notifyListeners();
@@ -87,8 +117,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Update block data
-  void updateBlockData(String blockId, String key, dynamic value) {
+  /// Update block data without notifying listeners (for real-time drag preview)
+  /// Use this during drag operations to avoid rebuilding the entire widget tree
+  void updateBlockDataSilent(String blockId, String key, dynamic value) {
     final blockIndex = _blocks.indexWhere((b) => b['id'] == blockId);
     if (blockIndex == -1) return;
 
@@ -100,6 +131,26 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       'block_data': blockData,
     };
     _hasUnsavedChanges = true;
+    // Don't call notifyListeners() - caller is responsible for UI updates
+  }
+
+  /// Update block data
+  void updateBlockData(String blockId, String key, dynamic value) {
+    final blockIndex = _blocks.indexWhere((b) => b['id'] == blockId);
+    if (blockIndex == -1) {
+      debugPrint('⚠️ [EditProvider] updateBlockData: block $blockId not found');
+      return;
+    }
+
+    final block = _blocks[blockIndex];
+    final blockData = Map<String, dynamic>.from(block['block_data'] ?? {});
+    blockData[key] = value;
+    _blocks[blockIndex] = {
+      ...block,
+      'block_data': blockData,
+    };
+    _hasUnsavedChanges = true;
+    debugPrint('✅ [EditProvider] updateBlockData: blockId=$blockId, key=$key, hasUnsavedChanges=$_hasUnsavedChanges');
     notifyListeners();
   }
 

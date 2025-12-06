@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:http/http.dart' as http;
 // Conditional import for web-only features
 import 'dart:typed_data' show Uint8List;
 // import 'dart:html' as html; // Removed - causes issues on native platforms
@@ -12,6 +14,7 @@ import 'dart:typed_data' show Uint8List;
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../settings/services/appearance_service.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 
@@ -1289,29 +1292,150 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     );
   }
   
+  // Cached logo bytes for PDF generation (avoids re-fetching on each PDF)
+  Uint8List? _cachedLogoBytes;
+  String? _cachedLogoUrl;
+  bool _isGeneratingPdf = false;
+  
   Future<void> _downloadInvoicePDF(Invoice invoice) async {
-    // TODO: Implement cross-platform PDF download using printing package
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Descarga de PDF temporalmente deshabilitada')),
-    );
+    if (_isGeneratingPdf) return;
+    
+    setState(() => _isGeneratingPdf = true);
+    
+    try {
+      final pdf = await _generateInvoicePDF(invoice);
+      final bytes = await pdf.save();
+      
+      // Use printing package for cross-platform PDF download/share
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'factura_${invoice.invoiceNumber}.pdf',
+      );
+    } catch (e) {
+      debugPrint('Error generating PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al generar PDF: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGeneratingPdf = false);
+    }
   }
   
   Future<void> _printInvoice(Invoice invoice) async {
-    // TODO: Implement cross-platform PDF printing using printing package
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Impresión de PDF temporalmente deshabilitada')),
-    );
+    if (_isGeneratingPdf) return;
+    
+    setState(() => _isGeneratingPdf = true);
+    
+    try {
+      final pdf = await _generateInvoicePDF(invoice);
+      
+      // Use printing package for cross-platform printing
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+        name: 'factura_${invoice.invoiceNumber}',
+      );
+    } catch (e) {
+      debugPrint('Error printing PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al imprimir: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGeneratingPdf = false);
+    }
   }
   
   Future<void> _previewInvoicePDF(Invoice invoice) async {
-    // TODO: Implement cross-platform PDF preview using printing package
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Vista previa de PDF temporalmente deshabilitada')),
-    );
+    try {
+      final pdf = await _generateInvoicePDF(invoice);
+      
+      // Show PDF preview dialog
+      await showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          child: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.8,
+            height: MediaQuery.of(context).size.height * 0.9,
+            child: Column(
+              children: [
+                // Header with close button
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.picture_as_pdf, color: Colors.white),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Vista previa: ${invoice.invoiceNumber}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                // PDF Preview
+                Expanded(
+                  child: PdfPreview(
+                    build: (format) async => pdf.save(),
+                    canChangeOrientation: false,
+                    canChangePageFormat: false,
+                    allowPrinting: true,
+                    allowSharing: true,
+                    pdfFileName: 'factura_${invoice.invoiceNumber}.pdf',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error previewing PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al mostrar vista previa: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
   
   Future<pw.Document> _generateInvoicePDF(Invoice invoice) async {
     final pdf = pw.Document();
+    
+    // Try to load company logo (use cache if available)
+    pw.ImageProvider? logoImage;
+    try {
+      final appearanceService = context.read<AppearanceService>();
+      final logoUrl = appearanceService.companyLogoUrl;
+      if (logoUrl != null && logoUrl.isNotEmpty) {
+        // Check if we already have cached bytes for this URL
+        if (_cachedLogoBytes != null && _cachedLogoUrl == logoUrl) {
+          logoImage = pw.MemoryImage(_cachedLogoBytes!);
+        } else {
+          // Fetch and cache
+          final response = await http.get(Uri.parse(logoUrl));
+          if (response.statusCode == 200) {
+            _cachedLogoBytes = response.bodyBytes;
+            _cachedLogoUrl = logoUrl;
+            logoImage = pw.MemoryImage(_cachedLogoBytes!);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading logo for PDF: $e');
+    }
     
     pdf.addPage(
       pw.Page(
@@ -1325,14 +1449,18 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(
-                  'VIÑABIKE',
-                  style: pw.TextStyle(
-                    fontSize: 18,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.blue800,
+                // Company logo or text fallback
+                if (logoImage != null)
+                  pw.Image(logoImage, width: 120, height: 40, fit: pw.BoxFit.contain)
+                else
+                  pw.Text(
+                    'VIÑABIKE',
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue800,
+                    ),
                   ),
-                ),
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
@@ -1614,6 +1742,11 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     final double dataSize = 13 * scale;
     final double spacing = 24 * scale;
     
+    // Get company logo URL
+    final appearanceService = context.read<AppearanceService>();
+    final logoUrl = appearanceService.companyLogoUrl;
+    final hasLogo = logoUrl != null && logoUrl.isNotEmpty;
+    
     return Padding(
       padding: EdgeInsets.all(padding),
       child: Column(
@@ -1623,14 +1756,31 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'VIÑABIKE',
-                style: TextStyle(
-                  fontSize: companyNameSize,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue[800],
+              // Company logo or text fallback
+              if (hasLogo)
+                Image.network(
+                  logoUrl,
+                  width: 120 * scale,
+                  height: 40 * scale,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Text(
+                    'VIÑABIKE',
+                    style: TextStyle(
+                      fontSize: companyNameSize,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[800],
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  'VIÑABIKE',
+                  style: TextStyle(
+                    fontSize: companyNameSize,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue[800],
+                  ),
                 ),
-              ),
               // Invoice number and balance in top right (like Zoho)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,

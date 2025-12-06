@@ -131,8 +131,18 @@ class TenantDetectionService {
   /// Detect tenant from current URL
   /// Tries subdomain first, then custom domain lookup, then authenticated user's tenant
   Future<Tenant?> detectTenant() async {
+    // For non-web platforms (macOS, Windows, iOS, Android), use authenticated user's tenant
     if (!kIsWeb) {
-      debugPrint('[TenantDetection] Not running on web, skipping detection');
+      debugPrint('[TenantDetection] Desktop/mobile platform, checking authenticated user...');
+      final user = _supabase.auth.currentUser;
+      if (user != null) {
+        final tenantFromAuth = await _getTenantFromAuthenticatedUser(user.id);
+        if (tenantFromAuth != null) {
+          debugPrint('[TenantDetection] ✅ Using authenticated user\'s tenant: ${tenantFromAuth.shopName}');
+          return tenantFromAuth;
+        }
+      }
+      debugPrint('[TenantDetection] No authenticated user on desktop/mobile');
       return null;
     }
 

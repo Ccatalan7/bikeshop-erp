@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,6 +11,7 @@ import '../../../shared/constants/storage_constants.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../services/website_backup_service.dart';
 import '../services/website_service.dart';
+import 'block_resize_handle.dart';
 
 /// Professional side panel editor for website blocks
 /// Inspired by Odoo's website builder - clean, functional, elegant
@@ -427,6 +431,10 @@ class _EditBlockTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildBlockHeader(blockType, isVisible, selectedId),
+          const SizedBox(height: 16),
+          _BlockHeightControl(data: blockData, blockId: selectedId, blockType: blockType, provider: editProvider),
+          const SizedBox(height: 16),
+          _BlockSpacingControl(data: blockData, blockId: selectedId, provider: editProvider),
           const SizedBox(height: 20),
           _buildBlockControls(blockType, blockData, selectedId),
         ],
@@ -598,6 +606,337 @@ class _EditBlockTab extends StatelessWidget {
   }
 }
 
+/// Block height control with presets and custom input
+class _BlockHeightControl extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final String blockId;
+  final String blockType;
+  final WebsiteEditModeProvider provider;
+
+  const _BlockHeightControl({
+    required this.data,
+    required this.blockId,
+    required this.blockType,
+    required this.provider,
+  });
+
+  @override
+  State<_BlockHeightControl> createState() => _BlockHeightControlState();
+}
+
+class _BlockHeightControlState extends State<_BlockHeightControl> {
+  late TextEditingController _customHeightController;
+  bool _showCustomInput = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final currentHeight = (widget.data['blockHeight'] as num?)?.toDouble();
+    _customHeightController = TextEditingController(
+      text: currentHeight?.toStringAsFixed(0) ?? '',
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _BlockHeightControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final currentHeight = (widget.data['blockHeight'] as num?)?.toDouble();
+    if (currentHeight?.toStringAsFixed(0) != _customHeightController.text) {
+      _customHeightController.text = currentHeight?.toStringAsFixed(0) ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _customHeightController.dispose();
+    super.dispose();
+  }
+
+  double? get _currentHeight => (widget.data['blockHeight'] as num?)?.toDouble();
+
+  void _setHeight(double? height) {
+    widget.provider.updateBlockData(widget.blockId, 'blockHeight', height);
+    if (height != null) {
+      _customHeightController.text = height.toStringAsFixed(0);
+    } else {
+      _customHeightController.text = '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Altura',
+              style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            if (_currentHeight != null)
+              Text(
+                '${_currentHeight!.toStringAsFixed(0)}px',
+                style: const TextStyle(color: Color(0xFF00A09D), fontSize: 11, fontWeight: FontWeight.w500),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        BlockHeightPresetSelector(
+          blockType: widget.blockType,
+          currentHeight: _currentHeight,
+          onHeightChanged: _setHeight,
+        ),
+        const SizedBox(height: 8),
+        // Custom height input toggle
+        Row(
+          children: [
+            GestureDetector(
+              onTap: () => setState(() => _showCustomInput = !_showCustomInput),
+              child: Row(
+                children: [
+                  Icon(
+                    _showCustomInput ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    color: Colors.white38,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Altura personalizada',
+                    style: TextStyle(
+                      color: _showCustomInput ? Colors.white70 : Colors.white38,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(),
+            if (_currentHeight != null)
+              GestureDetector(
+                onTap: () => _setHeight(null),
+                child: const Text(
+                  'Restablecer',
+                  style: TextStyle(color: Colors.white38, fontSize: 10, decoration: TextDecoration.underline),
+                ),
+              ),
+          ],
+        ),
+        if (_showCustomInput) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2D2D2D),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: TextField(
+                    controller: _customHeightController,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      hintText: 'ej: 450',
+                      hintStyle: TextStyle(color: Colors.white24, fontSize: 12),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      isDense: true,
+                    ),
+                    onSubmitted: (value) {
+                      final parsed = double.tryParse(value);
+                      if (parsed != null && parsed >= 100) {
+                        _setHeight(parsed);
+                      }
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {
+                  final parsed = double.tryParse(_customHeightController.text);
+                  if (parsed != null && parsed >= 100) {
+                    _setHeight(parsed);
+                  }
+                },
+                child: Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00A09D),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Aplicar',
+                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'También puedes arrastrar el borde inferior del bloque',
+            style: TextStyle(color: Colors.white24, fontSize: 9),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Control for spacing after a block (gap between blocks)
+class _BlockSpacingControl extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final String blockId;
+  final WebsiteEditModeProvider provider;
+
+  const _BlockSpacingControl({
+    required this.data,
+    required this.blockId,
+    required this.provider,
+  });
+
+  @override
+  State<_BlockSpacingControl> createState() => _BlockSpacingControlState();
+}
+
+class _BlockSpacingControlState extends State<_BlockSpacingControl> {
+  double get _currentSpacing => (widget.data['spacingAfter'] as num?)?.toDouble() ?? 32.0;
+
+  void _setSpacing(double spacing) {
+    widget.provider.updateBlockData(widget.blockId, 'spacingAfter', spacing);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.height, color: Colors.white38, size: 14),
+            const SizedBox(width: 6),
+            const Text(
+              'Espaciado inferior',
+              style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            Text(
+              _currentSpacing == 0 ? '0' : '${_currentSpacing.toInt()}px',
+              style: const TextStyle(color: Color(0xFF00A09D), fontSize: 11, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // Preset buttons
+        Row(
+          children: [
+            _SpacingPresetButton(
+              label: '0',
+              isSelected: _currentSpacing == 0,
+              onTap: () => _setSpacing(0),
+            ),
+            const SizedBox(width: 6),
+            _SpacingPresetButton(
+              label: 'S',
+              isSelected: _currentSpacing > 0 && _currentSpacing <= 16,
+              onTap: () => _setSpacing(16),
+            ),
+            const SizedBox(width: 6),
+            _SpacingPresetButton(
+              label: 'M',
+              isSelected: _currentSpacing > 16 && _currentSpacing <= 32,
+              onTap: () => _setSpacing(32),
+            ),
+            const SizedBox(width: 6),
+            _SpacingPresetButton(
+              label: 'L',
+              isSelected: _currentSpacing > 32 && _currentSpacing <= 64,
+              onTap: () => _setSpacing(64),
+            ),
+            const SizedBox(width: 6),
+            _SpacingPresetButton(
+              label: 'XL',
+              isSelected: _currentSpacing > 64,
+              onTap: () => _setSpacing(96),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        // Slider
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: const Color(0xFF00A09D),
+            inactiveTrackColor: Colors.white12,
+            thumbColor: const Color(0xFF00A09D),
+            overlayColor: const Color(0xFF00A09D).withValues(alpha: 0.2),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            trackHeight: 3,
+          ),
+          child: Slider(
+            value: _currentSpacing.clamp(0, 200),
+            min: 0,
+            max: 200,
+            divisions: 50,
+            onChanged: (value) => _setSpacing(value.roundToDouble()),
+          ),
+        ),
+        const Text(
+          'También puedes arrastrar la línea entre bloques',
+          style: TextStyle(color: Colors.white24, fontSize: 9),
+        ),
+      ],
+    );
+  }
+}
+
+class _SpacingPresetButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _SpacingPresetButton({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 28,
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF00A09D) : Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.white54,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _QuickActionButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
@@ -713,14 +1052,20 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
   }
 
   void _updateSlides(List<Map<String, dynamic>> newSlides) {
+    debugPrint('🎠 [CarouselControls] _updateSlides: saving ${newSlides.length} slides to provider');
+    debugPrint('🎠 [CarouselControls] First slide data: ${newSlides.isNotEmpty ? newSlides[0] : "empty"}');
     widget.provider.updateBlockData(widget.blockId, 'slides', newSlides);
   }
 
   void _updateSlide(int index, String key, dynamic value) {
+    debugPrint('🎠🎠 [CarouselControls] _updateSlide CALLED: index=$index, key=$key, value=$value');
     final slides = List<Map<String, dynamic>>.from(_slides);
     if (index >= 0 && index < slides.length) {
       slides[index] = {...slides[index], key: value};
+      debugPrint('🎠 [CarouselControls] _updateSlide: index=$index, key=$key, value=$value');
       _updateSlides(slides);
+    } else {
+      debugPrint('🎠⚠️ [CarouselControls] _updateSlide: INVALID INDEX index=$index, slides.length=${slides.length}');
     }
   }
 
@@ -749,6 +1094,229 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           _selectedSlideIndex = slides.length - 1;
         }
       });
+    }
+  }
+
+  /// Build slide fields inline (same pattern as VideoBanner)
+  Widget _buildSlideFields(Map<String, dynamic> slide) {
+    final showOverlay = slide['showOverlay'] ?? true;
+    final overlayOpacity = (slide['overlayOpacity'] as num?)?.toDouble() ?? 0.55;
+    final hasVideoFile = (slide['videoFileUrl']?.toString() ?? '').isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _EditorTextField(
+          label: 'Título',
+          value: slide['title']?.toString() ?? '',
+          onChanged: (v) => _updateSlide(_selectedSlideIndex, 'title', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Subtítulo',
+          value: slide['subtitle']?.toString() ?? '',
+          onChanged: (v) => _updateSlide(_selectedSlideIndex, 'subtitle', v),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Texto del botón',
+          value: slide['ctaText']?.toString() ?? '',
+          onChanged: (v) => _updateSlide(_selectedSlideIndex, 'ctaText', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Link del botón',
+          value: slide['ctaLink']?.toString() ?? '',
+          onChanged: (v) => _updateSlide(_selectedSlideIndex, 'ctaLink', v),
+          hint: '/tienda/productos',
+        ),
+        const SizedBox(height: 20),
+        
+        // Image section
+        _SectionHeader('IMAGEN DE FONDO'),
+        const SizedBox(height: 8),
+        _ImagePicker(
+          currentUrl: slide['imageUrl']?.toString(),
+          onChanged: (url) => _updateSlide(_selectedSlideIndex, 'imageUrl', url),
+        ),
+        
+        const SizedBox(height: 20),
+        
+        // Video section
+        _SectionHeader('VIDEO DE FONDO (OPCIONAL)'),
+        const SizedBox(height: 8),
+        Text(
+          'Si se configura un video, se usará en vez de la imagen',
+          style: TextStyle(color: Colors.white38, fontSize: 11),
+        ),
+        const SizedBox(height: 12),
+        
+        // YouTube URL option - use _EditorTextField like the title field
+        _EditorTextField(
+          label: 'URL de YouTube',
+          value: slide['videoUrl']?.toString() ?? '',
+          onChanged: (v) {
+            debugPrint('🎬 [CarouselSlide] YouTube URL changed: "$v"');
+            _updateSlide(_selectedSlideIndex, 'videoUrl', v);
+            // Clear file URL if entering YouTube URL
+            if (v.isNotEmpty) {
+              _updateSlide(_selectedSlideIndex, 'videoFileUrl', '');
+            }
+          },
+          hint: 'https://youtube.com/watch?v=...',
+        ),
+        
+        const SizedBox(height: 12),
+        
+        // Divider with "o"
+        Row(
+          children: [
+            Expanded(child: Divider(color: Colors.white24)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text('o', style: TextStyle(color: Colors.white38, fontSize: 12)),
+            ),
+            Expanded(child: Divider(color: Colors.white24)),
+          ],
+        ),
+        
+        const SizedBox(height: 12),
+        
+        // Upload video file button
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _uploadSlideVideoFile,
+            icon: const Icon(Icons.upload_file, size: 18),
+            label: const Text('Subir archivo de video'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00A09D),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+        
+        // Show current video file if exists
+        if (hasVideoFile) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.green.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Archivo de video cargado',
+                    style: TextStyle(color: Colors.green, fontSize: 12),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close, size: 16, color: Colors.green),
+                  onPressed: () => _updateSlide(_selectedSlideIndex, 'videoFileUrl', ''),
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+        ],
+        
+        const SizedBox(height: 20),
+        
+        // Overlay settings
+        _SectionHeader('OVERLAY'),
+        const SizedBox(height: 8),
+        _EditorToggle(
+          label: 'Mostrar overlay oscuro',
+          value: showOverlay,
+          onChanged: (v) => _updateSlide(_selectedSlideIndex, 'showOverlay', v),
+        ),
+        if (showOverlay) ...[
+          const SizedBox(height: 12),
+          _EditorSlider(
+            label: 'Opacidad del overlay',
+            value: overlayOpacity,
+            min: 0.0,
+            max: 1.0,
+            divisions: 20,
+            onChanged: (v) => _updateSlide(_selectedSlideIndex, 'overlayOpacity', v),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _uploadSlideVideoFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+        allowMultiple: false,
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      if (file.bytes == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: No se pudo leer el archivo')),
+          );
+        }
+        return;
+      }
+
+      // Get tenant ID
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) throw Exception('Usuario no autenticado');
+
+      final profileResponse = await Supabase.instance.client
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('user_id', user.id)
+          .single();
+      
+      final tenantId = profileResponse['tenant_id'] as String;
+
+      // Upload to Supabase Storage
+      final fileName = 'video_${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final storagePath = '$tenantId/videos/$fileName';
+
+      await Supabase.instance.client.storage
+          .from('website-assets')
+          .uploadBinary(storagePath, file.bytes!, fileOptions: FileOptions(
+            contentType: file.extension == 'mp4' ? 'video/mp4' : 'video/${file.extension ?? 'mp4'}',
+          ));
+
+      // Get public URL
+      final publicUrl = Supabase.instance.client.storage
+          .from('website-assets')
+          .getPublicUrl(storagePath);
+
+      _updateSlide(_selectedSlideIndex, 'videoFileUrl', publicUrl);
+      // Clear the YouTube URL if uploading a file
+      _updateSlide(_selectedSlideIndex, 'videoUrl', '');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Video subido correctamente'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      debugPrint('[CarouselSlide] Error uploading video: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al subir video: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -860,7 +1428,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                         Text(
                           'Slide ${index + 1}',
                           style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.white70,
+                            color: isSelected ? Colors.white70 : Colors.white70,
                             fontSize: 13,
                             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                           ),
@@ -885,13 +1453,9 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           ),
           const SizedBox(height: 16),
           
-          // Selected slide editor - key forces rebuild when switching slides
+          // Selected slide editor - INLINE fields (not nested StatefulWidget)
           if (_selectedSlideIndex < slides.length)
-            _SlideEditor(
-              key: ValueKey('slide_$_selectedSlideIndex'),
-              slide: slides[_selectedSlideIndex],
-              onUpdate: (key, value) => _updateSlide(_selectedSlideIndex, key, value),
-            ),
+            _buildSlideFields(slides[_selectedSlideIndex]),
         ] else
           Center(
             child: Padding(
@@ -919,8 +1483,8 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
   }
 }
 
-/// Individual slide editor
-class _SlideEditor extends StatelessWidget {
+/// Individual slide editor - now supports video backgrounds
+class _SlideEditor extends StatefulWidget {
   final Map<String, dynamic> slide;
   final void Function(String key, dynamic value) onUpdate;
 
@@ -931,37 +1495,241 @@ class _SlideEditor extends StatelessWidget {
   });
 
   @override
+  State<_SlideEditor> createState() => _SlideEditorState();
+}
+
+class _SlideEditorState extends State<_SlideEditor> {
+  bool _isUploading = false;
+
+  Future<void> _uploadVideoFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+        allowMultiple: false,
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      if (file.bytes == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: No se pudo leer el archivo')),
+          );
+        }
+        return;
+      }
+
+      setState(() => _isUploading = true);
+
+      // Get tenant ID
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) throw Exception('Usuario no autenticado');
+
+      final profileResponse = await Supabase.instance.client
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('user_id', user.id)
+          .single();
+      
+      final tenantId = profileResponse['tenant_id'] as String;
+
+      // Upload to Supabase Storage
+      final fileName = 'carousel_video_${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final storagePath = '$tenantId/videos/$fileName';
+
+      await Supabase.instance.client.storage
+          .from('website-assets')
+          .uploadBinary(storagePath, file.bytes!, fileOptions: FileOptions(
+            contentType: file.extension == 'mp4' ? 'video/mp4' : 'video/${file.extension ?? 'mp4'}',
+          ));
+
+      // Get public URL
+      final publicUrl = Supabase.instance.client.storage
+          .from('website-assets')
+          .getPublicUrl(storagePath);
+
+      widget.onUpdate('videoFileUrl', publicUrl);
+      // Clear the YouTube URL if uploading a file
+      widget.onUpdate('videoUrl', '');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Video subido correctamente'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      debugPrint('[SlideEditor] Error uploading video: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al subir video: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final showOverlay = slide['showOverlay'] ?? true;
-    final overlayOpacity = (slide['overlayOpacity'] as num?)?.toDouble() ?? 0.55;
+    final showOverlay = widget.slide['showOverlay'] ?? true;
+    final overlayOpacity = (widget.slide['overlayOpacity'] as num?)?.toDouble() ?? 0.55;
+    final hasVideoFile = (widget.slide['videoFileUrl']?.toString() ?? '').isNotEmpty;
+    final hasYoutubeUrl = (widget.slide['videoUrl']?.toString() ?? '').isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _EditorTextField(
           label: 'Título',
-          value: slide['title']?.toString() ?? '',
-          onChanged: (v) => onUpdate('title', v),
+          value: widget.slide['title']?.toString() ?? '',
+          onChanged: (v) => widget.onUpdate('title', v),
         ),
         const SizedBox(height: 12),
         _EditorTextField(
           label: 'Subtítulo',
-          value: slide['subtitle']?.toString() ?? '',
-          onChanged: (v) => onUpdate('subtitle', v),
+          value: widget.slide['subtitle']?.toString() ?? '',
+          onChanged: (v) => widget.onUpdate('subtitle', v),
           maxLines: 2,
         ),
         const SizedBox(height: 16),
         _SectionHeader('Imagen de fondo'),
         const SizedBox(height: 8),
         _ImagePicker(
-          currentUrl: slide['imageUrl']?.toString(),
-          onChanged: (url) => onUpdate('imageUrl', url),
+          currentUrl: widget.slide['imageUrl']?.toString(),
+          onChanged: (url) => widget.onUpdate('imageUrl', url),
         ),
-        const SizedBox(height: 16),
+        
+        const SizedBox(height: 20),
+        // Video section
+        Text('VIDEO DE FONDO (OPCIONAL)', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+        const SizedBox(height: 8),
+        Text(
+          'Si se configura un video, se usará en vez de la imagen',
+          style: TextStyle(color: Colors.white38, fontSize: 11),
+        ),
+        const SizedBox(height: 12),
+        
+        // YouTube URL option
+        _EditorTextField(
+          label: 'URL de YouTube',
+          value: widget.slide['videoUrl']?.toString() ?? '',
+          onChanged: (v) {
+            debugPrint('🎬 [SlideEditor] YouTube URL onChanged: "$v"');
+            widget.onUpdate('videoUrl', v);
+            // Clear file URL if entering YouTube URL
+            if (v.isNotEmpty) {
+              widget.onUpdate('videoFileUrl', '');
+            }
+          },
+          hint: 'https://youtube.com/watch?v=...',
+        ),
+        
+        const SizedBox(height: 12),
+        
+        // Divider with "o" (or)
+        Row(
+          children: [
+            Expanded(child: Divider(color: Colors.white24)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text('o', style: TextStyle(color: Colors.white38, fontSize: 12)),
+            ),
+            Expanded(child: Divider(color: Colors.white24)),
+          ],
+        ),
+        
+        const SizedBox(height: 12),
+        
+        // Upload video file button
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _isUploading ? null : _uploadVideoFile,
+            icon: _isUploading 
+                ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.upload_file, size: 18),
+            label: Text(_isUploading ? 'Subiendo...' : 'Subir archivo de video'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00A09D),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+        
+        // Show current video file if exists
+        if (hasVideoFile) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.green.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Archivo de video cargado',
+                    style: TextStyle(color: Colors.green, fontSize: 12),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.red.shade300, size: 18),
+                  onPressed: () => widget.onUpdate('videoFileUrl', ''),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Eliminar video',
+                ),
+              ],
+            ),
+          ),
+        ],
+        
+        // Show YouTube status if exists
+        if (hasYoutubeUrl && !hasVideoFile) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.red.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.play_circle_filled, color: Colors.red, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Video de YouTube configurado',
+                    style: TextStyle(color: Colors.red.shade200, fontSize: 12),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.red.shade300, size: 18),
+                  onPressed: () => widget.onUpdate('videoUrl', ''),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Eliminar video',
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 20),
         _EditorToggle(
           label: 'Mostrar overlay oscuro',
           value: showOverlay,
-          onChanged: (v) => onUpdate('showOverlay', v),
+          onChanged: (v) => widget.onUpdate('showOverlay', v),
         ),
         if (showOverlay) ...[
           const SizedBox(height: 12),
@@ -971,7 +1739,7 @@ class _SlideEditor extends StatelessWidget {
             min: 0.1,
             max: 0.9,
             divisions: 8,
-            onChanged: (v) => onUpdate('overlayOpacity', v),
+            onChanged: (v) => widget.onUpdate('overlayOpacity', v),
           ),
         ],
         const SizedBox(height: 16),
@@ -979,14 +1747,14 @@ class _SlideEditor extends StatelessWidget {
         const SizedBox(height: 8),
         _EditorTextField(
           label: 'Texto del botón',
-          value: slide['ctaText']?.toString() ?? '',
-          onChanged: (v) => onUpdate('ctaText', v),
+          value: widget.slide['ctaText']?.toString() ?? '',
+          onChanged: (v) => widget.onUpdate('ctaText', v),
         ),
         const SizedBox(height: 12),
         _EditorTextField(
           label: 'Enlace',
-          value: slide['ctaLink']?.toString() ?? '',
-          onChanged: (v) => onUpdate('ctaLink', v),
+          value: widget.slide['ctaLink']?.toString() ?? '',
+          onChanged: (v) => widget.onUpdate('ctaLink', v),
           hint: '/tienda/productos',
         ),
       ],
@@ -1025,22 +1793,42 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
     try {
       final supabase = Supabase.instance.client;
       
-      // Load products
+      // Load ALL active products (so user can see/deselect old selections)
+      // We'll mark unavailable ones in the picker UI
       final productsResponse = await supabase
           .from('products')
-          .select('id, name, sku, price, image_url, category_id, is_active, is_published')
+          .select('id, name, sku, price, image_url, category_id, is_active, is_published, stock_quantity')
           .eq('is_active', true)
-          .order('name');
+          .order('name', ascending: true);
+      
+      var allProducts = List<Map<String, dynamic>>.from(productsResponse);
+      
+      // Also load selected products that might be inactive (so we can display/deselect them)
+      final selectedIds = _selectedProductIds;
+      if (selectedIds.isNotEmpty) {
+        final selectedResponse = await supabase
+            .from('products')
+            .select('id, name, sku, price, image_url, category_id, is_active, is_published, stock_quantity')
+            .inFilter('id', selectedIds);
+        
+        // Add any selected products not already in the list
+        for (final selected in selectedResponse) {
+          final exists = allProducts.any((p) => p['id'].toString() == selected['id'].toString());
+          if (!exists) {
+            allProducts.add(Map<String, dynamic>.from(selected));
+          }
+        }
+      }
       
       // Load categories
       final categoriesResponse = await supabase
           .from('product_categories')
           .select('id, name')
-          .order('name');
+          .order('name', ascending: true);
       
       if (mounted) {
         setState(() {
-          _availableProducts = List<Map<String, dynamic>>.from(productsResponse);
+          _availableProducts = allProducts;
           _availableCategories = List<Map<String, dynamic>>.from(categoriesResponse);
           _isLoading = false;
         });
@@ -1339,62 +2127,91 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
             );
             if (product.isEmpty) return const SizedBox.shrink();
             
-            return Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2D2D2D),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                children: [
-                  // Product image
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF3D3D3D),
-                      borderRadius: BorderRadius.circular(4),
-                      image: product['image_url'] != null
-                          ? DecorationImage(
-                              image: NetworkImage(product['image_url']),
-                              fit: BoxFit.cover,
-                            )
+            final isActive = product['is_active'] == true;
+            final isPublished = product['is_published'] == true;
+            final stockQty = (product['stock_quantity'] as num?)?.toInt() ?? 0;
+            final isAvailable = isActive && isPublished && stockQty > 0;
+            final statusText = !isActive ? 'Inactivo' : stockQty <= 0 ? 'Sin stock' : !isPublished ? 'No publicado' : null;
+            
+            return Opacity(
+              opacity: isAvailable ? 1.0 : 0.6,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D2D2D),
+                  borderRadius: BorderRadius.circular(4),
+                  border: !isAvailable ? Border.all(color: Colors.red.withValues(alpha: 0.3)) : null,
+                ),
+                child: Row(
+                  children: [
+                    // Product image
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3D3D3D),
+                        borderRadius: BorderRadius.circular(4),
+                        image: product['image_url'] != null
+                            ? DecorationImage(
+                                image: NetworkImage(product['image_url']),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: product['image_url'] == null
+                          ? const Icon(Icons.image, size: 16, color: Colors.white24)
                           : null,
                     ),
-                    child: product['image_url'] == null
-                        ? const Icon(Icons.image, size: 16, color: Colors.white24)
-                        : null,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product['name']?.toString() ?? '',
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          product['sku']?.toString() ?? '',
-                          style: const TextStyle(color: Colors.white38, fontSize: 10),
-                        ),
-                      ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  product['name']?.toString() ?? '',
+                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (statusText != null)
+                                Container(
+                                  margin: const EdgeInsets.only(left: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                  child: Text(
+                                    statusText,
+                                    style: const TextStyle(color: Colors.red, fontSize: 8),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          Text(
+                            product['sku']?.toString() ?? '',
+                            style: const TextStyle(color: Colors.white38, fontSize: 10),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 16),
-                    color: Colors.white38,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    onPressed: () {
-                      final newList = List<String>.from(_selectedProductIds)..remove(productId);
-                      _updateField('selectedProducts', newList);
-                    },
-                  ),
-                ],
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 16),
+                      color: Colors.white38,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        final newList = List<String>.from(_selectedProductIds)..remove(productId);
+                        _updateField('selectedProducts', newList);
+                      },
+                    ),
+                  ],
+                ),
               ),
             );
           })),
@@ -1496,9 +2313,18 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
               onChanged: (v) => setState(() => _searchQuery = v),
             ),
             const SizedBox(height: 12),
-            Text(
-              '${_selected.length} productos seleccionados',
-              style: const TextStyle(color: Colors.white54, fontSize: 11),
+            Row(
+              children: [
+                Text(
+                  '${_selected.length} seleccionados',
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+                const Spacer(),
+                Text(
+                  '${_filteredProducts.length} productos',
+                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Expanded(
@@ -1508,6 +2334,9 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                   final product = _filteredProducts[index];
                   final productId = product['id'].toString();
                   final isSelected = _selected.contains(productId);
+                  final isPublished = product['is_published'] == true;
+                  final stockQty = (product['stock_quantity'] as num?)?.toInt() ?? 0;
+                  final isAvailable = isPublished && stockQty > 0;
                   
                   return InkWell(
                     onTap: () {
@@ -1519,70 +2348,92 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                         }
                       });
                     },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF00A09D).withValues(alpha: 0.2) : Colors.transparent,
-                        border: Border(
-                          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          // Checkbox
-                          Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
-                              ),
-                            ),
-                            child: isSelected
-                                ? const Icon(Icons.check, size: 14, color: Colors.white)
-                                : null,
+                    child: Opacity(
+                      opacity: isAvailable ? 1.0 : 0.5,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF00A09D).withValues(alpha: 0.2) : Colors.transparent,
+                          border: Border(
+                            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
                           ),
-                          const SizedBox(width: 12),
-                          // Image
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3D3D3D),
-                              borderRadius: BorderRadius.circular(4),
-                              image: product['image_url'] != null
-                                  ? DecorationImage(
-                                      image: NetworkImage(product['image_url']),
-                                      fit: BoxFit.cover,
-                                    )
+                        ),
+                        child: Row(
+                          children: [
+                            // Checkbox
+                            Container(
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
+                                ),
+                              ),
+                              child: isSelected
+                                  ? const Icon(Icons.check, size: 14, color: Colors.white)
                                   : null,
                             ),
-                            child: product['image_url'] == null
-                                ? const Icon(Icons.image, size: 20, color: Colors.white24)
-                                : null,
-                          ),
-                          const SizedBox(width: 12),
-                          // Details
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  product['name']?.toString() ?? '',
-                                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  'SKU: ${product['sku'] ?? '-'} · \$${NumberFormat('#,###', 'es_CL').format(product['price'] ?? 0)}',
-                                  style: const TextStyle(color: Colors.white38, fontSize: 11),
-                                ),
-                              ],
+                            const SizedBox(width: 12),
+                            // Image
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3D3D3D),
+                                borderRadius: BorderRadius.circular(4),
+                                image: product['image_url'] != null
+                                    ? DecorationImage(
+                                        image: NetworkImage(product['image_url']),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                              child: product['image_url'] == null
+                                  ? const Icon(Icons.image, size: 20, color: Colors.white24)
+                                  : null,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 12),
+                            // Details
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          product['name']?.toString() ?? '',
+                                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (!isAvailable)
+                                        Container(
+                                          margin: const EdgeInsets.only(left: 4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.withValues(alpha: 0.2),
+                                            borderRadius: BorderRadius.circular(2),
+                                          ),
+                                          child: Text(
+                                            stockQty <= 0 ? 'Sin stock' : 'No publicado',
+                                            style: const TextStyle(color: Colors.red, fontSize: 9),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  Text(
+                                    'SKU: ${product['sku'] ?? '-'} · \$${NumberFormat('#,###', 'es_CL').format(product['price'] ?? 0)}',
+                                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
@@ -2156,6 +3007,63 @@ class _ThemeTabState extends State<_ThemeTab> {
   }
 }
 
+/// Navigation link tile for the header editor
+class _NavLinkTile extends StatelessWidget {
+  final String label;
+  final String url;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _NavLinkTile({
+    super.key,
+    required this.label,
+    required this.url,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3D3D3D),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: ListTile(
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+        leading: const Icon(Icons.drag_handle, color: Colors.white38, size: 18),
+        title: Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+        ),
+        subtitle: Text(
+          url,
+          style: const TextStyle(color: Colors.white38, fontSize: 11),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit, color: Colors.white54, size: 16),
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              padding: EdgeInsets.zero,
+            ),
+            IconButton(
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete, color: Colors.red, size: 16),
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              padding: EdgeInsets.zero,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Logo uploader widget with image preview
 class _LogoUploader extends StatefulWidget {
   final String? currentUrl;
@@ -2340,7 +3248,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _EditorTextField extends StatelessWidget {
+class _EditorTextField extends StatefulWidget {
   final String label;
   final String value;
   final Function(String) onChanged;
@@ -2358,12 +3266,64 @@ class _EditorTextField extends StatelessWidget {
   });
 
   @override
+  State<_EditorTextField> createState() => _EditorTextFieldState();
+}
+
+class _EditorTextFieldState extends State<_EditorTextField> {
+  TextEditingController? _internalController;
+  
+  TextEditingController get _effectiveController {
+    return widget.controller ?? (_internalController ??= TextEditingController(text: widget.value));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Only create internal controller if external not provided
+    if (widget.controller == null) {
+      _internalController = TextEditingController(text: widget.value);
+      // Add listener to catch paste events that onChanged might miss on web
+      _internalController!.addListener(_onControllerChanged);
+    }
+  }
+  
+  void _onControllerChanged() {
+    // This fires on ANY text change including paste
+    final text = _effectiveController.text;
+    if (text != widget.value) {
+      debugPrint('📝 [_EditorTextField] controller listener: label="${widget.label}", value="$text"');
+      widget.onChanged(text);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _EditorTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only update internal controller if we own it and value changed externally
+    if (widget.controller == null && _internalController != null) {
+      if (oldWidget.value != widget.value && _internalController!.text != widget.value) {
+        // Remove listener temporarily to avoid triggering onChanged
+        _internalController!.removeListener(_onControllerChanged);
+        _internalController!.text = widget.value;
+        _internalController!.addListener(_onControllerChanged);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _internalController?.removeListener(_onControllerChanged);
+    _internalController?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
+          widget.label,
           style: const TextStyle(
             color: Colors.white70,
             fontSize: 12,
@@ -2371,12 +3331,11 @@ class _EditorTextField extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         TextFormField(
-          controller: controller,
-          initialValue: controller == null ? value : null,
-          maxLines: maxLines,
+          controller: _effectiveController,
+          maxLines: widget.maxLines,
           style: const TextStyle(color: Colors.white, fontSize: 13),
           decoration: InputDecoration(
-            hintText: hint,
+            hintText: widget.hint,
             hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
             filled: true,
             fillColor: const Color(0xFF2D2D2D),
@@ -2394,7 +3353,10 @@ class _EditorTextField extends StatelessWidget {
               borderSide: const BorderSide(color: Color(0xFF00A09D)),
             ),
           ),
-          onChanged: onChanged,
+          onChanged: (v) {
+            debugPrint('📝 [_EditorTextField] onChanged: label="${widget.label}", value="$v"');
+            widget.onChanged(v);
+          },
         ),
       ],
     );
@@ -3101,7 +4063,7 @@ class _CategoryGridBlockControlsState extends State<_CategoryGridBlockControls> 
 // ============================================================================
 // VIDEO BANNER BLOCK CONTROLS
 // ============================================================================
-class _VideoBannerBlockControls extends StatelessWidget {
+class _VideoBannerBlockControls extends StatefulWidget {
   final Map<String, dynamic> data;
   final String blockId;
   final WebsiteEditModeProvider provider;
@@ -3112,70 +4074,262 @@ class _VideoBannerBlockControls extends StatelessWidget {
     required this.provider,
   });
 
+  @override
+  State<_VideoBannerBlockControls> createState() => _VideoBannerBlockControlsState();
+}
+
+class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
+  bool _isUploading = false;
+
   void _updateField(String field, dynamic value) {
-    provider.updateBlockData(blockId, field, value);
+    widget.provider.updateBlockData(widget.blockId, field, value);
+  }
+
+  Future<void> _uploadVideoFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+        allowMultiple: false,
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      if (file.bytes == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: No se pudo leer el archivo')),
+          );
+        }
+        return;
+      }
+
+      setState(() => _isUploading = true);
+
+      // Get tenant ID
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) throw Exception('Usuario no autenticado');
+
+      final profileResponse = await Supabase.instance.client
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('user_id', user.id)
+          .single();
+      
+      final tenantId = profileResponse['tenant_id'] as String;
+
+      // Upload to Supabase Storage
+      final fileName = 'video_${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final storagePath = '$tenantId/videos/$fileName';
+
+      await Supabase.instance.client.storage
+          .from('website-assets')
+          .uploadBinary(storagePath, file.bytes!, fileOptions: FileOptions(
+            contentType: file.extension == 'mp4' ? 'video/mp4' : 'video/${file.extension ?? 'mp4'}',
+          ));
+
+      // Get public URL
+      final publicUrl = Supabase.instance.client.storage
+          .from('website-assets')
+          .getPublicUrl(storagePath);
+
+      _updateField('videoFileUrl', publicUrl);
+      // Clear the YouTube URL if uploading a file
+      _updateField('videoUrl', '');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Video subido correctamente'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      debugPrint('[VideoBanner] Error uploading video: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al subir video: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasVideoFile = (widget.data['videoFileUrl']?.toString() ?? '').isNotEmpty;
+    final hasYoutubeUrl = (widget.data['videoUrl']?.toString() ?? '').isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _EditorTextField(
           label: 'Título',
-          value: data['title']?.toString() ?? '',
+          value: widget.data['title']?.toString() ?? '',
           onChanged: (v) => _updateField('title', v),
         ),
         const SizedBox(height: 12),
         _EditorTextField(
           label: 'Subtítulo',
-          value: data['subtitle']?.toString() ?? '',
+          value: widget.data['subtitle']?.toString() ?? '',
           onChanged: (v) => _updateField('subtitle', v),
           maxLines: 2,
         ),
         const SizedBox(height: 12),
         _EditorTextField(
           label: 'URL Imagen de fondo',
-          value: data['imageUrl']?.toString() ?? '',
+          value: widget.data['imageUrl']?.toString() ?? '',
           onChanged: (v) => _updateField('imageUrl', v),
         ),
-        const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'URL Video (opcional)',
-          value: data['videoUrl']?.toString() ?? '',
-          onChanged: (v) => _updateField('videoUrl', v),
+        const SizedBox(height: 20),
+        
+        // Video section header
+        Text('VIDEO DE FONDO', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+        const SizedBox(height: 8),
+        Text(
+          'El video se reproducirá automáticamente, sin sonido, en loop',
+          style: TextStyle(color: Colors.white38, fontSize: 11),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        
+        // YouTube URL option
+        _EditorTextField(
+          label: 'URL de YouTube',
+          value: widget.data['videoUrl']?.toString() ?? '',
+          onChanged: (v) {
+            _updateField('videoUrl', v);
+            // Clear file URL if entering YouTube URL
+            if (v.isNotEmpty) {
+              _updateField('videoFileUrl', '');
+            }
+          },
+          hint: 'https://youtube.com/watch?v=...',
+        ),
+        
+        const SizedBox(height: 12),
+        
+        // Divider with "o" (or)
+        Row(
+          children: [
+            Expanded(child: Divider(color: Colors.white24)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text('o', style: TextStyle(color: Colors.white38, fontSize: 12)),
+            ),
+            Expanded(child: Divider(color: Colors.white24)),
+          ],
+        ),
+        
+        const SizedBox(height: 12),
+        
+        // Upload video file button
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _isUploading ? null : _uploadVideoFile,
+            icon: _isUploading 
+                ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.upload_file, size: 18),
+            label: Text(_isUploading ? 'Subiendo...' : 'Subir archivo de video'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00A09D),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+        
+        // Show current video file if exists
+        if (hasVideoFile) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.green.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Archivo de video cargado',
+                    style: TextStyle(color: Colors.green, fontSize: 12),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.red.shade300, size: 18),
+                  onPressed: () => _updateField('videoFileUrl', ''),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Eliminar video',
+                ),
+              ],
+            ),
+          ),
+        ],
+        
+        // Show YouTube status if exists
+        if (hasYoutubeUrl && !hasVideoFile) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.red.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.play_circle_filled, color: Colors.red, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Video de YouTube configurado',
+                    style: TextStyle(color: Colors.red.shade200, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 20),
+        
         // Show CTA toggle
         Row(
           children: [
             const Text('Mostrar botón', style: TextStyle(color: Colors.white70, fontSize: 13)),
             const Spacer(),
             Switch(
-              value: data['showCta'] != false,
+              value: widget.data['showCta'] != false,
               onChanged: (v) => _updateField('showCta', v),
               activeColor: const Color(0xFF00A09D),
             ),
           ],
         ),
-        if (data['showCta'] != false) ...[
+        if (widget.data['showCta'] != false) ...[
           const SizedBox(height: 12),
           _EditorTextField(
             label: 'Texto botón',
-            value: data['ctaText']?.toString() ?? '',
+            value: widget.data['ctaText']?.toString() ?? '',
             onChanged: (v) => _updateField('ctaText', v),
           ),
           const SizedBox(height: 12),
           _EditorTextField(
             label: 'Link botón',
-            value: data['ctaLink']?.toString() ?? '',
+            value: widget.data['ctaLink']?.toString() ?? '',
             onChanged: (v) => _updateField('ctaLink', v),
           ),
         ],
         const SizedBox(height: 16),
         Text('Opacidad overlay', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
         Slider(
-          value: (data['overlayOpacity'] as num?)?.toDouble() ?? 0.5,
+          value: (widget.data['overlayOpacity'] as num?)?.toDouble() ?? 0.5,
           min: 0,
           max: 1,
           divisions: 10,
@@ -4155,7 +5309,59 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   final _storeNameController = TextEditingController();
   final _logoUrlController = TextEditingController();
   final _topBannerController = TextEditingController();
+  final _headerBgColorController = TextEditingController();
+  
+  // Header style options
+  String _headerStyle = 'solid';
+  String _headerColorMode = 'light';
+  bool _showTopBanner = true;
+  bool _headerShadow = true;
+  List<Map<String, String>> _navLinks = [];
+  
   bool _loaded = false;
+  bool _hasLocalChanges = false;
+
+  final _headerStyles = {'solid': 'Sólido', 'transparent': 'Transparente (sobre hero)', 'sticky': 'Fijo al hacer scroll'};
+  final _headerColorModes = {'light': 'Claro (texto oscuro)', 'dark': 'Oscuro (texto claro)'};
+
+  @override
+  void initState() {
+    super.initState();
+    // Add listeners to detect changes
+    _storeNameController.addListener(_onFieldChanged);
+    _logoUrlController.addListener(_onFieldChanged);
+    _topBannerController.addListener(_onFieldChanged);
+    _headerBgColorController.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    if (_loaded && !_hasLocalChanges) {
+      _hasLocalChanges = true;
+      _syncPendingSettingsToProvider();
+    }
+  }
+  
+  void _markChanged() {
+    if (!_hasLocalChanges) {
+      _hasLocalChanges = true;
+    }
+    _syncPendingSettingsToProvider();
+  }
+  
+  /// Sync current header settings to provider for saving with main button
+  void _syncPendingSettingsToProvider() {
+    widget.provider.updateHeaderSettings({
+      'store_name': _storeNameController.text,
+      'logo_url': _logoUrlController.text,
+      'top_banner_text': _topBannerController.text,
+      'header_style': _headerStyle,
+      'header_color_mode': _headerColorMode,
+      'header_show_top_banner': _showTopBanner.toString(),
+      'header_shadow': _headerShadow.toString(),
+      'header_bg_color': _headerBgColorController.text,
+      'header_nav_links': jsonEncode(_navLinks),
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -4171,24 +5377,33 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     _storeNameController.text = service.getSetting('store_name', '');
     _logoUrlController.text = service.getSetting('logo_url', '');
     _topBannerController.text = service.getSetting('top_banner_text', 'Envíos a todo Chile');
-  }
-
-  Future<void> _saveSettings() async {
-    final service = context.read<WebsiteService>();
-    await service.saveSettings({
-      'store_name': _storeNameController.text,
-      'logo_url': _logoUrlController.text,
-      'top_banner_text': _topBannerController.text,
-    });
+    _headerBgColorController.text = service.getSetting('header_bg_color', '#FFFFFF');
     
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Header guardado'),
-          backgroundColor: Color(0xFF00A09D),
-        ),
-      );
+    _headerStyle = service.getSetting('header_style', 'solid');
+    _headerColorMode = service.getSetting('header_color_mode', 'light');
+    _showTopBanner = service.getSetting('header_show_top_banner', 'true') == 'true';
+    _headerShadow = service.getSetting('header_shadow', 'true') == 'true';
+    
+    // Parse nav links from JSON
+    final navLinksJson = service.getSetting('header_nav_links', '');
+    if (navLinksJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(navLinksJson) as List;
+        _navLinks = decoded.map((e) => Map<String, String>.from(e as Map)).toList();
+      } catch (_) {
+        _navLinks = _getDefaultNavLinks();
+      }
+    } else {
+      _navLinks = _getDefaultNavLinks();
     }
+  }
+  
+  List<Map<String, String>> _getDefaultNavLinks() {
+    return [
+      {'label': 'Inicio', 'url': '/tienda'},
+      {'label': 'Productos', 'url': '/tienda/productos'},
+      {'label': 'Contacto', 'url': '/tienda/contacto'},
+    ];
   }
 
   @override
@@ -4196,6 +5411,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     _storeNameController.dispose();
     _logoUrlController.dispose();
     _topBannerController.dispose();
+    _headerBgColorController.dispose();
     super.dispose();
   }
 
@@ -4249,6 +5465,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
             currentUrl: _logoUrlController.text,
             onChanged: (url) {
               _logoUrlController.text = url;
+              _markChanged();
               setState(() {});
             },
           ),
@@ -4277,19 +5494,296 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           
           const SizedBox(height: 24),
           
-          // Save button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _saveSettings,
-              icon: const Icon(Icons.save, size: 18),
-              label: const Text('Guardar header'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00A09D),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+          // ========== HEADER STYLE SECTION ==========
+          _SectionHeader('Estilo del header'),
+          const SizedBox(height: 12),
+          
+          // Header style dropdown
+          _buildDropdown(
+            label: 'Modo de visualización',
+            value: _headerStyle,
+            items: _headerStyles.keys.toList(),
+            labels: _headerStyles,
+            onChanged: (v) {
+              setState(() => _headerStyle = v!);
+              _markChanged();
+            },
+          ),
+          const SizedBox(height: 12),
+          
+          // Color mode dropdown
+          _buildDropdown(
+            label: 'Modo de color',
+            value: _headerColorMode,
+            items: _headerColorModes.keys.toList(),
+            labels: _headerColorModes,
+            onChanged: (v) {
+              setState(() => _headerColorMode = v!);
+              _markChanged();
+            },
+          ),
+          const SizedBox(height: 12),
+          
+          // Background color
+          _ColorField(
+            label: 'Color de fondo',
+            controller: _headerBgColorController,
+          ),
+          const SizedBox(height: 16),
+          
+          // Toggles
+          _buildSwitch(
+            label: 'Mostrar banner superior',
+            value: _showTopBanner,
+            onChanged: (v) {
+              setState(() => _showTopBanner = v);
+              _markChanged();
+            },
+          ),
+          const SizedBox(height: 8),
+          _buildSwitch(
+            label: 'Mostrar sombra',
+            value: _headerShadow,
+            onChanged: (v) {
+              setState(() => _headerShadow = v);
+              _markChanged();
+            },
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // ========== NAVIGATION LINKS SECTION ==========
+          _SectionHeader('Links de navegación'),
+          const SizedBox(height: 12),
+          
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.menu, color: Colors.white70, size: 16),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Menú de navegación',
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _addNavLink,
+                      icon: const Icon(Icons.add, color: Colors.white70, size: 18),
+                      tooltip: 'Agregar link',
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_navLinks.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text(
+                      'Sin links. Haz clic en + para agregar.',
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                  )
+                else
+                  ReorderableListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _navLinks.length,
+                    onReorder: (oldIndex, newIndex) {
+                      setState(() {
+                        if (newIndex > oldIndex) newIndex--;
+                        final item = _navLinks.removeAt(oldIndex);
+                        _navLinks.insert(newIndex, item);
+                      });
+                      _markChanged();
+                    },
+                    itemBuilder: (context, index) {
+                      final link = _navLinks[index];
+                      return _NavLinkTile(
+                        key: ValueKey('nav_$index'),
+                        label: link['label'] ?? '',
+                        url: link['url'] ?? '',
+                        onEdit: () => _editNavLink(index),
+                        onDelete: () {
+                          setState(() => _navLinks.removeAt(index));
+                          _markChanged();
+                        },
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Info text - changes are saved with main button
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.blue.shade300),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Los cambios se guardarán al presionar "Guardar" en la barra superior.',
+                    style: TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildDropdown({
+    required String label,
+    required String value,
+    required List<String> items,
+    Map<String, String>? labels,
+    required void Function(String?) onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF2D2D2D),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              dropdownColor: const Color(0xFF2D2D2D),
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              items: items.map((item) => DropdownMenuItem(
+                value: item,
+                child: Text(labels?[item] ?? item),
+              )).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildSwitch({
+    required String label,
+    required bool value,
+    required void Function(bool) onChanged,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+        ),
+        Switch(
+          value: value,
+          onChanged: onChanged,
+          activeColor: const Color(0xFF00A09D),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ],
+    );
+  }
+  
+  void _addNavLink() {
+    _showNavLinkDialog(
+      onSave: (label, url) {
+        setState(() => _navLinks.add({'label': label, 'url': url}));
+        _markChanged();
+      },
+    );
+  }
+  
+  void _editNavLink(int index) {
+    final link = _navLinks[index];
+    _showNavLinkDialog(
+      initialLabel: link['label'] ?? '',
+      initialUrl: link['url'] ?? '',
+      onSave: (label, url) {
+        setState(() => _navLinks[index] = {'label': label, 'url': url});
+        _markChanged();
+      },
+    );
+  }
+  
+  void _showNavLinkDialog({
+    String initialLabel = '',
+    String initialUrl = '',
+    required void Function(String label, String url) onSave,
+  }) {
+    final labelController = TextEditingController(text: initialLabel);
+    final urlController = TextEditingController(text: initialUrl);
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text('Link de navegación', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: labelController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Texto del link',
+                labelStyle: TextStyle(color: Colors.white60),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00A09D))),
               ),
             ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: urlController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'URL (ej: /tienda/productos)',
+                labelStyle: TextStyle(color: Colors.white60),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00A09D))),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (labelController.text.isNotEmpty && urlController.text.isNotEmpty) {
+                onSave(labelController.text, urlController.text);
+                Navigator.pop(ctx);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00A09D)),
+            child: const Text('Guardar'),
           ),
         ],
       ),

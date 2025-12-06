@@ -138,7 +138,7 @@ class CartPage extends StatelessWidget {
               width: 120,
               height: 120,
               decoration: BoxDecoration(
-                color: PublicStoreTheme.surface,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: product.imageUrl != null

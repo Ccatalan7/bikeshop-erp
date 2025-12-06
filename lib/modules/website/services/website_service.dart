@@ -225,13 +225,19 @@ class WebsiteService extends ChangeNotifier {
           final index = entry.key;
           final block = entry.value;
 
+          // Accept both legacy snake_case keys and new camelCase keys
+          final blockType = block['type'] ?? block['block_type'];
+          final blockData = block['data'] ?? block['block_data'] ?? {};
+          final isVisible = block['isVisible'] ?? block['is_visible'] ?? true;
+          final orderIndex = block['order_index'] ?? block['sort_order'] ?? index;
+
           return {
             'id': block['id'],
             'tenant_id': tenantId, // ✅ Add tenant_id for RLS
-            'block_type': block['type'],
-            'block_data': block['data'],
-            'is_visible': block['isVisible'] ?? true,
-            'order_index': index,
+            'block_type': blockType,
+            'block_data': blockData,
+            'is_visible': isVisible,
+            'order_index': orderIndex,
             'updated_at': DateTime.now().toIso8601String(),
           };
         }).toList();

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -8,6 +9,9 @@ import '../../../public_store/theme/public_store_theme.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/website_block_type.dart';
+
+// Conditional import for web platform
+import 'video_banner_stub.dart' if (dart.library.html) 'video_banner_web.dart' as video_platform;
 
 /// Renders website blocks using the same widgets as the public store so the
 /// editor preview can stay in sync with the live site.
@@ -361,7 +365,19 @@ class WebsiteBlockRenderer {
     double? bodySize,
     void Function(String route)? onNavigate,
   }) {
+    // Generate a key based on slides data to force rebuild when slides change
+    final slides = data['slides'];
+    final slidesHash = slides != null ? slides.toString().hashCode : 0;
+    
+    // Debug: Log slide data to trace video URL
+    if (slides is List && slides.isNotEmpty) {
+      final firstSlide = slides[0];
+      debugPrint('🎠 [_buildCarousel] First slide videoUrl: ${firstSlide['videoUrl']}');
+      debugPrint('🎠 [_buildCarousel] slidesHash: $slidesHash');
+    }
+    
     return _CarouselBanner(
+      key: ValueKey('carousel_$slidesHash'),
       data: data,
       primaryColor: primaryColor,
       accentColor: accentColor,
@@ -2225,11 +2241,11 @@ class WebsiteBlockRenderer {
     bool previewMode = false,
     void Function(String route)? onNavigate,
   }) {
-    final theme = Theme.of(context);
     final title = (data['title'] ?? '').toString().trim();
     final subtitle = (data['subtitle'] ?? '').toString().trim();
     final imageUrl = data['imageUrl']?.toString();
     final videoUrl = data['videoUrl']?.toString();
+    final videoFileUrl = data['videoFileUrl']?.toString(); // Direct video file
     final ctaText = (data['ctaText'] ?? 'Ver más').toString().trim();
     final ctaLink = (data['ctaLink'] ?? '/tienda/productos').toString().trim();
     final showCta = data['showCta'] != false;
@@ -2239,112 +2255,76 @@ class WebsiteBlockRenderer {
     if (rawOpacity is num) overlayOpacity = rawOpacity.toDouble().clamp(0.0, 1.0);
     
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
+    final hasVideoUrl = videoUrl != null && videoUrl.isNotEmpty;
+    final hasVideoFile = videoFileUrl != null && videoFileUrl.isNotEmpty;
+    
+    // Check if it's a YouTube URL
+    String? youtubeVideoId;
+    if (hasVideoUrl) {
+      youtubeVideoId = _extractYouTubeVideoId(videoUrl);
+    }
+    
+    // Determine what background to show
+    final hasPlayableVideo = youtubeVideoId != null || hasVideoFile;
 
-    return Container(
-      width: double.infinity,
-      height: 400,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1a1a1a),
-        image: hasImage
-            ? DecorationImage(
-                image: NetworkImage(imageUrl),
-                fit: BoxFit.cover,
-              )
-            : null,
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Overlay
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withOpacity(overlayOpacity * 0.3),
-                  Colors.black.withOpacity(overlayOpacity),
-                ],
-              ),
-            ),
-          ),
-          // Content
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (title.isNotEmpty)
-                      Text(
-                        title,
-                        style: theme.textTheme.displayMedium?.copyWith(
-                          fontFamily: headingFont,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 2,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    if (subtitle.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Text(
-                          subtitle,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontFamily: bodyFont,
-                            color: Colors.white70,
-                            fontStyle: FontStyle.italic,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    if (showCta && ctaText.isNotEmpty) ...[
-                      const SizedBox(height: 32),
-                      ElevatedButton(
-                        onPressed: previewMode
-                            ? null
-                            : () => onNavigate?.call(ctaLink),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accentColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 16,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        child: Text(ctaText),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Play button overlay for video
-          if (videoUrl != null && videoUrl.isNotEmpty)
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.play_arrow_rounded,
-                  size: 48,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-        ],
-      ),
+    return _VideoBannerWidget(
+      title: title,
+      subtitle: subtitle,
+      imageUrl: hasImage ? imageUrl : null,
+      youtubeVideoId: youtubeVideoId,
+      videoFileUrl: hasVideoFile ? videoFileUrl : null,
+      ctaText: ctaText,
+      ctaLink: ctaLink,
+      showCta: showCta,
+      overlayOpacity: overlayOpacity,
+      accentColor: accentColor,
+      headingFont: headingFont,
+      bodyFont: bodyFont,
+      previewMode: previewMode,
+      onNavigate: onNavigate,
+      hasPlayableVideo: hasPlayableVideo,
     );
+  }
+  
+  /// Extract YouTube video ID from various URL formats
+  static String? _extractYouTubeVideoId(String url) {
+    // Handle various YouTube URL formats:
+    // - https://www.youtube.com/watch?v=VIDEO_ID
+    // - https://youtu.be/VIDEO_ID
+    // - https://www.youtube.com/embed/VIDEO_ID
+    // - https://www.youtube.com/v/VIDEO_ID
+    
+    final uri = Uri.tryParse(url);
+    if (uri == null) return null;
+    
+    // youtube.com/watch?v=VIDEO_ID
+    if (uri.host.contains('youtube.com')) {
+      final videoId = uri.queryParameters['v'];
+      if (videoId != null && videoId.isNotEmpty) return videoId;
+      
+      // youtube.com/embed/VIDEO_ID or youtube.com/v/VIDEO_ID
+      final pathSegments = uri.pathSegments;
+      if (pathSegments.isNotEmpty) {
+        final embedIndex = pathSegments.indexOf('embed');
+        final vIndex = pathSegments.indexOf('v');
+        if (embedIndex != -1 && embedIndex + 1 < pathSegments.length) {
+          return pathSegments[embedIndex + 1];
+        }
+        if (vIndex != -1 && vIndex + 1 < pathSegments.length) {
+          return pathSegments[vIndex + 1];
+        }
+      }
+    }
+    
+    // youtu.be/VIDEO_ID
+    if (uri.host.contains('youtu.be')) {
+      final pathSegments = uri.pathSegments;
+      if (pathSegments.isNotEmpty) {
+        return pathSegments.first;
+      }
+    }
+    
+    return null;
   }
 
   // ============================================================================
@@ -2979,6 +2959,7 @@ enum _CarouselAnimation { slide, fade, zoom }
 
 class _CarouselBanner extends StatefulWidget {
   const _CarouselBanner({
+    super.key,
     required this.data,
     required this.primaryColor,
     required this.accentColor,
@@ -3138,7 +3119,12 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     final ctaText = (slide['ctaText'] ?? 'Ver más').toString().trim();
     final ctaLink = (slide['ctaLink'] ?? '/tienda/productos').toString().trim();
     final imageUrl = slide['imageUrl'];
+    final videoUrl = slide['videoUrl']?.toString() ?? '';
+    final videoFileUrl = slide['videoFileUrl']?.toString() ?? '';
     final showOverlay = (slide['showOverlay'] ?? true) == true;
+    
+    // Debug: Log video detection
+    debugPrint('🎬 [_buildSlide] index=$index, videoUrl="$videoUrl", videoFileUrl="$videoFileUrl"');
 
     double overlayOpacity = 0.55;
     final rawOverlay = slide['overlayOpacity'];
@@ -3150,6 +3136,14 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     overlayOpacity = overlayOpacity.clamp(0.0, 1.0);
 
     final hasImage = imageUrl != null && imageUrl.toString().isNotEmpty;
+    
+    // Check for video - prefer file upload over YouTube
+    final hasVideoFile = videoFileUrl.isNotEmpty;
+    final youtubeId = videoUrl.isNotEmpty ? WebsiteBlockRenderer._extractYouTubeVideoId(videoUrl) : null;
+    final hasYoutubeVideo = youtubeId != null;
+    
+    debugPrint('🎬 [_buildSlide] hasVideoFile=$hasVideoFile, youtubeId=$youtubeId, hasYoutubeVideo=$hasYoutubeVideo');
+    final hasVideo = hasVideoFile || hasYoutubeVideo;
 
     final headingStyle =
         (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
@@ -3166,6 +3160,111 @@ class _CarouselBannerState extends State<_CarouselBanner> {
       color: Colors.white70,
     );
 
+    // Content widget (text, buttons, overlay)
+    Widget contentWidget = Container(
+      decoration: showOverlay
+          ? BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withOpacity(overlayOpacity * 0.4),
+                  Colors.black.withOpacity(overlayOpacity * 0.7),
+                ],
+              ),
+            )
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  (title.isEmpty ? 'Título' : title).toUpperCase(),
+                  style: headingStyle.copyWith(
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    subtitle,
+                    style: subtitleStyle,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                const SizedBox(height: 40),
+                if (ctaText.isNotEmpty)
+                  OutlinedButton(
+                    onPressed: widget.previewMode
+                        ? () {}
+                        : () {
+                            final route = ctaLink.isNotEmpty
+                                ? ctaLink
+                                : '/tienda/productos';
+                            if (widget.onNavigate != null) {
+                              widget.onNavigate!(route);
+                            }
+                          },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white, width: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 16,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(0),
+                      ),
+                    ),
+                    child: Text(
+                      ctaText.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // If we have video, use Stack with video background
+    if (hasVideo && video_platform.VideoBannerPlatform.isSupported) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          return Container(
+            key: ValueKey<int>(index),
+            color: const Color(0xFF1a1a1a),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Video background
+                video_platform.VideoBannerPlatform.buildVideoBackground(
+                  youtubeVideoId: hasVideoFile ? null : youtubeId,
+                  videoFileUrl: hasVideoFile ? videoFileUrl : null,
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                ),
+                // Content on top of video
+                contentWidget,
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    // No video or web not supported - use image/gradient background
     return Container(
       key: ValueKey<int>(index),
       decoration: BoxDecoration(
@@ -3187,82 +3286,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
               )
             : null,
       ),
-      child: Container(
-        decoration: showOverlay
-            ? BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(overlayOpacity * 0.4),
-                    Colors.black.withOpacity(overlayOpacity * 0.7),
-                  ],
-                ),
-              )
-            : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 900),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    (title.isEmpty ? 'Título' : title).toUpperCase(),
-                    style: headingStyle.copyWith(
-                      letterSpacing: 3,
-                      fontWeight: FontWeight.w900,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    Text(
-                      subtitle,
-                      style: subtitleStyle,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                  const SizedBox(height: 40),
-                  if (ctaText.isNotEmpty)
-                    OutlinedButton(
-                      onPressed: widget.previewMode
-                          ? () {}
-                          : () {
-                              final route = ctaLink.isNotEmpty
-                                  ? ctaLink
-                                  : '/tienda/productos';
-                              if (widget.onNavigate != null) {
-                                widget.onNavigate!(route);
-                              }
-                            },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white, width: 1),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 40,
-                          vertical: 16,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(0),
-                        ),
-                      ),
-                      child: Text(
-                        ctaText.toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+      child: contentWidget,
     );
   }
 
@@ -3434,12 +3458,8 @@ class _PremiumProductCardState extends State<_PremiumProductCard> {
             : () => widget.onNavigate?.call('/tienda/producto/${widget.product.id}'),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: Colors.white,
-            border: Border.all(
-              color: _isHovered ? Colors.black12 : Colors.grey.shade200,
-              width: 1,
-            ),
           ),
           transform: _isHovered
               ? (Matrix4.identity()..translate(0.0, -2.0))
@@ -3455,7 +3475,7 @@ class _PremiumProductCardState extends State<_PremiumProductCard> {
                     // Image container
                     Container(
                       width: double.infinity,
-                      color: const Color(0xFFF8F8F8),
+                      color: Colors.white,
                       padding: const EdgeInsets.all(16),
                       child: hasImage
                           ? Image.network(
@@ -3940,5 +3960,178 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
       return raw.map((key, value) => MapEntry(key.toString(), value.toString()));
     }
     return {};
+  }
+}
+
+// ============================================================================
+// VIDEO BANNER WIDGET - Stateful widget for video playback
+// ============================================================================
+class _VideoBannerWidget extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final String? imageUrl;
+  final String? youtubeVideoId;
+  final String? videoFileUrl;
+  final String ctaText;
+  final String ctaLink;
+  final bool showCta;
+  final double overlayOpacity;
+  final Color accentColor;
+  final String? headingFont;
+  final String? bodyFont;
+  final bool previewMode;
+  final void Function(String route)? onNavigate;
+  final bool hasPlayableVideo;
+
+  const _VideoBannerWidget({
+    required this.title,
+    required this.subtitle,
+    this.imageUrl,
+    this.youtubeVideoId,
+    this.videoFileUrl,
+    required this.ctaText,
+    required this.ctaLink,
+    required this.showCta,
+    required this.overlayOpacity,
+    required this.accentColor,
+    this.headingFont,
+    this.bodyFont,
+    required this.previewMode,
+    this.onNavigate,
+    required this.hasPlayableVideo,
+  });
+
+  @override
+  State<_VideoBannerWidget> createState() => _VideoBannerWidgetState();
+}
+
+class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasImage = widget.imageUrl != null && widget.imageUrl!.isNotEmpty;
+    final screenWidth = MediaQuery.of(context).size.width;
+    
+    // Check if we can play video (web platform only)
+    final canPlayVideo = kIsWeb && widget.hasPlayableVideo && video_platform.VideoBannerPlatform.isSupported;
+
+    return Container(
+      width: double.infinity,
+      height: 500,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1a1a1a),
+        image: (hasImage && !canPlayVideo)
+            ? DecorationImage(
+                image: NetworkImage(widget.imageUrl!),
+                fit: BoxFit.cover,
+              )
+            : null,
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Video background (web only)
+          if (canPlayVideo)
+            Positioned.fill(
+              child: video_platform.VideoBannerPlatform.buildVideoBackground(
+                youtubeVideoId: widget.youtubeVideoId,
+                videoFileUrl: widget.videoFileUrl,
+                width: screenWidth,
+                height: 500,
+              ),
+            ),
+          
+          // Overlay gradient
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withOpacity(widget.overlayOpacity * 0.3),
+                  Colors.black.withOpacity(widget.overlayOpacity),
+                ],
+              ),
+            ),
+          ),
+          
+          // Content
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (widget.title.isNotEmpty)
+                      Text(
+                        widget.title,
+                        style: theme.textTheme.displayMedium?.copyWith(
+                          fontFamily: widget.headingFont,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 2,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    if (widget.subtitle.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Text(
+                          widget.subtitle,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontFamily: widget.bodyFont,
+                            color: Colors.white70,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    if (widget.showCta && widget.ctaText.isNotEmpty) ...[
+                      const SizedBox(height: 32),
+                      ElevatedButton(
+                        onPressed: widget.previewMode
+                            ? null
+                            : () => widget.onNavigate?.call(widget.ctaLink),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: widget.accentColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 16,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        child: Text(widget.ctaText),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          
+          // Play button overlay for non-web platforms when video is configured
+          if (!kIsWeb && widget.hasPlayableVideo)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  size: 48,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

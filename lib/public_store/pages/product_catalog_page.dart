@@ -437,12 +437,8 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
         onTap: () => context.go('/tienda/producto/${product.id}'),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: Colors.white,
-            border: Border.all(
-              color: _isHovered ? Colors.grey.shade300 : Colors.grey.shade200,
-              width: 1,
-            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -454,7 +450,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                   children: [
                     Container(
                       width: double.infinity,
-                      color: const Color(0xFFF8F8F8),
+                      color: Colors.white,
                       padding: const EdgeInsets.all(16),
                       child: hasImage
                           ? Image.network(

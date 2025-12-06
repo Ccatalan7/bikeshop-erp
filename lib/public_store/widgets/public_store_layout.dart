@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -90,56 +92,154 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       websiteService.getSetting('theme_background_color', ''),
       Colors.white,
     );
+    
+    // Header settings (DJI-style customization)
+    final headerStyle = websiteService.getSetting('header_style', 'solid');
+    final headerColorMode = websiteService.getSetting('header_color_mode', 'light');
+    final showTopBanner = websiteService.getSetting('header_show_top_banner', 'true') == 'true';
+    final headerShadow = websiteService.getSetting('header_shadow', 'true') == 'true';
+    final headerBgColor = _resolveColor(
+      websiteService.getSetting('header_bg_color', ''),
+      Colors.white,
+    );
+    
+    // Parse nav links
+    List<Map<String, String>> navLinks = [];
+    final navLinksJson = websiteService.getSetting('header_nav_links', '');
+    if (navLinksJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(navLinksJson) as List;
+        navLinks = decoded.map((e) => Map<String, String>.from(e as Map)).toList();
+      } catch (_) {
+        navLinks = [
+          {'label': 'Inicio', 'url': '/tienda'},
+          {'label': 'Productos', 'url': '/tienda/productos'},
+          {'label': 'Contacto', 'url': '/tienda/contacto'},
+        ];
+      }
+    } else {
+      navLinks = [
+        {'label': 'Inicio', 'url': '/tienda'},
+        {'label': 'Productos', 'url': '/tienda/productos'},
+        {'label': 'Contacto', 'url': '/tienda/contacto'},
+      ];
+    }
 
     // Check if in edit mode - use different layout structure
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
     final isPreviewMode = editProvider.isPreviewMode;
     
-    // Build the main page content (with header/footer)
-    final pageContent = Column(
-      children: [
-        // Header - with edit indicator if in edit mode
-        _buildHeader(
-          context: context,
-          storeName: storeName,
-          storeDescription: storeDescription,
-          logoUrl: logoUrl,
-          topBannerText: topBannerText,
-          contactPhone: contactPhone,
-          contactEmail: contactEmail,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          isEditMode: isEditMode,
-        ),
-        // Main content area
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
+    // Build footer (reused in all layouts)
+    final footerWidget = _buildFooter(
+      context: context,
+      storeName: storeName,
+      storeDescription: storeDescription,
+      contactEmail: contactEmail,
+      contactPhone: contactPhone,
+      contactAddress: contactAddress,
+      facebookHandle: facebookHandle,
+      instagramHandle: instagramHandle,
+      twitterHandle: twitterHandle,
+      youtubeHandle: youtubeHandle,
+      primaryColor: primaryColor,
+      accentColor: accentColor,
+      isEditMode: isEditMode,
+    );
+    
+    // Build header widget builder for special layouts
+    Widget buildHeaderWidget({bool isOverlay = false, Color? overrideBgColor, String? overrideColorMode, bool? overrideShowBanner, bool? overrideShadow}) {
+      return _buildHeader(
+        context: context,
+        storeName: storeName,
+        storeDescription: storeDescription,
+        logoUrl: logoUrl,
+        topBannerText: topBannerText,
+        contactPhone: contactPhone,
+        contactEmail: contactEmail,
+        primaryColor: primaryColor,
+        accentColor: accentColor,
+        isEditMode: isEditMode,
+        headerStyle: headerStyle,
+        headerColorMode: overrideColorMode ?? headerColorMode,
+        showTopBanner: overrideShowBanner ?? showTopBanner,
+        headerShadow: overrideShadow ?? headerShadow,
+        headerBgColor: overrideBgColor ?? headerBgColor,
+        navLinks: navLinks,
+        isOverlay: isOverlay,
+      );
+    }
+    
+    // Build the main page content based on header style
+    Widget pageContent;
+    
+    if (headerStyle == 'transparent') {
+      // TRANSPARENT: Header floats over hero, scrolls away with content (NOT sticky)
+      pageContent = SingleChildScrollView(
+        child: Stack(
+          children: [
+            // Content starts from top (behind header)
+            Column(
               children: [
                 widget.child,
-                // Footer - with edit indicator if in edit mode
-                _buildFooter(
-                  context: context,
-                  storeName: storeName,
-                  storeDescription: storeDescription,
-                  contactEmail: contactEmail,
-                  contactPhone: contactPhone,
-                  contactAddress: contactAddress,
-                  facebookHandle: facebookHandle,
-                  instagramHandle: instagramHandle,
-                  twitterHandle: twitterHandle,
-                  youtubeHandle: youtubeHandle,
-                  primaryColor: primaryColor,
-                  accentColor: accentColor,
-                  isEditMode: isEditMode,
-                ),
+                footerWidget,
               ],
             ),
-          ),
+            // Header floats on top (positioned at top, scrolls with content)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: buildHeaderWidget(
+                isOverlay: true,
+                overrideBgColor: Colors.transparent,
+                overrideColorMode: headerColorMode, // Use configured color mode (dark = white text)
+                overrideShadow: false,
+              ),
+            ),
+          ],
         ),
-      ],
-    );
+      );
+    } else if (headerStyle == 'sticky') {
+      // STICKY: Header stays fixed at top while scrolling
+      pageContent = _buildStickyHeaderLayout(
+        context: context,
+        storeName: storeName,
+        storeDescription: storeDescription,
+        logoUrl: logoUrl,
+        topBannerText: topBannerText,
+        contactPhone: contactPhone,
+        contactEmail: contactEmail,
+        primaryColor: primaryColor,
+        accentColor: accentColor,
+        headerColorMode: headerColorMode,
+        showTopBanner: showTopBanner,
+        headerShadow: headerShadow,
+        headerBgColor: headerBgColor,
+        navLinks: navLinks,
+        isEditMode: isEditMode,
+        footer: footerWidget,
+      );
+    } else {
+      // SOLID: Normal layout, header at top, content scrolls below
+      pageContent = Column(
+        children: [
+          // Header - static at top
+          buildHeaderWidget(),
+          // Main content area - scrollable
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  widget.child,
+                  footerWidget,
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     // In full edit mode, use Row layout with side panel
     if (isEditMode) {
@@ -425,6 +525,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         );
       }
 
+      // Save header settings if there are pending changes
+      if (editProvider.hasHeaderChanges && editProvider.pendingHeaderSettings.isNotEmpty) {
+        debugPrint('🔄 [SaveChanges] Saving header settings: ${editProvider.pendingHeaderSettings.keys.join(', ')}');
+        await websiteService.saveSettings(editProvider.pendingHeaderSettings);
+        debugPrint('✅ [SaveChanges] Header settings saved');
+      }
+
       // Convert blocks to the format expected by saveBlocks
       final blocks = editProvider.blocks;
       debugPrint('🔄 [SaveChanges] Saving ${blocks.length} blocks');
@@ -433,12 +540,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         final index = entry.key;
         final block = entry.value;
         debugPrint('  Block ${index}: id=${block['id']}, type=${block['block_type']}');
+        final blockType = block['block_type'] ?? block['type'];
+        final blockData = block['block_data'] ?? block['data'] ?? {};
+        final isVisible = block['is_visible'] ?? block['isVisible'] ?? true;
+        final orderIndex = block['order_index'] ?? index;
         return {
           'id': block['id'],
-          'type': block['block_type'],
-          'data': block['block_data'],
-          'isVisible': block['is_visible'] ?? true,
-          'order_index': index,
+          'type': blockType,
+          'data': blockData,
+          'isVisible': isVisible,
+          'order_index': orderIndex,
         };
       }).toList();
 
@@ -446,8 +557,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       await websiteService.saveBlocks(blocksForSave);
       debugPrint('✅ [SaveChanges] Blocks saved to database');
 
-      // Mark as saved
+      // Mark as saved and clear header changes
       editProvider.markAsSaved();
+      editProvider.clearHeaderChanged();
       
       // Reload blocks to get fresh data and update provider
       final freshBlocks = await websiteService.loadBlocksForTenant(tenantId);
@@ -488,84 +600,100 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required Color primaryColor,
     required Color accentColor,
     bool isEditMode = false,
+    String headerStyle = 'solid',
+    String headerColorMode = 'light',
+    bool showTopBanner = true,
+    bool headerShadow = true,
+    Color headerBgColor = Colors.white,
+    List<Map<String, String>> navLinks = const [],
+    bool isOverlay = false, // For transparent mode when scrolled up
   }) {
     final cart = context.watch<CartProvider>();
+    
+    // Determine colors based on mode
+    final isDarkMode = headerColorMode == 'dark' || isOverlay;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final iconColor = isDarkMode ? Colors.white : primaryColor;
+    final bgColor = isOverlay ? Colors.transparent : headerBgColor;
 
     final headerContent = Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: PublicStoreTheme.shadow,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: bgColor,
+        boxShadow: headerShadow && !isOverlay
+            ? [
+                BoxShadow(
+                  color: PublicStoreTheme.shadow,
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
       child: Column(
         children: [
-          // Top banner - customizable
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-            color: primaryColor,
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 24,
-              runSpacing: 8,
-              children: [
-                if (topBannerText.isNotEmpty)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.local_shipping_outlined,
-                          color: Colors.white, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        topBannerText,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                            ),
-                      ),
-                    ],
-                  ),
-                if (contactPhone.isNotEmpty)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.support_agent_outlined,
-                          color: Colors.white, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Contáctanos: $contactPhone',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                            ),
-                      ),
-                    ],
-                  ),
-                if (contactEmail.isNotEmpty)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.mail_outline,
-                          color: Colors.white, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        contactEmail,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                            ),
-                      ),
-                    ],
-                  ),
-              ],
+          // Top banner - customizable (only show if enabled and not in overlay mode)
+          if (showTopBanner && !isOverlay)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              color: primaryColor,
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 24,
+                runSpacing: 8,
+                children: [
+                  if (topBannerText.isNotEmpty)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.local_shipping_outlined,
+                            color: Colors.white, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          topBannerText,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
+                      ],
+                    ),
+                  if (contactPhone.isNotEmpty)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.support_agent_outlined,
+                            color: Colors.white, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Contáctanos: $contactPhone',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
+                      ],
+                    ),
+                  if (contactEmail.isNotEmpty)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.mail_outline,
+                            color: Colors.white, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          contactEmail,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
             ),
-          ),
           // Main header with logo
           Container(
             constraints: const BoxConstraints(maxWidth: 1200),
@@ -582,35 +710,44 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                             logoUrl,
                             fit: BoxFit.contain,
                             filterQuality: FilterQuality.high,
-                            errorBuilder: (context, error, stackTrace) => _buildTextLogo(context, storeName, primaryColor),
+                            color: isDarkMode ? Colors.white : null,
+                            colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
+                            errorBuilder: (context, error, stackTrace) => _buildTextLogo(context, storeName, textColor),
                           )
                         : Image.asset(
                             'assets/images/vinabike_logo.png',
                             fit: BoxFit.contain,
                             filterQuality: FilterQuality.high,
-                            errorBuilder: (context, error, stackTrace) => _buildTextLogo(context, storeName, primaryColor),
+                            color: isDarkMode ? Colors.white : null,
+                            colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
+                            errorBuilder: (context, error, stackTrace) => _buildTextLogo(context, storeName, textColor),
                           ),
                   ),
                 ),
                 const SizedBox(width: 24),
                 Expanded(
                   child: Row(
-                    children: [
-                      _buildNavLink(context, 'Inicio', '/tienda', primaryColor),
-                      const SizedBox(width: 24),
-                      _buildNavLink(context, 'Productos', '/tienda/productos',
-                          primaryColor),
-                      const SizedBox(width: 24),
-                      _buildNavLink(context, 'Contacto', '/tienda/contacto',
-                          primaryColor),
-                    ],
+                    children: navLinks.isEmpty
+                        ? [
+                            _buildNavLink(context, 'Inicio', '/tienda', textColor),
+                            const SizedBox(width: 24),
+                            _buildNavLink(context, 'Productos', '/tienda/productos', textColor),
+                            const SizedBox(width: 24),
+                            _buildNavLink(context, 'Contacto', '/tienda/contacto', textColor),
+                          ]
+                        : navLinks.map((link) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 24),
+                              child: _buildNavLink(context, link['label'] ?? '', link['url'] ?? '/', textColor),
+                            );
+                          }).toList(),
                   ),
                 ),
                 Row(
                   children: [
                     IconButton(
                       icon: const Icon(Icons.search),
-                      color: primaryColor,
+                      color: iconColor,
                       onPressed: () => context.go('/tienda/productos'),
                       tooltip: 'Buscar',
                     ),
@@ -620,7 +757,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.shopping_cart_outlined),
-                          color: primaryColor,
+                          color: iconColor,
                           onPressed: () => context.go('/tienda/carrito'),
                           tooltip: 'Carrito',
                         ),
@@ -650,7 +787,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       ],
                     ),
                     const SizedBox(width: 16),
-                    const CustomerAccountMenu(),
+                    CustomerAccountMenu(textColor: textColor),
                   ],
                 ),
               ],
@@ -716,6 +853,48 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     }
 
     return headerContent;
+  }
+
+  /// Builds a layout where the header stays fixed at the top while scrolling
+  /// Header starts with configured style and stays visible
+  Widget _buildStickyHeaderLayout({
+    required BuildContext context,
+    required String storeName,
+    required String storeDescription,
+    required String logoUrl,
+    required String topBannerText,
+    required String contactPhone,
+    required String contactEmail,
+    required Color primaryColor,
+    required Color accentColor,
+    required String headerColorMode,
+    required bool showTopBanner,
+    required bool headerShadow,
+    required Color headerBgColor,
+    required List<Map<String, String>> navLinks,
+    required bool isEditMode,
+    required Widget footer,
+  }) {
+    // Sticky uses the scaffold that keeps header fixed at top
+    return _StickyHeaderScaffold(
+      storeName: storeName,
+      storeDescription: storeDescription,
+      logoUrl: logoUrl,
+      topBannerText: topBannerText,
+      contactPhone: contactPhone,
+      contactEmail: contactEmail,
+      primaryColor: primaryColor,
+      accentColor: accentColor,
+      headerColorMode: headerColorMode,
+      showTopBanner: showTopBanner,
+      headerShadow: headerShadow,
+      headerBgColor: headerBgColor,
+      navLinks: navLinks,
+      isEditMode: isEditMode,
+      buildHeader: _buildHeader,
+      child: widget.child,
+      footer: footer,
+    );
   }
 
   Widget _buildFooter({
@@ -1161,5 +1340,148 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     }
 
     return parsed ?? fallback;
+  }
+}
+
+/// A stateful widget that manages the sticky header that stays fixed at top while scrolling
+class _StickyHeaderScaffold extends StatefulWidget {
+  final String storeName;
+  final String storeDescription;
+  final String logoUrl;
+  final String topBannerText;
+  final String contactPhone;
+  final String contactEmail;
+  final Color primaryColor;
+  final Color accentColor;
+  final String headerColorMode;
+  final bool showTopBanner;
+  final bool headerShadow;
+  final Color headerBgColor;
+  final List<Map<String, String>> navLinks;
+  final bool isEditMode;
+  final Widget Function({
+    required BuildContext context,
+    required String storeName,
+    required String storeDescription,
+    required String logoUrl,
+    required String topBannerText,
+    required String contactPhone,
+    required String contactEmail,
+    required Color primaryColor,
+    required Color accentColor,
+    bool isEditMode,
+    String headerStyle,
+    String headerColorMode,
+    bool showTopBanner,
+    bool headerShadow,
+    Color headerBgColor,
+    List<Map<String, String>> navLinks,
+    bool isOverlay,
+  }) buildHeader;
+  final Widget child;
+  final Widget footer;
+
+  const _StickyHeaderScaffold({
+    required this.storeName,
+    required this.storeDescription,
+    required this.logoUrl,
+    required this.topBannerText,
+    required this.contactPhone,
+    required this.contactEmail,
+    required this.primaryColor,
+    required this.accentColor,
+    required this.headerColorMode,
+    required this.showTopBanner,
+    required this.headerShadow,
+    required this.headerBgColor,
+    required this.navLinks,
+    required this.isEditMode,
+    required this.buildHeader,
+    required this.child,
+    required this.footer,
+  });
+
+  @override
+  State<_StickyHeaderScaffold> createState() =>
+      _StickyHeaderScaffoldState();
+}
+
+class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
+  final ScrollController _scrollController = ScrollController();
+  double _scrollOffset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    setState(() {
+      _scrollOffset = _scrollController.offset;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Calculate header opacity based on scroll (0 = transparent, 1 = solid)
+    // Transition happens over the first 100 pixels of scroll
+    final double headerOpacity = (_scrollOffset / 100).clamp(0.0, 1.0);
+    final bool isScrolled = _scrollOffset > 50;
+
+    // When scrolled, switch to light mode (dark text on white bg)
+    final String effectiveColorMode = isScrolled ? 'light' : widget.headerColorMode;
+    final Color effectiveBgColor = isScrolled 
+        ? widget.headerBgColor 
+        : widget.headerBgColor.withValues(alpha: headerOpacity);
+
+    return Stack(
+      children: [
+        // Main scrollable content
+        SingleChildScrollView(
+          controller: _scrollController,
+          child: Column(
+            children: [
+              // Add padding at top for the header space (only if not in edit mode)
+              if (!widget.isEditMode) const SizedBox(height: 0),
+              widget.child,
+              widget.footer,
+            ],
+          ),
+        ),
+        // Floating header
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: widget.buildHeader(
+            context: context,
+            storeName: widget.storeName,
+            storeDescription: widget.storeDescription,
+            logoUrl: widget.logoUrl,
+            topBannerText: widget.topBannerText,
+            contactPhone: widget.contactPhone,
+            contactEmail: widget.contactEmail,
+            primaryColor: widget.primaryColor,
+            accentColor: widget.accentColor,
+            isEditMode: widget.isEditMode,
+            headerStyle: 'transparent',
+            headerColorMode: effectiveColorMode,
+            showTopBanner: widget.showTopBanner && !isScrolled,
+            headerShadow: widget.headerShadow && isScrolled,
+            headerBgColor: effectiveBgColor,
+            navLinks: widget.navLinks,
+            isOverlay: !isScrolled, // Only overlay when not scrolled
+          ),
+        ),
+      ],
+    );
   }
 }

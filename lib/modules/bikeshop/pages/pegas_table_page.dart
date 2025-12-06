@@ -1,5 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io' show File;
+import 'dart:typed_data';
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +11,13 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:http/http.dart' as http;
+import 'package:file_saver/file_saver.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -14,6 +25,7 @@ import '../../../shared/services/database_service.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../sales/models/sales_models.dart';
+import '../../settings/services/appearance_service.dart';
 import '../services/bikeshop_service.dart';
 import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
@@ -1973,6 +1985,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
       case 'diagnosis':
         // Clickable job details cell with inline edit popup for all text fields
+        final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
         return _JobDetailsCell(
           customerName: customer?.name,
           bikeName: bike?.displayName,
@@ -1980,6 +1993,8 @@ class _PegasTablePageState extends State<PegasTablePage>
           diagnosis: job.diagnosis,
           workPerformed: job.workPerformed,
           notes: job.notes,
+          job: job,
+          invoice: invoice,
           onSave: ({
             String? clientRequest,
             String? diagnosis,
@@ -4194,6 +4209,8 @@ class _JobDetailsCell extends StatefulWidget {
   final String? diagnosis;
   final String? workPerformed;
   final String? notes;
+  final MechanicJob? job;
+  final Invoice? invoice;
   final Future<void> Function({
     String? clientRequest,
     String? diagnosis,
@@ -4208,6 +4225,8 @@ class _JobDetailsCell extends StatefulWidget {
     required this.diagnosis,
     required this.workPerformed,
     required this.notes,
+    this.job,
+    this.invoice,
     required this.onSave,
   });
 
@@ -4559,7 +4578,7 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                             ),
                           ),
                         ),
-                        // Footer hint
+                        // Footer with hint and export buttons
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
@@ -4570,15 +4589,36 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                               bottomRight: Radius.circular(7),
                             ),
                           ),
-                          child: Text(
-                            'Click afuera para guardar • Cambios se guardan al cerrar',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color:
-                                  isDark ? Colors.grey[500] : Colors.grey[500],
-                              fontStyle: FontStyle.italic,
-                            ),
-                            textAlign: TextAlign.center,
+                          child: Row(
+                            children: [
+                              // Hint text
+                              Expanded(
+                                child: Text(
+                                  'Click afuera para guardar',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark ? Colors.grey[500] : Colors.grey[500],
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ),
+                              // Export buttons
+                              if (widget.job != null) ...[
+                                _ExportButton(
+                                  icon: Icons.picture_as_pdf_outlined,
+                                  tooltip: 'Exportar a PDF',
+                                  onTap: () => _showExportDialog(context, 'pdf'),
+                                  isDark: isDark,
+                                ),
+                                const SizedBox(width: 4),
+                                _ExportButton(
+                                  icon: Icons.description_outlined,
+                                  tooltip: 'Exportar a Word',
+                                  onTap: () => _showExportDialog(context, 'word'),
+                                  isDark: isDark,
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ],
@@ -4746,6 +4786,679 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
     }
   }
 
+  void _showExportDialog(BuildContext context, String format) {
+    final hasInvoice = widget.invoice != null;
+    bool includeInvoice = hasInvoice;
+    
+    // Field selection - all checked by default if they have content
+    bool exportSolicitud = _clientRequest.isNotEmpty;
+    bool exportDiagnostico = _diagnosis.isNotEmpty;
+    bool exportTrabajos = _workPerformed.isNotEmpty;
+    bool exportNotas = _notes.isNotEmpty;
+    
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.all(20),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      format == 'pdf' ? Icons.picture_as_pdf : Icons.description,
+                      color: format == 'pdf' ? Colors.red[400] : Colors.blue[400],
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      format == 'pdf' ? 'Exportar a PDF' : 'Exportar a Word',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (hasInvoice) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[800] : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: Checkbox(
+                            value: includeInvoice,
+                            onChanged: (v) => setDialogState(() => includeInvoice = v ?? false),
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Incluir factura',
+                                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                              ),
+                              Text(
+                                'La factura irá en la primera página',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            widget.invoice!.invoiceNumber,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.green[700],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[800] : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 16, color: Colors.grey[500]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Esta pega no tiene factura asociada',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                // Field selection section
+                Text(
+                  'Campos a exportar:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.grey[300] : Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Field checkboxes in a compact grid
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _buildFieldCheckbox(
+                      label: 'Solicitud',
+                      value: exportSolicitud,
+                      hasContent: _clientRequest.isNotEmpty,
+                      isDark: isDark,
+                      onChanged: (v) => setDialogState(() => exportSolicitud = v ?? false),
+                    ),
+                    _buildFieldCheckbox(
+                      label: 'Diagnóstico',
+                      value: exportDiagnostico,
+                      hasContent: _diagnosis.isNotEmpty,
+                      isDark: isDark,
+                      onChanged: (v) => setDialogState(() => exportDiagnostico = v ?? false),
+                    ),
+                    _buildFieldCheckbox(
+                      label: 'Trabajos',
+                      value: exportTrabajos,
+                      hasContent: _workPerformed.isNotEmpty,
+                      isDark: isDark,
+                      onChanged: (v) => setDialogState(() => exportTrabajos = v ?? false),
+                    ),
+                    _buildFieldCheckbox(
+                      label: 'Notas',
+                      value: exportNotas,
+                      hasContent: _notes.isNotEmpty,
+                      isDark: isDark,
+                      onChanged: (v) => setDialogState(() => exportNotas = v ?? false),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(
+                  'Cancelar',
+                  style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  final fieldSelection = {
+                    'solicitud': exportSolicitud,
+                    'diagnostico': exportDiagnostico,
+                    'trabajos': exportTrabajos,
+                    'notas': exportNotas,
+                  };
+                  if (format == 'pdf') {
+                    _exportToPdf(context, includeInvoice, fieldSelection);
+                  } else {
+                    _exportToWord(context, includeInvoice, fieldSelection);
+                  }
+                },
+                icon: Icon(
+                  format == 'pdf' ? Icons.download : Icons.download,
+                  size: 16,
+                ),
+                label: const Text('Exportar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFieldCheckbox({
+    required String label,
+    required bool value,
+    required bool hasContent,
+    required bool isDark,
+    required ValueChanged<bool?> onChanged,
+  }) {
+    return InkWell(
+      onTap: hasContent ? () => onChanged(!value) : null,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: !hasContent
+              ? (isDark ? Colors.grey[800] : Colors.grey[200])
+              : value
+                  ? (isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.withOpacity(0.1))
+                  : (isDark ? Colors.grey[700] : Colors.grey[100]),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: !hasContent
+                ? Colors.transparent
+                : value
+                    ? Colors.blue.withOpacity(0.5)
+                    : (isDark ? Colors.grey[600]! : Colors.grey[300]!),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: Checkbox(
+                value: hasContent ? value : false,
+                onChanged: hasContent ? onChanged : null,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: !hasContent
+                    ? (isDark ? Colors.grey[600] : Colors.grey[500])
+                    : value
+                        ? (isDark ? Colors.blue[300] : Colors.blue[700])
+                        : (isDark ? Colors.grey[400] : Colors.grey[700]),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportToPdf(BuildContext context, bool includeInvoice, Map<String, bool> fieldSelection) async {
+    final job = widget.job;
+    if (job == null) return;
+
+    try {
+      final pdf = pw.Document();
+      final dateFormat = DateFormat('dd/MM/yyyy');
+      final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+
+      // Try to load company logo
+      pw.ImageProvider? logoImage;
+      try {
+        final appearanceService = context.read<AppearanceService>();
+        final logoUrl = appearanceService.companyLogoUrl;
+        if (logoUrl != null && logoUrl.isNotEmpty) {
+          final response = await http.get(Uri.parse(logoUrl));
+          if (response.statusCode == 200) {
+            logoImage = pw.MemoryImage(response.bodyBytes);
+          }
+        }
+      } catch (_) {}
+
+      // Page 1: Invoice (if included)
+      if (includeInvoice && widget.invoice != null) {
+        final invoice = widget.invoice!;
+        pdf.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.letter,
+            margin: const pw.EdgeInsets.all(40),
+            build: (context) => pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Header
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (logoImage != null)
+                      pw.Image(logoImage, width: 100, height: 35, fit: pw.BoxFit.contain)
+                    else
+                      pw.Text('FACTURA', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text(invoice.invoiceNumber, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Fecha: ${dateFormat.format(invoice.date)}', style: const pw.TextStyle(fontSize: 10)),
+                      ],
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 20),
+                pw.Divider(),
+                pw.SizedBox(height: 10),
+                // Customer info
+                pw.Text('Cliente: ${invoice.customerName ?? "Sin nombre"}', style: const pw.TextStyle(fontSize: 11)),
+                pw.SizedBox(height: 20),
+                // Items table
+                pw.Table(
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  columnWidths: {
+                    0: const pw.FlexColumnWidth(3),
+                    1: const pw.FlexColumnWidth(1),
+                    2: const pw.FlexColumnWidth(1.5),
+                    3: const pw.FlexColumnWidth(1.5),
+                  },
+                  children: [
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                      children: [
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Descripción', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10))),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Cant.', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10), textAlign: pw.TextAlign.center)),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Precio', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10), textAlign: pw.TextAlign.right)),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10), textAlign: pw.TextAlign.right)),
+                      ],
+                    ),
+                    ...invoice.items.map((item) => pw.TableRow(
+                      children: [
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(item.description ?? item.productName ?? '', style: const pw.TextStyle(fontSize: 10))),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${item.quantity.toInt()}', style: const pw.TextStyle(fontSize: 10), textAlign: pw.TextAlign.center)),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(currencyFormat.format(item.unitPrice), style: const pw.TextStyle(fontSize: 10), textAlign: pw.TextAlign.right)),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(currencyFormat.format(item.lineTotal), style: const pw.TextStyle(fontSize: 10), textAlign: pw.TextAlign.right)),
+                      ],
+                    )),
+                  ],
+                ),
+                pw.SizedBox(height: 10),
+                // Totals
+                pw.Align(
+                  alignment: pw.Alignment.centerRight,
+                  child: pw.Container(
+                    width: 180,
+                    child: pw.Column(
+                      children: [
+                        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+                          pw.Text('Subtotal:', style: const pw.TextStyle(fontSize: 10)),
+                          pw.Text(currencyFormat.format(invoice.subtotal), style: const pw.TextStyle(fontSize: 10)),
+                        ]),
+                        if (invoice.ivaAmount > 0)
+                          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+                            pw.Text('IVA:', style: const pw.TextStyle(fontSize: 10)),
+                            pw.Text(currencyFormat.format(invoice.ivaAmount), style: const pw.TextStyle(fontSize: 10)),
+                          ]),
+                        pw.Divider(),
+                        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+                          pw.Text('Total:', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(currencyFormat.format(invoice.total), style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                        ]),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      // Page 2 (or 1 if no invoice): Job details
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.letter,
+          margin: const pw.EdgeInsets.all(40),
+          build: (context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Header
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  if (logoImage != null)
+                    pw.Image(logoImage, width: 100, height: 35, fit: pw.BoxFit.contain)
+                  else
+                    pw.Text('ORDEN DE TRABAJO', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text('Pega #${job.jobNumber ?? ""}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Ingreso: ${dateFormat.format(job.arrivalDate)}', style: const pw.TextStyle(fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 20),
+              pw.Divider(),
+              pw.SizedBox(height: 10),
+              // Customer & bike info
+              pw.Row(
+                children: [
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('Cliente', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
+                        pw.Text(widget.customerName ?? '—', style: const pw.TextStyle(fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('Bicicleta', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
+                        pw.Text(widget.bikeName ?? '—', style: const pw.TextStyle(fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 20),
+              // Details sections (conditional based on selection)
+              if (fieldSelection['solicitud'] == true)
+                _buildPdfSection('Solicitud del Cliente', _clientRequest),
+              if (fieldSelection['diagnostico'] == true)
+                _buildPdfSection('Diagnóstico', _diagnosis),
+              if (fieldSelection['trabajos'] == true)
+                _buildPdfSection('Trabajos Realizados', _workPerformed),
+              if (fieldSelection['notas'] == true)
+                _buildPdfSection('Notas', _notes),
+              // Cost summary
+              pw.SizedBox(height: 20),
+              pw.Container(
+                padding: const pw.EdgeInsets.all(12),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.grey100,
+                  borderRadius: pw.BorderRadius.circular(6),
+                ),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Costo Total', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                    pw.Text(currencyFormat.format(job.totalCost), style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // Save and share
+      final bytes = await pdf.save();
+      final fileName = 'pega_${job.jobNumber ?? job.id}_${includeInvoice ? "con_factura" : "detalles"}.pdf';
+      
+      await Printing.sharePdf(bytes: bytes, filename: fileName);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al exportar: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  pw.Widget _buildPdfSection(String title, String content) {
+    if (content.isEmpty) {
+      return pw.Container();
+    }
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 16),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            title,
+            style: pw.TextStyle(
+              fontSize: 11,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.blue800,
+            ),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.all(10),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey300),
+              borderRadius: pw.BorderRadius.circular(4),
+            ),
+            child: pw.Text(content, style: const pw.TextStyle(fontSize: 10)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _exportToWord(BuildContext context, bool includeInvoice, Map<String, bool> fieldSelection) async {
+    final job = widget.job;
+    if (job == null) return;
+
+    try {
+      final dateFormat = DateFormat('dd/MM/yyyy');
+      final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+      
+      // Generate HTML that Word can open natively
+      final html = StringBuffer();
+      html.writeln('<!DOCTYPE html>');
+      html.writeln('<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">');
+      html.writeln('<head><meta charset="UTF-8"><title>Pega ${job.jobNumber ?? ""}</title>');
+      html.writeln('<style>');
+      html.writeln('body { font-family: Arial, sans-serif; font-size: 11pt; margin: 40px; }');
+      html.writeln('h1 { font-size: 16pt; color: #1a237e; border-bottom: 2px solid #1a237e; padding-bottom: 8px; }');
+      html.writeln('h2 { font-size: 13pt; color: #1565c0; margin-top: 20px; }');
+      html.writeln('.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }');
+      html.writeln('.info-row { margin: 4px 0; }');
+      html.writeln('.label { font-weight: bold; color: #666; }');
+      html.writeln('.section { background: #f5f5f5; padding: 12px; border-radius: 4px; margin: 10px 0; border-left: 3px solid #1565c0; }');
+      html.writeln('.total-box { background: #e3f2fd; padding: 15px; border-radius: 6px; margin-top: 20px; text-align: right; }');
+      html.writeln('.total-amount { font-size: 14pt; font-weight: bold; color: #1565c0; }');
+      html.writeln('table { width: 100%; border-collapse: collapse; margin: 15px 0; }');
+      html.writeln('th { background: #e0e0e0; padding: 8px; text-align: left; border: 1px solid #ccc; }');
+      html.writeln('td { padding: 8px; border: 1px solid #ccc; }');
+      html.writeln('.text-right { text-align: right; }');
+      html.writeln('.divider { border-top: 1px solid #ccc; margin: 25px 0; }');
+      html.writeln('</style></head><body>');
+      
+      // Invoice section (if included)
+      if (includeInvoice && widget.invoice != null) {
+        final invoice = widget.invoice!;
+        html.writeln('<h1>FACTURA ${invoice.invoiceNumber}</h1>');
+        html.writeln('<div class="info-row"><span class="label">Fecha:</span> ${dateFormat.format(invoice.date)}</div>');
+        html.writeln('<div class="info-row"><span class="label">Cliente:</span> ${invoice.customerName ?? "Sin nombre"}</div>');
+        html.writeln('<table>');
+        html.writeln('<tr><th>Descripción</th><th style="width:60px">Cant.</th><th style="width:100px" class="text-right">Precio</th><th style="width:100px" class="text-right">Total</th></tr>');
+        for (final item in invoice.items) {
+          html.writeln('<tr>');
+          html.writeln('<td>${_escapeHtml(item.description ?? item.productName ?? "")}</td>');
+          html.writeln('<td class="text-right">${item.quantity.toInt()}</td>');
+          html.writeln('<td class="text-right">${currencyFormat.format(item.unitPrice)}</td>');
+          html.writeln('<td class="text-right">${currencyFormat.format(item.lineTotal)}</td>');
+          html.writeln('</tr>');
+        }
+        html.writeln('</table>');
+        html.writeln('<div style="text-align: right; margin-top: 10px;">');
+        html.writeln('<div>Subtotal: ${currencyFormat.format(invoice.subtotal)}</div>');
+        if (invoice.ivaAmount > 0) {
+          html.writeln('<div>IVA: ${currencyFormat.format(invoice.ivaAmount)}</div>');
+        }
+        html.writeln('<div style="font-size: 13pt; font-weight: bold; margin-top: 5px;">TOTAL: ${currencyFormat.format(invoice.total)}</div>');
+        html.writeln('</div>');
+        html.writeln('<div class="divider"></div>');
+      }
+      
+      // Job details section
+      html.writeln('<h1>ORDEN DE TRABAJO - Pega #${job.jobNumber ?? ""}</h1>');
+      html.writeln('<div class="info-row"><span class="label">Fecha de ingreso:</span> ${dateFormat.format(job.arrivalDate)}</div>');
+      html.writeln('<div class="info-row"><span class="label">Cliente:</span> ${_escapeHtml(widget.customerName ?? "—")}</div>');
+      html.writeln('<div class="info-row"><span class="label">Bicicleta:</span> ${_escapeHtml(widget.bikeName ?? "—")}</div>');
+      
+      if (fieldSelection['solicitud'] == true && _clientRequest.isNotEmpty) {
+        html.writeln('<h2>Solicitud del Cliente</h2>');
+        html.writeln('<div class="section">${_escapeHtml(_clientRequest).replaceAll('\n', '<br>')}</div>');
+      }
+      
+      if (fieldSelection['diagnostico'] == true && _diagnosis.isNotEmpty) {
+        html.writeln('<h2>Diagnóstico</h2>');
+        html.writeln('<div class="section">${_escapeHtml(_diagnosis).replaceAll('\n', '<br>')}</div>');
+      }
+      
+      if (fieldSelection['trabajos'] == true && _workPerformed.isNotEmpty) {
+        html.writeln('<h2>Trabajos Realizados</h2>');
+        html.writeln('<div class="section">${_escapeHtml(_workPerformed).replaceAll('\n', '<br>')}</div>');
+      }
+      
+      if (fieldSelection['notas'] == true && _notes.isNotEmpty) {
+        html.writeln('<h2>Notas</h2>');
+        html.writeln('<div class="section">${_escapeHtml(_notes).replaceAll('\n', '<br>')}</div>');
+      }
+      
+      html.writeln('<div class="total-box">');
+      html.writeln('<span class="label">Costo Total: </span>');
+      html.writeln('<span class="total-amount">${currencyFormat.format(job.totalCost)}</span>');
+      html.writeln('</div>');
+      html.writeln('</body></html>');
+
+      // Save as .doc file (Word opens HTML files with .doc extension)
+      final bytes = utf8.encode(html.toString());
+      final fileName = 'pega_${job.jobNumber ?? job.id}${includeInvoice ? "_con_factura" : ""}.doc';
+      
+      String? savedPath;
+      
+      if (kIsWeb) {
+        // Web: Use FileSaver to trigger browser download
+        await FileSaver.instance.saveFile(
+          name: fileName.replaceAll('.doc', ''),
+          bytes: Uint8List.fromList(bytes),
+          ext: 'doc',
+          mimeType: MimeType.microsoftWord,
+        );
+      } else {
+        // Desktop (macOS/Windows/Linux): Save to Downloads folder
+        final downloadsDir = await getDownloadsDirectory();
+        if (downloadsDir == null) {
+          throw Exception('No se pudo acceder a la carpeta de Descargas');
+        }
+        
+        final file = File('${downloadsDir.path}/$fileName');
+        await file.writeAsBytes(bytes);
+        savedPath = file.path;
+        
+        // Open the file with default application
+        final uri = Uri.file(file.path);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+        }
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Expanded(child: Text('Archivo Word guardado en Descargas')),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+            action: savedPath != null ? SnackBarAction(
+              label: 'Abrir carpeta',
+              textColor: Colors.white,
+              onPressed: () async {
+                // Open Downloads folder
+                final downloadsDir = await getDownloadsDirectory();
+                if (downloadsDir != null) {
+                  final uri = Uri.file(downloadsDir.path);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri);
+                  }
+                }
+              },
+            ) : null,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al exportar: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+  
+  String _escapeHtml(String text) {
+    return text
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+  }
+
   @override
   Widget build(BuildContext context) {
     final diagnosis = widget.diagnosis?.trim();
@@ -4826,6 +5539,40 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                   ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Minimalistic export button for the details footer
+class _ExportButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool isDark;
+
+  const _ExportButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(
+            icon,
+            size: 16,
+            color: isDark ? Colors.grey[500] : Colors.grey[600],
           ),
         ),
       ),

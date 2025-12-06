@@ -1180,7 +1180,24 @@ class _EditableWebsiteState extends State<EditableWebsite> {
     final websiteService = context.read<WebsiteService>();
     
     try {
-      await websiteService.saveBlocks(_blocks);
+      // Normalize block payload for saving
+      final blocksForSave = _blocks.asMap().entries.map((entry) {
+        final index = entry.key;
+        final block = entry.value;
+        final blockType = block['block_type'] ?? block['type'];
+        final blockData = block['block_data'] ?? block['data'] ?? {};
+        final isVisible = block['is_visible'] ?? block['isVisible'] ?? true;
+
+        return {
+          'id': block['id'],
+          'type': blockType,
+          'data': blockData,
+          'isVisible': isVisible,
+          'order_index': index,
+        };
+      }).toList();
+
+      await websiteService.saveBlocks(blocksForSave);
       setState(() => _hasChanges = false);
       
       if (mounted) {

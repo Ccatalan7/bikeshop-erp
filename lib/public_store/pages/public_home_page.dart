@@ -10,6 +10,7 @@ import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../modules/website/widgets/editable_block_renderer.dart';
 import '../../modules/website/widgets/inline_edit_toolbar.dart' show AddBlockDialog;
+import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/models/product.dart';
 import '../../shared/widgets/branded_loading.dart';
@@ -529,21 +530,35 @@ class _PublicHomePageState extends State<PublicHomePage> {
       return SingleChildScrollView(
         child: Column(
           children: [
-            for (final block in visibleBlocks)
-              _buildBlockFromData(
-                block,
-                primaryColor,
-                accentColor,
-                headingFont: headingFont,
-                bodyFont: bodyFont,
-                headingSize: headingSize,
-                bodySize: bodySize,
-                textColor: textColor,
-                sectionSpacing: sectionSpacing,
-                containerPadding: containerPadding,
-                isEditMode: isEditMode,
-                tenantId: tenantId,
+            for (int i = 0; i < visibleBlocks.length; i++) ...[
+              KeyedSubtree(
+                // Use hash of block_data to force rebuild when content changes
+                key: ValueKey('${visibleBlocks[i]['id']}_${visibleBlocks[i]['block_data']?.toString().hashCode ?? 0}'),
+                child: _buildBlockFromData(
+                  visibleBlocks[i],
+                  primaryColor,
+                  accentColor,
+                  headingFont: headingFont,
+                  bodyFont: bodyFont,
+                  headingSize: headingSize,
+                  bodySize: bodySize,
+                  textColor: textColor,
+                  sectionSpacing: sectionSpacing,
+                  containerPadding: containerPadding,
+                  isEditMode: isEditMode,
+                  tenantId: tenantId,
+                ),
               ),
+              // Add spacer between blocks (not after the last one)
+              if (i < visibleBlocks.length - 1)
+                _buildBlockSpacer(
+                  blockId: visibleBlocks[i]['id']?.toString() ?? '',
+                  blockData: Map<String, dynamic>.from(visibleBlocks[i]['block_data'] ?? {}),
+                  defaultSpacing: sectionSpacing,
+                  isEditMode: isEditMode,
+                  editProvider: editProvider,
+                ),
+            ],
             SizedBox(height: sectionSpacing),
             
             // Add block button at the end in edit mode
@@ -635,6 +650,38 @@ class _PublicHomePageState extends State<PublicHomePage> {
     }
   }
 
+  /// Build a spacer handle between blocks
+  Widget _buildBlockSpacer({
+    required String blockId,
+    required Map<String, dynamic> blockData,
+    required double defaultSpacing,
+    required bool isEditMode,
+    required WebsiteEditModeProvider editProvider,
+  }) {
+    // Get spacing from block data, default to theme setting
+    final spacingAfter = (blockData['spacingAfter'] as num?)?.toDouble() ?? defaultSpacing;
+    
+    if (isEditMode) {
+      return BlockSpacerHandle(
+        currentSpacing: spacingAfter,
+        minSpacing: 0,
+        maxSpacing: 200,
+        snapIncrement: 4,
+        isActive: true,
+        onSpacingChanged: (newSpacing) {
+          // Update in provider (will be saved when user saves)
+          editProvider.updateBlockData(blockId, 'spacingAfter', newSpacing);
+        },
+        onSpacingChangeEnd: (finalSpacing) {
+          // Already updated in onSpacingChanged
+        },
+      );
+    } else {
+      // Non-edit mode: just show the spacing
+      return SizedBox(height: spacingAfter);
+    }
+  }
+
   Widget _buildBlockFromData(
     Map<String, dynamic> blockData,
     Color primaryColor,
@@ -666,8 +713,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
       displayColor: textColor,
     );
 
-    final verticalPadding = (sectionSpacing / 2).clamp(0.0, 200.0).toDouble();
-    
     // Full-width blocks (like Commencal's edge-to-edge banners) get no horizontal padding
     final blockTypeNormalized = blockType.toLowerCase();
     final isFullWidthBlock = const [
@@ -681,7 +726,9 @@ class _PublicHomePageState extends State<PublicHomePage> {
     final horizontalPadding = isFullWidthBlock ? 0.0 : containerPadding.clamp(0.0, 200.0).toDouble();
 
     // Use editable renderer if in edit mode
-    final content = isEditMode
+    final blockHeight = (data['blockHeight'] as num?)?.toDouble();
+    
+    Widget content = isEditMode
         ? EditableBlockRenderer.build(
             context: context,
             blockId: blockId,
@@ -712,14 +759,25 @@ class _PublicHomePageState extends State<PublicHomePage> {
             onNavigate: (route) => context.go(route),
             tenantId: tenantId,
           );
+    
+    // Apply custom block height if set (for non-edit mode - edit mode handles it in EditableBlockRenderer)
+    if (!isEditMode && blockHeight != null) {
+      content = SizedBox(
+        height: blockHeight,
+        width: double.infinity,
+        child: ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.center,
+            maxHeight: double.infinity,
+            child: content,
+          ),
+        ),
+      );
+    }
 
+    // Only apply horizontal padding - vertical spacing is now handled by BlockSpacerHandle
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        horizontalPadding,
-        isFullWidthBlock ? 0.0 : verticalPadding, // Full-width blocks handle their own spacing
-        horizontalPadding,
-        verticalPadding,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Theme(
         data: baseTheme.copyWith(textTheme: themedText),
         child: content,

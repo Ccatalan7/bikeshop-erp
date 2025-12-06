@@ -318,9 +318,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (images.isEmpty) {
       return Container(
         height: 500,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8F8F8),
-          border: Border.all(color: Colors.grey.shade200),
+        decoration: const BoxDecoration(
+          color: Colors.white,
         ),
         child: const Center(
           child: Icon(
@@ -334,12 +333,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     return Column(
       children: [
-        // Main Image - Clean, minimal border
+        // Main Image - Clean, no border
         Container(
           height: 500,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F8F8),
-            border: Border.all(color: Colors.grey.shade200),
+          decoration: const BoxDecoration(
+            color: Colors.white,
           ),
           padding: const EdgeInsets.all(24),
           child: Image.network(
@@ -374,12 +372,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     child: Container(
                       width: 80,
                       decoration: BoxDecoration(
-                        border: Border.all(
-                          color: isSelected
-                              ? Colors.black
-                              : Colors.grey.shade300,
-                          width: isSelected ? 2 : 1,
-                        ),
+                        border: isSelected
+                            ? Border.all(color: Colors.black, width: 2)
+                            : null,
                       ),
                       padding: const EdgeInsets.all(4),
                       child: Image.network(
@@ -911,9 +906,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           _loadProduct();
         },
         child: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: Colors.grey.shade200),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -923,7 +917,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 flex: 4,
                 child: Container(
                   width: double.infinity,
-                  color: const Color(0xFFF8F8F8),
+                  color: Colors.white,
                   padding: const EdgeInsets.all(12),
                   child: hasImage
                       ? Image.network(
