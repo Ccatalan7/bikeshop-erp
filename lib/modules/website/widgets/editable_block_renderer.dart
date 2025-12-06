@@ -200,6 +200,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         clipBehavior: Clip.none,
         children: [
           // The block content with visibility opacity and height
+          // When custom height is set, blocks use LayoutBuilder to fill/center internally
           Opacity(
             opacity: widget.isVisible ? 1.0 : 0.5,
             child: KeyedSubtree(
@@ -208,13 +209,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                   ? SizedBox(
                       height: displayHeight,
                       width: double.infinity,
-                      child: ClipRect(
-                        child: OverflowBox(
-                          alignment: Alignment.center,
-                          maxHeight: double.infinity,
-                          child: blockContent,
-                        ),
-                      ),
+                      child: blockContent,
                     )
                   : blockContent,
             ),

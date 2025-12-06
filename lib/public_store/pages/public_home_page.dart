@@ -761,17 +761,12 @@ class _PublicHomePageState extends State<PublicHomePage> {
           );
     
     // Apply custom block height if set (for non-edit mode - edit mode handles it in EditableBlockRenderer)
+    // Blocks use LayoutBuilder internally to fill/center within this height
     if (!isEditMode && blockHeight != null) {
       content = SizedBox(
         height: blockHeight,
         width: double.infinity,
-        child: ClipRect(
-          child: OverflowBox(
-            alignment: Alignment.center,
-            maxHeight: double.infinity,
-            child: content,
-          ),
-        ),
+        child: content,
       );
     }
 

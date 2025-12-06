@@ -88,8 +88,20 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel> with SingleTick
       child: Row(
         children: [
           // Undo/Redo buttons
-          _buildIconButton(Icons.undo, 'Deshacer', null),
-          _buildIconButton(Icons.redo, 'Rehacer', null),
+          Consumer<WebsiteEditModeProvider>(
+            builder: (context, editProvider, _) => _buildIconButton(
+              Icons.undo, 
+              'Deshacer', 
+              editProvider.canUndo ? () => editProvider.undo() : null,
+            ),
+          ),
+          Consumer<WebsiteEditModeProvider>(
+            builder: (context, editProvider, _) => _buildIconButton(
+              Icons.redo, 
+              'Rehacer', 
+              editProvider.canRedo ? () => editProvider.redo() : null,
+            ),
+          ),
           // Backup button
           _buildIconButton(Icons.backup, 'Copias de seguridad', () => _showBackupsDialog(context)),
           // Preview button
@@ -409,11 +421,12 @@ class _EditBlockTab extends StatelessWidget {
     }
 
     // Handle special elements (header/footer) - these are not blocks
+    // Use ValueKey to preserve state across rebuilds
     if (selectedId == 'header') {
-      return _HeaderBlockControls(provider: editProvider);
+      return _HeaderBlockControls(key: const ValueKey('header_controls'), provider: editProvider);
     }
     if (selectedId == 'footer') {
-      return _FooterBlockControls(provider: editProvider);
+      return _FooterBlockControls(key: const ValueKey('footer_controls'), provider: editProvider);
     }
 
     final block = editProvider.getBlock(selectedId);
@@ -3418,7 +3431,12 @@ class _EditorToggle extends StatelessWidget {
         Switch(
           value: value,
           onChanged: onChanged,
-          activeColor: const Color(0xFF00A09D),
+          // ON state: bright teal color (highlighted)
+          activeColor: Colors.white,
+          activeTrackColor: const Color(0xFF00A09D),
+          // OFF state: dim/dark (muted)
+          inactiveThumbColor: Colors.grey.shade400,
+          inactiveTrackColor: Colors.grey.shade700,
         ),
       ],
     );
@@ -4308,7 +4326,12 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
             Switch(
               value: widget.data['showCta'] != false,
               onChanged: (v) => _updateField('showCta', v),
-              activeColor: const Color(0xFF00A09D),
+              // ON state: bright teal color (highlighted)
+              activeColor: Colors.white,
+              activeTrackColor: const Color(0xFF00A09D),
+              // OFF state: dim/dark (muted)
+              inactiveThumbColor: Colors.grey.shade400,
+              inactiveTrackColor: Colors.grey.shade700,
             ),
           ],
         ),
@@ -5299,7 +5322,7 @@ class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
 class _HeaderBlockControls extends StatefulWidget {
   final WebsiteEditModeProvider provider;
 
-  const _HeaderBlockControls({required this.provider});
+  const _HeaderBlockControls({super.key, required this.provider});
 
   @override
   State<_HeaderBlockControls> createState() => _HeaderBlockControlsState();
@@ -5314,7 +5337,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   // Header style options
   String _headerStyle = 'solid';
   String _headerColorMode = 'light';
-  bool _showTopBanner = true;
+  bool _showTopBanner = false;
   bool _headerShadow = true;
   List<Map<String, String>> _navLinks = [];
   
@@ -5350,6 +5373,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   
   /// Sync current header settings to provider for saving with main button
   void _syncPendingSettingsToProvider() {
+    debugPrint('🔧 [HeaderSettings] Syncing to provider: header_show_top_banner = $_showTopBanner');
     widget.provider.updateHeaderSettings({
       'store_name': _storeNameController.text,
       'logo_url': _logoUrlController.text,
@@ -5381,7 +5405,9 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     
     _headerStyle = service.getSetting('header_style', 'solid');
     _headerColorMode = service.getSetting('header_color_mode', 'light');
-    _showTopBanner = service.getSetting('header_show_top_banner', 'true') == 'true';
+    final rawBannerValue = service.getSetting('header_show_top_banner', 'false');
+    _showTopBanner = rawBannerValue == 'true';
+    debugPrint('🔧 [HeaderSettings] _loadSettings: rawBannerValue="$rawBannerValue" → _showTopBanner=$_showTopBanner');
     _headerShadow = service.getSetting('header_shadow', 'true') == 'true';
     
     // Parse nav links from JSON
@@ -5536,8 +5562,15 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
             label: 'Mostrar banner superior',
             value: _showTopBanner,
             onChanged: (v) {
-              setState(() => _showTopBanner = v);
-              _markChanged();
+              debugPrint('🔧 [HeaderSettings] Toggling showTopBanner: $_showTopBanner → $v');
+              setState(() {
+                _showTopBanner = v;
+                _hasLocalChanges = true;
+              });
+              // Sync AFTER setState completes with new value
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _syncPendingSettingsToProvider();
+              });
             },
           ),
           const SizedBox(height: 8),
@@ -5545,8 +5578,13 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
             label: 'Mostrar sombra',
             value: _headerShadow,
             onChanged: (v) {
-              setState(() => _headerShadow = v);
-              _markChanged();
+              setState(() {
+                _headerShadow = v;
+                _hasLocalChanges = true;
+              });
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _syncPendingSettingsToProvider();
+              });
             },
           ),
           
@@ -5703,7 +5741,12 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
         Switch(
           value: value,
           onChanged: onChanged,
-          activeColor: const Color(0xFF00A09D),
+          // ON state: bright teal color (highlighted)
+          activeColor: Colors.white,
+          activeTrackColor: const Color(0xFF00A09D),
+          // OFF state: dim/dark (muted)
+          inactiveThumbColor: Colors.grey.shade400,
+          inactiveTrackColor: Colors.grey.shade700,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ],
@@ -5795,7 +5838,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
 class _FooterBlockControls extends StatefulWidget {
   final WebsiteEditModeProvider provider;
 
-  const _FooterBlockControls({required this.provider});
+  const _FooterBlockControls({super.key, required this.provider});
 
   @override
   State<_FooterBlockControls> createState() => _FooterBlockControlsState();

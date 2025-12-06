@@ -22,6 +22,7 @@ import '../models/website_block_registry.dart';
 import '../models/website_block_definition.dart';
 import '../models/website_block_type.dart';
 import '../models/website_page_models.dart';
+import '../providers/website_edit_mode_provider.dart';
 // import '../services/website_service.dart';
 
 /// 🎨 ODOO-STYLE VISUAL EDITOR - PHASE 3
@@ -1234,15 +1235,19 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       ),
       actions: [
         // Undo/Redo
-        IconButton(
-          icon: const Icon(Icons.undo, color: Colors.black87),
-          onPressed: _historyIndex > 0 ? _undo : null,
-          tooltip: 'Deshacer',
+        Consumer<WebsiteEditModeProvider>(
+          builder: (context, editProvider, _) => IconButton(
+            icon: const Icon(Icons.undo, color: Colors.black87),
+            onPressed: (editProvider.canUndo) ? () => editProvider.undo() : null,
+            tooltip: 'Deshacer',
+          ),
         ),
-        IconButton(
-          icon: const Icon(Icons.redo, color: Colors.black87),
-          onPressed: _historyIndex < _history.length - 1 ? _redo : null,
-          tooltip: 'Rehacer',
+        Consumer<WebsiteEditModeProvider>(
+          builder: (context, editProvider, _) => IconButton(
+            icon: const Icon(Icons.redo, color: Colors.black87),
+            onPressed: (editProvider.canRedo) ? () => editProvider.redo() : null,
+            tooltip: 'Rehacer',
+          ),
         ),
 
         Container(

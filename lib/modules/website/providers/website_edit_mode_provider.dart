@@ -21,6 +21,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   // Pending header settings (to be saved with main save button)
   Map<String, String> _pendingHeaderSettings = {};
   
+  // History for undo/redo
+  final List<List<Map<String, dynamic>>> _history = [];
+  int _historyIndex = -1;
+  final int _maxHistory = 50;
+  
   // Getters
   bool get isPreviewMode => _isPreviewMode;
   bool get isEditMode => _isEditMode;
@@ -31,6 +36,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get blocks => _blocks;
   Map<String, dynamic> get settings => _settings;
   Map<String, String> get pendingHeaderSettings => _pendingHeaderSettings;
+  bool get canUndo => _historyIndex > 0;
+  bool get canRedo => _historyIndex < _history.length - 1;
 
   /// Mark header as having unsaved changes
   void markHeaderChanged() {
@@ -74,6 +81,12 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _hasUnsavedChanges = false;
     _hasHeaderChanges = false;
     _selectedBlockId = null;
+    
+    // Initialize history with current state
+    _history.clear();
+    _history.add(_blocks.map((b) => Map<String, dynamic>.from(b)).toList());
+    _historyIndex = 0;
+    
     notifyListeners();
   }
 
@@ -150,7 +163,51 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       'block_data': blockData,
     };
     _hasUnsavedChanges = true;
+    _saveToHistory(); // Save to history after each change
     debugPrint('✅ [EditProvider] updateBlockData: blockId=$blockId, key=$key, hasUnsavedChanges=$_hasUnsavedChanges');
+    notifyListeners();
+  }
+
+  /// Save current state to history
+  void _saveToHistory() {
+    // Remove any future history if we're not at the end
+    if (_historyIndex < _history.length - 1) {
+      _history.removeRange(_historyIndex + 1, _history.length);
+    }
+
+    // Deep copy blocks
+    final snapshot = _blocks.map((b) => Map<String, dynamic>.from(b)).toList();
+    _history.add(snapshot);
+    _historyIndex = _history.length - 1;
+
+    // Limit history size
+    if (_history.length > _maxHistory) {
+      _history.removeAt(0);
+      _historyIndex--;
+    }
+    
+    debugPrint('💾 [EditProvider] Saved to history: index=$_historyIndex, total=${_history.length}, canUndo=$canUndo, canRedo=$canRedo');
+  }
+
+  /// Undo last change
+  void undo() {
+    if (!canUndo) return;
+    
+    _historyIndex--;
+    _blocks = _history[_historyIndex].map((b) => Map<String, dynamic>.from(b)).toList();
+    _hasUnsavedChanges = true;
+    debugPrint('⏪ [EditProvider] Undo: index=$_historyIndex');
+    notifyListeners();
+  }
+
+  /// Redo last undone change
+  void redo() {
+    if (!canRedo) return;
+    
+    _historyIndex++;
+    _blocks = _history[_historyIndex].map((b) => Map<String, dynamic>.from(b)).toList();
+    _hasUnsavedChanges = true;
+    debugPrint('⏩ [EditProvider] Redo: index=$_historyIndex');
     notifyListeners();
   }
 

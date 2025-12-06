@@ -454,81 +454,91 @@ class WebsiteBlockRenderer {
       ];
     }
 
-    return Container(
-      color: const Color(0xFFFAFAFA),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 56, horizontal: 24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1000),
-          child: Column(
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 2,
-                  color: Colors.black87,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 40),
-              Row(
-                children: services.take(3).map((service) {
-                  final iconName = service['icon']?.toString();
-                  final serviceTitle = (service['title'] ?? 'Servicio').toString();
-                  final description = (service['description'] ?? '').toString().trim();
-
-                  return Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          left: services.indexOf(service) > 0
-                              ? BorderSide(color: Colors.grey.shade300, width: 1)
-                              : BorderSide.none,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(
-                            _getIconFromString(iconName),
-                            size: 32,
-                            color: primaryColor,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            serviceTitle,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          if (description.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              description,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey.shade600,
-                                height: 1.4,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ],
-                      ),
+    // Use LayoutBuilder to fill available height and center content
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+        
+        return Container(
+          color: const Color(0xFFFAFAFA),
+          width: double.infinity,
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight ? const EdgeInsets.symmetric(horizontal: 24) : const EdgeInsets.symmetric(vertical: 56, horizontal: 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1000),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 2,
+                      color: Colors.black87,
                     ),
-                  );
-                }).toList(),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 40),
+                  Row(
+                    children: services.take(3).map((service) {
+                      final iconName = service['icon']?.toString();
+                      final serviceTitle = (service['title'] ?? 'Servicio').toString();
+                      final description = (service['description'] ?? '').toString().trim();
+
+                      return Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              left: services.indexOf(service) > 0
+                                  ? BorderSide(color: Colors.grey.shade300, width: 1)
+                                  : BorderSide.none,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _getIconFromString(iconName),
+                                size: 32,
+                                color: primaryColor,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                serviceTitle,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              if (description.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  description,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade600,
+                                    height: 1.4,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -2359,57 +2369,69 @@ class WebsiteBlockRenderer {
 
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1a1a1a),
-        image: hasImage
-            ? DecorationImage(
-                image: NetworkImage(imageUrl),
-                fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(
-                  Colors.black.withOpacity(0.7),
-                  BlendMode.darken,
-                ),
-              )
-            : null,
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Column(
-            children: [
-              if (title.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: Text(
-                    title.toUpperCase(),
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontFamily: bodyFont,
-                      color: Colors.white60,
-                      letterSpacing: 3,
+    // Use LayoutBuilder to fill available height and center content
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+        
+        return Container(
+          width: double.infinity,
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1a1a1a),
+            image: hasImage
+                ? DecorationImage(
+                    image: NetworkImage(imageUrl),
+                    fit: BoxFit.cover,
+                    colorFilter: ColorFilter.mode(
+                      Colors.black.withOpacity(0.7),
+                      BlendMode.darken,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ...items.map((item) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Text(
-                      item.toUpperCase(),
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontFamily: headingFont,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  )),
-            ],
+                  )
+                : null,
           ),
-        ),
-      ),
+          padding: hasFixedHeight ? null : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          child: Center(
+            child: Padding(
+              padding: hasFixedHeight ? const EdgeInsets.symmetric(horizontal: 24) : EdgeInsets.zero,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (title.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        child: Text(
+                          title.toUpperCase(),
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontFamily: bodyFont,
+                            color: Colors.white60,
+                            letterSpacing: 3,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ...items.map((item) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Text(
+                            item.toUpperCase(),
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontFamily: headingFont,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        )),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -2470,43 +2492,54 @@ class WebsiteBlockRenderer {
     // Gap between logos
     const double gap = 80;
 
-    return Container(
-      width: double.infinity,
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 48),
-      child: Column(
-        children: [
-          // Title with accent underline
-          Text(
-            title.toUpperCase(),
-            style: TextStyle(
-              fontFamily: headingFont,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 2,
-              color: Colors.black87,
+    // Use LayoutBuilder to fill available height and center content
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+        
+        return Container(
+          width: double.infinity,
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          color: Colors.white,
+          padding: hasFixedHeight ? const EdgeInsets.symmetric(horizontal: 16) : const EdgeInsets.symmetric(vertical: 48),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Title with accent underline
+                Text(
+                  title.toUpperCase(),
+                  style: TextStyle(
+                    fontFamily: headingFont,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: 40,
+                  height: 3,
+                  color: accentColor,
+                ),
+                const SizedBox(height: 32),
+                // Brand logos - full width carousel
+                Padding(
+                  padding: hasFixedHeight ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 16),
+                  child: _BrandLogosCarousel(
+                    brands: brands,
+                    bodyFont: bodyFont,
+                    logoHeight: logoHeight,
+                    gap: gap,
+                  ),
+                ),
+              ],
             ),
-            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 8),
-          Container(
-            width: 40,
-            height: 3,
-            color: accentColor,
-          ),
-          const SizedBox(height: 32),
-          // Brand logos - full width carousel
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _BrandLogosCarousel(
-              brands: brands,
-              bodyFont: bodyFont,
-              logoHeight: logoHeight,
-              gap: gap,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -3039,15 +3072,19 @@ class _CarouselBannerState extends State<_CarouselBanner> {
       return const SizedBox.shrink();
     }
 
-    return SizedBox(
-      height: 520,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 600),
-            switchInCurve: Curves.easeOutCubic,
+    // Use LayoutBuilder to fill available height, default to 520 if unconstrained
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final height = constraints.maxHeight.isFinite ? constraints.maxHeight : 520.0;
+        return SizedBox(
+          height: height,
+          width: double.infinity,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 600),
+                switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             transitionBuilder: _buildTransition,
             child: _buildSlide(context, _slides[_currentIndex], _currentIndex),
@@ -3105,6 +3142,8 @@ class _CarouselBannerState extends State<_CarouselBanner> {
           ],
         ],
       ),
+    );
+      },
     );
   }
 
@@ -4015,63 +4054,67 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
     // Check if we can play video (web platform only)
     final canPlayVideo = kIsWeb && widget.hasPlayableVideo && video_platform.VideoBannerPlatform.isSupported;
 
-    return Container(
-      width: double.infinity,
-      height: 500,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1a1a1a),
-        image: (hasImage && !canPlayVideo)
-            ? DecorationImage(
-                image: NetworkImage(widget.imageUrl!),
-                fit: BoxFit.cover,
-              )
-            : null,
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Video background (web only)
-          if (canPlayVideo)
-            Positioned.fill(
-              child: video_platform.VideoBannerPlatform.buildVideoBackground(
-                youtubeVideoId: widget.youtubeVideoId,
-                videoFileUrl: widget.videoFileUrl,
-                width: screenWidth,
-                height: 500,
-              ),
-            ),
-          
-          // Overlay gradient
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withOpacity(widget.overlayOpacity * 0.3),
-                  Colors.black.withOpacity(widget.overlayOpacity),
-                ],
-              ),
-            ),
+    // Use LayoutBuilder to fill available height, default to 500 if unconstrained
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final height = constraints.maxHeight.isFinite ? constraints.maxHeight : 500.0;
+        return Container(
+          width: double.infinity,
+          height: height,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1a1a1a),
+            image: (hasImage && !canPlayVideo)
+                ? DecorationImage(
+                    image: NetworkImage(widget.imageUrl!),
+                    fit: BoxFit.cover,
+                  )
+                : null,
           ),
-          
-          // Content
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (widget.title.isNotEmpty)
-                      Text(
-                        widget.title,
-                        style: theme.textTheme.displayMedium?.copyWith(
-                          fontFamily: widget.headingFont,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 2,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Video background (web only)
+              if (canPlayVideo)
+                Positioned.fill(
+                  child: video_platform.VideoBannerPlatform.buildVideoBackground(
+                    youtubeVideoId: widget.youtubeVideoId,
+                    videoFileUrl: widget.videoFileUrl,
+                    width: screenWidth,
+                    height: height,
+                  ),
+                ),
+              
+              // Overlay gradient
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(widget.overlayOpacity * 0.3),
+                      Colors.black.withOpacity(widget.overlayOpacity),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Content
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 800),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (widget.title.isNotEmpty)
+                          Text(
+                            widget.title,
+                            style: theme.textTheme.displayMedium?.copyWith(
+                              fontFamily: widget.headingFont,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 2,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -4132,6 +4175,8 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
             ),
         ],
       ),
+    );
+      },
     );
   }
 }

@@ -96,7 +96,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Header settings (DJI-style customization)
     final headerStyle = websiteService.getSetting('header_style', 'solid');
     final headerColorMode = websiteService.getSetting('header_color_mode', 'light');
-    final showTopBanner = websiteService.getSetting('header_show_top_banner', 'true') == 'true';
+    final showTopBannerRaw = websiteService.getSetting('header_show_top_banner', 'false');
+    final showTopBanner = showTopBannerRaw == 'true';
+    debugPrint('🎨 [PublicStoreLayout] showTopBannerRaw=$showTopBannerRaw → showTopBanner=$showTopBanner');
     final headerShadow = websiteService.getSetting('header_shadow', 'true') == 'true';
     final headerBgColor = _resolveColor(
       websiteService.getSetting('header_bg_color', ''),
@@ -173,8 +175,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Build the main page content based on header style
     Widget pageContent;
     
-    if (headerStyle == 'transparent') {
-      // TRANSPARENT: Header floats over hero, scrolls away with content (NOT sticky)
+    // Check if we're on the homepage (route is exactly '/tienda' or '/')
+    final currentRoute = GoRouterState.of(context).uri.path;
+    final isHomePage = currentRoute == '/tienda' || currentRoute == '/' || currentRoute == '/tienda/';
+    
+    if (headerStyle == 'transparent' && isHomePage) {
+      // TRANSPARENT: Header floats over hero ONLY ON HOMEPAGE
       pageContent = SingleChildScrollView(
         child: Stack(
           children: [
@@ -199,6 +205,30 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ),
           ],
         ),
+      );
+    } else if (headerStyle == 'transparent' && !isHomePage) {
+      // TRANSPARENT style but NOT homepage: Use solid header instead
+      pageContent = Column(
+        children: [
+          // Header - static at top with solid background
+          buildHeaderWidget(
+            isOverlay: false,
+            overrideBgColor: headerBgColor,
+            overrideColorMode: headerColorMode,
+            overrideShadow: headerShadow,
+          ),
+          // Main content area - scrollable
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  widget.child,
+                  footerWidget,
+                ],
+              ),
+            ),
+          ),
+        ],
       );
     } else if (headerStyle == 'sticky') {
       // STICKY: Header stays fixed at top while scrolling
@@ -526,10 +556,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       }
 
       // Save header settings if there are pending changes
+      debugPrint('🔄 [SaveChanges] hasHeaderChanges=${editProvider.hasHeaderChanges}, pendingSettings=${editProvider.pendingHeaderSettings.keys.join(', ')}');
       if (editProvider.hasHeaderChanges && editProvider.pendingHeaderSettings.isNotEmpty) {
-        debugPrint('🔄 [SaveChanges] Saving header settings: ${editProvider.pendingHeaderSettings.keys.join(', ')}');
+        debugPrint('🔄 [SaveChanges] Saving header settings: ${editProvider.pendingHeaderSettings}');
         await websiteService.saveSettings(editProvider.pendingHeaderSettings);
         debugPrint('✅ [SaveChanges] Header settings saved');
+      } else {
+        debugPrint('⚠️ [SaveChanges] Skipping header save: hasHeaderChanges=${editProvider.hasHeaderChanges}, isEmpty=${editProvider.pendingHeaderSettings.isEmpty}');
       }
 
       // Convert blocks to the format expected by saveBlocks

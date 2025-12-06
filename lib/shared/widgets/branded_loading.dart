@@ -99,7 +99,7 @@ class _BrandedLoadingState extends State<BrandedLoading>
             width: widget.size,
             height: widget.size,
             fit: BoxFit.contain,
-            placeholder: (context, url) => _buildFallbackIndicator(),
+            placeholder: (context, url) => const SizedBox.shrink(), // Don't show spinner while loading
             errorWidget: (context, url, error) => _buildFallbackIndicator(),
           ),
         ),

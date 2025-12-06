@@ -594,11 +594,13 @@ class WebsiteService extends ChangeNotifier {
     required String errorContext,
   }) async {
     if (values.isEmpty) {
+      debugPrint('⚠️ [WebsiteService] _upsertSettings called with empty values - skipping');
       return;
     }
 
     try {
       final tenantId = await _tenantService.getTenantId();
+      debugPrint('💾 [WebsiteService] _upsertSettings: tenantId=$tenantId, ${values.length} settings to save');
       if (tenantId == null) {
         throw Exception('No tenant ID available');
       }
@@ -607,6 +609,7 @@ class WebsiteService extends ChangeNotifier {
       
       // Update or insert each setting individually
       for (final entry in values.entries) {
+        debugPrint('💾 [WebsiteService] Upserting setting: ${entry.key} = ${entry.value} for tenant $tenantId');
         try {
           // Try UPDATE first (most common case after initial setup)
           final updateResult = await _supabase
@@ -618,6 +621,7 @@ class WebsiteService extends ChangeNotifier {
             .eq('tenant_id', tenantId)
             .eq('key', entry.key)
             .select();
+          debugPrint('✅ [WebsiteService] Updated ${entry.key}: ${updateResult.length} rows affected');
           
           // If no rows were updated, insert new row
           if (updateResult.isEmpty) {
