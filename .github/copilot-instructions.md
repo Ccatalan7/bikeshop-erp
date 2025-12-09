@@ -6,6 +6,76 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 ---
 
+# 🗄️ SUPABASE PROJECT CONFIGURATION
+
+**⚠️ NEVER GUESS THESE VALUES - THEY ARE DOCUMENTED HERE!**
+
+## Project Details
+
+| Field | Value |
+|-------|-------|
+| **Project URL** | `https://xzdvtzdqjeyqxnkqprtf.supabase.co` |
+| **Project ID** | `xzdvtzdqjeyqxnkqprtf` |
+| **Region** | AWS US West 1 |
+| **Database Host** | `aws-0-us-west-1.pooler.supabase.com` |
+| **Database Port** | `6543` (pooler) / `5432` (direct) |
+
+## Connection Strings
+
+**Pooler Connection (recommended for most operations):**
+```
+postgresql://postgres.xzdvtzdqjeyqxnkqprtf:[PASSWORD]@aws-0-us-west-1.pooler.supabase.com:6543/postgres
+```
+
+**Direct Connection (for migrations/schema changes):**
+```
+postgresql://postgres:[PASSWORD]@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres
+```
+
+## Important Tenant IDs
+
+| Tenant | UUID | Description |
+|--------|------|-------------|
+| **Viñabike (Production)** | `5443b130-cc28-45af-a420-cd500b288890` | Primary business account, used for testing and production |
+
+## Storage Buckets
+
+- `products` - Product images
+- `website` - Website builder assets (blocks, logos, banners)
+- `documents` - Business documents (invoices, reports)
+
+## API Endpoints
+
+- **REST API:** `https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/`
+- **Auth API:** `https://xzdvtzdqjeyqxnkqprtf.supabase.co/auth/v1/`
+- **Storage API:** `https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/`
+- **Realtime:** `wss://xzdvtzdqjeyqxnkqprtf.supabase.co/realtime/v1/`
+
+## When Running Database Queries
+
+**⚠️ IMPORTANT: Use REST API with Service Role Key (psql connection is unreliable)**
+
+The database password for psql may change. Use the **REST API with service role key** instead:
+
+```bash
+# ✅ CORRECT: Use REST API with service role key from .env
+curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/TABLE_NAME?select=*" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" | jq .
+
+# ✅ EXAMPLE: Query website_pages for Viñabike tenant
+curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/website_pages?tenant_id=eq.5443b130-cc28-45af-a420-cd500b288890&select=id,slug,title" \
+  -H "apikey: $(grep SUPABASE_SERVICE_ROLE_KEY .env | cut -d= -f2)" \
+  -H "Authorization: Bearer $(grep SUPABASE_SERVICE_ROLE_KEY .env | cut -d= -f2)" | jq .
+
+# ❌ AVOID: psql connection (password issues)
+# psql "postgresql://postgres.xzdvtzdqjeyqxnkqprtf:..."  # Often fails with "Tenant or user not found"
+```
+
+**Service Role Key Location:** `.env` file → `SUPABASE_SERVICE_ROLE_KEY`
+
+---
+
 # 🚨 CRITICAL: MULTI-TENANT ARCHITECTURE
 
 **THIS IS A MULTI-TENANT SaaS APPLICATION - EVERY TABLE MUST HAVE `tenant_id`**
@@ -1640,6 +1710,31 @@ App is primarily used in Chile
 
 ---
 
+# 🏪 BUSINESS DATA - VIÑABIKE (Primary Tenant)
+
+**Use this data whenever creating content, policies, or UI that references the business:**
+
+| Campo | Valor |
+|-------|-------|
+| **Nombre comercial** | Viñabike |
+| **Dirección** | Álvarez 32, Local 17 |
+| **Código postal** | 2520000 |
+| **Ciudad** | Viña del Mar |
+| **Región** | Valparaíso |
+| **País** | Chile |
+| **Teléfono** | +56 9 9835 7797 |
+| **Email** | vinabikechile@gmail.com |
+| **Métodos de pago web** | Mercado Pago, Transferencia bancaria |
+| **Horario** | Lunes a Viernes 10:00 - 19:00, Sábado 10:00 - 14:00 |
+| **Subdomain** | vinabike |
+
+**⚠️ IMPORTANT:**
+- Use Spanish terminology: "Región" (not "Estado"), "Código postal" (not "ZIP code")
+- Format phone as `+56 9 XXXX XXXX` (Chilean mobile format)
+- Currency always in CLP with proper thousand separators: `$49.990`
+
+---
+
 # 👥 HR & Workforce Management (RRHH)
 
 Include the following modules:
@@ -1655,13 +1750,864 @@ Include the following modules:
 
 ---
 
-# 🌐 Website Builder
+# 🌐 Website Builder - COMPLETE ARCHITECTURE
 
-- Product catalog with images, descriptions, prices
-- Online orders sync with Inventory and Accounting
-- CMS for homepage, blog, promotions
-- Customer login and order history
-- Payment gateway integration (free-tier or mock)
+**CRITICAL: The Website Builder is a visual, block-based CMS. ALL content must be editable through the UI - NEVER hardcode content in code or SQL!**
+
+---
+
+## 🚨 CRITICAL: EDITOR ARCHITECTURE (Dec 2025)
+
+**There is ONE editor system - the INLINE EDITOR. No other editor exists.**
+
+### The Inline Editor System
+
+The website is edited **inline** - users see the actual website preview and click elements to edit them. A side panel provides additional editing tools.
+
+**Core Components:**
+
+| File | Purpose | Lines |
+|------|---------|-------|
+| `lib/public_store/widgets/public_store_layout.dart` | Layout wrapper, shows edit button, renders panel | ~1600 |
+| `lib/modules/website/widgets/website_editor_panel.dart` | Side panel with tabs: Agregar/Editar/Tema | ~6600 |
+| `lib/modules/website/providers/website_edit_mode_provider.dart` | State management for edit mode | ~560 |
+| `lib/modules/website/widgets/editable_block_renderer.dart` | Makes blocks clickable/selectable | ~2800 |
+| `lib/public_store/pages/public_home_page.dart` | HOME page with full editing support | ~800 |
+
+### How It Works
+
+```
+User clicks "Editar Sitio" button
+         ↓
+public_store_layout.dart calls editProvider.enterPreviewMode()
+         ↓
+Top bar appears with "Editar" button
+         ↓
+User clicks "Editar" → editProvider.switchToEditMode()
+         ↓
+WebsiteEditorPanel appears on right side (dark panel)
+         ↓
+Blocks become clickable via EditableBlockRenderer
+         ↓
+Selected block shows in "Editar" tab with field editors
+         ↓
+User saves → WebsiteService.saveBlocks()
+```
+
+### Edit Modes
+
+1. **Normal Mode** (`isEditMode = false`, `isPreviewMode = false`)
+   - Regular visitor view
+   - "Editar Sitio" floating button visible for logged-in admins
+
+2. **Preview Mode** (`isPreviewMode = true`)
+   - Top bar appears with "Editar" button
+   - Site looks normal but ready to edit
+   - **Activated by:** `/tienda?preview=true` or clicking "Vista Previa" button
+
+3. **Edit Mode** (`isEditMode = true`)
+   - Side panel visible (WebsiteEditorPanel)
+   - Blocks are clickable/selectable
+   - Changes tracked for save
+   - **Activated by:** `/tienda?edit=true` or clicking "Abrir Editor" button
+
+### URL Parameters (Dec 2025)
+
+| URL | Mode | What User Sees |
+|-----|------|----------------|
+| `/tienda` | Normal | Store with "Editar Sitio" FAB (if logged in) |
+| `/tienda?preview=true` | Preview | Store with elegant top bar (Publicado toggle, Editar button) |
+| `/tienda?edit=true` | Edit | Store with side panel editor (full editing capability) |
+
+### Entry Points from Website Management Page
+
+| Button | Action | Result |
+|--------|--------|--------|
+| "Vista Previa" | `context.go('/tienda?preview=true')` | Preview mode with top bar |
+| "Abrir Editor" | `context.go('/tienda?edit=true')` | Edit mode with side panel |
+| "Nueva Pestaña" | `launchUrl('/tienda')` | Opens in new browser tab (no editor) |
+
+---
+
+## ⚠️ KNOWN LIMITATION: Multi-Page Editing (Dec 2025)
+
+**CURRENT STATE: Only HOME page supports inline editing!**
+
+### The Problem
+
+| Page Type | Editing Support | Why |
+|-----------|-----------------|-----|
+| Home Page (`/tienda`) | ✅ Full editing | Uses `public_home_page.dart` with `EditableBlockRenderer` |
+| Policy Pages (`/pagina/:slug`) | ❌ READ ONLY | Uses `dynamic_website_page.dart` with `WebsiteBlockRenderer` (no edit support) |
+
+### Root Cause
+
+`DynamicWebsitePage` (used for `/pagina/:slug` routes) does NOT:
+- Import `WebsiteEditModeProvider`
+- Use `EditableBlockRenderer`
+- Connect to the inline editor system
+
+It only uses `WebsiteBlockRenderer` which is **read-only**.
+
+### Future Implementation Required
+
+To enable editing on ALL pages:
+
+1. **Modify `DynamicWebsitePage`:**
+   - Import and watch `WebsiteEditModeProvider`
+   - When `isEditMode = true`, use `EditableBlockRenderer` instead of `WebsiteBlockRenderer`
+   - Load page-specific blocks into `editProvider` when entering edit mode
+
+2. **Modify `public_store_layout.dart`:**
+   - Detect current page slug from route
+   - Pass current page ID to `WebsiteEditorPanel`
+   - Load correct blocks for current page (not just home page)
+
+3. **Modify `WebsiteService`:**
+   - Track "current editing page" in state
+   - `saveBlocks()` should save to correct page_id
+
+**For now:** Edit policy pages via SQL or create a dedicated page editor (not inline).
+
+---
+
+## 🗑️ DELETED FILES (Dec 2025)
+
+The following files were REMOVED because they caused confusion:
+
+| Deleted File | Reason |
+|--------------|--------|
+| `odoo_style_editor_page.dart` | Standalone editor that was NEVER used - caused massive confusion |
+| `website_editor_page.dart` | Wrapper that just returned OdooStyleEditorPage |
+
+**The `/website/editor` route has been removed.** All editing happens inline via the public store.
+
+---
+
+## Core Architecture
+
+### Database Tables
+```sql
+-- Pages (multi-page support)
+website_pages (
+  id, tenant_id, slug, title, is_published, is_home, is_system, template, meta_description, created_at, updated_at
+)
+
+-- Blocks (visual components)
+website_blocks (
+  id, tenant_id, page_id, block_type, order_index, is_visible, block_data JSONB, created_at, updated_at
+)
+
+-- Settings (theme, contact info, etc)
+website_settings (
+  id, tenant_id, key, value, created_at, updated_at
+)
+```
+
+### Block System
+
+**Block Types Available** (`lib/modules/website/models/website_block_type.dart`):
+```dart
+enum WebsiteBlockType {
+  hero,           // Banner with title, subtitle, CTA button, background image
+  carousel,       // Multi-slide hero with navigation
+  products,       // Product grid from inventory
+  services,       // Service cards with icons
+  about,          // Company info with image
+  testimonials,   // Customer reviews
+  features,       // Feature/benefit grid
+  cta,            // Call-to-action section
+  gallery,        // Image gallery
+  contact,        // Contact form
+  faq,            // Accordion FAQ
+  pricing,        // Pricing plans
+  team,           // Team member cards
+  stats,          // Statistics/metrics
+  footer,         // Page footer
+  categoryGrid,   // Category cards with images
+  videoBanner,    // Video background section
+  partnersBanner, // Partners/sponsors
+  brandLogos,     // Brand logo carousel
+}
+```
+
+### Block Data Structure
+
+Each block stores its configuration in `block_data` JSONB:
+```json
+{
+  "title": "Welcome to Vinabike",
+  "subtitle": "Your cycling partner",
+  "buttonText": "Shop Now",
+  "buttonLink": "/tienda/productos",
+  "backgroundImage": "https://...",
+  "overlayColor": "#000000",
+  "overlayOpacity": 0.35,
+  "visibility": {
+    "desktop": true,
+    "tablet": true,
+    "mobile": true
+  }
+}
+```
+
+---
+
+## 🎨 Visual Editor Features (MUST PRESERVE)
+
+### 1. Inline Text Editing
+**Location:** `lib/modules/website/widgets/inline_editable_text.dart`
+
+Users can click on ANY text element and edit it directly in the preview:
+```dart
+InlineEditableText(
+  text: data['title'] ?? '',
+  isEditMode: true,  // Enable inline editing
+  onChanged: (newText) => _updateBlockData(block, 'title', newText),
+  style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+)
+```
+
+**RULE:** Every text field in a block MUST use `InlineEditableText` for direct editing.
+
+### 2. Inline Image Editing
+**Location:** `lib/modules/website/widgets/inline_editable_image.dart`
+
+Users can click on images to upload/replace:
+```dart
+InlineEditableImage(
+  imageUrl: data['backgroundImage'],
+  isEditMode: true,
+  onChanged: (newUrl) => _updateBlockData(block, 'backgroundImage', newUrl),
+  width: double.infinity,
+  height: 400,
+)
+```
+
+**RULE:** Every image in a block MUST use `InlineEditableImage` for click-to-upload.
+
+### 3. Block Field Schema System
+**Location:** `lib/modules/website/models/website_block_definition.dart`
+
+Every block defines its editable fields:
+```dart
+WebsiteBlockDefinition(
+  type: WebsiteBlockType.hero,
+  title: 'Hero / Banner',
+  fields: [
+    WebsiteBlockFieldSchema(
+      key: 'title',
+      label: 'Título',
+      type: WebsiteBlockFieldType.text,
+    ),
+    WebsiteBlockFieldSchema(
+      key: 'buttonText',
+      label: 'Texto del botón',
+      type: WebsiteBlockFieldType.text,
+    ),
+    WebsiteBlockFieldSchema(
+      key: 'buttonLink',
+      label: 'Enlace del botón',
+      type: WebsiteBlockFieldType.text,
+    ),
+    WebsiteBlockFieldSchema(
+      key: 'backgroundImage',
+      label: 'Imagen de fondo',
+      type: WebsiteBlockFieldType.image,
+    ),
+  ],
+)
+```
+
+### 4. Field Types Available
+```dart
+enum WebsiteBlockFieldType {
+  text,      // Single line text
+  textarea,  // Multi-line text
+  richtext,  // Rich text editor (HTML)
+  color,     // Color picker
+  image,     // Image upload
+  number,    // Numeric input
+  toggle,    // Boolean switch
+  select,    // Dropdown options
+  chips,     // Tag/chip list
+  repeater,  // Repeatable items (testimonials, team members, etc.)
+}
+```
+
+### 5. Repeater Fields (Lists)
+For blocks with multiple items (testimonials, services, team):
+```dart
+WebsiteBlockFieldSchema(
+  key: 'services',
+  label: 'Servicios',
+  type: WebsiteBlockFieldType.repeater,
+  itemLabel: 'Servicio',
+  minItems: 1,
+  itemFields: [
+    WebsiteBlockFieldSchema(key: 'icon', label: 'Ícono', type: WebsiteBlockFieldType.select),
+    WebsiteBlockFieldSchema(key: 'title', label: 'Título', type: WebsiteBlockFieldType.text),
+    WebsiteBlockFieldSchema(key: 'description', label: 'Descripción', type: WebsiteBlockFieldType.textarea),
+  ],
+)
+```
+
+---
+
+## 🚨 CRITICAL RULES FOR WEBSITE DEVELOPMENT
+
+### ❌ NEVER DO THIS:
+```sql
+-- WRONG: Hardcoding content in SQL
+INSERT INTO website_blocks (block_data) VALUES ('{
+  "content": "<h1>Hardcoded Title</h1><p>Hardcoded paragraph...</p>"
+}');
+```
+
+```dart
+// WRONG: Hardcoding content in Dart
+Widget build(context) {
+  return Text('Welcome to Vinabike'); // Hardcoded!
+}
+```
+
+### ✅ ALWAYS DO THIS:
+```dart
+// CORRECT: Read from block_data, editable through UI
+Widget build(context) {
+  final title = data['title'] ?? 'Default Title';
+  return InlineEditableText(
+    text: title,
+    isEditMode: isEditMode,
+    onChanged: (v) => onUpdateBlock('title', v),
+  );
+}
+```
+
+---
+
+## 📦 Creating New Block Types
+
+When adding a NEW block type, you MUST:
+
+### 1. Add Enum Value
+```dart
+// lib/modules/website/models/website_block_type.dart
+enum WebsiteBlockType {
+  // ... existing types
+  myNewBlock,  // Add new type
+}
+```
+
+### 2. Add Icon
+```dart
+// In WebsiteBlockTypeX extension
+IconData get icon => switch (this) {
+  // ...
+  WebsiteBlockType.myNewBlock => Icons.my_icon,
+};
+```
+
+### 3. Register Block Definition
+```dart
+// lib/modules/website/models/website_block_registry.dart
+WebsiteBlockType.myNewBlock: WebsiteBlockDefinition(
+  type: WebsiteBlockType.myNewBlock,
+  title: 'Mi Nuevo Bloque',
+  description: 'Descripción del bloque',
+  defaultData: {
+    'title': 'Título por defecto',
+    'content': 'Contenido por defecto',
+    'imageUrl': null,
+    'buttonText': null,
+    'buttonLink': null,
+  },
+  fields: [
+    // Define ALL editable fields
+    WebsiteBlockFieldSchema(key: 'title', label: 'Título', type: WebsiteBlockFieldType.text),
+    WebsiteBlockFieldSchema(key: 'content', label: 'Contenido', type: WebsiteBlockFieldType.textarea),
+    WebsiteBlockFieldSchema(key: 'imageUrl', label: 'Imagen', type: WebsiteBlockFieldType.image),
+    WebsiteBlockFieldSchema(key: 'buttonText', label: 'Texto del Botón', type: WebsiteBlockFieldType.text),
+    WebsiteBlockFieldSchema(key: 'buttonLink', label: 'Enlace', type: WebsiteBlockFieldType.text),
+  ],
+),
+```
+
+### 4. Add Renderer
+```dart
+// lib/modules/website/widgets/website_block_renderer.dart
+case WebsiteBlockType.myNewBlock:
+  return _buildMyNewBlock(
+    context: context,
+    data: data,
+    primaryColor: primaryColor,
+    // ... other params
+  );
+
+static Widget _buildMyNewBlock({
+  required BuildContext context,
+  required Map<String, dynamic> data,
+  required Color primaryColor,
+  // ...
+}) {
+  final title = data['title'] as String? ?? 'Default';
+  final content = data['content'] as String? ?? '';
+  final imageUrl = data['imageUrl'] as String?;
+  final buttonText = data['buttonText'] as String?;
+  final buttonLink = data['buttonLink'] as String?;
+  
+  return Container(
+    // Build UI using data from block_data
+    // ALL content comes from editable fields!
+  );
+}
+```
+
+### 5. Add to Editor Preview
+The Odoo-style editor automatically handles preview if block is registered properly.
+
+---
+
+## 🔘 Button/Link System
+
+**Every block that can have buttons MUST support:**
+
+1. **Button Text** (`buttonText`): The label on the button
+2. **Button Link** (`buttonLink`): Where it navigates to
+
+**Valid link formats:**
+- `/tienda` - Internal store home
+- `/tienda/productos` - Product catalog
+- `/tienda/categoria/mtb` - Category page
+- `/pagina/nosotros` - Custom page by slug
+- `https://external.com` - External URL
+
+**Implementation:**
+```dart
+if (buttonText != null && buttonText.isNotEmpty)
+  ElevatedButton(
+    onPressed: () {
+      if (buttonLink != null) {
+        if (buttonLink.startsWith('http')) {
+          // External link
+          launchUrl(Uri.parse(buttonLink));
+        } else {
+          // Internal navigation
+          onNavigate?.call(buttonLink);
+        }
+      }
+    },
+    child: Text(buttonText),
+  )
+```
+
+---
+
+## 🖼️ Media System
+
+### Image Fields
+```dart
+WebsiteBlockFieldSchema(
+  key: 'imageUrl',
+  label: 'Imagen',
+  type: WebsiteBlockFieldType.image,
+)
+```
+
+Images are:
+1. Uploaded to Supabase Storage (`website/blocks/` folder)
+2. URL stored in `block_data.imageUrl`
+3. Rendered with `InlineEditableImage` for click-to-replace
+
+### Video Fields (VideoBanner block)
+```dart
+defaultData: {
+  'videoUrl': null,  // YouTube/Vimeo URL
+  'posterImage': null,  // Fallback image
+  'autoplay': true,
+  'loop': true,
+  'muted': true,
+}
+```
+
+---
+
+## 📄 Multi-Page System
+
+### Page Templates
+```dart
+enum PageTemplate {
+  defaultTemplate,  // General purpose
+  landing,          // Marketing landing page
+  productList,      // Product catalog
+  blog,             // Blog/article page
+}
+```
+
+### Creating Pages
+Pages are created in the Website Editor:
+1. Click "Nueva Página" button
+2. Enter title and slug
+3. Select template (determines default blocks)
+4. Add/edit blocks
+5. Publish
+
+### Route Structure
+```
+/tienda                    - Home page (is_home = true)
+/tienda/productos          - Product catalog
+/tienda/producto/:id       - Product detail
+/pagina/:slug              - Custom pages (nosotros, terminos, etc.)
+/cuenta                    - Customer account
+```
+
+---
+
+## 🎨 Theme System
+
+Theme settings stored in `website_settings`:
+```
+theme_primary_color     - Main brand color
+theme_accent_color      - Secondary/highlight color
+theme_background_color  - Page background
+theme_text_color        - Default text color
+theme_heading_font      - Font family for titles
+theme_body_font         - Font family for body text
+theme_heading_size      - Base heading size (px)
+theme_body_size         - Base body size (px)
+theme_section_spacing   - Gap between blocks (px)
+theme_container_padding - Content padding (px)
+```
+
+All blocks inherit theme settings automatically.
+
+---
+
+## ⚠️ Checklist for Website Features
+
+When creating ANY website feature:
+
+- [ ] **Is all content editable?** (No hardcoded text/images)
+- [ ] **Does it use InlineEditableText?** (For text fields)
+- [ ] **Does it use InlineEditableImage?** (For images)
+- [ ] **Is there a block definition?** (In website_block_registry.dart)
+- [ ] **Are all fields defined?** (With proper types)
+- [ ] **Does it support buttons/links?** (buttonText + buttonLink)
+- [ ] **Does it respect theme settings?** (Colors, fonts)
+- [ ] **Is it responsive?** (desktop/tablet/mobile visibility)
+- [ ] **Is there a renderer?** (In website_block_renderer.dart)
+- [ ] **Is the default data sensible?** (Placeholder content, not real data)
+- [ ] **Does the editable block use LayoutBuilder?** (For vertical centering when resized)
+- [ ] **Does the GestureDetector have HitTestBehavior.opaque?** (For click-anywhere selection)
+
+---
+
+## 🎯 CRITICAL: Editable Block Rendering Patterns (Dec 2025)
+
+**Location:** `lib/modules/website/widgets/editable_block_renderer.dart`
+
+### Block Selection Architecture
+
+The `EditableBlockRenderer` widget wraps each block with:
+1. **GestureDetector** - For tap-to-select functionality
+2. **Stack** - For overlay elements (selection border, resize handles, action bar)
+3. **ConstrainedBox** - For enforcing custom block heights when resized
+
+**CRITICAL:** The GestureDetector MUST have `behavior: HitTestBehavior.opaque` to capture taps on empty areas within the block bounds.
+
+```dart
+return GestureDetector(
+  behavior: HitTestBehavior.opaque, // ⚠️ CRITICAL: Captures taps on empty space
+  onTap: () => editProvider.selectBlock(widget.blockId),
+  child: Stack(
+    clipBehavior: Clip.none,
+    children: [
+      // Block content
+      // Selection border (Positioned.fill)
+      // Resize handles (if selected)
+      // Action bar (if selected)
+    ],
+  ),
+);
+```
+
+### Block Height Categories
+
+Blocks are categorized into two types based on how they handle custom heights:
+
+#### 1. Full-Bleed Blocks (Media fills entire height)
+These blocks stretch their media (images/videos) to fill the entire block height:
+- `hero` - Background image fills block
+- `carousel` - Slides fill block height
+- `videoBanner` - Video fills block
+
+**Pattern:** Pass `blockHeight` to the block builder and use it directly:
+```dart
+final fullBleedBlocks = {'hero', 'carousel', 'videoBanner'};
+
+// In hero/carousel/videoBanner builders:
+final blockHeight = (data['blockHeight'] as num?)?.toDouble() ?? 480;
+return SizedBox(
+  height: blockHeight,
+  child: Stack(
+    fit: StackFit.expand, // Image/video fills entire space
+    children: [
+      // Background media
+      // Overlay content (centered)
+    ],
+  ),
+);
+```
+
+#### 2. Content Blocks (Content centers vertically)
+These blocks center their content vertically within the constrained height:
+- `services`, `features`, `about`, `cta`, `faq`
+- `contact`, `pricing`, `testimonials`, `stats`, `team`
+- `gallery`, `categoryGrid`, `partnersBanner`, `brandLogos`
+
+**Pattern:** Use `LayoutBuilder` to detect constrained height and center content:
+```dart
+Widget _buildEditableServices(BuildContext context) {
+  // ... parse data, create content Column ...
+  
+  final content = Column(
+    mainAxisSize: MainAxisSize.min, // ⚠️ CRITICAL: Don't expand unnecessarily
+    children: [
+      // Title, subtitle, items, etc.
+    ],
+  );
+
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final hasFixedHeight = constraints.maxHeight.isFinite;
+      
+      return Container(
+        width: double.infinity, // ⚠️ Fill horizontal space for click detection
+        height: hasFixedHeight ? constraints.maxHeight : null,
+        padding: hasFixedHeight
+            ? const EdgeInsets.symmetric(horizontal: 24) // No vertical padding when constrained
+            : const EdgeInsets.symmetric(vertical: 64, horizontal: 24), // Normal padding
+        child: Center( // ⚠️ Centers content vertically AND horizontally
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: content,
+          ),
+        ),
+      );
+    },
+  );
+}
+```
+
+### Why LayoutBuilder Pattern is Required
+
+1. **Resize Feature:** Users can drag the bottom edge of blocks to resize them
+2. **Height Constraint:** The wrapper passes `ConstrainedBox` with `minHeight`/`maxHeight` to the block
+3. **Vertical Centering:** Without `LayoutBuilder`, content would stick to top of block
+4. **Click Detection:** Without `width: double.infinity`, empty areas won't register taps
+
+### Common Mistakes to AVOID
+
+❌ **Missing HitTestBehavior.opaque on GestureDetector:**
+```dart
+// WRONG: Taps on empty space don't select block
+GestureDetector(
+  onTap: () => selectBlock(id),
+  child: ...
+)
+
+// CORRECT: Taps anywhere in bounds select block
+GestureDetector(
+  behavior: HitTestBehavior.opaque,
+  onTap: () => selectBlock(id),
+  child: ...
+)
+```
+
+❌ **Not using LayoutBuilder for content blocks:**
+```dart
+// WRONG: Content sticks to top when block is resized
+return Container(
+  padding: EdgeInsets.all(64),
+  child: Column(children: [...]),
+);
+
+// CORRECT: Content centers vertically when height is constrained
+return LayoutBuilder(
+  builder: (context, constraints) {
+    final hasFixedHeight = constraints.maxHeight.isFinite;
+    return Container(
+      height: hasFixedHeight ? constraints.maxHeight : null,
+      child: Center(child: content),
+    );
+  },
+);
+```
+
+❌ **Missing mainAxisSize: MainAxisSize.min on Column:**
+```dart
+// WRONG: Column expands to fill all space, breaks centering
+Column(
+  children: [...]
+)
+
+// CORRECT: Column only takes needed space
+Column(
+  mainAxisSize: MainAxisSize.min,
+  children: [...]
+)
+```
+
+❌ **Missing width: double.infinity on Container:**
+```dart
+// WRONG: Click area only covers content width
+Container(
+  child: Center(child: content),
+)
+
+// CORRECT: Click area covers full block width
+Container(
+  width: double.infinity,
+  child: Center(child: content),
+)
+```
+
+### Adding a New Editable Block
+
+When creating a new editable block in `editable_block_renderer.dart`:
+
+1. **Add case to switch statement:**
+```dart
+case WebsiteBlockType.myNewBlock:
+  return _buildEditableMyNewBlock(context);
+```
+
+2. **Create builder method following the pattern:**
+```dart
+Widget _buildEditableMyNewBlock(BuildContext context) {
+  final editProvider = context.read<WebsiteEditModeProvider>();
+  final theme = Theme.of(context);
+  
+  // 1. Parse data from widget.data
+  final title = (widget.data['title'] ?? 'Default Title').toString();
+  final items = widget.data['items'] as List? ?? [];
+  
+  // 2. Define styles
+  final headingStyle = theme.textTheme.displaySmall?.copyWith(
+    fontFamily: widget.headingFont,
+  );
+  
+  // 3. Build content with mainAxisSize: MainAxisSize.min
+  final content = Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      InlineEditableTextV2(
+        text: title,
+        baseStyle: headingStyle,
+        textAlign: TextAlign.center,
+        isEditMode: true,
+        placeholder: 'Título',
+        fieldKey: '${widget.blockId}_title',
+        onTextChanged: (value) =>
+            editProvider.updateBlockData(widget.blockId, 'title', value),
+      ),
+      // ... more content
+    ],
+  );
+  
+  // 4. Wrap with LayoutBuilder for vertical centering
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final hasFixedHeight = constraints.maxHeight.isFinite;
+      
+      return Container(
+        width: double.infinity,
+        height: hasFixedHeight ? constraints.maxHeight : null,
+        padding: hasFixedHeight
+            ? const EdgeInsets.symmetric(horizontal: 24)
+            : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+        color: Colors.white, // Optional background
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: content,
+          ),
+        ),
+      );
+    },
+  );
+}
+```
+
+3. **For full-bleed blocks (with background images/videos):**
+```dart
+Widget _buildEditableMyMediaBlock(BuildContext context) {
+  final blockHeight = (widget.data['blockHeight'] as num?)?.toDouble() ?? 480;
+  
+  return SizedBox(
+    height: blockHeight,
+    width: double.infinity,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        // Background image/video (fills entire space)
+        InlineEditableImage(
+          imageUrl: widget.data['backgroundImage'],
+          fit: BoxFit.cover,
+          isEditMode: true,
+          onChanged: (url) => editProvider.updateBlockData(
+              widget.blockId, 'backgroundImage', url),
+        ),
+        // Overlay content (centered)
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [/* Title, subtitle, button */],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+```
+
+### Block Rendering Checklist (New Blocks)
+
+When adding a new editable block:
+
+- [ ] Added case to `_buildEditableBlock()` switch statement
+- [ ] Created `_buildEditableMyBlock()` method
+- [ ] Used `InlineEditableTextV2` for all text fields
+- [ ] Used `InlineEditableImage` for all images
+- [ ] Set `mainAxisSize: MainAxisSize.min` on all Columns
+- [ ] Wrapped return with `LayoutBuilder` (for content blocks)
+- [ ] Set `width: double.infinity` on Container
+- [ ] Used `Center` widget for vertical centering
+- [ ] Used `ConstrainedBox` with appropriate maxWidth
+- [ ] Tested click-anywhere-to-select behavior
+- [ ] Tested resize behavior (content centers vertically)
+- [ ] Tested with both short and tall content
+
+---
+
+## 🔍 Reference Files
+
+| File | Purpose |
+|------|---------|
+| `lib/public_store/widgets/public_store_layout.dart` | Main layout with edit button & panel integration |
+| `lib/modules/website/widgets/website_editor_panel.dart` | Side panel editor (6600 lines) |
+| `lib/modules/website/providers/website_edit_mode_provider.dart` | Edit state management |
+| `lib/modules/website/widgets/editable_block_renderer.dart` | **CRITICAL:** Makes blocks clickable/selectable/resizable in edit mode. Contains all `_buildEditable*` methods |
+| `lib/public_store/pages/public_home_page.dart` | Home page with full editing support |
+| `lib/public_store/pages/dynamic_website_page.dart` | Other pages (READ-ONLY, no editing yet) |
+| `lib/modules/website/models/website_block_type.dart` | Block type enum |
+| `lib/modules/website/models/website_block_definition.dart` | Field schema definitions |
+| `lib/modules/website/models/website_block_registry.dart` | Block registration & defaults |
+| `lib/modules/website/widgets/website_block_renderer.dart` | Renders blocks (read-only, for public view) |
+| `lib/modules/website/widgets/inline_editable_text.dart` | Inline text editing widget (V1) |
+| `lib/modules/website/widgets/inline_editable_text_v2.dart` | Inline text editing widget (V2 with formatting) |
+| `lib/modules/website/widgets/inline_editable_image.dart` | Inline image editing/upload widget |
+| `lib/modules/website/services/website_service.dart` | Database operations for blocks/pages (**includes page_id in saves**) |
 
 ---
 

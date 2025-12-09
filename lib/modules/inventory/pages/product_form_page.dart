@@ -62,6 +62,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   ProductBrand? _selectedBrand;
   bool _isActive = true;
   bool _isPublished = true;
+  bool _isGoogleMerchant = false;
   ProductType _selectedProductType = ProductType.product;
 
   String? _imageUrl;
@@ -464,6 +465,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         _selectedProductType = product.productType;
         _isActive = product.isActive;
         _isPublished = product.isPublished;
+        _isGoogleMerchant = product.isGoogleMerchant;
         _imageUrl = product.imageUrl;
         _additionalImages
           ..clear()
@@ -717,6 +719,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
             additionalImages: safeAdditionalImages,
             isActive: _isActive,
             isPublished: _isPublished,
+            isGoogleMerchant: _isGoogleMerchant,
             productType: _selectedProductType,
           );
 
@@ -742,6 +745,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         additionalImages: safeAdditionalImages,
         isActive: _isActive,
         isPublished: _isPublished,
+        isGoogleMerchant: _isGoogleMerchant,
         productType: _selectedProductType,
         updatedAt: DateTime.now(),
       );
@@ -1423,6 +1427,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
   List<Widget> _buildStatusFields(ThemeData theme) {
     return [
+      // Toggle 1: Product Active (base toggle)
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Producto activo'),
@@ -1433,22 +1438,91 @@ class _ProductFormPageState extends State<ProductFormPage> {
         onChanged: (value) {
           setState(() {
             _isActive = value;
+            // CASCADE: If deactivating, turn off all dependent toggles
             if (!_isActive) {
               _isPublished = false;
+              _isGoogleMerchant = false;
             }
           });
         },
       ),
       const SizedBox(height: 8),
+      
+      // Toggle 2: Published on Website (requires is_active)
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text('Publicado en la tienda online'),
-        subtitle: const Text(
-          'Controla si este producto se muestra en la web y en el catálogo público.',
+        title: Text(
+          'Publicado en la tienda online',
+          style: TextStyle(
+            color: _isActive ? null : theme.disabledColor,
+          ),
         ),
-        value: _isActive ? _isPublished : false,
-        onChanged:
-            _isActive ? (value) => setState(() => _isPublished = value) : null,
+        subtitle: Text(
+          _isActive 
+            ? 'Controla si este producto se muestra en la web y en el catálogo público.'
+            : 'Requiere que el producto esté activo.',
+          style: TextStyle(
+            color: _isActive ? null : theme.disabledColor,
+          ),
+        ),
+        value: _isActive && _isPublished,
+        onChanged: _isActive 
+          ? (value) {
+              setState(() {
+                _isPublished = value;
+                // CASCADE: If unpublishing, turn off Google Merchant
+                if (!_isPublished) {
+                  _isGoogleMerchant = false;
+                }
+              });
+            } 
+          : null,
+      ),
+      const SizedBox(height: 8),
+      
+      // Toggle 3: Google Merchant Center (requires is_published)
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Row(
+          children: [
+            Text(
+              'Google Merchant Center',
+              style: TextStyle(
+                color: (_isActive && _isPublished) ? null : theme.disabledColor,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'Shopping',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+        subtitle: Text(
+          !_isActive 
+            ? 'Requiere que el producto esté activo.'
+            : !_isPublished
+              ? 'Requiere que el producto esté publicado en la tienda.'
+              : 'Incluye este producto en el feed de Google Shopping para aparecer en búsquedas de Google.',
+          style: TextStyle(
+            color: (_isActive && _isPublished) ? null : theme.disabledColor,
+          ),
+        ),
+        value: _isActive && _isPublished && _isGoogleMerchant,
+        onChanged: (_isActive && _isPublished) 
+          ? (value) => setState(() => _isGoogleMerchant = value)
+          : null,
       ),
     ];
   }

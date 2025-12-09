@@ -18,6 +18,10 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _blocks = [];
   Map<String, dynamic> _settings = {};
   
+  // Multi-page editing support (Dec 2025)
+  String? _currentPageId; // The page ID being edited (null = home page)
+  String? _currentPageSlug; // The page slug for navigation
+  
   // Pending header settings (to be saved with main save button)
   Map<String, String> _pendingHeaderSettings = {};
   
@@ -38,6 +42,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   Map<String, String> get pendingHeaderSettings => _pendingHeaderSettings;
   bool get canUndo => _historyIndex > 0;
   bool get canRedo => _historyIndex < _history.length - 1;
+  
+  // Multi-page editing getters
+  String? get currentPageId => _currentPageId;
+  String? get currentPageSlug => _currentPageSlug;
+  bool get isEditingHomePage => _currentPageId == null;
 
   /// Mark header as having unsaved changes
   void markHeaderChanged() {
@@ -61,7 +70,14 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   }
 
   /// Enter preview mode (shows top bar with "Editar" button)
-  void enterPreviewMode(List<Map<String, dynamic>> blocks, Map<String, dynamic> settings) {
+  /// [pageId] - Optional page ID for multi-page editing (null = home page)
+  /// [pageSlug] - Optional page slug for navigation
+  void enterPreviewMode(
+    List<Map<String, dynamic>> blocks, 
+    Map<String, dynamic> settings, {
+    String? pageId,
+    String? pageSlug,
+  }) {
     _isPreviewMode = true;
     _isEditMode = false;
     _blocks = blocks.map((b) => Map<String, dynamic>.from(b)).toList();
@@ -69,11 +85,21 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _hasUnsavedChanges = false;
     _hasHeaderChanges = false;
     _selectedBlockId = null;
+    _currentPageId = pageId;
+    _currentPageSlug = pageSlug;
+    debugPrint('👁️ [EditProvider] Entered preview mode for page: ${pageSlug ?? "home"} (id: $pageId)');
     notifyListeners();
   }
 
   /// Enter edit mode (shows side panel editor)
-  void enterEditMode(List<Map<String, dynamic>> blocks, Map<String, dynamic> settings) {
+  /// [pageId] - Optional page ID for multi-page editing (null = home page)
+  /// [pageSlug] - Optional page slug for navigation
+  void enterEditMode(
+    List<Map<String, dynamic>> blocks, 
+    Map<String, dynamic> settings, {
+    String? pageId,
+    String? pageSlug,
+  }) {
     _isPreviewMode = false;
     _isEditMode = true;
     _blocks = blocks.map((b) => Map<String, dynamic>.from(b)).toList();
@@ -81,12 +107,15 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _hasUnsavedChanges = false;
     _hasHeaderChanges = false;
     _selectedBlockId = null;
+    _currentPageId = pageId;
+    _currentPageSlug = pageSlug;
     
     // Initialize history with current state
     _history.clear();
     _history.add(_blocks.map((b) => Map<String, dynamic>.from(b)).toList());
     _historyIndex = 0;
     
+    debugPrint('✏️ [EditProvider] Entered edit mode for page: ${pageSlug ?? "home"} (id: $pageId)');
     notifyListeners();
   }
 
@@ -114,6 +143,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _hasHeaderChanges = false;
     _blocks = [];
     _settings = {};
+    _currentPageId = null;
+    _currentPageSlug = null;
     notifyListeners();
   }
 

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../modules/crm/models/crm_models.dart';
+import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../modules/crm/services/customer_service.dart';
@@ -1856,7 +1857,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
                     ),
                     child: Text(
                       NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                          .format(job.totalCost),
+                          .format(_getJobDisplayTotal(job)),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.green[900],
@@ -1975,6 +1976,16 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
         ],
       ),
     );
+  }
+
+  /// Calculate display total respecting tax treatment
+  /// For noTax jobs, show partsCost + laborCost (net amount)
+  /// For taxIncluded jobs, show totalCost (gross amount)
+  double _getJobDisplayTotal(MechanicJob job) {
+    if (job.taxTreatment == TaxTreatment.noTax) {
+      return job.partsCost + job.laborCost;
+    }
+    return job.totalCost;
   }
 
   Widget _buildStatusBadge(JobStatus status) {

@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../modules/settings/services/appearance_service.dart';
+import '../../modules/website/services/website_service.dart';
 
 /// A branded loading indicator that shows the company logo if configured,
 /// otherwise falls back to a standard circular progress indicator.
 /// 
+/// For authenticated users: Tries AppearanceService first (ERP logo)
+/// For public users: Falls back to WebsiteService (store logo)
+/// 
 /// Usage:
 /// ```dart
-/// // Simple usage - uses logo from AppearanceService
+/// // Simple usage - uses logo from AppearanceService/WebsiteService
 /// const BrandedLoading()
 /// 
 /// // With custom size
@@ -73,8 +77,22 @@ class _BrandedLoadingState extends State<BrandedLoading>
 
   @override
   Widget build(BuildContext context) {
+    // Try AppearanceService first (authenticated users)
     final appearanceService = context.watch<AppearanceService>();
-    final logoUrl = appearanceService.companyLogoUrl;
+    String? logoUrl = appearanceService.companyLogoUrl;
+    
+    // Fallback to WebsiteService for public store (anonymous users)
+    if ((logoUrl == null || logoUrl.isEmpty)) {
+      try {
+        final websiteService = context.watch<WebsiteService>();
+        logoUrl = websiteService.getSetting('company_logo_url', '');
+        if (logoUrl.isEmpty) logoUrl = null;
+      } catch (e) {
+        // WebsiteService not available, use fallback
+        logoUrl = null;
+      }
+    }
+    
     final hasLogo = logoUrl != null && logoUrl.isNotEmpty;
 
     Widget loadingWidget;

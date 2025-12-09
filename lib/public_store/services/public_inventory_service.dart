@@ -39,6 +39,18 @@ class PublicInventoryService extends ChangeNotifier {
     return DateTime.now().difference(timestamp) < _cacheDuration;
   }
 
+  /// Check if products cache exists and is valid for tenant
+  bool hasProductsCache(String tenantId) {
+    final cacheKey = 'products_$tenantId';
+    return _isCacheValid(cacheKey) && _productsCache.containsKey(cacheKey);
+  }
+
+  /// Check if categories cache exists and is valid for tenant
+  bool hasCategoriesCache(String tenantId) {
+    final cacheKey = 'categories_$tenantId';
+    return _isCacheValid(cacheKey) && _categoriesCache.containsKey(cacheKey);
+  }
+
   /// Get products for specific tenant (public access)
   /// 
   /// Parameters:
@@ -72,12 +84,8 @@ class PublicInventoryService extends ChangeNotifier {
           maxPrice == null &&
           offset == 0 &&
           _isCacheValid(cacheKey)) {
-        debugPrint('📦 PublicInventoryService: Returning cached products for tenant $tenantId');
         return _productsCache[cacheKey] ?? [];
       }
-
-      debugPrint('🔍 PublicInventoryService: Fetching products for tenant: $tenantId');
-
       // Build base query
       var query = _supabase
           .from('products')
@@ -117,8 +125,6 @@ class PublicInventoryService extends ChangeNotifier {
           .map((json) => Product.fromJson(json))
           .toList();
 
-      debugPrint('✅ PublicInventoryService: Found ${products.length} products');
-
       // Cache results if no filters (default view)
       if (categoryId == null && 
           searchQuery == null && 
@@ -132,7 +138,6 @@ class PublicInventoryService extends ChangeNotifier {
 
       return products;
     } catch (e) {
-      debugPrint('❌ PublicInventoryService: Error fetching products: $e');
       return [];
     }
   }
@@ -150,11 +155,8 @@ class PublicInventoryService extends ChangeNotifier {
       // Check cache first
       final cacheKey = 'categories_$tenantId';
       if (_isCacheValid(cacheKey)) {
-        debugPrint('📦 PublicInventoryService: Returning cached categories for tenant $tenantId');
         return _categoriesCache[cacheKey] ?? [];
       }
-
-      debugPrint('🔍 PublicInventoryService: Fetching categories for tenant: $tenantId');
 
       final response = await _supabase
           .from('categories')

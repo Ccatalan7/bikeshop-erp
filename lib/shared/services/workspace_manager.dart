@@ -86,7 +86,8 @@ String getRouteTitle(String path) {
     
     // Website
     '/website': 'Sitio Web',
-    '/website/editor': 'Editor Web',
+    '/website/pages': 'Gestión de Páginas',
+    '/website/navigation': 'Navegación',
     
     // Settings
     '/settings': 'Configuración',

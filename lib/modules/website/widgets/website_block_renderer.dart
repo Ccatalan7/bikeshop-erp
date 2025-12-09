@@ -3654,11 +3654,16 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   void didUpdateWidget(_ProductsBlockWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Reload if source, selected products, OR tenantId changed
-    if (oldWidget.data['productSource'] != widget.data['productSource'] ||
+    final shouldReload = oldWidget.data['productSource'] != widget.data['productSource'] ||
         oldWidget.data['selectedProducts']?.toString() != widget.data['selectedProducts']?.toString() ||
         oldWidget.data['categoryId'] != widget.data['categoryId'] ||
         oldWidget.data['maxProducts'] != widget.data['maxProducts'] ||
-        oldWidget.tenantId != widget.tenantId) {
+        oldWidget.tenantId != widget.tenantId;
+        
+    if (shouldReload) {
+      debugPrint('🔄 [ProductsBlock] didUpdateWidget triggered reload');
+      debugPrint('🔄 [ProductsBlock] oldTenantId: ${oldWidget.tenantId}');
+      debugPrint('🔄 [ProductsBlock] newTenantId: ${widget.tenantId}');
       _loadProducts();
     }
   }
@@ -3677,6 +3682,16 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   Future<void> _loadProducts() async {
     if (!mounted) return;
     
+    final tenantId = widget.tenantId;
+    
+    // If no tenantId yet, stay in loading state and wait for didUpdateWidget
+    if (tenantId == null || tenantId.isEmpty) {
+      debugPrint('🛒 [ProductsBlock] No tenantId yet, waiting for tenant detection...');
+      // Keep _isLoading = true to show loading placeholders
+      // Don't set error state - tenant detection may still be in progress
+      return;
+    }
+    
     setState(() {
       _isLoading = true;
       _hasError = false;
@@ -3685,40 +3700,31 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
     try {
       final supabase = Supabase.instance.client;
       List<Product> products = [];
-      final tenantId = widget.tenantId;
 
-      debugPrint('[ProductsBlock] Loading products - source: $_productSource, maxProducts: $_maxProducts, tenantId: $tenantId');
+      debugPrint('🛒 [ProductsBlock] ========== LOADING PRODUCTS ==========');
+      debugPrint('🛒 [ProductsBlock] source: $_productSource');
+      debugPrint('🛒 [ProductsBlock] maxProducts: $_maxProducts');
+      debugPrint('🛒 [ProductsBlock] tenantId: $tenantId');
+      debugPrint('🛒 [ProductsBlock] selectedProductIds: $_selectedProductIds');
+      debugPrint('🛒 [ProductsBlock] featuredProducts passed: ${widget.featuredProducts?.length ?? 0}');
 
-      // If no tenantId and we have featured products passed, use those
-      if (tenantId == null || tenantId.isEmpty) {
-        if (widget.featuredProducts != null && widget.featuredProducts!.isNotEmpty) {
-          debugPrint('[ProductsBlock] No tenantId, using passed featured products');
-          products = widget.featuredProducts!
-              .where((p) => p.isActive)
-              .take(_maxProducts)
-              .toList();
-        } else {
-          debugPrint('[ProductsBlock] No tenantId and no featured products - showing empty');
-          products = [];
-        }
-      } else {
-        // We have tenantId - fetch based on source
-        switch (_productSource) {
-          case 'manual':
-            // Fetch specific products by ID
-            if (_selectedProductIds.isNotEmpty) {
-              debugPrint('[ProductsBlock] Manual selection: ${_selectedProductIds.length} products');
-              final response = await supabase
-                  .from('products')
-                  .select()
-                  .eq('tenant_id', tenantId)
-                  .inFilter('id', _selectedProductIds)
-                  .eq('is_active', true);
-              
-              products = _parseProducts(response);
-              
-              // Sort by the order in selectedProductIds
-              final idOrder = {for (int i = 0; i < _selectedProductIds.length; i++) _selectedProductIds[i]: i};
+      // We have tenantId - fetch based on source
+      switch (_productSource) {
+        case 'manual':
+          // Fetch specific products by ID
+          if (_selectedProductIds.isNotEmpty) {
+            debugPrint('[ProductsBlock] Manual selection: ${_selectedProductIds.length} products');
+            final response = await supabase
+                .from('products')
+                .select()
+                .eq('tenant_id', tenantId)
+                .inFilter('id', _selectedProductIds)
+                .eq('is_active', true);
+            
+            products = _parseProducts(response);
+            
+            // Sort by the order in selectedProductIds
+            final idOrder = {for (int i = 0; i < _selectedProductIds.length; i++) _selectedProductIds[i]: i};
               products.sort((a, b) => (idOrder[a.id] ?? 999).compareTo(idOrder[b.id] ?? 999));
             }
             break;
@@ -3767,7 +3773,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                   .toList();
             } else {
               // Fallback: fetch products marked as show_on_website
-              debugPrint('[ProductsBlock] Fallback to show_on_website products');
+              debugPrint('[ProductsBlock] Fallback to show_on_website products for tenant: $tenantId');
               final response = await supabase
                   .from('products')
                   .select()
@@ -3777,10 +3783,11 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                   .order('name')
                   .limit(_maxProducts);
               
+              debugPrint('[ProductsBlock] Query response: ${response.length} rows');
               products = _parseProducts(response);
+              debugPrint('[ProductsBlock] Parsed ${products.length} products from response');
             }
             break;
-        }
       }
 
       debugPrint('[ProductsBlock] Loaded ${products.length} products');
@@ -3860,10 +3867,55 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
     }
     itemsPerRow = itemsPerRow.clamp(2, 4);
 
-    // Show placeholders only during loading or if no products
-    final displayProducts = _isLoading || _products.isEmpty
+    // Show placeholders only during loading
+    // Show empty message if no products after loading
+    final bool showEmptyState = !_isLoading && _products.isEmpty;
+    final displayProducts = _isLoading
         ? _buildSampleProducts(itemsPerRow) // Just 1 row of placeholders
         : _products;
+
+    // If no products after loading, show compact empty state
+    if (showEmptyState) {
+      return Container(
+        color: Colors.white,
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Section header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 4,
+                  height: 24,
+                  color: Colors.black,
+                  margin: const EdgeInsets.only(right: 12),
+                ),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: Colors.black,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey[400]),
+            const SizedBox(height: 12),
+            Text(
+              'No hay productos disponibles',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       color: Colors.white,

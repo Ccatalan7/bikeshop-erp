@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
 import '../theme/public_store_theme.dart';
 import '../../shared/utils/chilean_utils.dart';
@@ -26,46 +27,79 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
             .where((o) => o.paymentStatus == _statusFilter)
             .toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mis Pedidos'),
-        actions: [
-          PopupMenuButton<String?>(
-            icon: const Icon(Icons.filter_list),
-            tooltip: 'Filtrar por estado',
-            onSelected: (value) => setState(() => _statusFilter = value),
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: null, child: Text('Todos')),
-              const PopupMenuItem(value: 'pending', child: Text('Pendientes')),
-              const PopupMenuItem(value: 'approved', child: Text('Pagados')),
-              const PopupMenuItem(value: 'cancelled', child: Text('Cancelados')),
+    // No Scaffold - wrapped by PublicStoreLayout
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header bar
+        Container(
+          color: Theme.of(context).primaryColor,
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top,
+            left: 4,
+            right: 8,
+            bottom: 8,
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => context.go('/cuenta'),
+              ),
+              const Expanded(
+                child: Text(
+                  'Mis Pedidos',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              PopupMenuButton<String?>(
+                icon: const Icon(Icons.filter_list, color: Colors.white),
+                tooltip: 'Filtrar por estado',
+                onSelected: (value) => setState(() => _statusFilter = value),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: null, child: Text('Todos')),
+                  const PopupMenuItem(value: 'pending', child: Text('Pendientes')),
+                  const PopupMenuItem(value: 'approved', child: Text('Pagados')),
+                  const PopupMenuItem(value: 'cancelled', child: Text('Cancelados')),
+                ],
+              ),
             ],
           ),
-        ],
+        ),
+        // Content
+        if (accountService.orders.isEmpty)
+          _buildEmptyState(context)
+        else
+          _buildOrdersList(filteredOrders),
+      ],
+    );
+  }
+
+  Widget _buildOrdersList(List<OnlineOrder> orders) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: orders.map((order) => _OrderCard(order: order)).toList(),
       ),
-      body: accountService.orders.isEmpty
-          ? _buildEmptyState(context)
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: filteredOrders.length,
-              itemBuilder: (context, index) {
-                final order = filteredOrders[index];
-                return _OrderCard(order: order);
-              },
-            ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return const Center(
+    return const Padding(
+      padding: EdgeInsets.all(32),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          SizedBox(height: 48),
           Icon(Icons.shopping_bag_outlined, size: 64),
           SizedBox(height: 16),
           Text('No tienes pedidos aún'),
           SizedBox(height: 8),
           Text('Tus compras aparecerán aquí'),
+          SizedBox(height: 48),
         ],
       ),
     );

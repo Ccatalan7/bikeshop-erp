@@ -1,121 +1,46 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
-
-  <!-- iOS meta tags & icons -->
+  <meta name="description" content="Vinabike - Todo para tu bicicleta">
+  
+  <!-- Google Analytics GA4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-FR5Q37BW43"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-FR5Q37BW43');
+  </script>
+  
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="vinabike_erp">
+  <meta name="apple-mobile-web-app-title" content="Vinabike">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>Viñabike ERP</title>
+  <title>Vinabike</title>
   <link rel="manifest" href="manifest.json">
-  
-  <style>
-    /* Universal fix for all browsers: prevent navigation gestures */
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      /* Disable horizontal overscroll navigation (Chrome, Edge, Safari, Firefox) */
-      overscroll-behavior-x: none;
-      overscroll-behavior-y: auto;
-      /* Legacy browser support */
-      -ms-scroll-chaining: none;
-      -ms-overflow-style: -ms-autohiding-scrollbar;
-    }
-    
-    /* Apply globally to prevent any horizontal navigation */
-    * {
-      overscroll-behavior-x: none !important;
-    }
-    
-    /* Disable touch gestures that trigger navigation */
-    body {
-      touch-action: pan-y pinch-zoom;
-      -ms-touch-action: pan-y pinch-zoom;
-      -ms-content-zooming: none;
-    }
-  </style>
-  
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overscroll-behavior-x: none; }
+    body { touch-action: pan-y pinch-zoom; }
+  </style>
 </head>
 <body>
   <script>
-    // Universal fix: Prevent horizontal wheel/trackpad gestures from triggering navigation
-    // Works in Chrome, Edge, Safari, Firefox, Opera
     window.addEventListener('wheel', function(e) {
-      // Only check horizontal movement
       if (Math.abs(e.deltaX) > 0) {
-        // Walk up the DOM tree to check if any parent is horizontally scrollable
-        let element = e.target;
-        let canScrollHorizontally = false;
-        
-        while (element && element !== document.documentElement) {
-          const hasHorizontalScrollbar = element.scrollWidth > element.clientWidth;
-          const overflowX = window.getComputedStyle(element).overflowX;
-          
-          if (hasHorizontalScrollbar && (overflowX === 'auto' || overflowX === 'scroll')) {
-            canScrollHorizontally = true;
-            break;
-          }
-          element = element.parentElement;
+        let el = e.target, canScroll = false;
+        while (el && el !== document.documentElement) {
+          if (el.scrollWidth > el.clientWidth && ['auto','scroll'].includes(getComputedStyle(el).overflowX)) { canScroll = true; break; }
+          el = el.parentElement;
         }
-        
-        // If no horizontal scrolling is needed, prevent browser navigation
-        if (!canScrollHorizontally) {
-          e.preventDefault();
-        }
-      }
-    }, { passive: false });
-    
-    // Prevent edge swipe gestures on touch devices
-    let touchStartX = 0;
-    let touchStartY = 0;
-    
-    window.addEventListener('touchstart', function(e) {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-    }, { passive: true });
-    
-    window.addEventListener('touchmove', function(e) {
-      const touchX = e.touches[0].clientX;
-      const touchY = e.touches[0].clientY;
-      const diffX = touchX - touchStartX;
-      const diffY = touchY - touchStartY;
-      
-      // If swipe starts from screen edge and is primarily horizontal, block it
-      const isEdgeSwipe = touchStartX < 50 || touchStartX > window.innerWidth - 50;
-      const isHorizontalSwipe = Math.abs(diffX) > Math.abs(diffY);
-      
-      if (isEdgeSwipe && isHorizontalSwipe && Math.abs(diffX) > 30) {
-        e.preventDefault();
+        if (!canScroll) e.preventDefault();
       }
     }, { passive: false });
   </script>
-  
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

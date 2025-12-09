@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
 import '../theme/public_store_theme.dart';
 import '../../shared/models/customer_address.dart';
@@ -11,49 +12,76 @@ class CustomerAddressesPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final accountService = context.watch<CustomerAccountService>();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mis Direcciones'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () {
-              _showAddressDialog(context, null);
-            },
-            tooltip: 'Agregar dirección',
+    // No Scaffold - wrapped by PublicStoreLayout
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header bar
+        Container(
+          color: Theme.of(context).primaryColor,
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top,
+            left: 4,
+            right: 8,
+            bottom: 8,
           ),
-        ],
-      ),
-      body: accountService.addresses.isEmpty
-          ? _buildEmptyState(context)
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: accountService.addresses.length,
-              itemBuilder: (context, index) {
-                final address = accountService.addresses[index];
-                return _AddressCard(
-                  address: address,
-                  onEdit: () => _showAddressDialog(context, address),
-                  onDelete: () => _confirmDelete(context, address),
-                  onSetDefault: () async {
-                    await accountService.setDefaultAddress(address.id);
-                  },
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddressDialog(context, null),
-        icon: const Icon(Icons.add),
-        label: const Text('Nueva Dirección'),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => context.go('/cuenta'),
+              ),
+              const Expanded(
+                child: Text(
+                  'Mis Direcciones',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.add, color: Colors.white),
+                onPressed: () => _showAddressDialog(context, null),
+                tooltip: 'Agregar dirección',
+              ),
+            ],
+          ),
+        ),
+        // Content
+        if (accountService.addresses.isEmpty)
+          _buildEmptyState(context)
+        else
+          _buildAddressesList(context, accountService),
+      ],
+    );
+  }
+
+  Widget _buildAddressesList(BuildContext context, CustomerAccountService accountService) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: accountService.addresses.map((address) {
+          return _AddressCard(
+            address: address,
+            onEdit: () => _showAddressDialog(context, address),
+            onDelete: () => _confirmDelete(context, address),
+            onSetDefault: () async {
+              await accountService.setDefaultAddress(address.id);
+            },
+          );
+        }).toList(),
       ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
+    return Padding(
+      padding: const EdgeInsets.all(32),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          const SizedBox(height: 48),
           const Icon(Icons.location_off_outlined, size: 64),
           const SizedBox(height: 16),
           const Text('No tienes direcciones guardadas'),
@@ -63,6 +91,7 @@ class CustomerAddressesPage extends StatelessWidget {
             icon: const Icon(Icons.add),
             label: const Text('AGREGAR DIRECCIÓN'),
           ),
+          const SizedBox(height: 48),
         ],
       ),
     );

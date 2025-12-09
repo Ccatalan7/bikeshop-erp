@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
 import '../theme/public_store_theme.dart';
 
@@ -44,42 +45,103 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
     final profile = accountService.customerProfile;
 
     if (profile == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Mi Perfil')),
-        body: const Center(child: Text('Cargando...')),
+      // Loading state - no Scaffold (wrapped by layout)
+      return Column(
+        children: [
+          _buildHeader(context),
+          const Padding(
+            padding: EdgeInsets.all(48),
+            child: Center(child: Text('Cargando...')),
+          ),
+        ],
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mi Perfil'),
-        actions: [
-          if (_isEditing)
-            TextButton.icon(
-              onPressed: _saveProfile,
-              icon: const Icon(Icons.save),
-              label: const Text('GUARDAR'),
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () => setState(() => _isEditing = true),
-              tooltip: 'Editar perfil',
-            ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _buildProfileHeader(profile),
-            const SizedBox(height: 32),
-            _buildProfileForm(),
-            const SizedBox(height: 32),
-            _buildSecuritySection(context),
-          ],
+    // No Scaffold - wrapped by PublicStoreLayout
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header bar
+        Container(
+          color: Theme.of(context).primaryColor,
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top,
+            left: 4,
+            right: 8,
+            bottom: 8,
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => context.go('/cuenta'),
+              ),
+              const Expanded(
+                child: Text(
+                  'Mi Perfil',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              if (_isEditing)
+                TextButton.icon(
+                  onPressed: _saveProfile,
+                  icon: const Icon(Icons.save, color: Colors.white),
+                  label: const Text('GUARDAR', style: TextStyle(color: Colors.white)),
+                )
+              else
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.white),
+                  onPressed: () => setState(() => _isEditing = true),
+                  tooltip: 'Editar perfil',
+                ),
+            ],
+          ),
         ),
+        // Content
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _buildProfileHeader(profile),
+              const SizedBox(height: 32),
+              _buildProfileForm(),
+              const SizedBox(height: 32),
+              _buildSecuritySection(context),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      color: Theme.of(context).primaryColor,
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top,
+        left: 4,
+        right: 16,
+        bottom: 8,
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => context.go('/cuenta'),
+          ),
+          const Text(
+            'Mi Perfil',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }

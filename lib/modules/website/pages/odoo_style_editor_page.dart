@@ -193,7 +193,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   /// Load blocks for a specific page
   Future<void> _loadBlocksForPage(String pageId) async {
     if (!mounted) return;
-    
+
     try {
       final websiteService = context.read<WebsiteService>();
       final inventoryService = context.read<InventoryService>();
@@ -203,7 +203,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
       final loadedBlocks = await websiteService.loadBlocksForPage(pageId);
       if (!mounted) return;
-      
+
       await inventoryService.getProducts();
       if (!mounted) return;
 
@@ -213,7 +213,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       } else {
         _blocks = loadedBlocks.map((blockData) {
           final typeRaw = (blockData['block_type'] ?? 'hero').toString();
-          final dataRaw = Map<String, dynamic>.from(blockData['block_data'] ?? {});
+          final dataRaw =
+              Map<String, dynamic>.from(blockData['block_data'] ?? {});
           final block = WebsiteBlock(
             id: blockData['id']?.toString() ?? _uuid.v4(),
             type: _parseBlockType(typeRaw),
@@ -247,7 +248,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   void _initializeDefaultBlocksForPage() {
     // Different defaults based on page template
     final template = _selectedPage?.template ?? PageTemplate.defaultTemplate;
-    
+
     List<WebsiteBlockType> defaultTypes;
     switch (template) {
       case PageTemplate.landing:
@@ -290,21 +291,22 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
     if (_blocks.isNotEmpty) {
       _selectedBlockId = _blocks.first.id;
     }
-    
+
     _hasChanges = true; // Mark as changed so new page gets saved
   }
 
   /// Switch to a different page
   Future<void> _switchToPage(WebsitePage page) async {
     if (_selectedPage?.id == page.id) return;
-    
+
     // If there are unsaved changes, prompt to save
     if (_hasChanges) {
       final shouldSave = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Cambios sin guardar'),
-          content: Text('¿Deseas guardar los cambios en "${_selectedPage?.title}" antes de cambiar de página?'),
+          content: Text(
+              '¿Deseas guardar los cambios en "${_selectedPage?.title}" antes de cambiar de página?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -317,19 +319,19 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
           ],
         ),
       );
-      
+
       if (shouldSave == true) {
         await _saveChanges(showNotification: false);
       }
     }
-    
+
     setState(() {
       _selectedPage = page;
       _blocks = [];
       _selectedBlockId = null;
       _hasChanges = false;
     });
-    
+
     await _loadBlocksForPage(page.id);
   }
 
@@ -526,7 +528,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
   Future<void> _loadFromDatabase() async {
     debugPrint('[OdooEditor] _loadFromDatabase started');
     if (!mounted) return;
-    
+
     try {
       // Initialize block registry with timeout
       debugPrint('[OdooEditor] Initializing block registry...');
@@ -539,18 +541,51 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       final inventoryService = context.read<InventoryService>();
       debugPrint('[OdooEditor] Services obtained');
 
+      // Load pages first
+      debugPrint('[OdooEditor] Loading pages...');
+      await websiteService.loadPages();
+      if (!mounted) return;
+
+      _pages = List<WebsitePage>.from(websiteService.pages);
+      debugPrint('[OdooEditor] Loaded ${_pages.length} pages');
+
+      // Find home page or first published page
+      final homePage = _pages.firstWhere(
+        (p) => p.isHome && p.isPublished,
+        orElse: () => _pages.isNotEmpty
+            ? _pages.first
+            : WebsitePage(
+                id: '',
+                tenantId: '',
+                slug: 'inicio',
+                title: 'Inicio',
+                isPublished: true,
+                isHome: true,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
+              ),
+      );
+      _selectedPage = homePage;
+      debugPrint('[OdooEditor] Selected page: ${_selectedPage?.title}');
+
       // Load data with timeout to prevent hanging
       debugPrint('[OdooEditor] Loading data...');
       await Future.wait([
-        websiteService.loadBlocks().then((_) => debugPrint('[OdooEditor] loadBlocks done')),
-        websiteService.loadFeaturedProducts().then((_) => debugPrint('[OdooEditor] loadFeaturedProducts done')),
-        inventoryService.getProducts().then((_) => debugPrint('[OdooEditor] getProducts done')),
+        websiteService
+            .loadBlocks()
+            .then((_) => debugPrint('[OdooEditor] loadBlocks done')),
+        websiteService
+            .loadFeaturedProducts()
+            .then((_) => debugPrint('[OdooEditor] loadFeaturedProducts done')),
+        inventoryService
+            .getProducts()
+            .then((_) => debugPrint('[OdooEditor] getProducts done')),
       ]).timeout(const Duration(seconds: 10), onTimeout: () {
         debugPrint('[OdooEditor] Data loading timed out');
         return [null, null, null];
       });
       debugPrint('[OdooEditor] All data loaded');
-      
+
       if (!mounted) return;
 
       final loadedBlocks = List<Map<String, dynamic>>.from(
@@ -732,11 +767,13 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       // Save to database - use page-specific save if a page is selected
       if (_selectedPage != null) {
         await websiteService.saveBlocksForPage(_selectedPage!.id, blocksData);
-        debugPrint('[OdooEditor] Saved ${blocksData.length} blocks to page: ${_selectedPage!.title}');
+        debugPrint(
+            '[OdooEditor] Saved ${blocksData.length} blocks to page: ${_selectedPage!.title}');
       } else {
         // Fallback to legacy global save
         await websiteService.saveBlocks(blocksData);
-        debugPrint('[OdooEditor] Saved ${blocksData.length} blocks (legacy mode)');
+        debugPrint(
+            '[OdooEditor] Saved ${blocksData.length} blocks (legacy mode)');
       }
 
       if (mounted) {
@@ -1171,10 +1208,68 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
             ),
           ),
           const SizedBox(width: 16),
-          
-          // Multi-page selector temporarily disabled
-          // TODO: Re-enable when website_pages table is deployed
-          
+
+          // Page selector dropdown
+          if (_pages.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedPage?.id,
+                  icon: const Icon(Icons.arrow_drop_down, size: 20),
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  items: _pages.map((page) {
+                    return DropdownMenuItem<String>(
+                      value: page.id,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (page.isHome)
+                            const Icon(Icons.home, size: 16, color: Colors.blue)
+                          else
+                            const Icon(Icons.article_outlined,
+                                size: 16, color: Colors.grey),
+                          const SizedBox(width: 8),
+                          Text(page.title),
+                          if (!page.isPublished) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade100,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'Borrador',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.orange.shade700),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (String? pageId) {
+                    if (pageId == null) return;
+                    final page = _pages.firstWhere((p) => p.id == pageId);
+                    _switchToPage(page);
+                  },
+                ),
+              ),
+            ),
+
           const SizedBox(width: 12),
           if (_hasChanges)
             Container(
@@ -1238,14 +1333,16 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         Consumer<WebsiteEditModeProvider>(
           builder: (context, editProvider, _) => IconButton(
             icon: const Icon(Icons.undo, color: Colors.black87),
-            onPressed: (editProvider.canUndo) ? () => editProvider.undo() : null,
+            onPressed:
+                (editProvider.canUndo) ? () => editProvider.undo() : null,
             tooltip: 'Deshacer',
           ),
         ),
         Consumer<WebsiteEditModeProvider>(
           builder: (context, editProvider, _) => IconButton(
             icon: const Icon(Icons.redo, color: Colors.black87),
-            onPressed: (editProvider.canRedo) ? () => editProvider.redo() : null,
+            onPressed:
+                (editProvider.canRedo) ? () => editProvider.redo() : null,
             tooltip: 'Rehacer',
           ),
         ),
@@ -1312,7 +1409,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                     if (mounted) {
                       // Navigate to the selected page's URL
                       if (_selectedPage != null) {
-                        final slug = _selectedPage!.isHome ? '' : _selectedPage!.slug;
+                        final slug =
+                            _selectedPage!.isHome ? '' : _selectedPage!.slug;
                         context.go('/tienda${slug.isEmpty ? '' : '/$slug'}');
                       } else {
                         context.go('/tienda');
@@ -1460,7 +1558,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                     onPressed: () => setState(() =>
                         _previewZoom = (_previewZoom - 0.1).clamp(0.5, 2.0)),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints:
+                        const BoxConstraints(minWidth: 32, minHeight: 32),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -1477,7 +1576,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                     onPressed: () => setState(() =>
                         _previewZoom = (_previewZoom + 0.1).clamp(0.5, 2.0)),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints:
+                        const BoxConstraints(minWidth: 32, minHeight: 32),
                   ),
                 ],
               ),
@@ -1676,12 +1776,14 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
         // Calculate safe height for bottom label (avoid overflow)
         const bottomLabelHeight = 48.0; // Label + padding
         final availableHeight = constraints.maxHeight - bottomLabelHeight;
-        
+
         return Column(
           children: [
             // Preview area takes available space minus bottom label
             SizedBox(
-              height: availableHeight > 100 ? availableHeight : constraints.maxHeight * 0.85,
+              height: availableHeight > 100
+                  ? availableHeight
+                  : constraints.maxHeight * 0.85,
               child: Center(
                 child: Transform.scale(
                   scale: _previewZoom,
@@ -1735,7 +1837,8 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
                     ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Text(
                       previewLabel,
                       style: theme.textTheme.labelLarge?.copyWith(
@@ -4643,7 +4746,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
 
     final service = context.read<WebsiteService>();
     final tenantService = context.read<TenantService>();
-    
+
     // Get tenant ID
     final tenantId = await tenantService.getTenantId();
     if (tenantId == null) {
@@ -4654,7 +4757,7 @@ class _OdooStyleEditorPageState extends State<OdooStyleEditorPage> {
       );
       return;
     }
-    
+
     ThemePreset? existing;
 
     for (final preset in _themePresets) {

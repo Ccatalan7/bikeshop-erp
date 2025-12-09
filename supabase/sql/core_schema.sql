@@ -222,6 +222,14 @@ end $$;
 -- Add index on custom_domain for faster lookups
 create index if not exists idx_tenants_custom_domain on tenants(custom_domain);
 
+-- Set production custom domain for Vinabike tenant (shop id 5443b130-cc28-45af-a420-cd500b288890)
+do $$
+begin
+  update tenants
+    set custom_domain = 'vinabike.cl'
+  where id = '5443b130-cc28-45af-a420-cd500b288890';
+end $$;
+
 -- Add constraint: subdomain must be URL-safe (lowercase alphanumeric and hyphens)
 do $$ begin
   alter table tenants add constraint subdomain_format 
@@ -1681,6 +1689,11 @@ begin
 
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'is_published') then
     alter table products add column is_published boolean not null default true;
+  end if;
+
+  -- Add is_google_merchant (requires is_published to be true)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'is_google_merchant') then
+    alter table products add column is_google_merchant boolean not null default false;
   end if;
 
   -- Add tags array
@@ -13043,35 +13056,464 @@ declare
   v_home_page_id uuid;
   v_products_page_id uuid;
   v_contact_page_id uuid;
+  v_about_page_id uuid;
+  v_terms_page_id uuid;
+  v_privacy_page_id uuid;
+  v_returns_page_id uuid;
+  v_shipping_page_id uuid;
 begin
   -- Create Home page (system page, is_home = true)
   insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
   values (p_tenant_id, 'inicio', 'Inicio', true, true, true, 'default')
+  on conflict (tenant_id, slug) do nothing
   returning id into v_home_page_id;
   
   -- Create Products page (system page)
   insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
   values (p_tenant_id, 'productos', 'Productos', true, false, true, 'product-list')
+  on conflict (tenant_id, slug) do nothing
   returning id into v_products_page_id;
   
   -- Create Contact page
   insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
   values (p_tenant_id, 'contacto', 'Contacto', true, false, false, 'default')
+  on conflict (tenant_id, slug) do nothing
   returning id into v_contact_page_id;
+  
+  -- ============================================
+  -- POLICY PAGES (Required for Google Merchant)
+  -- ============================================
+  
+  -- About Us page
+  insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
+  values (p_tenant_id, 'nosotros', 'Sobre Nosotros', true, false, false, 'default')
+  on conflict (tenant_id, slug) do nothing
+  returning id into v_about_page_id;
+  
+  -- Terms and Conditions
+  insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
+  values (p_tenant_id, 'terminos', 'Términos y Condiciones', true, false, false, 'default')
+  on conflict (tenant_id, slug) do nothing
+  returning id into v_terms_page_id;
+  
+  -- Privacy Policy
+  insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
+  values (p_tenant_id, 'privacidad', 'Política de Privacidad', true, false, false, 'default')
+  on conflict (tenant_id, slug) do nothing
+  returning id into v_privacy_page_id;
+  
+  -- Returns Policy
+  insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
+  values (p_tenant_id, 'devoluciones', 'Política de Devoluciones', true, false, false, 'default')
+  on conflict (tenant_id, slug) do nothing
+  returning id into v_returns_page_id;
+  
+  -- Shipping Info
+  insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
+  values (p_tenant_id, 'envios', 'Información de Envíos', true, false, false, 'default')
+  on conflict (tenant_id, slug) do nothing
+  returning id into v_shipping_page_id;
   
   -- Migrate existing blocks to home page (for existing tenants)
   update website_blocks
   set page_id = v_home_page_id
   where tenant_id = p_tenant_id and page_id is null;
   
-  -- Create default navigation for header
-  insert into website_navigation (tenant_id, menu_location, label, link_type, link_value, order_index)
-  values 
-    (p_tenant_id, 'header', 'Inicio', 'page', v_home_page_id::text, 0),
-    (p_tenant_id, 'header', 'Productos', 'page', v_products_page_id::text, 1),
-    (p_tenant_id, 'header', 'Contacto', 'page', v_contact_page_id::text, 2);
+  -- Create default navigation for header (only if no nav exists)
+  if not exists (select 1 from website_navigation where tenant_id = p_tenant_id and menu_location = 'header') then
+    insert into website_navigation (tenant_id, menu_location, label, link_type, link_value, order_index)
+    values 
+      (p_tenant_id, 'header', 'Inicio', 'page', v_home_page_id::text, 0),
+      (p_tenant_id, 'header', 'Productos', 'page', v_products_page_id::text, 1),
+      (p_tenant_id, 'header', 'Contacto', 'page', v_contact_page_id::text, 2);
+  end if;
   
   raise notice '✅ Seeded website pages and navigation for tenant %', p_tenant_id;
+end;
+$$;
+
+-- ============================================================================
+-- SEED POLICY PAGE CONTENT (Required for Google Merchant Center compliance)
+-- ============================================================================
+-- Creates professional content blocks for policy pages
+-- Call this after seed_website_pages to populate content
+
+create or replace function seed_policy_page_content(p_tenant_id uuid)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  v_page_id uuid;
+  v_order_index integer;
+begin
+  -- ============================================
+  -- ABOUT US PAGE (Sobre Nosotros)
+  -- ============================================
+  select id into v_page_id from website_pages 
+  where tenant_id = p_tenant_id and slug = 'nosotros';
+  
+  if v_page_id is not null and not exists (
+    select 1 from website_blocks where page_id = v_page_id
+  ) then
+    -- Hero section
+    insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
+    values (p_tenant_id, v_page_id, 'hero', 0, true, jsonb_build_object(
+      'title', 'Sobre Nosotros',
+      'subtitle', 'Conoce nuestra historia y compromiso con el ciclismo',
+      'background_color', '#1a1a2e',
+      'text_color', '#ffffff',
+      'height', 'small'
+    ));
+    
+    -- Content section
+    insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
+    values (p_tenant_id, v_page_id, 'rich_text', 1, true, jsonb_build_object(
+      'content', '<div style="max-width: 800px; margin: 0 auto; padding: 60px 20px;">
+        <h2 style="font-size: 32px; margin-bottom: 24px; color: #1a1a2e;">Nuestra Historia</h2>
+        <p style="font-size: 18px; line-height: 1.8; color: #444; margin-bottom: 24px;">
+          Somos una empresa chilena dedicada al mundo del ciclismo, con años de experiencia 
+          brindando productos de calidad y servicio técnico especializado. Nuestra pasión 
+          por las bicicletas nos impulsa a ofrecer siempre lo mejor a nuestros clientes.
+        </p>
+        <h2 style="font-size: 32px; margin-bottom: 24px; color: #1a1a2e; margin-top: 48px;">Nuestra Misión</h2>
+        <p style="font-size: 18px; line-height: 1.8; color: #444; margin-bottom: 24px;">
+          Promover el ciclismo como estilo de vida saludable y sustentable, ofreciendo 
+          productos de calidad, asesoría experta y servicio técnico profesional.
+        </p>
+        <h2 style="font-size: 32px; margin-bottom: 24px; color: #1a1a2e; margin-top: 48px;">¿Por qué elegirnos?</h2>
+        <ul style="font-size: 18px; line-height: 2; color: #444;">
+          <li>Amplia variedad de bicicletas y accesorios</li>
+          <li>Servicio técnico con mecánicos certificados</li>
+          <li>Garantía en todos nuestros productos</li>
+          <li>Atención personalizada y asesoría experta</li>
+          <li>Envíos a todo Chile</li>
+        </ul>
+      </div>',
+      'background_color', '#ffffff'
+    ));
+  end if;
+  
+  -- ============================================
+  -- TERMS AND CONDITIONS PAGE
+  -- ============================================
+  select id into v_page_id from website_pages 
+  where tenant_id = p_tenant_id and slug = 'terminos';
+  
+  if v_page_id is not null and not exists (
+    select 1 from website_blocks where page_id = v_page_id
+  ) then
+    insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
+    values (p_tenant_id, v_page_id, 'hero', 0, true, jsonb_build_object(
+      'title', 'Términos y Condiciones',
+      'subtitle', 'Condiciones de uso de nuestro sitio web y servicios',
+      'background_color', '#1a1a2e',
+      'text_color', '#ffffff',
+      'height', 'small'
+    ));
+    
+    insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
+    values (p_tenant_id, v_page_id, 'rich_text', 1, true, jsonb_build_object(
+      'content', '<div style="max-width: 800px; margin: 0 auto; padding: 60px 20px;">
+        <p style="color: #666; margin-bottom: 32px;">Última actualización: Diciembre 2025</p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">1. Aceptación de los Términos</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Al acceder y utilizar este sitio web, usted acepta estar sujeto a estos términos y 
+          condiciones de uso. Si no está de acuerdo con alguna parte de estos términos, 
+          le rogamos que no utilice nuestro sitio web.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">2. Uso del Sitio</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Este sitio web está destinado únicamente para uso personal y no comercial. 
+          Usted se compromete a utilizar el sitio de manera responsable y de acuerdo 
+          con la legislación vigente en Chile.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">3. Productos y Precios</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Los precios mostrados en el sitio incluyen IVA y están expresados en pesos chilenos (CLP). 
+          Nos reservamos el derecho de modificar los precios sin previo aviso. Las fotografías 
+          de los productos son referenciales.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">4. Proceso de Compra</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Al realizar una compra, usted confirma que la información proporcionada es veraz y completa. 
+          Nos reservamos el derecho de cancelar pedidos si detectamos información incorrecta o 
+          actividad fraudulenta.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">5. Propiedad Intelectual</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Todo el contenido de este sitio web, incluyendo textos, imágenes, logotipos y diseños, 
+          está protegido por derechos de autor y no puede ser reproducido sin autorización expresa.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">6. Limitación de Responsabilidad</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          No seremos responsables por daños indirectos, incidentales o consecuentes derivados 
+          del uso de nuestro sitio web o productos, más allá de lo establecido por la ley chilena.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">7. Legislación Aplicable</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Estos términos se rigen por las leyes de la República de Chile. Cualquier disputa 
+          será sometida a los tribunales competentes de la ciudad de Viña del Mar.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">8. Contacto</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444;">
+          Para consultas sobre estos términos, contáctenos a través de nuestro formulario 
+          de contacto o al correo electrónico indicado en el sitio.
+        </p>
+      </div>',
+      'background_color', '#ffffff'
+    ));
+  end if;
+  
+  -- ============================================
+  -- PRIVACY POLICY PAGE
+  -- ============================================
+  select id into v_page_id from website_pages 
+  where tenant_id = p_tenant_id and slug = 'privacidad';
+  
+  if v_page_id is not null and not exists (
+    select 1 from website_blocks where page_id = v_page_id
+  ) then
+    insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
+    values (p_tenant_id, v_page_id, 'hero', 0, true, jsonb_build_object(
+      'title', 'Política de Privacidad',
+      'subtitle', 'Cómo protegemos y utilizamos tu información',
+      'background_color', '#1a1a2e',
+      'text_color', '#ffffff',
+      'height', 'small'
+    ));
+    
+    insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
+    values (p_tenant_id, v_page_id, 'rich_text', 1, true, jsonb_build_object(
+      'content', '<div style="max-width: 800px; margin: 0 auto; padding: 60px 20px;">
+        <p style="color: #666; margin-bottom: 32px;">Última actualización: Diciembre 2025</p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">1. Información que Recopilamos</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
+          Recopilamos información que usted nos proporciona directamente:
+        </p>
+        <ul style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          <li>Nombre y apellidos</li>
+          <li>Dirección de correo electrónico</li>
+          <li>Número de teléfono</li>
+          <li>Dirección de envío y facturación</li>
+          <li>RUT (para facturación)</li>
+          <li>Información de pago (procesada de forma segura por terceros)</li>
+        </ul>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">2. Uso de la Información</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
+          Utilizamos su información para:
+        </p>
+        <ul style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          <li>Procesar y enviar sus pedidos</li>
+          <li>Comunicarnos sobre su compra o servicio técnico</li>
+          <li>Enviar información sobre promociones (solo si usted lo autoriza)</li>
+          <li>Mejorar nuestros productos y servicios</li>
+          <li>Cumplir con obligaciones legales y tributarias</li>
+        </ul>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">3. Protección de Datos</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Implementamos medidas de seguridad técnicas y organizativas para proteger su información 
+          personal contra acceso no autorizado, alteración o destrucción. Utilizamos conexiones 
+          seguras (HTTPS/SSL) para todas las transacciones.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">4. Compartir Información</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          No vendemos ni compartimos su información personal con terceros, excepto cuando es 
+          necesario para procesar su pedido (empresas de envío, procesadores de pago) o 
+          cuando la ley lo requiere.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">5. Cookies</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Utilizamos cookies para mejorar su experiencia de navegación, recordar sus preferencias 
+          y analizar el uso del sitio. Puede configurar su navegador para rechazar cookies, 
+          aunque esto podría afectar algunas funcionalidades.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">6. Sus Derechos</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
+          Conforme a la Ley 19.628 sobre Protección de Datos Personales, usted tiene derecho a:
+        </p>
+        <ul style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          <li>Acceder a sus datos personales</li>
+          <li>Solicitar la rectificación de datos inexactos</li>
+          <li>Solicitar la eliminación de sus datos</li>
+          <li>Oponerse al tratamiento de sus datos</li>
+        </ul>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">7. Contacto</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444;">
+          Para ejercer sus derechos o consultas sobre privacidad, contáctenos a través 
+          de nuestro formulario de contacto.
+        </p>
+      </div>',
+      'background_color', '#ffffff'
+    ));
+  end if;
+  
+  -- ============================================
+  -- RETURNS POLICY PAGE
+  -- ============================================
+  select id into v_page_id from website_pages 
+  where tenant_id = p_tenant_id and slug = 'devoluciones';
+  
+  if v_page_id is not null and not exists (
+    select 1 from website_blocks where page_id = v_page_id
+  ) then
+    insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
+    values (p_tenant_id, v_page_id, 'hero', 0, true, jsonb_build_object(
+      'title', 'Política de Devoluciones',
+      'subtitle', 'Garantía y cambios de productos',
+      'background_color', '#1a1a2e',
+      'text_color', '#ffffff',
+      'height', 'small'
+    ));
+    
+    insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
+    values (p_tenant_id, v_page_id, 'rich_text', 1, true, jsonb_build_object(
+      'content', '<div style="max-width: 800px; margin: 0 auto; padding: 60px 20px;">
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Garantía Legal</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Todos nuestros productos cuentan con garantía legal de 6 meses según la Ley del 
+          Consumidor chilena (Ley 19.496). Esta garantía cubre defectos de fabricación 
+          y mal funcionamiento bajo uso normal.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Derecho a Retracto</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Para compras realizadas a través de nuestro sitio web, usted tiene derecho a 
+          retractarse de la compra dentro de los 10 días siguientes a la recepción del 
+          producto, siempre que este se encuentre en su empaque original, sin uso y 
+          con todos sus accesorios.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Proceso de Devolución</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
+          Para solicitar una devolución:
+        </p>
+        <ol style="font-size: 16px; line-height: 2; color: #444; margin-bottom: 32px;">
+          <li>Contáctenos indicando su número de pedido y motivo de la devolución</li>
+          <li>Recibirá instrucciones para el envío del producto</li>
+          <li>Una vez recibido y verificado el producto, procesaremos el reembolso</li>
+          <li>El reembolso se realizará por el mismo medio de pago utilizado</li>
+        </ol>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Excepciones</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
+          No se aceptan devoluciones en los siguientes casos:
+        </p>
+        <ul style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          <li>Productos usados o con señales de uso</li>
+          <li>Productos sin empaque original o accesorios</li>
+          <li>Daños causados por mal uso o accidentes</li>
+          <li>Productos personalizados o a pedido</li>
+          <li>Desgaste normal de componentes (neumáticos, frenos, cadenas)</li>
+        </ul>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Cambios</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Aceptamos cambios de talla o modelo dentro de 15 días desde la recepción, 
+          sujeto a disponibilidad de stock. El cliente asume el costo de envío del cambio.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Contacto</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444;">
+          Para gestionar devoluciones o cambios, contáctenos a través de nuestro 
+          formulario de contacto o directamente en nuestra tienda.
+        </p>
+      </div>',
+      'background_color', '#ffffff'
+    ));
+  end if;
+  
+  -- ============================================
+  -- SHIPPING INFO PAGE
+  -- ============================================
+  select id into v_page_id from website_pages 
+  where tenant_id = p_tenant_id and slug = 'envios';
+  
+  if v_page_id is not null and not exists (
+    select 1 from website_blocks where page_id = v_page_id
+  ) then
+    insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
+    values (p_tenant_id, v_page_id, 'hero', 0, true, jsonb_build_object(
+      'title', 'Información de Envíos',
+      'subtitle', 'Despacho a todo Chile',
+      'background_color', '#1a1a2e',
+      'text_color', '#ffffff',
+      'height', 'small'
+    ));
+    
+    insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
+    values (p_tenant_id, v_page_id, 'rich_text', 1, true, jsonb_build_object(
+      'content', '<div style="max-width: 800px; margin: 0 auto; padding: 60px 20px;">
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Cobertura</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Realizamos envíos a todo Chile continental. Para zonas extremas (Arica, Punta Arenas, 
+          Chiloé y otras islas), los tiempos y costos pueden variar.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Costos de Envío</h2>
+        <div style="background: #f8f9fa; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+          <p style="font-size: 18px; color: #1a1a2e; margin-bottom: 16px;"><strong>Región Metropolitana:</strong></p>
+          <ul style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
+            <li>Envío estándar: $3.990</li>
+            <li>Envío express (24-48 hrs): $5.990</li>
+          </ul>
+          <p style="font-size: 18px; color: #1a1a2e; margin-bottom: 16px;"><strong>Regiones:</strong></p>
+          <ul style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
+            <li>Zona norte y sur: Desde $5.990</li>
+            <li>Zonas extremas: Desde $9.990</li>
+          </ul>
+          <p style="font-size: 18px; color: #28a745; font-weight: bold;">
+            🚚 ¡Envío GRATIS en compras sobre $50.000!
+          </p>
+        </div>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Tiempos de Entrega</h2>
+        <ul style="font-size: 16px; line-height: 2; color: #444; margin-bottom: 32px;">
+          <li><strong>Viña del Mar / Valparaíso:</strong> 1-2 días hábiles</li>
+          <li><strong>Región Metropolitana:</strong> 2-3 días hábiles</li>
+          <li><strong>Otras regiones:</strong> 3-5 días hábiles</li>
+          <li><strong>Zonas extremas:</strong> 5-10 días hábiles</li>
+        </ul>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Retiro en Tienda</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          También puede retirar su compra sin costo en nuestra tienda. Recibirá un correo 
+          de confirmación cuando su pedido esté listo para retiro (generalmente 24 horas hábiles).
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Seguimiento</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
+          Una vez despachado su pedido, recibirá un correo con el número de seguimiento 
+          para rastrear su envío en tiempo real.
+        </p>
+        
+        <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Bicicletas</h2>
+        <p style="font-size: 16px; line-height: 1.8; color: #444;">
+          Las bicicletas se envían parcialmente armadas para mayor seguridad. Incluimos 
+          instrucciones de armado final. Para bicicletas de alta gama, recomendamos 
+          retiro en tienda donde nuestros mecánicos realizan el armado completo sin costo adicional.
+        </p>
+      </div>',
+      'background_color', '#ffffff'
+    ));
+  end if;
+  
+  raise notice '✅ Seeded policy page content for tenant %', p_tenant_id;
 end;
 $$;
 
@@ -13334,7 +13776,7 @@ create table if not exists online_orders (
   customer_email text not null,
   customer_name text not null,
   customer_phone text,
-  customer_address text,
+  customer_address text, -- Legacy: billing address (kept for backward compatibility)
   
   -- Order details
   subtotal numeric(12,2) not null default 0,
@@ -13343,8 +13785,19 @@ create table if not exists online_orders (
   discount_amount numeric(12,2) not null default 0,
   total numeric(12,2) not null default 0,
   
-  -- Order status
-  status text not null default 'pending' check (status in ('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled')),
+  -- Delivery type and shipping address
+  delivery_type text not null default 'shipping' check (delivery_type in ('shipping', 'pickup')),
+  shipping_address_line1 text,
+  shipping_address_line2 text,
+  shipping_city text,
+  shipping_state text,
+  shipping_postal_code text,
+  shipping_country text default 'Chile',
+  shipping_carrier text,
+  tracking_url text,
+  
+  -- Order status (added ready_for_pickup for in-store pickup orders)
+  status text not null default 'pending' check (status in ('pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipped', 'delivered', 'cancelled')),
   payment_status text not null default 'pending' check (payment_status in ('pending', 'paid', 'failed', 'refunded')),
   
   -- Payment details
@@ -13356,18 +13809,69 @@ create table if not exists online_orders (
   tracking_number text,
   shipped_at timestamp with time zone,
   delivered_at timestamp with time zone,
+  ready_for_pickup_at timestamp with time zone, -- When order is ready for in-store pickup
   
-  -- ERP integration
-  sales_invoice_id uuid references sales_invoices(id) on delete set null,
+  -- Cancellation/refund
+  cancelled_at timestamp with time zone,
+  cancelled_reason text,
+  refund_amount numeric(12,2) default 0,
+  refunded_at timestamp with time zone,
+  
+  -- ERP integration (renamed for clarity, aliased from sales_invoice_id)
+  invoice_id uuid references sales_invoices(id) on delete set null,
+  sales_invoice_id uuid references sales_invoices(id) on delete set null, -- Legacy alias, kept for backward compatibility
   
   -- Notes
   customer_notes text,
   internal_notes text,
+  notes text, -- Admin notes
   
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
   unique(tenant_id, order_number)
 );
+
+-- Add new columns to existing table (for deployed databases)
+do $$ begin
+  -- Delivery type and shipping address
+  alter table online_orders add column if not exists delivery_type text default 'shipping';
+  alter table online_orders add column if not exists shipping_address_line1 text;
+  alter table online_orders add column if not exists shipping_address_line2 text;
+  alter table online_orders add column if not exists shipping_city text;
+  alter table online_orders add column if not exists shipping_state text;
+  alter table online_orders add column if not exists shipping_postal_code text;
+  alter table online_orders add column if not exists shipping_country text default 'Chile';
+  alter table online_orders add column if not exists shipping_carrier text;
+  alter table online_orders add column if not exists tracking_url text;
+  
+  -- Pickup and cancellation
+  alter table online_orders add column if not exists ready_for_pickup_at timestamp with time zone;
+  alter table online_orders add column if not exists cancelled_at timestamp with time zone;
+  alter table online_orders add column if not exists cancelled_reason text;
+  alter table online_orders add column if not exists refund_amount numeric(12,2) default 0;
+  alter table online_orders add column if not exists refunded_at timestamp with time zone;
+  
+  -- Invoice reference (new standard name)
+  alter table online_orders add column if not exists invoice_id uuid references sales_invoices(id) on delete set null;
+  
+  -- Admin notes
+  alter table online_orders add column if not exists notes text;
+  
+  -- Update constraint to include ready_for_pickup
+  alter table online_orders drop constraint if exists online_orders_status_check;
+  alter table online_orders add constraint online_orders_status_check 
+    check (status in ('pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipped', 'delivered', 'cancelled'));
+    
+  -- Update constraint for delivery type
+  alter table online_orders drop constraint if exists online_orders_delivery_type_check;
+  alter table online_orders add constraint online_orders_delivery_type_check 
+    check (delivery_type in ('shipping', 'pickup'));
+    
+  raise notice '✅ Added new columns to online_orders table';
+exception
+  when others then 
+    raise notice '⚠ Some columns may already exist or table not found: %', sqlerrm;
+end $$;
 
 do $$ begin
   create index if not exists idx_online_orders_tenant on online_orders(tenant_id);
@@ -13454,10 +13958,49 @@ alter table online_order_items enable row level security;
 -- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
 -- ============================================================================
+-- ONLINE ORDER SCHEMA EXTENSIONS
+-- ============================================================================
+
+-- Add delivery type and fulfillment tracking to online_orders
+alter table online_orders
+  add column if not exists delivery_type text not null default 'shipping' 
+    check (delivery_type in ('shipping', 'pickup')),
+  add column if not exists ready_for_pickup_at timestamp with time zone,
+  add column if not exists cancelled_at timestamp with time zone,
+  add column if not exists cancelled_reason text,
+  add column if not exists refund_amount numeric(12,2) default 0,
+  add column if not exists refunded_at timestamp with time zone;
+
+-- Add shipping address details (separate from customer_address which is formatted)
+alter table online_orders
+  add column if not exists shipping_recipient_name text,
+  add column if not exists shipping_phone text,
+  add column if not exists shipping_street_address text,
+  add column if not exists shipping_apartment text,
+  add column if not exists shipping_comuna text,
+  add column if not exists shipping_city text,
+  add column if not exists shipping_region text,
+  add column if not exists shipping_postal_code text;
+
+-- Update status constraint to include ready_for_pickup
+do $$
+begin
+  alter table online_orders drop constraint if exists online_orders_status_check;
+  alter table online_orders add constraint online_orders_status_check 
+    check (status in ('pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipped', 'delivered', 'cancelled'));
+exception when others then
+  raise notice 'Could not update online_orders status constraint: %', sqlerrm;
+end $$;
+
+-- ============================================================================
 -- FUNCTIONS FOR ONLINE ORDER PROCESSING
 -- ============================================================================
 
 -- Function to automatically create sales invoice from online order
+-- This function:
+-- 1. Creates a sales_invoice linked to the order
+-- 2. Creates a payment record if order is paid
+-- 3. The invoice trigger handles: inventory deduction + journal entry
 create or replace function public.process_online_order(p_order_id uuid)
 returns uuid -- Returns sales_invoice_id
 language plpgsql
@@ -13472,6 +14015,8 @@ declare
   v_next_number integer;
   v_year text;
   v_payment_method_id uuid;
+  v_tenant_id uuid;
+  v_net_amount numeric(12,2);
 begin
   -- Get order details
   select * into v_order
@@ -13482,18 +14027,25 @@ begin
     raise exception 'Order not found: %', p_order_id;
   end if;
   
+  -- CRITICAL: Get tenant_id from the order
+  v_tenant_id := v_order.tenant_id;
+  if v_tenant_id is null then
+    raise exception 'Order has no tenant_id: %', p_order_id;
+  end if;
+  
   -- Check if invoice already exists
   if v_order.sales_invoice_id is not null then
     return v_order.sales_invoice_id;
   end if;
   
-  -- Generate invoice number in format: INV-25-00001
+  -- Generate invoice number PER TENANT in format: INV-25-00001
   v_year := to_char(now(), 'YY');
   
   select coalesce(max(cast(substring(invoice_number from '\d+$') as integer)), 0) + 1
   into v_next_number
   from sales_invoices
-  where invoice_number ~ ('^INV-' || v_year || '-\d+$');
+  where tenant_id = v_tenant_id
+    and invoice_number ~ ('^INV-' || v_year || '-\d+$');
   
   v_invoice_number := 'INV-' || v_year || '-' || lpad(v_next_number::text, 5, '0');
   
@@ -13516,32 +14068,47 @@ begin
     v_items := '[]'::jsonb;
   end if;
   
-  -- Create sales invoice
+  -- Calculate net amount (assuming tax_included for online orders)
+  -- net = total / 1.19 when IVA is included
+  if v_order.tax_amount > 0 then
+    v_net_amount := round(v_order.total / 1.19, 2);
+  else
+    v_net_amount := v_order.subtotal;
+  end if;
+  
+  -- Create sales invoice WITH tenant_id
+  -- Status 'pagado' will trigger the invoice trigger to:
+  -- - Deduct inventory via consume_sales_invoice_inventory()
+  -- - Create journal entry via create_sales_invoice_journal_entry()
   insert into sales_invoices (
+    tenant_id, -- CRITICAL: Include tenant_id
     invoice_number,
     customer_id,
     customer_name,
     date,
     due_date,
     status,
+    tax_treatment,
+    net_amount,
     subtotal,
     iva_amount,
-    discount_amount,
     total,
     paid_amount,
     balance,
     items,
     reference
   ) values (
+    v_tenant_id, -- CRITICAL: Use order's tenant_id
     v_invoice_number,
     v_order.customer_id,
     v_order.customer_name,
     now(),
     now() + interval '30 days',
     case when v_order.payment_status = 'paid' then 'pagado' else 'enviado' end,
+    case when v_order.tax_amount > 0 then 'tax_included' else 'no_tax' end,
+    v_net_amount,
     v_order.subtotal,
     v_order.tax_amount,
-    coalesce(v_order.discount_amount, 0),
     v_order.total,
     case when v_order.payment_status = 'paid' then v_order.total else 0 end,
     case when v_order.payment_status = 'paid' then 0 else v_order.total end,
@@ -13550,31 +14117,50 @@ begin
   )
   returning id into v_invoice_id;
   
+  raise notice 'Created invoice % for online order %', v_invoice_number, v_order.order_number;
+  
   -- Link invoice to order
   update online_orders
   set sales_invoice_id = v_invoice_id,
+      status = case when status = 'pending' then 'confirmed' else status end,
       updated_at = now()
   where id = p_order_id;
   
   -- If order is already paid, create payment record
-  if v_order.payment_status = 'paid' and v_order.payment_method is not null then
+  if v_order.payment_status = 'paid' then
     -- Get payment method ID by code (default to MercadoPago if not found)
+    -- Look in tenant's payment methods first
     select id into v_payment_method_id
     from payment_methods
-    where code = lower(v_order.payment_method)
-      and is_active = true;
+    where tenant_id = v_tenant_id
+      and lower(code) = lower(coalesce(v_order.payment_method, 'mercadopago'))
+      and is_active = true
+    limit 1;
     
-    -- If payment method not found, try to get MercadoPago
+    -- If payment method not found, try any MercadoPago for tenant
     if v_payment_method_id is null then
       select id into v_payment_method_id
       from payment_methods
-      where code = 'mercadopago'
-        and is_active = true;
+      where tenant_id = v_tenant_id
+        and lower(code) = 'mercadopago'
+        and is_active = true
+      limit 1;
+    end if;
+    
+    -- If still not found, try any transfer method
+    if v_payment_method_id is null then
+      select id into v_payment_method_id
+      from payment_methods
+      where tenant_id = v_tenant_id
+        and lower(code) in ('transfer', 'transferencia', 'bank_transfer')
+        and is_active = true
+      limit 1;
     end if;
     
     -- Create payment record if we found a payment method
     if v_payment_method_id is not null then
       insert into sales_payments (
+        tenant_id, -- CRITICAL: Include tenant_id
         invoice_id,
         invoice_reference,
         payment_method_id,
@@ -13583,25 +14169,284 @@ begin
         reference,
         notes
       ) values (
+        v_tenant_id, -- CRITICAL: Use order's tenant_id
         v_invoice_id,
         v_invoice_number,
         v_payment_method_id,
         v_order.total,
         coalesce(v_order.paid_at, now()),
         v_order.payment_reference,
-        'Pago automático desde pedido online #' || v_order.order_number
+        'Pago automático - Pedido online #' || v_order.order_number
       );
+      
+      raise notice 'Created payment record for invoice %', v_invoice_number;
       
       -- The trigger on sales_payments will automatically:
       -- 1. Create the journal entry (Dr: Bank, Cr: AR)
       -- 2. Update paid_amount and balance on the invoice
-      -- 3. Transition invoice status to 'pagado'
+    else
+      raise notice 'Warning: No payment method found for tenant %, order paid but no payment record created', v_tenant_id;
     end if;
   end if;
   
   return v_invoice_id;
 end;
 $$;
+
+--------------------------------------------------------------------------------
+-- FUNCTION: cancel_online_order
+-- PURPOSE: Cancel an online order, handle refunds, restore inventory
+-- CALLED BY: ERP admin panel when cancelling/refunding orders
+--------------------------------------------------------------------------------
+create or replace function public.cancel_online_order(
+  p_order_id uuid,
+  p_reason text default 'Cancelado por el administrador',
+  p_refund_amount numeric default null -- null = full refund, 0 = no refund
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_order record;
+  v_invoice record;
+  v_actual_refund numeric;
+  v_result jsonb;
+begin
+  -- Get the order with tenant context
+  select * into v_order
+  from online_orders
+  where id = p_order_id
+    and tenant_id = public.user_tenant_id();
+    
+  if v_order is null then
+    raise exception 'Order not found or access denied: %', p_order_id;
+  end if;
+  
+  -- Check if already cancelled
+  if v_order.status = 'cancelled' then
+    raise exception 'Order is already cancelled';
+  end if;
+  
+  -- Get associated invoice if exists
+  if v_order.invoice_id is not null then
+    select * into v_invoice
+    from sales_invoices
+    where id = v_order.invoice_id;
+  end if;
+  
+  -- Determine refund amount
+  if p_refund_amount is null then
+    v_actual_refund := v_order.total;
+  else
+    v_actual_refund := least(p_refund_amount, v_order.total);
+  end if;
+  
+  -- Start cancellation process
+  -- 1. Cancel/delete the invoice (which will restore inventory and delete journal entries)
+  if v_invoice is not null then
+    -- If invoice is posted (confirmada/pagada), we need to revert it first
+    if v_invoice.status in ('confirmada', 'pagada') then
+      -- Delete payments first (triggers will handle journal entry reversal)
+      delete from sales_payments where invoice_id = v_invoice.id;
+      
+      -- Set invoice back to borrador (which triggers inventory restoration)
+      update sales_invoices
+      set status = 'borrador',
+          updated_at = now()
+      where id = v_invoice.id;
+    end if;
+    
+    -- Now delete the invoice
+    delete from sales_invoices where id = v_invoice.id;
+    
+    raise notice 'Deleted invoice % and restored inventory', v_invoice.invoice_number;
+  end if;
+  
+  -- 2. Update the order status
+  update online_orders
+  set 
+    status = 'cancelled',
+    cancelled_at = now(),
+    cancelled_reason = p_reason,
+    refund_amount = v_actual_refund,
+    refunded_at = case when v_actual_refund > 0 then now() else null end,
+    invoice_id = null, -- Clear invoice reference
+    updated_at = now()
+  where id = p_order_id;
+  
+  -- Build result
+  v_result := jsonb_build_object(
+    'success', true,
+    'order_id', p_order_id,
+    'order_number', v_order.order_number,
+    'status', 'cancelled',
+    'refund_amount', v_actual_refund,
+    'invoice_deleted', v_invoice is not null,
+    'invoice_number', coalesce(v_invoice.invoice_number, null),
+    'message', format('Order %s cancelled. Refund: $%s', v_order.order_number, v_actual_refund)
+  );
+  
+  return v_result;
+end;
+$$;
+
+--------------------------------------------------------------------------------
+-- FUNCTION: update_online_order_status
+-- PURPOSE: Update order status with proper business logic
+-- CALLED BY: ERP admin panel for order management
+--------------------------------------------------------------------------------
+create or replace function public.update_online_order_status(
+  p_order_id uuid,
+  p_new_status text,
+  p_tracking_number text default null,
+  p_tracking_url text default null,
+  p_carrier text default null,
+  p_notes text default null
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_order record;
+  v_invoice_id uuid;
+begin
+  -- Get current order
+  select * into v_order
+  from online_orders
+  where id = p_order_id
+    and tenant_id = public.user_tenant_id();
+    
+  if v_order is null then
+    raise exception 'Order not found or access denied: %', p_order_id;
+  end if;
+  
+  -- Validate status transition
+  if v_order.status = 'cancelled' then
+    raise exception 'Cannot change status of cancelled order';
+  end if;
+  
+  -- Handle status-specific logic
+  case p_new_status
+    -- Order confirmed (usually after payment)
+    when 'confirmed' then
+      -- If no invoice yet, create one
+      if v_order.invoice_id is null and v_order.payment_status = 'paid' then
+        v_invoice_id := public.process_online_order(p_order_id);
+      end if;
+      
+    -- Processing (preparing order)
+    when 'processing' then
+      if v_order.invoice_id is null then
+        raise exception 'Cannot process order without invoice. Confirm order first.';
+      end if;
+      
+    -- Ready for pickup (in-store pickup orders)
+    when 'ready_for_pickup' then
+      if v_order.delivery_type != 'pickup' then
+        raise exception 'Can only mark pickup orders as ready_for_pickup';
+      end if;
+      update online_orders
+      set ready_for_pickup_at = now()
+      where id = p_order_id;
+      
+    -- Shipped
+    when 'shipped' then
+      if v_order.delivery_type != 'shipping' then
+        raise exception 'Can only ship delivery orders, not pickup orders';
+      end if;
+      update online_orders
+      set 
+        shipped_at = now(),
+        tracking_number = coalesce(p_tracking_number, tracking_number),
+        tracking_url = coalesce(p_tracking_url, tracking_url),
+        shipping_carrier = coalesce(p_carrier, shipping_carrier)
+      where id = p_order_id;
+      
+    -- Delivered
+    when 'delivered' then
+      update online_orders
+      set delivered_at = now()
+      where id = p_order_id;
+      
+    -- Cancelled
+    when 'cancelled' then
+      -- Use dedicated cancel function
+      return public.cancel_online_order(p_order_id, coalesce(p_notes, 'Cancelado'));
+      
+    else
+      raise exception 'Invalid status: %', p_new_status;
+  end case;
+  
+  -- Update the status
+  update online_orders
+  set 
+    status = p_new_status,
+    notes = coalesce(p_notes, notes),
+    updated_at = now()
+  where id = p_order_id;
+  
+  return jsonb_build_object(
+    'success', true,
+    'order_id', p_order_id,
+    'old_status', v_order.status,
+    'new_status', p_new_status,
+    'invoice_id', coalesce(v_invoice_id, v_order.invoice_id)
+  );
+end;
+$$;
+
+--------------------------------------------------------------------------------
+-- TRIGGER: auto_process_paid_online_order
+-- PURPOSE: Automatically process order when payment is received
+-- FLOW: Customer pays → webhook updates payment_status → trigger creates invoice
+--------------------------------------------------------------------------------
+create or replace function public.handle_online_order_payment()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  v_invoice_id uuid;
+begin
+  -- Only process when payment_status changes to 'paid'
+  if NEW.payment_status = 'paid' and 
+     (OLD.payment_status is null or OLD.payment_status != 'paid') and
+     NEW.invoice_id is null and  -- Don't duplicate
+     NEW.status != 'cancelled' then
+     
+    -- Automatically process the order to create invoice
+    v_invoice_id := public.process_online_order(NEW.id);
+    
+    -- Update the order with invoice_id (trigger already updates status to confirmed)
+    -- Note: process_online_order already sets invoice_id and status
+    
+    raise notice 'Auto-processed order % -> Invoice %', NEW.order_number, v_invoice_id;
+  end if;
+  
+  return NEW;
+end;
+$$;
+
+-- Create the trigger
+do $$
+begin
+  -- Drop existing trigger if any
+  drop trigger if exists trg_auto_process_paid_online_order on online_orders;
+  
+  -- Create new trigger (AFTER to allow the row to be committed first)
+  create trigger trg_auto_process_paid_online_order
+    after update of payment_status on online_orders
+    for each row
+    execute function public.handle_online_order_payment();
+    
+  raise notice 'Created trigger trg_auto_process_paid_online_order';
+end $$;
+
+-- Grant execute permissions
+grant execute on function public.cancel_online_order(uuid, text, numeric) to authenticated;
+grant execute on function public.update_online_order_status(uuid, text, text, text, text, text) to authenticated;
 
 -- Function to generate order number
 create or replace function public.generate_online_order_number()
@@ -15860,30 +16705,56 @@ exception when others then null; end $$;
 
 --------------------------------------------------------------------------------
 -- PUBLIC STORE RLS POLICIES
--- Allow anonymous (unauthenticated) users to read tenant-scoped data
--- These policies enable public-facing storefronts to work without auth
+-- Allow both anonymous AND authenticated website customers to read tenant-scoped data
+-- These policies enable public-facing storefronts to work with or without auth
 -- 
--- SECURITY NOTE: These policies allow anonymous read access, but the application
+-- ARCHITECTURE NOTE:
+-- - ERP Users: Have user_profiles record → use user_tenant_id() function
+-- - Website Customers: Have customers record (NO user_profiles) → use explicit tenant_id filter
+-- - Anonymous Visitors: No auth → use explicit tenant_id filter
+--
+-- SECURITY NOTE: These policies allow broad read access, but the application
 -- layer (PublicInventoryService) MUST filter by tenant_id using .eq('tenant_id', tenantId)
 -- to prevent cross-tenant data leakage. These policies provide defense-in-depth
 -- but rely on app-layer filtering for tenant isolation.
 --------------------------------------------------------------------------------
 
--- Drop existing policies first
+-- Drop existing policies first (both anon and authenticated versions)
 drop policy if exists "public_products_select" on products;
+drop policy if exists "public_products_select_authenticated" on products;
 drop policy if exists "public_categories_select" on categories;
+drop policy if exists "public_categories_select_authenticated" on categories;
 drop policy if exists "public_product_categories_select" on product_categories;
+drop policy if exists "public_product_categories_select_authenticated" on product_categories;
 drop policy if exists "public_website_banners_select" on website_banners;
+drop policy if exists "public_website_banners_select_authenticated" on website_banners;
 drop policy if exists "public_website_content_select" on website_content;
+drop policy if exists "public_website_content_select_authenticated" on website_content;
 drop policy if exists "public_website_settings_select" on website_settings;
+drop policy if exists "public_website_settings_select_authenticated" on website_settings;
 drop policy if exists "public_website_blocks_select" on website_blocks;
+drop policy if exists "public_website_blocks_select_authenticated" on website_blocks;
 drop policy if exists "public_tenants_select" on tenants;
+drop policy if exists "public_tenants_select_authenticated" on tenants;
 drop policy if exists "public_orders_insert" on orders;
 drop policy if exists "public_order_items_insert" on order_items;
 drop policy if exists "public_online_orders_insert" on online_orders;
 drop policy if exists "public_online_order_items_insert" on online_order_items;
+drop policy if exists "public_online_orders_select_authenticated" on online_orders;
+drop policy if exists "public_online_order_items_select_authenticated" on online_order_items;
 drop policy if exists "public_featured_products_select" on featured_products;
+drop policy if exists "public_featured_products_select_authenticated" on featured_products;
 drop policy if exists "public_product_brands_select" on product_brands;
+drop policy if exists "public_product_brands_select_authenticated" on product_brands;
+drop policy if exists "public_customers_select_own" on customers;
+drop policy if exists "public_customers_update_own" on customers;
+drop policy if exists "public_customers_insert_own" on customers;
+drop policy if exists "public_mechanic_jobs_select_own" on mechanic_jobs;
+drop policy if exists "public_bikes_select_own" on bikes;
+
+-- ============================================================================
+-- TENANT DETECTION POLICIES
+-- ============================================================================
 
 -- Tenants: Public read access (for subdomain lookup)
 -- Required for public store tenant detection from URL
@@ -15892,12 +16763,33 @@ create policy "public_tenants_select" on tenants
   to anon
   using (is_active = true);
 
+-- Tenants: Authenticated users can also lookup tenants (for website customers)
+create policy "public_tenants_select_authenticated" on tenants 
+  for select 
+  to authenticated
+  using (is_active = true);
+
+-- ============================================================================
+-- WEBSITE CONTENT POLICIES (anon + authenticated)
+-- ============================================================================
+
 -- Website blocks: Public read access (for homepage content)
 -- App must filter by tenant_id explicitly
 create policy "public_website_blocks_select" on website_blocks 
   for select 
   to anon
   using (is_visible = true);
+
+create policy "public_website_blocks_select_authenticated" on website_blocks 
+  for select 
+  to authenticated
+  using (is_visible = true);
+
+-- ============================================================================
+-- PRODUCT CATALOG POLICIES (anon + authenticated)
+-- These allow BOTH anonymous visitors AND logged-in website customers
+-- to browse products. The app layer filters by tenant_id.
+-- ============================================================================
 
 -- Products: Public read access (only active products)
 -- App must filter by tenant_id explicitly
@@ -15907,11 +16799,29 @@ create policy "public_products_select" on products
   to anon
   using (is_active = true);
 
+-- Products: Authenticated website customers can also browse
+-- This is SEPARATE from ERP products_select which uses user_tenant_id()
+-- Website customers don't have user_profiles, so they need this policy
+create policy "public_products_select_authenticated" on products 
+  for select 
+  to authenticated
+  using (
+    is_active = true 
+    -- Allow if user is ERP user (has user_profiles) OR is website customer
+    -- ERP users already have products_select policy, but this won't conflict
+    -- because PostgreSQL RLS policies are OR'd together
+  );
+
 -- Product Categories: Public read access (hierarchical categories)
 -- App must filter by tenant_id explicitly
 create policy "public_product_categories_select" on product_categories 
   for select 
   to anon
+  using (is_active = true);
+
+create policy "public_product_categories_select_authenticated" on product_categories 
+  for select 
+  to authenticated
   using (is_active = true);
 
 -- Legacy Categories: Public read access (if table exists)
@@ -15920,7 +16830,9 @@ do $$
 begin
   if exists (select 1 from information_schema.tables where table_name = 'categories') then
     execute 'create policy "public_categories_select" on categories for select to anon using (true)';
+    execute 'create policy "public_categories_select_authenticated" on categories for select to authenticated using (true)';
   end if;
+exception when duplicate_object then null;
 end $$;
 
 -- Website banners: Public read access (only active)
@@ -15930,14 +16842,24 @@ create policy "public_website_banners_select" on website_banners
   to anon
   using (active = true);
 
+create policy "public_website_banners_select_authenticated" on website_banners 
+  for select 
+  to authenticated
+  using (active = true);
+
 -- Website content: Public read access (tenant-isolated)
 -- App must filter by tenant_id explicitly for multi-tenant routing
 do $$ begin
   drop policy if exists "public_website_content_select" on website_content;
+  drop policy if exists "public_website_content_select_authenticated" on website_content;
   create policy "public_website_content_select" on website_content 
     for select 
     to anon
     using (tenant_id is not null); -- Defense-in-depth: require valid tenant
+  create policy "public_website_content_select_authenticated" on website_content 
+    for select 
+    to authenticated
+    using (tenant_id is not null);
 exception
   when undefined_table then raise notice '⚠ Table website_content does not exist';
 end $$;
@@ -15949,11 +16871,21 @@ create policy "public_website_settings_select" on website_settings
   to anon
   using (true);
 
+create policy "public_website_settings_select_authenticated" on website_settings 
+  for select 
+  to authenticated
+  using (true);
+
 -- Featured products: Public read access
 -- App must filter by tenant_id explicitly
 create policy "public_featured_products_select" on featured_products 
   for select 
   to anon
+  using (active = true);
+
+create policy "public_featured_products_select_authenticated" on featured_products 
+  for select 
+  to authenticated
   using (active = true);
 
 -- Product brands: Public read access
@@ -15962,6 +16894,73 @@ create policy "public_product_brands_select" on product_brands
   for select 
   to anon
   using (is_active = true);
+
+create policy "public_product_brands_select_authenticated" on product_brands 
+  for select 
+  to authenticated
+  using (is_active = true);
+
+-- ============================================================================
+-- CUSTOMER ACCOUNT POLICIES
+-- Allow website customers to view/manage their own data
+-- ============================================================================
+
+-- Customers: Authenticated users can view their own customer record
+create policy "public_customers_select_own" on customers 
+  for select 
+  to authenticated
+  using (auth_user_id = auth.uid());
+
+-- Customers: Authenticated users can update their own customer record
+create policy "public_customers_update_own" on customers 
+  for update 
+  to authenticated
+  using (auth_user_id = auth.uid());
+
+-- Customers: INSERT own record (for website signup - user can only create their own customer record)
+-- This is CRITICAL because website customers don't have user_profiles, so user_tenant_id() returns NULL
+-- and the regular customers_insert policy fails
+create policy "public_customers_insert_own" on customers 
+  for insert 
+  to authenticated
+  with check (
+    auth_user_id = auth.uid() AND  -- Can only create their own record
+    tenant_id IS NOT NULL          -- Must specify a valid tenant
+  );
+
+-- Online Orders: Authenticated customers can view their own orders
+create policy "public_online_orders_select_authenticated" on online_orders 
+  for select 
+  to authenticated
+  using (customer_id IN (
+    SELECT id FROM customers WHERE auth_user_id = auth.uid()
+  ));
+
+-- Online Order Items: Authenticated customers can view their own order items
+create policy "public_online_order_items_select_authenticated" on online_order_items 
+  for select 
+  to authenticated
+  using (order_id IN (
+    SELECT id FROM online_orders WHERE customer_id IN (
+      SELECT id FROM customers WHERE auth_user_id = auth.uid()
+    )
+  ));
+
+-- Mechanic Jobs (Pegas): Website customers can view their own service history
+create policy "public_mechanic_jobs_select_own" on mechanic_jobs 
+  for select 
+  to authenticated
+  using (customer_id IN (
+    SELECT id FROM customers WHERE auth_user_id = auth.uid()
+  ));
+
+-- Bikes: Website customers can view their own bikes
+create policy "public_bikes_select_own" on bikes 
+  for select 
+  to authenticated
+  using (customer_id IN (
+    SELECT id FROM customers WHERE auth_user_id = auth.uid()
+  ));
 
 -- ⚠️ WRITE POLICIES FOR GUEST CHECKOUT
 -- These allow anonymous users to create orders
@@ -15978,11 +16977,26 @@ create policy "public_online_orders_insert" on online_orders
     status in ('pending', 'processing')
   );
 
+-- Online Orders: Authenticated users can also create orders
+create policy "public_online_orders_insert_authenticated" on online_orders 
+  for insert 
+  to authenticated
+  with check (
+    tenant_id is not null and
+    status in ('pending', 'processing')
+  );
+
 -- Online Order Items: Anonymous users can create order items
 -- SECURITY: App must set correct tenant_id from subdomain detection
 create policy "public_online_order_items_insert" on online_order_items 
   for insert 
   to anon
+  with check (tenant_id is not null);
+
+-- Online Order Items: Authenticated users can also create order items
+create policy "public_online_order_items_insert_authenticated" on online_order_items 
+  for insert 
+  to authenticated
   with check (tenant_id is not null);
 
 -- Legacy Orders: Anonymous users can create orders (if table is used for POS+online)
@@ -15992,6 +17006,7 @@ begin
   if exists (select 1 from information_schema.tables where table_name = 'orders') then
     execute 'create policy "public_orders_insert" on orders for insert to anon with check (tenant_id is not null)';
   end if;
+exception when duplicate_object then null;
 end $$;
 
 -- Legacy Order Items: Anonymous users can create order items

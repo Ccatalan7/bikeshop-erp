@@ -46,6 +46,7 @@ class Product {
   final double? taxRate;
   final bool isActive;
   final bool isPublished;
+  final bool isGoogleMerchant;
   final ProductType productType;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -96,6 +97,7 @@ class Product {
     this.taxRate,
     this.isActive = true,
     this.isPublished = true,
+    this.isGoogleMerchant = false,
     this.productType = ProductType.product,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -166,6 +168,7 @@ class Product {
           json['show_on_website'] ??
           json['published'] ??
           true,
+      isGoogleMerchant: json['is_google_merchant'] ?? false,
       productType: _parseProductType(json['product_type']),
       createdAt: json['created_at'] == null
           ? DateTime.now()
@@ -237,6 +240,7 @@ class Product {
       'tax_rate': taxRate,
       'is_active': isActive,
       'is_published': isPublished,
+      'is_google_merchant': isGoogleMerchant,
       'show_on_website': isPublished,
       'product_type': productType.name,
       'is_service': isService, // Computed from product_type for DB triggers
@@ -303,6 +307,7 @@ class Product {
     double? taxRate,
     bool? isActive,
     bool? isPublished,
+    bool? isGoogleMerchant,
     ProductType? productType,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -353,6 +358,7 @@ class Product {
       taxRate: taxRate ?? this.taxRate,
       isActive: isActive ?? this.isActive,
       isPublished: isPublished ?? this.isPublished,
+      isGoogleMerchant: isGoogleMerchant ?? this.isGoogleMerchant,
       productType: productType ?? this.productType,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

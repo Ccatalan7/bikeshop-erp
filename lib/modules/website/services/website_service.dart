@@ -135,6 +135,8 @@ class WebsiteService extends ChangeNotifier {
   // WEBSITE BLOCKS (Odoo-style Visual Editor)
   // ============================================================================
 
+  /// Load blocks for the HOME page only (legacy method for Odoo editor)
+  /// This ensures the editor doesn't mix blocks from all pages
   Future<void> loadBlocks() async {
     debugPrint('[WebsiteService] loadBlocks started');
     _isLoading = true;
@@ -150,11 +152,22 @@ class WebsiteService extends ChangeNotifier {
         throw Exception('No tenant_id found');
       }
 
-      debugPrint('[WebsiteService] Querying website_blocks...');
+      // First, find the home page ID
+      String? homePageId;
+      await loadPages(); // Ensure pages are loaded
+      final homePage = _pages.firstWhere(
+        (p) => p.isHome && p.isPublished,
+        orElse: () => _pages.isNotEmpty ? _pages.first : throw Exception('No pages found'),
+      );
+      homePageId = homePage.id;
+      debugPrint('[WebsiteService] Home page ID: $homePageId');
+
+      debugPrint('[WebsiteService] Querying website_blocks for home page only...');
       final response = await _supabase
           .from('website_blocks')
           .select()
           .eq('tenant_id', tenantId) // ✅ Filter by tenant
+          .eq('page_id', homePageId) // ✅ Filter by HOME PAGE ONLY
           .order('order_index', ascending: true);
       debugPrint('[WebsiteService] Query complete, got ${(response as List).length} blocks');
 
@@ -175,17 +188,50 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
-  /// Load blocks for a specific tenant (used by public store for anonymous visitors)
+  /// Load blocks for a specific tenant's HOME PAGE (used by public store for anonymous visitors)
   /// This method does NOT require authentication - it uses the provided tenant_id
   /// from subdomain detection (PublicStoreTenantProvider)
   Future<List<Map<String, dynamic>>> loadBlocksForTenant(String tenantId) async {
-    debugPrint('[WebsiteService] loadBlocksForTenant started for tenant: $tenantId');
-    
     try {
+      // First, find the home page for this tenant
+      final pagesResponse = await _supabase
+          .from('website_pages')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('is_home', true)
+          .eq('is_published', true)
+          .limit(1);
+      
+      String? homePageId;
+      if ((pagesResponse as List).isNotEmpty) {
+        homePageId = pagesResponse[0]['id']?.toString();
+      }
+      
+      // If no home page found, try to get the first published page
+      if (homePageId == null) {
+        final firstPageResponse = await _supabase
+            .from('website_pages')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('is_published', true)
+            .order('created_at', ascending: true)
+            .limit(1);
+        
+        if ((firstPageResponse as List).isNotEmpty) {
+          homePageId = firstPageResponse[0]['id']?.toString();
+        }
+      }
+      
+      if (homePageId == null) {
+        debugPrint('[WebsiteService] No home page found for tenant $tenantId');
+        return [];
+      }
+      
       final response = await _supabase
           .from('website_blocks')
           .select()
           .eq('tenant_id', tenantId)
+          .eq('page_id', homePageId) // ✅ Filter by HOME PAGE ONLY
           .order('order_index', ascending: true);
       
       final data = List<Map<String, dynamic>>.from(response as List);
@@ -197,7 +243,6 @@ class WebsiteService extends ChangeNotifier {
       _blocks = data;
       _safeNotifyListeners();
       
-      debugPrint('[WebsiteService] loadBlocksForTenant complete, got ${data.length} blocks');
       return data;
     } catch (e) {
       debugPrint('[WebsiteService] Error loading blocks for tenant: $e');
@@ -213,11 +258,44 @@ class WebsiteService extends ChangeNotifier {
         throw Exception('No tenant ID found');
       }
 
-      // Delete all existing blocks FOR THIS TENANT ONLY
+      // Find the home page for this tenant (required for page_id)
+      String? homePageId;
+      final pagesResponse = await _supabase
+          .from('website_pages')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('is_home', true)
+          .limit(1);
+      
+      if ((pagesResponse as List).isNotEmpty) {
+        homePageId = pagesResponse[0]['id']?.toString();
+      }
+      
+      // If no home page found, create one
+      if (homePageId == null) {
+        debugPrint('[WebsiteService] No home page found, creating one...');
+        final newPageResponse = await _supabase
+            .from('website_pages')
+            .insert({
+              'tenant_id': tenantId,
+              'slug': 'home',
+              'title': 'Inicio',
+              'is_home': true,
+              'is_published': true,
+              'is_system': true,
+            })
+            .select('id')
+            .single();
+        homePageId = newPageResponse['id']?.toString();
+        debugPrint('[WebsiteService] Created home page with id: $homePageId');
+      }
+
+      // Delete existing blocks FOR THIS TENANT'S HOME PAGE ONLY
       await _supabase
           .from('website_blocks')
           .delete()
-          .eq('tenant_id', tenantId);
+          .eq('tenant_id', tenantId)
+          .eq('page_id', homePageId!);
 
       // Insert new blocks
       if (blocks.isNotEmpty) {
@@ -234,6 +312,7 @@ class WebsiteService extends ChangeNotifier {
           return {
             'id': block['id'],
             'tenant_id': tenantId, // ✅ Add tenant_id for RLS
+            'page_id': homePageId, // ✅ Add page_id for proper loading
             'block_type': blockType,
             'block_data': blockData,
             'is_visible': isVisible,
@@ -299,8 +378,6 @@ class WebsiteService extends ChangeNotifier {
   /// Load featured products for a specific tenant (used by public store for anonymous visitors)
   /// This method does NOT require authentication
   Future<List<FeaturedProduct>> loadFeaturedProductsForTenant(String tenantId) async {
-    debugPrint('[WebsiteService] loadFeaturedProductsForTenant started for tenant: $tenantId');
-    
     try {
       final response = await _supabase
           .from('featured_products')
@@ -315,10 +392,8 @@ class WebsiteService extends ChangeNotifier {
       // Also update internal state
       _featuredProducts = products;
       
-      debugPrint('[WebsiteService] loadFeaturedProductsForTenant complete, got ${products.length} products');
       return products;
     } catch (e) {
-      debugPrint('[WebsiteService] Error loading featured products for tenant: $e');
       return [];
     }
   }
@@ -480,8 +555,6 @@ class WebsiteService extends ChangeNotifier {
   /// Load settings for a specific tenant (used by public store for anonymous visitors)
   /// This method does NOT require authentication
   Future<Map<String, String>> loadSettingsForTenant(String tenantId) async {
-    debugPrint('[WebsiteService] loadSettingsForTenant started for tenant: $tenantId');
-    
     try {
       final response = await _supabase
           .from('website_settings')
@@ -497,10 +570,8 @@ class WebsiteService extends ChangeNotifier {
       _settings = settings;
       _themePresets = _parseThemePresets(_settings['theme_presets']);
       
-      debugPrint('[WebsiteService] loadSettingsForTenant complete, got ${settings.length} settings');
       return settings;
     } catch (e) {
-      debugPrint('[WebsiteService] Error loading settings for tenant: $e');
       return {};
     }
   }
@@ -956,7 +1027,7 @@ class WebsiteService extends ChangeNotifier {
   List<WebsitePage> get pages => _pages;
   List<WebsiteNavigation> get navigation => _navigation;
 
-  /// Load all pages for the current tenant
+  /// Load all pages for the current tenant (requires authentication)
   Future<void> loadPages() async {
     try {
       final tenantId = await _tenantService.getTenantId();
@@ -964,6 +1035,17 @@ class WebsiteService extends ChangeNotifier {
         throw Exception('No tenant_id found');
       }
 
+      await loadPagesForTenant(tenantId);
+    } catch (e) {
+      _error = 'Error al cargar páginas: $e';
+      debugPrint(_error);
+    }
+  }
+
+  /// Load all pages for a specific tenant (public - no auth required)
+  /// Used by public store for anonymous visitors
+  Future<void> loadPagesForTenant(String tenantId) async {
+    try {
       final response = await _supabase
           .from('website_pages')
           .select()
@@ -974,6 +1056,8 @@ class WebsiteService extends ChangeNotifier {
       _pages = (response as List)
           .map((json) => WebsitePage.fromJson(json))
           .toList();
+
+      debugPrint('[WebsiteService] Loaded ${_pages.length} pages for tenant $tenantId');
 
       _safeNotifyListeners();
     } catch (e) {
@@ -1159,17 +1243,21 @@ class WebsiteService extends ChangeNotifier {
   }
 
   /// Load blocks for a specific page
-  Future<List<Map<String, dynamic>>> loadBlocksForPage(String pageId) async {
+  Future<List<Map<String, dynamic>>> loadBlocksForPage(
+    String pageId, {
+    String? tenantId,
+  }) async {
     try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
+      // Allow explicit tenant for public store (anonymous visitors)
+      final effectiveTenantId = tenantId ?? await _tenantService.getTenantId();
+      if (effectiveTenantId == null) {
         throw Exception('No tenant_id found');
       }
 
       final response = await _supabase
           .from('website_blocks')
           .select()
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', effectiveTenantId)
           .eq('page_id', pageId)
           .order('order_index', ascending: true);
 

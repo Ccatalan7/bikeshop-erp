@@ -14,7 +14,6 @@ import '../../../shared/models/product.dart';
 class EditableBlockRenderer {
   const EditableBlockRenderer._();
 
-
   /// Build a block with editing capability
   static Widget build({
     required BuildContext context,
@@ -30,6 +29,7 @@ class EditableBlockRenderer {
     double? bodySize,
     void Function(String route)? onNavigate,
     bool isVisible = true,
+    String? tenantId,
   }) {
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
@@ -38,7 +38,7 @@ class EditableBlockRenderer {
     // If not in edit mode, render normally
     if (!isEditMode) {
       if (!isVisible) return const SizedBox.shrink();
-      
+
       return WebsiteBlockRenderer.build(
         context: context,
         blockType: blockType,
@@ -51,6 +51,7 @@ class EditableBlockRenderer {
         headingSize: headingSize,
         bodySize: bodySize,
         onNavigate: onNavigate,
+        tenantId: tenantId,
       );
     }
 
@@ -69,6 +70,7 @@ class EditableBlockRenderer {
       onNavigate: onNavigate,
       isSelected: isSelected,
       isVisible: isVisible,
+      tenantId: tenantId,
     );
   }
 }
@@ -87,6 +89,7 @@ class _EditableBlockWrapper extends StatefulWidget {
   final void Function(String route)? onNavigate;
   final bool isSelected;
   final bool isVisible;
+  final String? tenantId;
 
   const _EditableBlockWrapper({
     required this.blockId,
@@ -102,6 +105,7 @@ class _EditableBlockWrapper extends StatefulWidget {
     this.onNavigate,
     required this.isSelected,
     required this.isVisible,
+    this.tenantId,
   });
 
   @override
@@ -111,7 +115,8 @@ class _EditableBlockWrapper extends StatefulWidget {
 class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
   final GlobalKey _contentKey = GlobalKey();
   double? _measuredHeight;
-  double? _localDragHeight; // Local height during drag (avoids Provider rebuilds)
+  double?
+      _localDragHeight; // Local height during drag (avoids Provider rebuilds)
   bool _isDragging = false;
 
   @override
@@ -131,7 +136,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
   }
 
   void _measureHeight() {
-    final renderBox = _contentKey.currentContext?.findRenderObject() as RenderBox?;
+    final renderBox =
+        _contentKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox != null && mounted) {
       final height = renderBox.size.height;
       if (height != _measuredHeight) {
@@ -194,21 +200,27 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
 
     // Wrap with selection and action bar
     // Resize handles are INSIDE the Stack so they don't add extra space
+    
     return GestureDetector(
+      behavior: HitTestBehavior.opaque, // Capture taps on empty space too
       onTap: () => editProvider.selectBlock(widget.blockId),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // The block content with visibility opacity and height
-          // When custom height is set, blocks use LayoutBuilder to fill/center internally
+          // The block content with visibility opacity and height constraint
+          // All blocks use ConstrainedBox when there's a custom height (during drag or saved)
+          // Blocks use LayoutBuilder internally to read the constraint for live resize
           Opacity(
             opacity: widget.isVisible ? 1.0 : 0.5,
             child: KeyedSubtree(
               key: _contentKey,
               child: displayHeight != null
-                  ? SizedBox(
-                      height: displayHeight,
-                      width: double.infinity,
+                  ? ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: displayHeight,
+                        maxHeight: displayHeight,
+                        minWidth: double.infinity,
+                      ),
                       child: blockContent,
                     )
                   : blockContent,
@@ -222,7 +234,9 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 duration: const Duration(milliseconds: 200),
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: widget.isSelected ? const Color(0xFF00A09D) : Colors.transparent,
+                    color: widget.isSelected
+                        ? const Color(0xFF00A09D)
+                        : Colors.transparent,
                     width: 2,
                   ),
                 ),
@@ -270,7 +284,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 onMoveDown: () => editProvider.moveBlockDown(widget.blockId),
                 onDuplicate: () => editProvider.duplicateBlock(widget.blockId),
                 onDelete: () => _confirmDelete(context, editProvider),
-                onToggleVisibility: () => editProvider.toggleBlockVisibility(widget.blockId),
+                onToggleVisibility: () =>
+                    editProvider.toggleBlockVisibility(widget.blockId),
               ),
             ),
 
@@ -300,7 +315,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 },
               ),
             ),
-          
+
           // Bottom resize handle - positioned INSIDE the block at bottom edge
           if (widget.isSelected)
             Positioned(
@@ -380,6 +395,22 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         return _buildEditableAbout(context);
       case 'cta':
         return _buildEditableCta(context);
+      case 'features':
+        return _buildEditableFeatures(context);
+      case 'faq':
+        return _buildEditableFaq(context);
+      case 'contact':
+        return _buildEditableContact(context);
+      case 'services':
+        return _buildEditableServices(context);
+      case 'pricing':
+        return _buildEditablePricing(context);
+      case 'testimonials':
+        return _buildEditableTestimonials(context);
+      case 'stats':
+        return _buildEditableStats(context);
+      case 'team':
+        return _buildEditableTeam(context);
       default:
         // Fall back to standard renderer for other types
         return WebsiteBlockRenderer.build(
@@ -395,6 +426,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           headingSize: widget.headingSize,
           bodySize: widget.bodySize,
           onNavigate: widget.onNavigate,
+          tenantId: widget.tenantId,
         );
     }
   }
@@ -428,27 +460,38 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     final showIndicators = (widget.data['showIndicators'] ?? true) == true;
     final showArrows = (widget.data['showArrows'] ?? true) == true;
 
-    return _EditableCarouselWidget(
-      slides: slides,
-      showIndicators: showIndicators,
-      showArrows: showArrows,
-      primaryColor: widget.primaryColor,
-      accentColor: widget.accentColor,
-      headingFont: widget.headingFont,
-      bodyFont: widget.bodyFont,
-      headingSize: widget.headingSize,
-      bodySize: widget.bodySize,
-      blockId: widget.blockId,
-      onSlideUpdated: (index, field, value) {
-        // Update the slide data in the block
-        final updatedSlides = List<Map<String, dynamic>>.from(slides);
-        if (index < updatedSlides.length) {
-          updatedSlides[index] = Map<String, dynamic>.from(updatedSlides[index]);
-          updatedSlides[index][field] = value;
-          editProvider.updateBlockData(widget.blockId, 'slides', updatedSlides);
-        }
+    // Use LayoutBuilder to get live height from parent constraints (for smooth resize)
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final constraintHeight = constraints.maxHeight.isFinite ? constraints.maxHeight : null;
+        final dataHeight = (widget.data['blockHeight'] as num?)?.toDouble();
+        final blockHeight = constraintHeight ?? dataHeight;
+        
+        return _EditableCarouselWidget(
+          slides: slides,
+          showIndicators: showIndicators,
+          showArrows: showArrows,
+          primaryColor: widget.primaryColor,
+          accentColor: widget.accentColor,
+          headingFont: widget.headingFont,
+          bodyFont: widget.bodyFont,
+          headingSize: widget.headingSize,
+          bodySize: widget.bodySize,
+          blockId: widget.blockId,
+          blockHeight: blockHeight,
+          onSlideUpdated: (index, field, value) {
+            // Update the slide data in the block
+            final updatedSlides = List<Map<String, dynamic>>.from(slides);
+            if (index < updatedSlides.length) {
+              updatedSlides[index] =
+                  Map<String, dynamic>.from(updatedSlides[index]);
+              updatedSlides[index][field] = value;
+              editProvider.updateBlockData(widget.blockId, 'slides', updatedSlides);
+            }
+          },
+          onNavigate: widget.onNavigate,
+        );
       },
-      onNavigate: widget.onNavigate,
     );
   }
 
@@ -458,50 +501,66 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
 
     final title = (widget.data['title'] ?? '').toString();
     final subtitle = (widget.data['subtitle'] ?? '').toString();
-    final ctaText = (widget.data['buttonText'] ?? widget.data['ctaText'] ?? 'Ver más').toString();
-    final ctaLink = (widget.data['buttonLink'] ?? widget.data['ctaLink'] ?? '').toString();
+    final ctaText =
+        (widget.data['buttonText'] ?? widget.data['ctaText'] ?? 'Ver más')
+            .toString();
+    final ctaLink =
+        (widget.data['buttonLink'] ?? widget.data['ctaLink'] ?? '').toString();
     final imageUrl = widget.data['backgroundImage']?.toString();
-    
+
     // Get formatting data if saved
     final titleFormatting = TextFormatting.fromJson(
-      widget.data['titleFormatting'] as Map<String, dynamic>?
-    );
+        widget.data['titleFormatting'] as Map<String, dynamic>?);
     final subtitleFormatting = TextFormatting.fromJson(
-      widget.data['subtitleFormatting'] as Map<String, dynamic>?
-    );
+        widget.data['subtitleFormatting'] as Map<String, dynamic>?);
 
-    final headingStyle = (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
-      fontFamily: widget.headingFont?.isNotEmpty == true ? widget.headingFont : null,
+    final headingStyle =
+        (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
+      fontFamily:
+          widget.headingFont?.isNotEmpty == true ? widget.headingFont : null,
       fontSize: widget.headingSize ?? 48,
       color: Colors.white,
     );
 
-    final subtitleStyle = (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
+    final subtitleStyle =
+        (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
       fontFamily: widget.bodyFont?.isNotEmpty == true ? widget.bodyFont : null,
       fontSize: widget.bodySize != null ? widget.bodySize! * 1.2 : 20,
       color: Colors.white70,
     );
 
-    return Container(
-      height: 480,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Background image (editable)
-          InlineEditableImage(
-            imageUrl: imageUrl,
-            fit: BoxFit.cover,
-            isEditMode: true,
-            onChanged: (url) => editProvider.updateBlockData(widget.blockId, 'backgroundImage', url),
-            placeholder: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [widget.primaryColor, widget.accentColor.withValues(alpha: 0.85)],
+    // Use LayoutBuilder to get live height from parent constraints (for smooth resize)
+    // Fall back to widget.data['blockHeight'] or default 480 if no constraints
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final constraintHeight = constraints.maxHeight.isFinite ? constraints.maxHeight : null;
+        final dataHeight = (widget.data['blockHeight'] as num?)?.toDouble();
+        final blockHeight = constraintHeight ?? dataHeight ?? 480.0;
+        
+        return Container(
+          height: blockHeight,
+          width: double.infinity,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Background image (editable)
+              InlineEditableImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.cover,
+                isEditMode: true,
+                onChanged: (url) => editProvider.updateBlockData(
+                    widget.blockId, 'backgroundImage', url),
+                placeholder: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        widget.primaryColor,
+                        widget.accentColor.withValues(alpha: 0.85)
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
 
           // Overlay
           Container(
@@ -533,9 +592,13 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                     placeholder: 'Título Principal',
                     formatting: titleFormatting,
                     fieldKey: '${widget.blockId}_title',
-                    onTextChanged: (value) => editProvider.updateBlockData(widget.blockId, 'title', value),
-                    onFormattingChanged: (formatting) => editProvider.updateBlockData(
-                      widget.blockId, 'titleFormatting', formatting.toJson(),
+                    onTextChanged: (value) => editProvider.updateBlockData(
+                        widget.blockId, 'title', value),
+                    onFormattingChanged: (formatting) =>
+                        editProvider.updateBlockData(
+                      widget.blockId,
+                      'titleFormatting',
+                      formatting.toJson(),
                     ),
                   ),
 
@@ -550,9 +613,13 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                     placeholder: 'Subtítulo descriptivo',
                     formatting: subtitleFormatting,
                     fieldKey: '${widget.blockId}_subtitle',
-                    onTextChanged: (value) => editProvider.updateBlockData(widget.blockId, 'subtitle', value),
-                    onFormattingChanged: (formatting) => editProvider.updateBlockData(
-                      widget.blockId, 'subtitleFormatting', formatting.toJson(),
+                    onTextChanged: (value) => editProvider.updateBlockData(
+                        widget.blockId, 'subtitle', value),
+                    onFormattingChanged: (formatting) =>
+                        editProvider.updateBlockData(
+                      widget.blockId,
+                      'subtitleFormatting',
+                      formatting.toJson(),
                     ),
                   ),
 
@@ -563,11 +630,15 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                     text: ctaText.isEmpty ? 'Ver más' : ctaText,
                     link: ctaLink,
                     backgroundColor: widget.accentColor,
-                    onTextChanged: (value) => editProvider.updateBlockData(widget.blockId, 'buttonText', value),
-                    onLinkChanged: (value) => editProvider.updateBlockData(widget.blockId, 'buttonLink', value),
-                    onNavigate: ctaLink.isNotEmpty ? () {
-                      widget.onNavigate?.call(ctaLink);
-                    } : null,
+                    onTextChanged: (value) => editProvider.updateBlockData(
+                        widget.blockId, 'buttonText', value),
+                    onLinkChanged: (value) => editProvider.updateBlockData(
+                        widget.blockId, 'buttonLink', value),
+                    onNavigate: ctaLink.isNotEmpty
+                        ? () {
+                            widget.onNavigate?.call(ctaLink);
+                          }
+                        : null,
                   ),
                 ],
               ),
@@ -575,6 +646,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           ),
         ],
       ),
+    );
+      },
     );
   }
 
@@ -588,14 +661,14 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
 
     // Get formatting data if saved
     final titleFormatting = TextFormatting.fromJson(
-      widget.data['titleFormatting'] as Map<String, dynamic>?
-    );
+        widget.data['titleFormatting'] as Map<String, dynamic>?);
     final descriptionFormatting = TextFormatting.fromJson(
-      widget.data['descriptionFormatting'] as Map<String, dynamic>?
-    );
+        widget.data['descriptionFormatting'] as Map<String, dynamic>?);
 
-    final headingStyle = (theme.textTheme.headlineMedium ?? const TextStyle()).copyWith(
-      fontFamily: widget.headingFont?.isNotEmpty == true ? widget.headingFont : null,
+    final headingStyle =
+        (theme.textTheme.headlineMedium ?? const TextStyle()).copyWith(
+      fontFamily:
+          widget.headingFont?.isNotEmpty == true ? widget.headingFont : null,
       fontWeight: FontWeight.bold,
     );
 
@@ -604,61 +677,88 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       height: 1.6,
     );
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Image side
-          Expanded(
-            child: InlineEditableImage(
-              imageUrl: imageUrl,
-              height: 400,
-              fit: BoxFit.cover,
-              borderRadius: BorderRadius.circular(16),
-              isEditMode: true,
-              onChanged: (url) => editProvider.updateBlockData(widget.blockId, 'image', url),
+    final content = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Image side
+        Expanded(
+          child: InlineEditableImage(
+            imageUrl: imageUrl,
+            height: 400,
+            fit: BoxFit.cover,
+            borderRadius: BorderRadius.circular(16),
+            isEditMode: true,
+            onChanged: (url) =>
+                editProvider.updateBlockData(widget.blockId, 'image', url),
+          ),
+        ),
+
+        const SizedBox(width: 48),
+
+        // Text side
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InlineEditableTextV2(
+                text: title,
+                baseStyle: headingStyle,
+                isEditMode: true,
+                placeholder: 'Sobre Nosotros',
+                formatting: titleFormatting,
+                fieldKey: '${widget.blockId}_about_title',
+                onTextChanged: (value) =>
+                    editProvider.updateBlockData(widget.blockId, 'title', value),
+                onFormattingChanged: (formatting) =>
+                    editProvider.updateBlockData(
+                  widget.blockId,
+                  'titleFormatting',
+                  formatting.toJson(),
+                ),
+              ),
+              const SizedBox(height: 24),
+              InlineEditableTextV2(
+                text: description,
+                baseStyle: bodyStyle,
+                maxLines: 10,
+                isEditMode: true,
+                placeholder: 'Descripción de tu empresa...',
+                formatting: descriptionFormatting,
+                fieldKey: '${widget.blockId}_about_description',
+                onTextChanged: (value) => editProvider.updateBlockData(
+                    widget.blockId, 'description', value),
+                onFormattingChanged: (formatting) =>
+                    editProvider.updateBlockData(
+                  widget.blockId,
+                  'descriptionFormatting',
+                  formatting.toJson(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+
+        return Container(
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 24)
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: content,
             ),
           ),
-
-          const SizedBox(width: 48),
-
-          // Text side
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                InlineEditableTextV2(
-                  text: title,
-                  baseStyle: headingStyle,
-                  isEditMode: true,
-                  placeholder: 'Sobre Nosotros',
-                  formatting: titleFormatting,
-                  fieldKey: '${widget.blockId}_about_title',
-                  onTextChanged: (value) => editProvider.updateBlockData(widget.blockId, 'title', value),
-                  onFormattingChanged: (formatting) => editProvider.updateBlockData(
-                    widget.blockId, 'titleFormatting', formatting.toJson(),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                InlineEditableTextV2(
-                  text: description,
-                  baseStyle: bodyStyle,
-                  maxLines: 10,
-                  isEditMode: true,
-                  placeholder: 'Descripción de tu empresa...',
-                  formatting: descriptionFormatting,
-                  fieldKey: '${widget.blockId}_about_description',
-                  onTextChanged: (value) => editProvider.updateBlockData(widget.blockId, 'description', value),
-                  onFormattingChanged: (formatting) => editProvider.updateBlockData(
-                    widget.blockId, 'descriptionFormatting', formatting.toJson(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -673,14 +773,14 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
 
     // Get formatting data if saved
     final titleFormatting = TextFormatting.fromJson(
-      widget.data['titleFormatting'] as Map<String, dynamic>?
-    );
+        widget.data['titleFormatting'] as Map<String, dynamic>?);
     final descriptionFormatting = TextFormatting.fromJson(
-      widget.data['descriptionFormatting'] as Map<String, dynamic>?
-    );
+        widget.data['descriptionFormatting'] as Map<String, dynamic>?);
 
-    final headingStyle = (theme.textTheme.headlineMedium ?? const TextStyle()).copyWith(
-      fontFamily: widget.headingFont?.isNotEmpty == true ? widget.headingFont : null,
+    final headingStyle =
+        (theme.textTheme.headlineMedium ?? const TextStyle()).copyWith(
+      fontFamily:
+          widget.headingFont?.isNotEmpty == true ? widget.headingFont : null,
       fontWeight: FontWeight.bold,
       color: Colors.white,
     );
@@ -690,26 +790,23 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       color: Colors.white70,
     );
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [widget.primaryColor, widget.accentColor],
-        ),
-      ),
-      child: Column(
-        children: [
-          InlineEditableTextV2(
-            text: title,
-            baseStyle: headingStyle,
-            textAlign: TextAlign.center,
-            isEditMode: true,
-            placeholder: 'Llamado a la Acción',
-            formatting: titleFormatting,
-            fieldKey: '${widget.blockId}_cta_title',
-            onTextChanged: (value) => editProvider.updateBlockData(widget.blockId, 'title', value),
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InlineEditableTextV2(
+          text: title,
+          baseStyle: headingStyle,
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Llamado a la Acción',
+          formatting: titleFormatting,
+          fieldKey: '${widget.blockId}_cta_title',
+            onTextChanged: (value) =>
+                editProvider.updateBlockData(widget.blockId, 'title', value),
             onFormattingChanged: (formatting) => editProvider.updateBlockData(
-              widget.blockId, 'titleFormatting', formatting.toJson(),
+              widget.blockId,
+              'titleFormatting',
+              formatting.toJson(),
             ),
           ),
           const SizedBox(height: 16),
@@ -721,9 +818,12 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
             placeholder: 'Descripción del llamado a la acción',
             formatting: descriptionFormatting,
             fieldKey: '${widget.blockId}_cta_description',
-            onTextChanged: (value) => editProvider.updateBlockData(widget.blockId, 'description', value),
+            onTextChanged: (value) => editProvider.updateBlockData(
+                widget.blockId, 'description', value),
             onFormattingChanged: (formatting) => editProvider.updateBlockData(
-              widget.blockId, 'descriptionFormatting', formatting.toJson(),
+              widget.blockId,
+              'descriptionFormatting',
+              formatting.toJson(),
             ),
           ),
           const SizedBox(height: 32),
@@ -731,24 +831,1602 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
             text: buttonText.isEmpty ? 'Contactar' : buttonText,
             link: buttonLink,
             backgroundColor: Colors.white,
-            foregroundColor: widget.primaryColor, // Text matches CTA gradient color
-            onTextChanged: (value) => editProvider.updateBlockData(widget.blockId, 'buttonText', value),
-            onLinkChanged: (value) => editProvider.updateBlockData(widget.blockId, 'buttonLink', value),
-            onNavigate: buttonLink.isNotEmpty ? () {
-              widget.onNavigate?.call(buttonLink);
-            } : null,
+            foregroundColor:
+                widget.primaryColor, // Text matches CTA gradient color
+            onTextChanged: (value) => editProvider.updateBlockData(
+                widget.blockId, 'buttonText', value),
+            onLinkChanged: (value) => editProvider.updateBlockData(
+                widget.blockId, 'buttonLink', value),
+            onNavigate: buttonLink.isNotEmpty
+                ? () {
+                    widget.onNavigate?.call(buttonLink);
+                  }
+              : null,
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+        return Container(
+          width: double.infinity,
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 24)
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [widget.primaryColor, widget.accentColor],
+            ),
+          ),
+          child: Center(child: content),
+        );
+      },
+    );
+  }
+
+  /// Editable Features block
+  Widget _buildEditableFeatures(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final theme = Theme.of(context);
+
+    final title = (widget.data['title'] ?? 'Características').toString();
+    final subtitle = (widget.data['subtitle'] ?? '').toString();
+    final rawFeatures = widget.data['features'] ?? widget.data['items'];
+
+    List<Map<String, dynamic>> features = [];
+    if (rawFeatures is List) {
+      features = rawFeatures
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+
+    if (features.isEmpty) {
+      features = [
+        {
+          'icon': 'check_circle',
+          'title': 'Característica 1',
+          'description': 'Descripción de la característica'
+        },
+        {
+          'icon': 'check_circle',
+          'title': 'Característica 2',
+          'description': 'Descripción de la característica'
+        },
+        {
+          'icon': 'check_circle',
+          'title': 'Característica 3',
+          'description': 'Descripción de la característica'
+        },
+      ];
+    }
+
+    final headingStyle =
+        (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
+      fontFamily: widget.headingFont,
+    );
+
+    final bodyStyle = (theme.textTheme.bodyLarge ?? const TextStyle()).copyWith(
+      fontFamily: widget.bodyFont,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InlineEditableTextV2(
+          text: title,
+          baseStyle: headingStyle,
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Título de características',
+          fieldKey: '${widget.blockId}_features_title',
+                onTextChanged: (value) => editProvider.updateBlockData(
+                    widget.blockId, 'title', value),
+              ),
+              const SizedBox(height: 12),
+              InlineEditableTextV2(
+                text: subtitle,
+                baseStyle: bodyStyle,
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Subtítulo opcional',
+                fieldKey: '${widget.blockId}_features_subtitle',
+                onTextChanged: (value) => editProvider.updateBlockData(
+                    widget.blockId, 'subtitle', value),
+              ),
+              const SizedBox(height: 48),
+              Wrap(
+                spacing: 32,
+                runSpacing: 32,
+                alignment: WrapAlignment.center,
+                children: features.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final feature = entry.value;
+                  return _buildEditableFeatureCard(
+                    context,
+                    feature,
+                    index,
+                    features,
+                    editProvider,
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+              TextButton.icon(
+                onPressed: () {
+                  final newFeatures = List<Map<String, dynamic>>.from(features);
+                  newFeatures.add({
+                    'icon': 'check_circle',
+                    'title': 'Nueva Característica',
+                    'description': 'Descripción de la característica',
+                  });
+                  editProvider.updateBlockData(
+                      widget.blockId, 'features', newFeatures);
+                },
+                icon: const Icon(Icons.add),
+          label: const Text('Agregar característica'),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+        return Container(
+          width: double.infinity,
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 24)
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: content,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEditableFeatureCard(
+    BuildContext context,
+    Map<String, dynamic> feature,
+    int index,
+    List<Map<String, dynamic>> allFeatures,
+    WebsiteEditModeProvider editProvider,
+  ) {
+    final theme = Theme.of(context);
+    final featureTitle = (feature['title'] ?? '').toString();
+    final featureDesc = (feature['description'] ?? '').toString();
+
+    return Container(
+      width: 300,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: widget.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.check_circle,
+                    color: widget.primaryColor, size: 32),
+              ),
+              const SizedBox(height: 16),
+              InlineEditableTextV2(
+                text: featureTitle,
+                baseStyle: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Título',
+                fieldKey: '${widget.blockId}_feature_${index}_title',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allFeatures);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['title'] = value;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'features', updated);
+                },
+              ),
+              const SizedBox(height: 8),
+              InlineEditableTextV2(
+                text: featureDesc,
+                baseStyle: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Descripción',
+                fieldKey: '${widget.blockId}_feature_${index}_desc',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allFeatures);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['description'] = value;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'features', updated);
+                },
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () {
+                final updated = List<Map<String, dynamic>>.from(allFeatures);
+                updated.removeAt(index);
+                editProvider.updateBlockData(
+                    widget.blockId, 'features', updated);
+              },
+              tooltip: 'Eliminar',
+            ),
           ),
         ],
       ),
     );
   }
 
-  void _confirmDelete(BuildContext context, WebsiteEditModeProvider editProvider) {
+  /// Editable FAQ block
+  Widget _buildEditableFaq(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final theme = Theme.of(context);
+
+    final title = (widget.data['title'] ?? 'Preguntas Frecuentes').toString();
+    final subtitle = (widget.data['subtitle'] ?? '').toString();
+    final rawItems = widget.data['items'];
+
+    List<Map<String, dynamic>> items = [];
+    if (rawItems is List) {
+      items = rawItems
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+
+    if (items.isEmpty) {
+      items = [
+        {'question': '¿Pregunta de ejemplo?', 'answer': 'Respuesta de ejemplo'},
+      ];
+    }
+
+    final headingStyle =
+        (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
+      fontFamily: widget.headingFont,
+    );
+
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InlineEditableTextV2(
+          text: title,
+          baseStyle: headingStyle,
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Título de FAQ',
+          fieldKey: '${widget.blockId}_faq_title',
+          onTextChanged: (value) => editProvider.updateBlockData(
+              widget.blockId, 'title', value),
+        ),
+        const SizedBox(height: 12),
+        InlineEditableTextV2(
+          text: subtitle,
+          baseStyle: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Subtítulo opcional',
+          fieldKey: '${widget.blockId}_faq_subtitle',
+          onTextChanged: (value) => editProvider.updateBlockData(
+              widget.blockId, 'subtitle', value),
+        ),
+        const SizedBox(height: 32),
+        ...items.asMap().entries.map((entry) {
+          final index = entry.key;
+          final item = entry.value;
+          return _buildEditableFaqItem(
+              context, item, index, items, editProvider);
+        }),
+        const SizedBox(height: 24),
+        TextButton.icon(
+          onPressed: () {
+            final newItems = List<Map<String, dynamic>>.from(items);
+            newItems.add({
+              'question': 'Nueva pregunta',
+              'answer': 'Respuesta a la pregunta',
+            });
+            editProvider.updateBlockData(
+                widget.blockId, 'items', newItems);
+          },
+          icon: const Icon(Icons.add),
+          label: const Text('Agregar pregunta'),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+        return Container(
+          width: double.infinity,
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 24)
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: content,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEditableFaqItem(
+    BuildContext context,
+    Map<String, dynamic> item,
+    int index,
+    List<Map<String, dynamic>> allItems,
+    WebsiteEditModeProvider editProvider,
+  ) {
+    final theme = Theme.of(context);
+    final question = (item['question'] ?? '').toString();
+    final answer = (item['answer'] ?? '').toString();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          iconColor: widget.primaryColor,
+          collapsedIconColor: widget.primaryColor,
+          initiallyExpanded: true,
+          title: Row(
+            children: [
+              Expanded(
+                child: InlineEditableTextV2(
+                  text: question,
+                  baseStyle: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                  isEditMode: true,
+                  placeholder: 'Pregunta',
+                  fieldKey: '${widget.blockId}_faq_${index}_question',
+                  onTextChanged: (value) {
+                    final updated = List<Map<String, dynamic>>.from(allItems);
+                    updated[index] = Map<String, dynamic>.from(updated[index]);
+                    updated[index]['question'] = value;
+                    editProvider.updateBlockData(
+                        widget.blockId, 'items', updated);
+                  },
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () {
+                  final updated = List<Map<String, dynamic>>.from(allItems);
+                  updated.removeAt(index);
+                  editProvider.updateBlockData(
+                      widget.blockId, 'items', updated);
+                },
+                tooltip: 'Eliminar',
+              ),
+            ],
+          ),
+          childrenPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          children: [
+            InlineEditableTextV2(
+              text: answer,
+              baseStyle: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              isEditMode: true,
+              placeholder: 'Respuesta',
+              fieldKey: '${widget.blockId}_faq_${index}_answer',
+              onTextChanged: (value) {
+                final updated = List<Map<String, dynamic>>.from(allItems);
+                updated[index] = Map<String, dynamic>.from(updated[index]);
+                updated[index]['answer'] = value;
+                editProvider.updateBlockData(widget.blockId, 'items', updated);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Editable Contact block
+  Widget _buildEditableContact(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final theme = Theme.of(context);
+
+    final title = (widget.data['title'] ?? 'Contáctanos').toString();
+    final subtitle = (widget.data['subtitle'] ?? '').toString();
+    final buttonText = (widget.data['buttonText'] ?? 'Enviar').toString();
+
+    final headingStyle =
+        (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
+      fontFamily: widget.headingFont,
+    );
+
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InlineEditableTextV2(
+          text: title,
+          baseStyle: headingStyle,
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Título de contacto',
+          fieldKey: '${widget.blockId}_contact_title',
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'title', value),
+        ),
+        const SizedBox(height: 12),
+        InlineEditableTextV2(
+          text: subtitle,
+          baseStyle: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Subtítulo o descripción',
+          fieldKey: '${widget.blockId}_contact_subtitle',
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'subtitle', value),
+        ),
+        const SizedBox(height: 32),
+        // Preview form (non-functional in editor)
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                enabled: false,
+                decoration: InputDecoration(
+                  labelText: 'Nombre',
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                enabled: false,
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                enabled: false,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: 'Mensaje',
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: _EditableButton(
+                  text: buttonText,
+                  link: '',
+                  backgroundColor: widget.primaryColor,
+                  foregroundColor: Colors.white,
+                  onTextChanged: (value) => editProvider.updateBlockData(
+                      widget.blockId, 'buttonText', value),
+                  onLinkChanged: (_) {},
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+
+        return Container(
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 24)
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          color: Colors.grey.shade50,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: content,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Editable Services block
+  Widget _buildEditableServices(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final theme = Theme.of(context);
+
+    final title = (widget.data['title'] ?? 'Nuestros Servicios').toString();
+    final subtitle = (widget.data['subtitle'] ?? '').toString();
+    final rawServices = widget.data['services'] ?? widget.data['items'];
+
+    List<Map<String, dynamic>> services = [];
+    if (rawServices is List) {
+      services = rawServices
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+
+    if (services.isEmpty) {
+      services = [
+        {
+          'icon': 'build',
+          'title': 'Servicio 1',
+          'description': 'Descripción del servicio'
+        },
+        {
+          'icon': 'build',
+          'title': 'Servicio 2',
+          'description': 'Descripción del servicio'
+        },
+        {
+          'icon': 'build',
+          'title': 'Servicio 3',
+          'description': 'Descripción del servicio'
+        },
+      ];
+    }
+
+    final headingStyle =
+        (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
+      fontFamily: widget.headingFont,
+    );
+
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InlineEditableTextV2(
+          text: title,
+          baseStyle: headingStyle,
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Título de servicios',
+          fieldKey: '${widget.blockId}_services_title',
+          onTextChanged: (value) => editProvider.updateBlockData(
+              widget.blockId, 'title', value),
+        ),
+        const SizedBox(height: 12),
+        InlineEditableTextV2(
+          text: subtitle,
+          baseStyle: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Subtítulo opcional',
+          fieldKey: '${widget.blockId}_services_subtitle',
+          onTextChanged: (value) => editProvider.updateBlockData(
+              widget.blockId, 'subtitle', value),
+        ),
+        const SizedBox(height: 48),
+        Wrap(
+          spacing: 24,
+          runSpacing: 24,
+          alignment: WrapAlignment.center,
+          children: services.asMap().entries.map((entry) {
+            final index = entry.key;
+            final service = entry.value;
+            return _buildEditableServiceCard(
+                context, service, index, services, editProvider);
+          }).toList(),
+        ),
+        const SizedBox(height: 24),
+        TextButton.icon(
+          onPressed: () {
+            final newServices = List<Map<String, dynamic>>.from(services);
+            newServices.add({
+              'icon': 'build',
+              'title': 'Nuevo Servicio',
+              'description': 'Descripción del servicio',
+            });
+            editProvider.updateBlockData(
+                widget.blockId, 'services', newServices);
+          },
+          icon: const Icon(Icons.add),
+          label: const Text('Agregar servicio'),
+        ),
+      ],
+    );
+
+    // Use LayoutBuilder to center vertically when height is constrained
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+        
+        return Container(
+          width: double.infinity,
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight 
+              ? const EdgeInsets.symmetric(horizontal: 24) 
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: content,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEditableServiceCard(
+    BuildContext context,
+    Map<String, dynamic> service,
+    int index,
+    List<Map<String, dynamic>> allServices,
+    WebsiteEditModeProvider editProvider,
+  ) {
+    final theme = Theme.of(context);
+    final serviceTitle = (service['title'] ?? '').toString();
+    final serviceDesc = (service['description'] ?? '').toString();
+
+    return Container(
+      width: 320,
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: widget.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.build, color: widget.primaryColor, size: 36),
+              ),
+              const SizedBox(height: 20),
+              InlineEditableTextV2(
+                text: serviceTitle,
+                baseStyle: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Nombre del servicio',
+                fieldKey: '${widget.blockId}_service_${index}_title',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allServices);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['title'] = value;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'services', updated);
+                },
+              ),
+              const SizedBox(height: 12),
+              InlineEditableTextV2(
+                text: serviceDesc,
+                baseStyle: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Descripción',
+                fieldKey: '${widget.blockId}_service_${index}_desc',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allServices);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['description'] = value;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'services', updated);
+                },
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () {
+                final updated = List<Map<String, dynamic>>.from(allServices);
+                updated.removeAt(index);
+                editProvider.updateBlockData(
+                    widget.blockId, 'services', updated);
+              },
+              tooltip: 'Eliminar',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Editable Pricing block
+  Widget _buildEditablePricing(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final theme = Theme.of(context);
+
+    final title = (widget.data['title'] ?? 'Precios').toString();
+    final subtitle = (widget.data['subtitle'] ?? '').toString();
+    final rawPlans = widget.data['plans'] ?? widget.data['items'];
+
+    List<Map<String, dynamic>> plans = [];
+    if (rawPlans is List) {
+      plans = rawPlans
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+
+    if (plans.isEmpty) {
+      plans = [
+        {
+          'name': 'Básico',
+          'price': '\$9.990',
+          'description': 'Ideal para empezar',
+          'features': ['Feature 1', 'Feature 2']
+        },
+        {
+          'name': 'Pro',
+          'price': '\$19.990',
+          'description': 'El más popular',
+          'features': ['Feature 1', 'Feature 2', 'Feature 3'],
+          'highlighted': true
+        },
+      ];
+    }
+
+    final headingStyle =
+        (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
+      fontFamily: widget.headingFont,
+    );
+
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InlineEditableTextV2(
+          text: title,
+          baseStyle: headingStyle,
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Título de precios',
+          fieldKey: '${widget.blockId}_pricing_title',
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'title', value),
+        ),
+        const SizedBox(height: 12),
+        InlineEditableTextV2(
+          text: subtitle,
+          baseStyle: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Subtítulo opcional',
+          fieldKey: '${widget.blockId}_pricing_subtitle',
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'subtitle', value),
+        ),
+        const SizedBox(height: 48),
+        Wrap(
+          spacing: 24,
+          runSpacing: 24,
+          alignment: WrapAlignment.center,
+          children: plans.asMap().entries.map((entry) {
+            final index = entry.key;
+            final plan = entry.value;
+            return _buildEditablePricingCard(
+                context, plan, index, plans, editProvider);
+          }).toList(),
+        ),
+        const SizedBox(height: 24),
+        TextButton.icon(
+          onPressed: () {
+            final newPlans = List<Map<String, dynamic>>.from(plans);
+            newPlans.add({
+              'name': 'Nuevo Plan',
+              'price': '\$0',
+              'description': 'Descripción del plan',
+              'features': ['Característica 1'],
+            });
+            editProvider.updateBlockData(widget.blockId, 'plans', newPlans);
+          },
+          icon: const Icon(Icons.add),
+          label: const Text('Agregar plan'),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+
+        return Container(
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 24)
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: content,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEditablePricingCard(
+    BuildContext context,
+    Map<String, dynamic> plan,
+    int index,
+    List<Map<String, dynamic>> allPlans,
+    WebsiteEditModeProvider editProvider,
+  ) {
+    final theme = Theme.of(context);
+    final name = (plan['name'] ?? '').toString();
+    final price = (plan['price'] ?? '').toString();
+    final description = (plan['description'] ?? '').toString();
+    final isHighlighted = plan['highlighted'] == true;
+
+    return Container(
+      width: 300,
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: isHighlighted ? widget.primaryColor : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isHighlighted ? widget.primaryColor : Colors.grey.shade200,
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isHighlighted ? 0.1 : 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              InlineEditableTextV2(
+                text: name,
+                baseStyle: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: isHighlighted ? Colors.white : null,
+                ),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Nombre del plan',
+                fieldKey: '${widget.blockId}_plan_${index}_name',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allPlans);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['name'] = value;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'plans', updated);
+                },
+              ),
+              const SizedBox(height: 12),
+              InlineEditableTextV2(
+                text: price,
+                baseStyle: theme.textTheme.displaySmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: isHighlighted ? Colors.white : widget.primaryColor,
+                ),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: '\$0',
+                fieldKey: '${widget.blockId}_plan_${index}_price',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allPlans);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['price'] = value;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'plans', updated);
+                },
+              ),
+              const SizedBox(height: 8),
+              InlineEditableTextV2(
+                text: description,
+                baseStyle: theme.textTheme.bodyMedium?.copyWith(
+                  color: isHighlighted
+                      ? Colors.white70
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Descripción',
+                fieldKey: '${widget.blockId}_plan_${index}_desc',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allPlans);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['description'] = value;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'plans', updated);
+                },
+              ),
+              const SizedBox(height: 16),
+              // Toggle highlight
+              TextButton(
+                onPressed: () {
+                  final updated = List<Map<String, dynamic>>.from(allPlans);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['highlighted'] = !isHighlighted;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'plans', updated);
+                },
+                child: Text(
+                  isHighlighted ? 'Quitar destacado' : 'Destacar plan',
+                  style: TextStyle(
+                    color: isHighlighted ? Colors.white70 : widget.primaryColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: IconButton(
+              icon: Icon(Icons.close,
+                  size: 18, color: isHighlighted ? Colors.white : null),
+              onPressed: () {
+                final updated = List<Map<String, dynamic>>.from(allPlans);
+                updated.removeAt(index);
+                editProvider.updateBlockData(widget.blockId, 'plans', updated);
+              },
+              tooltip: 'Eliminar',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Editable Testimonials block
+  Widget _buildEditableTestimonials(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final theme = Theme.of(context);
+
+    final title =
+        (widget.data['title'] ?? 'Lo que dicen nuestros clientes').toString();
+    final subtitle = (widget.data['subtitle'] ?? '').toString();
+    final rawItems = widget.data['testimonials'] ?? widget.data['items'];
+
+    List<Map<String, dynamic>> items = [];
+    if (rawItems is List) {
+      items = rawItems
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+
+    if (items.isEmpty) {
+      items = [
+        {
+          'name': 'Cliente 1',
+          'role': 'Cargo',
+          'quote': 'Excelente servicio y atención al cliente.'
+        },
+      ];
+    }
+
+    final headingStyle =
+        (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
+      fontFamily: widget.headingFont,
+    );
+
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InlineEditableTextV2(
+          text: title,
+          baseStyle: headingStyle,
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Título de testimonios',
+          fieldKey: '${widget.blockId}_testimonials_title',
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'title', value),
+        ),
+        const SizedBox(height: 12),
+        InlineEditableTextV2(
+          text: subtitle,
+          baseStyle: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Subtítulo opcional',
+          fieldKey: '${widget.blockId}_testimonials_subtitle',
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'subtitle', value),
+        ),
+        const SizedBox(height: 48),
+        Wrap(
+          spacing: 24,
+          runSpacing: 24,
+          alignment: WrapAlignment.center,
+          children: items.asMap().entries.map((entry) {
+            final index = entry.key;
+            final item = entry.value;
+            return _buildEditableTestimonialCard(
+                context, item, index, items, editProvider);
+          }).toList(),
+        ),
+        const SizedBox(height: 24),
+        TextButton.icon(
+          onPressed: () {
+            final newItems = List<Map<String, dynamic>>.from(items);
+            newItems.add({
+              'name': 'Nuevo Cliente',
+              'role': 'Cargo',
+              'quote': 'Su testimonio aquí...',
+            });
+            editProvider.updateBlockData(
+                widget.blockId, 'testimonials', newItems);
+          },
+          icon: const Icon(Icons.add),
+          label: const Text('Agregar testimonio'),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+
+        return Container(
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 24)
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          color: Colors.grey.shade50,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: content,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEditableTestimonialCard(
+    BuildContext context,
+    Map<String, dynamic> item,
+    int index,
+    List<Map<String, dynamic>> allItems,
+    WebsiteEditModeProvider editProvider,
+  ) {
+    final theme = Theme.of(context);
+    final name = (item['name'] ?? '').toString();
+    final role = (item['role'] ?? '').toString();
+    final quote = (item['quote'] ?? '').toString();
+
+    return Container(
+      width: 350,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              Icon(Icons.format_quote, color: widget.primaryColor, size: 36),
+              const SizedBox(height: 16),
+              InlineEditableTextV2(
+                text: quote,
+                baseStyle: theme.textTheme.bodyLarge?.copyWith(
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Testimonio del cliente',
+                fieldKey: '${widget.blockId}_testimonial_${index}_quote',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allItems);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['quote'] = value;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'testimonials', updated);
+                },
+              ),
+              const SizedBox(height: 16),
+              InlineEditableTextV2(
+                text: name,
+                baseStyle: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Nombre',
+                fieldKey: '${widget.blockId}_testimonial_${index}_name',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allItems);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['name'] = value;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'testimonials', updated);
+                },
+              ),
+              const SizedBox(height: 4),
+              InlineEditableTextV2(
+                text: role,
+                baseStyle: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Cargo o título',
+                fieldKey: '${widget.blockId}_testimonial_${index}_role',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allItems);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['role'] = value;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'testimonials', updated);
+                },
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () {
+                final updated = List<Map<String, dynamic>>.from(allItems);
+                updated.removeAt(index);
+                editProvider.updateBlockData(
+                    widget.blockId, 'testimonials', updated);
+              },
+              tooltip: 'Eliminar',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Editable Stats block
+  Widget _buildEditableStats(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final theme = Theme.of(context);
+
+    final title = (widget.data['title'] ?? '').toString();
+    final rawStats = widget.data['stats'] ?? widget.data['items'];
+
+    List<Map<String, dynamic>> stats = [];
+    if (rawStats is List) {
+      stats = rawStats
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+
+    if (stats.isEmpty) {
+      stats = [
+        {'value': '100+', 'label': 'Clientes Satisfechos'},
+        {'value': '500+', 'label': 'Proyectos Completados'},
+        {'value': '10+', 'label': 'Años de Experiencia'},
+      ];
+    }
+
+    final headingStyle =
+        (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
+      fontFamily: widget.headingFont,
+    );
+
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (title.isNotEmpty || true)
+          InlineEditableTextV2(
+            text: title,
+            baseStyle: headingStyle.copyWith(color: Colors.white),
+            textAlign: TextAlign.center,
+            isEditMode: true,
+            placeholder: 'Título opcional',
+            fieldKey: '${widget.blockId}_stats_title',
+            onTextChanged: (value) =>
+                editProvider.updateBlockData(widget.blockId, 'title', value),
+          ),
+        const SizedBox(height: 48),
+        Wrap(
+          spacing: 48,
+          runSpacing: 32,
+          alignment: WrapAlignment.center,
+          children: stats.asMap().entries.map((entry) {
+            final index = entry.key;
+            final stat = entry.value;
+            return _buildEditableStatItem(
+                context, stat, index, stats, editProvider);
+          }).toList(),
+        ),
+        const SizedBox(height: 24),
+        TextButton.icon(
+          onPressed: () {
+            final newStats = List<Map<String, dynamic>>.from(stats);
+            newStats.add({
+              'value': '0+',
+              'label': 'Nueva Estadística',
+            });
+            editProvider.updateBlockData(widget.blockId, 'stats', newStats);
+          },
+          icon: const Icon(Icons.add, color: Colors.white70),
+          label: const Text('Agregar estadística',
+              style: TextStyle(color: Colors.white70)),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+
+        return Container(
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 24)
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          color: widget.primaryColor,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: content,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEditableStatItem(
+    BuildContext context,
+    Map<String, dynamic> stat,
+    int index,
+    List<Map<String, dynamic>> allStats,
+    WebsiteEditModeProvider editProvider,
+  ) {
+    final theme = Theme.of(context);
+    final value = (stat['value'] ?? '').toString();
+    final label = (stat['label'] ?? '').toString();
+
+    return Container(
+      width: 200,
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              InlineEditableTextV2(
+                text: value,
+                baseStyle: theme.textTheme.displayMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: '0+',
+                fieldKey: '${widget.blockId}_stat_${index}_value',
+                onTextChanged: (val) {
+                  final updated = List<Map<String, dynamic>>.from(allStats);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['value'] = val;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'stats', updated);
+                },
+              ),
+              const SizedBox(height: 8),
+              InlineEditableTextV2(
+                text: label,
+                baseStyle:
+                    theme.textTheme.bodyLarge?.copyWith(color: Colors.white70),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Etiqueta',
+                fieldKey: '${widget.blockId}_stat_${index}_label',
+                onTextChanged: (val) {
+                  final updated = List<Map<String, dynamic>>.from(allStats);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['label'] = val;
+                  editProvider.updateBlockData(
+                      widget.blockId, 'stats', updated);
+                },
+              ),
+            ],
+          ),
+          Positioned(
+            top: -8,
+            right: 0,
+            child: IconButton(
+              icon: const Icon(Icons.close, size: 18, color: Colors.white70),
+              onPressed: () {
+                final updated = List<Map<String, dynamic>>.from(allStats);
+                updated.removeAt(index);
+                editProvider.updateBlockData(widget.blockId, 'stats', updated);
+              },
+              tooltip: 'Eliminar',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Editable Team block
+  Widget _buildEditableTeam(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final theme = Theme.of(context);
+
+    final title = (widget.data['title'] ?? 'Nuestro Equipo').toString();
+    final subtitle = (widget.data['subtitle'] ?? '').toString();
+    final rawMembers =
+        widget.data['team'] ?? widget.data['members'] ?? widget.data['items'];
+
+    List<Map<String, dynamic>> members = [];
+    if (rawMembers is List) {
+      members = rawMembers
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+
+    if (members.isEmpty) {
+      members = [
+        {'name': 'Nombre', 'role': 'Cargo', 'image': null},
+      ];
+    }
+
+    final headingStyle =
+        (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
+      fontFamily: widget.headingFont,
+    );
+
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InlineEditableTextV2(
+          text: title,
+          baseStyle: headingStyle,
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Título del equipo',
+          fieldKey: '${widget.blockId}_team_title',
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'title', value),
+        ),
+        const SizedBox(height: 12),
+        InlineEditableTextV2(
+          text: subtitle,
+          baseStyle: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Subtítulo opcional',
+          fieldKey: '${widget.blockId}_team_subtitle',
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'subtitle', value),
+        ),
+        const SizedBox(height: 48),
+        Wrap(
+          spacing: 32,
+          runSpacing: 32,
+          alignment: WrapAlignment.center,
+          children: members.asMap().entries.map((entry) {
+            final index = entry.key;
+            final member = entry.value;
+            return _buildEditableTeamCard(
+                context, member, index, members, editProvider);
+          }).toList(),
+        ),
+        const SizedBox(height: 24),
+        TextButton.icon(
+          onPressed: () {
+            final newMembers = List<Map<String, dynamic>>.from(members);
+            newMembers.add({
+              'name': 'Nuevo Miembro',
+              'role': 'Cargo',
+              'image': null,
+            });
+            editProvider.updateBlockData(widget.blockId, 'team', newMembers);
+          },
+          icon: const Icon(Icons.add),
+          label: const Text('Agregar miembro'),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+
+        return Container(
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 24)
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: content,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEditableTeamCard(
+    BuildContext context,
+    Map<String, dynamic> member,
+    int index,
+    List<Map<String, dynamic>> allMembers,
+    WebsiteEditModeProvider editProvider,
+  ) {
+    final theme = Theme.of(context);
+    final name = (member['name'] ?? '').toString();
+    final role = (member['role'] ?? '').toString();
+
+    return Container(
+      width: 250,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              CircleAvatar(
+                radius: 48,
+                backgroundColor: widget.primaryColor.withValues(alpha: 0.1),
+                child: Icon(Icons.person, size: 48, color: widget.primaryColor),
+              ),
+              const SizedBox(height: 16),
+              InlineEditableTextV2(
+                text: name,
+                baseStyle: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Nombre',
+                fieldKey: '${widget.blockId}_team_${index}_name',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allMembers);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['name'] = value;
+                  editProvider.updateBlockData(widget.blockId, 'team', updated);
+                },
+              ),
+              const SizedBox(height: 4),
+              InlineEditableTextV2(
+                text: role,
+                baseStyle: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+                isEditMode: true,
+                placeholder: 'Cargo',
+                fieldKey: '${widget.blockId}_team_${index}_role',
+                onTextChanged: (value) {
+                  final updated = List<Map<String, dynamic>>.from(allMembers);
+                  updated[index] = Map<String, dynamic>.from(updated[index]);
+                  updated[index]['role'] = value;
+                  editProvider.updateBlockData(widget.blockId, 'team', updated);
+                },
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () {
+                final updated = List<Map<String, dynamic>>.from(allMembers);
+                updated.removeAt(index);
+                editProvider.updateBlockData(widget.blockId, 'team', updated);
+              },
+              tooltip: 'Eliminar',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(
+      BuildContext context, WebsiteEditModeProvider editProvider) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar Bloque'),
-        content: const Text('¿Estás seguro de que deseas eliminar este bloque?'),
+        content:
+            const Text('¿Estás seguro de que deseas eliminar este bloque?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -800,15 +2478,15 @@ class _EditableButtonState extends State<_EditableButton> {
   late TextEditingController _linkController;
   final FocusNode _textFocus = FocusNode();
   final FocusNode _linkFocus = FocusNode();
-  
+
   Color get _textColor {
     // If foreground color specified, use it; otherwise, compute based on background brightness
     if (widget.foregroundColor != null) return widget.foregroundColor!;
-    return widget.backgroundColor.computeLuminance() > 0.5 
-        ? Colors.black87 
+    return widget.backgroundColor.computeLuminance() > 0.5
+        ? Colors.black87
         : Colors.white;
   }
-  
+
   bool get _isOutlineStyle => widget.backgroundColor == Colors.transparent;
 
   @override
@@ -816,7 +2494,7 @@ class _EditableButtonState extends State<_EditableButton> {
     super.initState();
     _textController = TextEditingController(text: widget.text);
     _linkController = TextEditingController(text: widget.link);
-    
+
     _textFocus.addListener(_onFocusChange);
     _linkFocus.addListener(_onFocusChange);
   }
@@ -888,30 +2566,41 @@ class _EditableButtonState extends State<_EditableButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
-            color: _isOutlineStyle ? Colors.transparent : widget.backgroundColor,
-            borderRadius: _isOutlineStyle ? BorderRadius.zero : BorderRadius.circular(8),
+            color:
+                _isOutlineStyle ? Colors.transparent : widget.backgroundColor,
+            borderRadius:
+                _isOutlineStyle ? BorderRadius.zero : BorderRadius.circular(8),
             border: _isSelected
                 ? Border.all(color: Colors.blue, width: 2)
                 : _isHovering
-                    ? Border.all(color: Colors.blue.withValues(alpha: 0.5), width: 2)
+                    ? Border.all(
+                        color: Colors.blue.withValues(alpha: 0.5), width: 2)
                     : _isOutlineStyle
                         ? Border.all(color: _textColor, width: 1)
                         : null,
             boxShadow: _isSelected
-                ? [BoxShadow(color: Colors.blue.withValues(alpha: 0.3), blurRadius: 8)]
+                ? [
+                    BoxShadow(
+                        color: Colors.blue.withValues(alpha: 0.3),
+                        blurRadius: 8)
+                  ]
                 : null,
           ),
           child: Stack(
             children: [
               Padding(
-                padding: _isOutlineStyle 
+                padding: _isOutlineStyle
                     ? const EdgeInsets.symmetric(horizontal: 40, vertical: 16)
                     : const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      widget.text.isEmpty ? 'Botón' : (_isOutlineStyle ? widget.text.toUpperCase() : widget.text),
+                      widget.text.isEmpty
+                          ? 'Botón'
+                          : (_isOutlineStyle
+                              ? widget.text.toUpperCase()
+                              : widget.text),
                       style: TextStyle(
                         color: _textColor,
                         fontWeight: FontWeight.w600,
@@ -936,7 +2625,8 @@ class _EditableButtonState extends State<_EditableButton> {
                   right: 0,
                   child: Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.black87,
                         borderRadius: BorderRadius.circular(4),
@@ -955,7 +2645,8 @@ class _EditableButtonState extends State<_EditableButton> {
                   right: 0,
                   child: Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.blue,
                         borderRadius: BorderRadius.circular(4),
@@ -1022,7 +2713,7 @@ class _EditableButtonState extends State<_EditableButton> {
             ],
           ),
           const SizedBox(height: 12),
-          
+
           // Text field
           TextField(
             controller: _textController,
@@ -1032,14 +2723,16 @@ class _EditableButtonState extends State<_EditableButton> {
               labelText: 'Texto del botón',
               labelStyle: TextStyle(fontSize: 12, color: Colors.grey[600]),
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               prefixIcon: const Icon(Icons.text_fields, size: 18),
             ),
             onChanged: widget.onTextChanged,
           ),
           const SizedBox(height: 12),
-          
+
           // Link field
           TextField(
             controller: _linkController,
@@ -1049,8 +2742,10 @@ class _EditableButtonState extends State<_EditableButton> {
               labelText: 'Enlace (URL o ruta)',
               labelStyle: TextStyle(fontSize: 12, color: Colors.grey[600]),
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               prefixIcon: const Icon(Icons.link, size: 18),
               hintText: '/tienda/productos',
               hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
@@ -1058,20 +2753,23 @@ class _EditableButtonState extends State<_EditableButton> {
             onChanged: widget.onLinkChanged,
           ),
           const SizedBox(height: 16),
-          
+
           // Preview and save
           Row(
             children: [
               // Preview
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: widget.backgroundColor,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    _textController.text.isEmpty ? 'Botón' : _textController.text,
+                    _textController.text.isEmpty
+                        ? 'Botón'
+                        : _textController.text,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: _textColor,
@@ -1095,7 +2793,8 @@ class _EditableButtonState extends State<_EditableButton> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
               ),
             ],
@@ -1118,6 +2817,7 @@ class _EditableCarouselWidget extends StatefulWidget {
   final double? headingSize;
   final double? bodySize;
   final String blockId;
+  final double? blockHeight; // Custom height from resize handle
   final void Function(int index, String field, dynamic value) onSlideUpdated;
   final void Function(String route)? onNavigate;
 
@@ -1132,12 +2832,14 @@ class _EditableCarouselWidget extends StatefulWidget {
     this.headingSize,
     this.bodySize,
     required this.blockId,
+    this.blockHeight,
     required this.onSlideUpdated,
     this.onNavigate,
   });
 
   @override
-  State<_EditableCarouselWidget> createState() => _EditableCarouselWidgetState();
+  State<_EditableCarouselWidget> createState() =>
+      _EditableCarouselWidgetState();
 }
 
 class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
@@ -1151,7 +2853,8 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
 
   void _previousSlide() {
     setState(() {
-      _currentIndex = (_currentIndex - 1 + widget.slides.length) % widget.slides.length;
+      _currentIndex =
+          (_currentIndex - 1 + widget.slides.length) % widget.slides.length;
     });
   }
 
@@ -1167,8 +2870,11 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
       return const SizedBox.shrink();
     }
 
+    // Use custom height if set, otherwise default to 520
+    final height = widget.blockHeight ?? 520.0;
+    
     return SizedBox(
-      height: 520,
+      height: height,
       width: double.infinity,
       child: Stack(
         fit: StackFit.expand,
@@ -1176,9 +2882,10 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
           // Current slide
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 600),
-            child: _buildEditableSlide(context, widget.slides[_currentIndex], _currentIndex),
+            child: _buildEditableSlide(
+                context, widget.slides[_currentIndex], _currentIndex),
           ),
-          
+
           // Indicators
           if (widget.showIndicators && widget.slides.length > 1)
             Positioned(
@@ -1207,7 +2914,7 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
                 }),
               ),
             ),
-            
+
           // Arrows
           if (widget.showArrows && widget.slides.length > 1) ...[
             Positioned(
@@ -1256,9 +2963,10 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
     );
   }
 
-  Widget _buildEditableSlide(BuildContext context, Map<String, dynamic> slide, int index) {
+  Widget _buildEditableSlide(
+      BuildContext context, Map<String, dynamic> slide, int index) {
     final theme = Theme.of(context);
-    
+
     final title = (slide['title'] ?? 'Título').toString().trim();
     final subtitle = (slide['subtitle'] ?? '').toString().trim();
     final ctaText = (slide['ctaText'] ?? 'Ver más').toString().trim();
@@ -1279,21 +2987,22 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
 
     // Get formatting data if saved
     final titleFormatting = TextFormatting.fromJson(
-      slide['titleFormatting'] as Map<String, dynamic>?
-    );
+        slide['titleFormatting'] as Map<String, dynamic>?);
     final subtitleFormatting = TextFormatting.fromJson(
-      slide['subtitleFormatting'] as Map<String, dynamic>?
-    );
+        slide['subtitleFormatting'] as Map<String, dynamic>?);
 
-    final headingStyle = (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
-      fontFamily: widget.headingFont?.isNotEmpty == true ? widget.headingFont : null,
+    final headingStyle =
+        (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
+      fontFamily:
+          widget.headingFont?.isNotEmpty == true ? widget.headingFont : null,
       fontSize: widget.headingSize ?? 48,
       color: Colors.white,
       letterSpacing: 3,
       fontWeight: FontWeight.w900,
     );
 
-    final subtitleStyle = (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
+    final subtitleStyle =
+        (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
       fontFamily: widget.bodyFont?.isNotEmpty == true ? widget.bodyFont : null,
       fontSize: widget.bodySize != null ? widget.bodySize! * 1.2 : 20,
       color: Colors.white70,
@@ -1314,7 +3023,10 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
               errorBuilder: (context, error, stackTrace) => Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [widget.primaryColor, widget.accentColor.withValues(alpha: 0.85)],
+                    colors: [
+                      widget.primaryColor,
+                      widget.accentColor.withValues(alpha: 0.85)
+                    ],
                   ),
                 ),
               ),
@@ -1323,7 +3035,10 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [widget.primaryColor, widget.accentColor.withValues(alpha: 0.85)],
+                  colors: [
+                    widget.primaryColor,
+                    widget.accentColor.withValues(alpha: 0.85)
+                  ],
                 ),
               ),
             ),
@@ -1354,21 +3069,27 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
                   children: [
                     // Editable title
                     InlineEditableTextV2(
-                      text: title.isEmpty ? 'Título del Banner' : title.toUpperCase(),
+                      text: title.isEmpty
+                          ? 'Título del Banner'
+                          : title.toUpperCase(),
                       baseStyle: headingStyle,
                       textAlign: TextAlign.center,
                       isEditMode: true,
                       placeholder: 'TÍTULO DEL BANNER',
                       formatting: titleFormatting,
                       fieldKey: '${widget.blockId}_slide_${index}_title',
-                      onTextChanged: (value) => widget.onSlideUpdated(index, 'title', value),
-                      onFormattingChanged: (formatting) => widget.onSlideUpdated(
-                        index, 'titleFormatting', formatting.toJson(),
+                      onTextChanged: (value) =>
+                          widget.onSlideUpdated(index, 'title', value),
+                      onFormattingChanged: (formatting) =>
+                          widget.onSlideUpdated(
+                        index,
+                        'titleFormatting',
+                        formatting.toJson(),
                       ),
                     ),
-                    
+
                     const SizedBox(height: 20),
-                    
+
                     // Editable subtitle
                     InlineEditableTextV2(
                       text: subtitle,
@@ -1378,14 +3099,18 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
                       placeholder: 'Subtítulo descriptivo',
                       formatting: subtitleFormatting,
                       fieldKey: '${widget.blockId}_slide_${index}_subtitle',
-                      onTextChanged: (value) => widget.onSlideUpdated(index, 'subtitle', value),
-                      onFormattingChanged: (formatting) => widget.onSlideUpdated(
-                        index, 'subtitleFormatting', formatting.toJson(),
+                      onTextChanged: (value) =>
+                          widget.onSlideUpdated(index, 'subtitle', value),
+                      onFormattingChanged: (formatting) =>
+                          widget.onSlideUpdated(
+                        index,
+                        'subtitleFormatting',
+                        formatting.toJson(),
                       ),
                     ),
-                    
+
                     const SizedBox(height: 40),
-                    
+
                     // Editable button
                     if (ctaText.isNotEmpty)
                       _EditableButton(
@@ -1393,25 +3118,30 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
                         link: ctaLink,
                         backgroundColor: Colors.transparent,
                         foregroundColor: Colors.white,
-                        onTextChanged: (value) => widget.onSlideUpdated(index, 'ctaText', value),
-                        onLinkChanged: (value) => widget.onSlideUpdated(index, 'ctaLink', value),
-                        onNavigate: ctaLink.isNotEmpty ? () {
-                          widget.onNavigate?.call(ctaLink);
-                        } : null,
+                        onTextChanged: (value) =>
+                            widget.onSlideUpdated(index, 'ctaText', value),
+                        onLinkChanged: (value) =>
+                            widget.onSlideUpdated(index, 'ctaLink', value),
+                        onNavigate: ctaLink.isNotEmpty
+                            ? () {
+                                widget.onNavigate?.call(ctaLink);
+                              }
+                            : null,
                       ),
                   ],
                 ),
               ),
             ),
           ),
-          
+
           // Image edit button (bottom-right corner)
           Positioned(
             right: 16,
             bottom: 60,
             child: _SlideImageEditButton(
               currentImageUrl: hasImage ? imageUrl.toString() : null,
-              onImageChanged: (url) => widget.onSlideUpdated(index, 'imageUrl', url),
+              onImageChanged: (url) =>
+                  widget.onSlideUpdated(index, 'imageUrl', url),
             ),
           ),
         ],
@@ -1486,14 +3216,18 @@ class _SlideImageEditButtonState extends State<_SlideImageEditButton> {
                 const SizedBox(width: 8),
                 const Text(
                   'URL de imagen',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87),
                 ),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.close, size: 16),
                   onPressed: () => setState(() => _isEditing = false),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                  constraints:
+                      const BoxConstraints(minWidth: 24, minHeight: 24),
                 ),
               ],
             ),
@@ -1503,8 +3237,10 @@ class _SlideImageEditButtonState extends State<_SlideImageEditButton> {
               style: const TextStyle(fontSize: 13, color: Colors.black87),
               decoration: InputDecoration(
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
                 hintText: 'https://ejemplo.com/imagen.jpg',
                 hintStyle: TextStyle(fontSize: 12, color: Colors.grey[400]),
               ),
@@ -1528,7 +3264,8 @@ class _SlideImageEditButtonState extends State<_SlideImageEditButton> {
                     setState(() => _isEditing = false);
                   },
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   ),
                   child: const Text('Guardar', style: TextStyle(fontSize: 12)),
                 ),
@@ -1548,7 +3285,7 @@ class _SlideImageEditButtonState extends State<_SlideImageEditButton> {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: _isHovered 
+            color: _isHovered
                 ? Colors.black.withValues(alpha: 0.7)
                 : Colors.black.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(6),

@@ -44,17 +44,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final isLoggedIn = supabase.auth.currentUser != null;
     
     // Watch providers to rebuild when data changes
-    final tenantProvider = context.watch<PublicStoreTenantProvider>();
+    context.watch<PublicStoreTenantProvider>();
     final websiteService = context.watch<WebsiteService>();
     
-    // Show loading while tenant is being detected OR settings are not yet loaded
-    // This prevents the "flash" of default blue color before real settings load
-    if (tenantProvider.isLoading || 
-        (tenantProvider.tenantId != null && websiteService.settings.isEmpty)) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+    // Don't block rendering - just use defaults until settings load
+    // This makes the site feel faster
 
     final storeName = websiteService.getSetting('store_name', 'VINABIKE');
     final storeDescription = websiteService.getSetting(
@@ -98,14 +92,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final headerColorMode = websiteService.getSetting('header_color_mode', 'light');
     final showTopBannerRaw = websiteService.getSetting('header_show_top_banner', 'false');
     final showTopBanner = showTopBannerRaw == 'true';
-    debugPrint('🎨 [PublicStoreLayout] showTopBannerRaw=$showTopBannerRaw → showTopBanner=$showTopBanner');
     final headerShadow = websiteService.getSetting('header_shadow', 'true') == 'true';
     final headerBgColor = _resolveColor(
       websiteService.getSetting('header_bg_color', ''),
       Colors.white,
     );
     
-    // Parse nav links
+    // Parse nav links (rewrite to clean paths when on public store domain)
     List<Map<String, String>> navLinks = [];
     final navLinksJson = websiteService.getSetting('header_nav_links', '');
     if (navLinksJson.isNotEmpty) {
@@ -125,6 +118,27 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         {'label': 'Productos', 'url': '/tienda/productos'},
         {'label': 'Contacto', 'url': '/tienda/contacto'},
       ];
+    }
+
+    // On public store domain, rewrite legacy /tienda/* links to clean URLs
+    if (_isPublicStoreDomain()) {
+      navLinks = navLinks.map((link) {
+        var url = link['url'] ?? '';
+        if (url.startsWith('/tienda/pagina')) {
+          url = url.replaceFirst('/tienda', '');
+        } else if (url.startsWith('/tienda')) {
+          url = url.replaceFirst('/tienda', '');
+          if (url.isEmpty) url = '/';
+        }
+        // Ensure homepage uses clean root
+        if (url == '/tienda' || url.isEmpty) {
+          url = '/';
+        }
+        return {
+          'label': link['label'] ?? '',
+          'url': url,
+        };
+      }).toList();
     }
 
     // Check if in edit mode - use different layout structure
@@ -491,11 +505,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           ),
           const SizedBox(width: 8),
           
-          // Close/exit button
+          // Close/exit button - go back to Website Management
           IconButton(
-            onPressed: () => editProvider.exitEditMode(),
+            onPressed: () {
+              editProvider.exitEditMode();
+              context.go('/website');
+            },
             icon: const Icon(Icons.close, color: Colors.white70, size: 20),
-            tooltip: 'Salir',
+            tooltip: 'Volver a Gestión de Sitio Web',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           ),
@@ -567,7 +584,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
       // Convert blocks to the format expected by saveBlocks
       final blocks = editProvider.blocks;
-      debugPrint('🔄 [SaveChanges] Saving ${blocks.length} blocks');
+      final pageId = editProvider.currentPageId; // Multi-page editing support
+      final pageSlug = editProvider.currentPageSlug;
+      debugPrint('🔄 [SaveChanges] Saving ${blocks.length} blocks for page: ${pageSlug ?? "home"} (id: $pageId)');
       
       final blocksForSave = blocks.asMap().entries.map((entry) {
         final index = entry.key;
@@ -586,17 +605,31 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         };
       }).toList();
 
-      // Save all blocks
-      await websiteService.saveBlocks(blocksForSave);
-      debugPrint('✅ [SaveChanges] Blocks saved to database');
+      // Save blocks - use page-specific save if editing a non-home page
+      if (pageId != null) {
+        await websiteService.saveBlocksForPage(pageId, blocksForSave);
+        debugPrint('✅ [SaveChanges] Blocks saved to page: $pageSlug (id: $pageId)');
+      } else {
+        await websiteService.saveBlocks(blocksForSave);
+        debugPrint('✅ [SaveChanges] Blocks saved to home page');
+      }
 
       // Mark as saved and clear header changes
       editProvider.markAsSaved();
       editProvider.clearHeaderChanged();
       
       // Reload blocks to get fresh data and update provider
-      final freshBlocks = await websiteService.loadBlocksForTenant(tenantId);
-      debugPrint('✅ [SaveChanges] Reloaded ${freshBlocks.length} blocks');
+      List<Map<String, dynamic>> freshBlocks;
+      if (pageId != null) {
+        freshBlocks = await websiteService.loadBlocksForPage(
+          pageId,
+          tenantId: tenantId,
+        );
+        debugPrint('✅ [SaveChanges] Reloaded ${freshBlocks.length} blocks for page: $pageSlug');
+      } else {
+        freshBlocks = await websiteService.loadBlocksForTenant(tenantId);
+        debugPrint('✅ [SaveChanges] Reloaded ${freshBlocks.length} blocks for home page');
+      }
       
       // Update the edit provider with fresh blocks from database
       editProvider.updateBlocksAfterSave(freshBlocks);
@@ -766,14 +799,19 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                             const SizedBox(width: 24),
                             _buildNavLink(context, 'Productos', '/tienda/productos', textColor),
                             const SizedBox(width: 24),
+                            _buildInfoDropdown(context, textColor),
+                            const SizedBox(width: 24),
                             _buildNavLink(context, 'Contacto', '/tienda/contacto', textColor),
                           ]
-                        : navLinks.map((link) {
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 24),
-                              child: _buildNavLink(context, link['label'] ?? '', link['url'] ?? '/', textColor),
-                            );
-                          }).toList(),
+                        : [
+                            ...navLinks.map((link) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 24),
+                                child: _buildNavLink(context, link['label'] ?? '', link['url'] ?? '/', textColor),
+                              );
+                            }),
+                            _buildInfoDropdown(context, textColor),
+                          ],
                   ),
                 ),
                 Row(
@@ -1083,13 +1121,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         ),
                         const SizedBox(height: 16),
                         _buildFooterLink(context, 'Sobre Nosotros',
-                            '/tienda/nosotros', primaryColor),
+                            _isPublicStoreDomain() ? '/pagina/nosotros' : '/tienda/pagina/nosotros', primaryColor),
                         _buildFooterLink(context, 'Términos y Condiciones',
-                            '/tienda/terminos', primaryColor),
+                            _isPublicStoreDomain() ? '/pagina/terminos' : '/tienda/pagina/terminos', primaryColor),
                         _buildFooterLink(context, 'Política de Privacidad',
-                            '/tienda/privacidad', primaryColor),
-                        _buildFooterLink(context, 'Preguntas Frecuentes',
-                            '/tienda/faq', primaryColor),
+                            _isPublicStoreDomain() ? '/pagina/privacidad' : '/tienda/pagina/privacidad', primaryColor),
+                        _buildFooterLink(context, 'Política de Devoluciones',
+                            _isPublicStoreDomain() ? '/pagina/devoluciones' : '/tienda/pagina/devoluciones', primaryColor),
+                        _buildFooterLink(context, 'Envíos',
+                            _isPublicStoreDomain() ? '/pagina/envios' : '/tienda/pagina/envios', primaryColor),
                       ],
                     ),
                   ),
@@ -1282,6 +1322,93 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 color: isActive ? primaryColor : PublicStoreTheme.textPrimary,
               ),
         ),
+      ),
+    );
+  }
+
+  /// Build elegant dropdown menu for information/policy pages
+  Widget _buildInfoDropdown(BuildContext context, Color textColor) {
+    return PopupMenuButton<String>(
+      offset: const Offset(0, 40),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      elevation: 8,
+      color: Colors.white,
+      onSelected: (String path) {
+        context.go(path);
+      },
+      itemBuilder: (BuildContext context) {
+        final basePath = _isPublicStoreDomain() ? '/pagina' : '/tienda/pagina';
+        return <PopupMenuEntry<String>>[
+          _buildDropdownItem(
+            icon: Icons.info_outline,
+            label: 'Sobre Nosotros',
+            value: '$basePath/nosotros',
+          ),
+          const PopupMenuDivider(height: 1),
+          _buildDropdownItem(
+            icon: Icons.local_shipping_outlined,
+            label: 'Envíos',
+            value: '$basePath/envios',
+          ),
+          _buildDropdownItem(
+            icon: Icons.replay_outlined,
+            label: 'Devoluciones',
+            value: '$basePath/devoluciones',
+          ),
+          const PopupMenuDivider(height: 1),
+          _buildDropdownItem(
+            icon: Icons.gavel_outlined,
+            label: 'Términos y Condiciones',
+            value: '$basePath/terminos',
+          ),
+          _buildDropdownItem(
+            icon: Icons.privacy_tip_outlined,
+            label: 'Privacidad',
+            value: '$basePath/privacidad',
+          ),
+        ];
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Información',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.normal,
+                  color: textColor,
+                ),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.keyboard_arrow_down, size: 18, color: textColor),
+        ],
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _buildDropdownItem({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: 44,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.grey.shade700),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade800,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
@@ -34,23 +35,30 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       return true;
     }).toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text('Pedidos Online'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => websiteService.loadOrders(),
-            tooltip: 'Actualizar',
-          ),
-        ],
-      ),
-      body: Column(
+    return MainLayout(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => context.go('/website'),
+                ),
+                const SizedBox(width: 8),
+                Text('Pedidos Online', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () => websiteService.loadOrders(),
+                  tooltip: 'Actualizar',
+                ),
+              ],
+            ),
+          ),
           // Filters
           Container(
             padding: const EdgeInsets.all(16),

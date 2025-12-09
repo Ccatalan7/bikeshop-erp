@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
 import '../widgets/main_layout.dart';
@@ -72,9 +73,13 @@ import '../../modules/hr/pages/attendances_page.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
 import '../../modules/hr/pages/medical_leaves_page.dart';
 import '../../modules/website/pages/website_management_page.dart';
-import '../../modules/website/pages/odoo_style_editor_page.dart';
 import '../../modules/website/pages/page_management_page.dart';
 import '../../modules/website/pages/navigation_management_page.dart';
+import '../../modules/website/pages/integrations_page.dart';
+import '../../modules/website/pages/featured_products_page.dart';
+import '../../modules/website/pages/content_management_page.dart';
+import '../../modules/website/pages/online_orders_page.dart';
+import '../../modules/website/pages/website_settings_page.dart';
 import '../widgets/workspace_demo_page.dart';
 
 // WebView Modules (embedded websites)
@@ -93,6 +98,8 @@ import '../../public_store/pages/customer_account_page.dart';
 import '../../public_store/pages/customer_profile_page.dart';
 import '../../public_store/pages/customer_addresses_page.dart';
 import '../../public_store/pages/customer_orders_page.dart';
+import '../../public_store/pages/customer_bikes_page.dart';
+import '../../public_store/pages/customer_service_history_page.dart';
 import '../../public_store/pages/dynamic_website_page.dart';
 import '../../public_store/widgets/public_store_layout.dart';
 
@@ -126,21 +133,8 @@ class AppRouter {
     String? initialLocationOverride,
     bool forcePublicStoreHost = false,
   }) {
-    // Public store routes (customer-facing, no auth required)
-    final publicRoutes = [
-      '/tienda',
-      '/tienda/productos',
-      '/tienda/producto',
-      '/tienda/carrito',
-      '/tienda/checkout',
-      '/tienda/pedido',
-      '/tienda/contacto',
-      '/tienda/cuenta',
-      '/tienda/pagina', // Dynamic pages (Dec 2025)
-    ];
-
     final effectiveInitialLocation = initialLocationOverride ??
-        (forcePublicStoreHost ? '/tienda' : '/login');
+        (forcePublicStoreHost ? '/' : '/login');
 
     final router = GoRouter(
       initialLocation: effectiveInitialLocation,
@@ -151,16 +145,52 @@ class AppRouter {
           return null;
         }
 
-        final isPublicRoute = publicRoutes.any(
-          (route) => state.uri.path.startsWith(route),
-        );
+        // Treat any customer-facing path as public (clean + legacy, with slug support)
+        bool isPublicPath(String path) {
+          if (path == '/' || path.isEmpty) return true;
 
-        // Public store host (vinabike-store.web.app): ONLY allow /tienda/* routes
+          // Common public prefixes (clean + legacy)
+          const publicPrefixes = [
+            '/productos',
+            '/producto',
+            '/carrito',
+            '/checkout',
+            '/pedido',
+            '/contacto',
+            '/cuenta',
+            '/pagina',
+            '/tienda',
+          ];
+
+          for (final prefix in publicPrefixes) {
+            if (path == prefix || path.startsWith('$prefix/')) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        final path = state.uri.path;
+        final isPublicRoute = isPublicPath(path);
+
+        // Public store host (vinabike-store.web.app): ONLY allow public routes
         // Customer auth on store is for orders/addresses, NOT for ERP access
         if (forcePublicStoreHost) {
-          if (!isPublicRoute) {
-            return '/tienda';
+          if (kDebugMode) {
+            debugPrint('🌐 [Router] Public store host redirect check: path=${state.uri.path}, isPublicRoute=$isPublicRoute');
           }
+
+          // Redirect legacy /tienda paths to clean paths
+          if (state.uri.path.startsWith('/tienda')) {
+            final newPath = state.uri.path.replaceFirst('/tienda', '');
+            return newPath.isEmpty ? '/' : newPath;
+          }
+
+          // If somehow a non-public path sneaks in, send to home (should be rare)
+          if (!isPublicRoute) {
+            return '/';
+          }
+
           return null;
         }
 
@@ -201,10 +231,165 @@ class AppRouter {
       routes: [
         // ========================================
         // PUBLIC STORE ROUTES (Customer-facing, No Auth Required)
-        // Accessible at /tienda/* for customers
+        // Clean URLs: /, /productos, /producto/:id, etc.
         // ========================================
 
-        // Public Store Home
+        // Public Store Home (clean URL)
+        GoRoute(
+          path: '/',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: PublicHomePage()),
+          ),
+        ),
+
+        // Product Catalog (clean URL)
+        GoRoute(
+          path: '/productos',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: ProductCatalogPage()),
+          ),
+        ),
+
+        // Product Detail (clean URL)
+        GoRoute(
+          path: '/producto/:id',
+          pageBuilder: (context, state) {
+            final productId = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(child: ProductDetailPage(productId: productId)),
+            );
+          },
+        ),
+
+        // Shopping Cart (clean URL)
+        GoRoute(
+          path: '/carrito',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CartPage()),
+          ),
+        ),
+
+        // Checkout (clean URL)
+        GoRoute(
+          path: '/checkout',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CheckoutPage()),
+          ),
+        ),
+
+        // Order Confirmation (clean URL)
+        GoRoute(
+          path: '/pedido/:id',
+          pageBuilder: (context, state) {
+            final orderId = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(child: OrderConfirmationPage(orderId: orderId)),
+            );
+          },
+        ),
+
+        // Contact Page (clean URL)
+        GoRoute(
+          path: '/contacto',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: ContactPage()),
+          ),
+        ),
+
+        // Customer Account Routes (clean URLs)
+        GoRoute(
+          path: '/cuenta/login',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerAuthPage()),
+          ),
+        ),
+        GoRoute(
+          path: '/cuenta',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerAccountPage()),
+          ),
+        ),
+        GoRoute(
+          path: '/cuenta/perfil',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerProfilePage()),
+          ),
+        ),
+        GoRoute(
+          path: '/cuenta/direcciones',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerAddressesPage()),
+          ),
+        ),
+        GoRoute(
+          path: '/cuenta/pedidos',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerOrdersPage()),
+          ),
+        ),
+        GoRoute(
+          path: '/cuenta/bicicletas',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerBikesPage()),
+          ),
+        ),
+        GoRoute(
+          path: '/cuenta/servicios',
+          pageBuilder: (context, state) {
+            final bikeId = state.uri.queryParameters['bike_id'];
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(child: CustomerServiceHistoryPage(bikeId: bikeId)),
+            );
+          },
+        ),
+
+        // Dynamic Pages (clean URL)
+        GoRoute(
+          path: '/pagina/:slug',
+          pageBuilder: (context, state) {
+            final slug = state.pathParameters['slug'] ?? 'home';
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(child: DynamicWebsitePage(slug: slug)),
+            );
+          },
+        ),
+
+        // ========================================
+        // LEGACY /tienda/* ROUTES (for backwards compatibility)
+        // These will redirect to clean URLs via the redirect logic above
+        // ========================================
+
+        // Legacy Public Store Home
         GoRoute(
           path: '/tienda',
           pageBuilder: (context, state) => _buildPageWithNoTransition(
@@ -334,6 +519,29 @@ class AppRouter {
             state,
             const PublicStoreWrapper(child: CustomerOrdersPage()),
           ),
+        ),
+
+        // My Bikes
+        GoRoute(
+          path: '/tienda/cuenta/bicicletas',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerBikesPage()),
+          ),
+        ),
+
+        // Service History
+        GoRoute(
+          path: '/tienda/cuenta/servicios',
+          pageBuilder: (context, state) {
+            final bikeId = state.uri.queryParameters['bike_id'];
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(child: CustomerServiceHistoryPage(bikeId: bikeId)),
+            );
+          },
         ),
 
         // ========================================
@@ -946,8 +1154,8 @@ class AppRouter {
           pageBuilder: (context, state) {
             final prepaymentParam = state.uri.queryParameters['prepayment'];
             final isPrepayment = prepaymentParam == 'true';
-            print(
-                '🔍 DEBUG: prepayment param = "$prepaymentParam", isPrepayment = $isPrepayment');
+            debugPrint(
+              '🔍 DEBUG: prepayment param = "$prepaymentParam", isPrepayment = $isPrepayment');
             return _buildPageWithNoTransition(
               context,
               state,
@@ -1216,15 +1424,6 @@ class AppRouter {
             const WebsiteManagementPage(),
           ),
           routes: [
-            // Website Editor
-            GoRoute(
-              path: 'editor',
-              pageBuilder: (context, state) => _buildPageWithNoTransition(
-                context,
-                state,
-                const OdooStyleEditorPage(),
-              ),
-            ),
             // Page Management (Dec 2025)
             GoRoute(
               path: 'pages',
@@ -1241,6 +1440,51 @@ class AppRouter {
                 context,
                 state,
                 const NavigationManagementPage(),
+              ),
+            ),
+            // Integrations (Dec 2025)
+            GoRoute(
+              path: 'integrations',
+              pageBuilder: (context, state) => _buildPageWithNoTransition(
+                context,
+                state,
+                const IntegrationsPage(),
+              ),
+            ),
+            // Featured Products
+            GoRoute(
+              path: 'featured',
+              pageBuilder: (context, state) => _buildPageWithNoTransition(
+                context,
+                state,
+                const FeaturedProductsPage(),
+              ),
+            ),
+            // Content Management
+            GoRoute(
+              path: 'content',
+              pageBuilder: (context, state) => _buildPageWithNoTransition(
+                context,
+                state,
+                const ContentManagementPage(),
+              ),
+            ),
+            // Online Orders
+            GoRoute(
+              path: 'orders',
+              pageBuilder: (context, state) => _buildPageWithNoTransition(
+                context,
+                state,
+                const OnlineOrdersPage(),
+              ),
+            ),
+            // Website Settings
+            GoRoute(
+              path: 'settings',
+              pageBuilder: (context, state) => _buildPageWithNoTransition(
+                context,
+                state,
+                const WebsiteSettingsPage(),
               ),
             ),
           ],

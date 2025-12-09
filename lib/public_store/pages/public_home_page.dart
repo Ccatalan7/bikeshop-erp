@@ -25,9 +25,11 @@ class PublicHomePage extends StatefulWidget {
 }
 
 class _PublicHomePageState extends State<PublicHomePage> {
-  bool _isLoading = true;
+  // Start with false - we'll show content from WebsiteService immediately
+  bool _isLoading = false;
   List<Map<String, dynamic>> _allBlocks = []; // All loaded blocks
   List<Product> _featuredProducts = [];
+  bool _editModeChecked = false; // Track if we've checked edit mode for this navigation
 
   static const List<String> _responsiveBreakpoints = [
     'desktop',
@@ -36,66 +38,126 @@ class _PublicHomePageState extends State<PublicHomePage> {
   ];
 
   String? _lastLoadedTenantId; // Track which tenant we loaded data for
+  bool _tenantDetectionTriggered = false;
 
   @override
   void initState() {
     super.initState();
-    // Trigger tenant detection and data loading
+    // Trigger tenant detection if not already done
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ensureTenantAndLoad();
+      _ensureTenantDetection();
     });
   }
   
-  Future<void> _ensureTenantAndLoad() async {
+  /// Ensure tenant is detected - call this when page loads
+  Future<void> _ensureTenantDetection() async {
+    if (!mounted || _tenantDetectionTriggered) return;
+    
+    final tenantProvider = context.read<PublicStoreTenantProvider>();
+    
+    // If tenant not yet detected and not loading, trigger detection
+    if (!tenantProvider.hasTenant && !tenantProvider.isLoading) {
+      debugPrint('🏠 [HomePage] Triggering tenant detection from page...');
+      _tenantDetectionTriggered = true;
+      await tenantProvider.detectTenant();
+      debugPrint('🏠 [HomePage] Tenant detection complete: ${tenantProvider.tenantId}');
+    }
+  }
+  
+  Future<void> _loadDataIfReady() async {
     if (!mounted) return;
     
     final tenantProvider = context.read<PublicStoreTenantProvider>();
     
-    // If no tenant yet, trigger detection
-    if (!tenantProvider.hasTenant && !tenantProvider.isLoading) {
-      debugPrint('[PublicHomePage] No tenant detected, triggering detection...');
-      await tenantProvider.detectTenant();
-    }
-    
-    // After tenant is available, load data
-    if (mounted && tenantProvider.tenantId != null && tenantProvider.tenantId != _lastLoadedTenantId) {
+    // Wait for tenant to be available (main.dart handles detection)
+    if (tenantProvider.tenantId != null && tenantProvider.tenantId != _lastLoadedTenantId) {
       _lastLoadedTenantId = tenantProvider.tenantId;
       await _loadData();
-      
-      // After data is loaded, check for edit mode
       _checkAutoEditMode();
     }
+    // No retry loop - we rely on didChangeDependencies to detect tenant changes
   }
   
   void _checkAutoEditMode() {
     if (!mounted) return;
     
-    // Check URL for edit=true parameter
+    // Check URL for edit=true or preview=true parameters
     // Handle both regular URLs and hash-based routing (/#/path?edit=true)
     final uri = Uri.base;
+    
     var shouldEdit = uri.queryParameters['edit'] == 'true';
+    var shouldPreview = uri.queryParameters['preview'] == 'true';
     
     // For hash-based routing, the query params are in the fragment
     // URL format: http://localhost:64749/#/tienda?edit=true
-    if (!shouldEdit && uri.fragment.isNotEmpty) {
-      final fragmentUri = Uri.tryParse(uri.fragment);
+    // The fragment would be: /tienda?edit=true
+    if ((!shouldEdit && !shouldPreview) && uri.fragment.isNotEmpty) {
+      // The fragment contains the path AND query string
+      // We need to parse it as a URI to extract query params
+      final fragmentWithScheme = 'http://x${uri.fragment}';
+      final fragmentUri = Uri.tryParse(fragmentWithScheme);
+      
       if (fragmentUri != null) {
         shouldEdit = fragmentUri.queryParameters['edit'] == 'true';
+        shouldPreview = fragmentUri.queryParameters['preview'] == 'true';
       }
     }
     
-    debugPrint('[PublicHomePage] _checkAutoEditMode: shouldEdit=$shouldEdit, uri=$uri, fragment=${uri.fragment}');
-    
-    if (shouldEdit) {
+    if (shouldEdit || shouldPreview) {
       final editProvider = context.read<WebsiteEditModeProvider>();
       final websiteService = context.read<WebsiteService>();
       
-      // If not already in editor context, enter preview mode first
+      // If not already in editor context, enter the appropriate mode
       if (!editProvider.isInEditorContext) {
         final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
         final settings = Map<String, dynamic>.from(websiteService.settings);
-        debugPrint('[PublicHomePage] Entering preview mode with ${blocks.length} blocks');
-        editProvider.enterPreviewMode(blocks, settings);
+        
+        if (shouldEdit) {
+          // Go directly to edit mode (with side panel)
+          editProvider.enterEditMode(blocks, settings);
+          debugPrint('🎨 [HomePage] Auto-entered EDIT mode from URL');
+        } else {
+          // Go to preview mode (top bar only)
+          editProvider.enterPreviewMode(blocks, settings);
+          debugPrint('👁️ [HomePage] Auto-entered PREVIEW mode from URL');
+        }
+      }
+    }
+  }
+  
+  /// Check edit mode using GoRouter state (called from build method)
+  void _checkEditModeFromRouter(BuildContext context) {
+    // Get query parameters from GoRouter
+    final goRouterState = GoRouterState.of(context);
+    final queryParams = goRouterState.uri.queryParameters;
+    
+    final shouldEdit = queryParams['edit'] == 'true';
+    final shouldPreview = queryParams['preview'] == 'true';
+    
+    // Only process once per navigation (avoid infinite rebuilds)
+    if (_editModeChecked) return;
+    
+    if (shouldEdit || shouldPreview) {
+      _editModeChecked = true;
+      
+      final editProvider = context.read<WebsiteEditModeProvider>();
+      final websiteService = context.read<WebsiteService>();
+      
+      // If not already in editor context, enter the appropriate mode
+      if (!editProvider.isInEditorContext) {
+        // Schedule for next frame to avoid calling during build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          
+          final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
+          final settings = Map<String, dynamic>.from(websiteService.settings);
+          
+          if (shouldEdit) {
+            editProvider.enterEditMode(blocks, settings);
+          } else {
+            editProvider.enterPreviewMode(blocks, settings);
+          }
+        });
       }
     }
   }
@@ -103,27 +165,60 @@ class _PublicHomePageState extends State<PublicHomePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    
+    // Reset edit mode check flag on each navigation
+    _editModeChecked = false;
+    
     // Check if tenant is now available and we haven't loaded data for it yet
     final tenantProvider = context.read<PublicStoreTenantProvider>();
     final tenantId = tenantProvider.tenantId;
     
     if (tenantId != null && tenantId != _lastLoadedTenantId) {
-      debugPrint('[PublicHomePage] Tenant detected: $tenantId, loading data...');
       _lastLoadedTenantId = tenantId;
-      _loadData();
-      
-      // Re-check edit mode after data loads
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _checkAutoEditMode();
+      // Load data and then check edit mode after data is ready
+      _loadData().then((_) {
+        if (mounted) {
+          _checkAutoEditMode();
+          _updateEditProviderIfNeeded();
+        }
       });
-    } else if (tenantId == null && !tenantProvider.isLoading && _lastLoadedTenantId == null) {
-      // Tenant detection finished but no tenant found - show loading briefly then fallback
-      if (_isLoading) {
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted && _lastLoadedTenantId == null) {
-            setState(() => _isLoading = false);
-          }
-        });
+    } else if (tenantId != null) {
+      // Tenant already loaded, but we still need to check edit mode
+      // (user might have navigated with ?edit=true or ?preview=true)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _checkAutoEditMode();
+          _updateEditProviderIfNeeded();
+        }
+      });
+    }
+  }
+
+  /// Update the edit provider with home page blocks if we're in edit mode
+  /// and coming from a different page
+  void _updateEditProviderIfNeeded() {
+    if (!mounted) return;
+    
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    
+    // If we're already in edit mode (or preview mode), update the blocks for home page
+    if (editProvider.isEditMode || editProvider.isPreviewMode) {
+      // Check if we're coming from a different page (not home)
+      if (editProvider.currentPageSlug != null && editProvider.currentPageSlug!.isNotEmpty) {
+        final websiteService = context.read<WebsiteService>();
+        final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
+        final settings = Map<String, dynamic>.from(websiteService.settings);
+        
+        debugPrint('🔄 [HomePage] Page changed while in edit mode: ${editProvider.currentPageSlug} → home');
+        debugPrint('📄 [HomePage] Updating provider with ${blocks.length} blocks for home page');
+        
+        if (editProvider.isEditMode) {
+          editProvider.enterEditMode(blocks, settings);
+        } else {
+          editProvider.enterPreviewMode(blocks, settings);
+        }
+        
+        _editModeChecked = true;
       }
     }
   }
@@ -205,37 +300,36 @@ class _PublicHomePageState extends State<PublicHomePage> {
       // Get tenant from provider (detected from subdomain - works for anonymous users)
       final tenantProvider = context.read<PublicStoreTenantProvider>();
       final tenantId = tenantProvider.tenantId;
-      
-      debugPrint('[PublicHomePage] _loadData started, tenantId: $tenantId');
 
       if (tenantId == null) {
-        debugPrint('[PublicHomePage] No tenant detected from subdomain');
         return;
       }
 
       // Settings are already loaded in main.dart after tenant detection
       // Only load blocks if not already in service (blocks are cached in _allBlocks)
       
-      // ✅ Get blocks from service (already loaded in main.dart, or load now)
+      // Get blocks from service (already loaded in main.dart, or load now)
       List<Map<String, dynamic>> blocks;
       if (websiteService.blocks.isNotEmpty) {
         blocks = websiteService.blocks;
-        debugPrint('[PublicHomePage] Using cached blocks: ${blocks.length}');
       } else {
         blocks = await websiteService.loadBlocksForTenant(tenantId);
-        debugPrint('[PublicHomePage] Loaded ${blocks.length} blocks for tenant');
       }
       
       // Store all blocks for rendering
       _allBlocks = blocks;
 
       // ✅ Use tenant-aware method for featured products
+      debugPrint('🏠 [HomePage] Loading featured products for tenant: $tenantId');
       final featuredEntries = await websiteService.loadFeaturedProductsForTenant(tenantId);
+      debugPrint('🏠 [HomePage] Found ${featuredEntries.length} featured entries');
       final activeFeatured = featuredEntries.where((fp) => fp.active).toList();
+      debugPrint('🏠 [HomePage] Active featured entries: ${activeFeatured.length}');
 
       _featuredProducts = await _fetchFeaturedProducts(activeFeatured);
+      debugPrint('🏠 [HomePage] Fetched ${_featuredProducts.length} featured products');
     } catch (error) {
-      debugPrint('[PublicHomePage] Error loading data: $error');
+      // Error loading data - silently fail, page will show empty state
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -255,7 +349,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
     final tenantId = tenantProvider.tenantId;
 
     if (tenantId == null) {
-      debugPrint('[PublicHomePage] No tenant detected - cannot load featured products');
       return const [];
     }
 
@@ -278,7 +371,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
           final product = _productFromMap(map);
           productsById[product.id] = product;
         } catch (error) {
-          debugPrint('[PublicHomePage] Failed to parse product: $error');
+          // Skip malformed products silently
         }
       }
 
@@ -293,8 +386,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
       return orderedProducts.take(8).toList();
     } catch (error) {
-      debugPrint(
-          '[PublicHomePage] Error fetching featured product details: $error');
       return const [];
     }
   }
@@ -372,6 +463,9 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Check for edit/preview mode from URL query parameters (using GoRouter)
+    _checkEditModeFromRouter(context);
+    
     // Watch tenant provider to trigger rebuild when tenant is detected
     final tenantProvider = context.watch<PublicStoreTenantProvider>();
     final websiteService = context.watch<WebsiteService>();
@@ -428,16 +522,18 @@ class _PublicHomePageState extends State<PublicHomePage> {
       max: 64.0,
     );
 
-    debugPrint('[PublicHomePage] BUILD: _isLoading=$_isLoading, tenantLoading=${tenantProvider.isLoading}, tenantId=${tenantProvider.tenantId}, blocksCount=${_allBlocks.length}');
-
-    if (_isLoading || tenantProvider.isLoading) {
-      debugPrint('[PublicHomePage] Showing loading spinner');
-      return const Center(child: BrandedLoading());
-    }
+    // Use blocks from WebsiteService if we have them, or our local cache
+    final blocksToRender = websiteService.blocks.isNotEmpty 
+        ? websiteService.blocks 
+        : _allBlocks;
     
-    // If no tenant detected after loading, show error
-    if (tenantProvider.tenantId == null && !tenantProvider.isLoading) {
-      debugPrint('[PublicHomePage] Showing "Tienda no encontrada" - tenant is null');
+    // Determine if we're still in initial loading state
+    // This happens when tenant is loading OR when tenant was just detected but blocks haven't loaded yet
+    final isInitialLoading = tenantProvider.isLoading || 
+        (tenantProvider.tenantId != null && blocksToRender.isEmpty && _isLoading);
+    
+    // Only show error if tenant detection completed and found nothing
+    if (tenantProvider.tenantId == null && !tenantProvider.isLoading && blocksToRender.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -465,13 +561,13 @@ class _PublicHomePageState extends State<PublicHomePage> {
     final isEditMode = editProvider.isEditMode;
     final isInEditorContext = editProvider.isInEditorContext;
 
-    // Use edit provider blocks if in editor context, otherwise use loaded blocks
-    final blocksToRender = isInEditorContext ? editProvider.blocks : _allBlocks;
+    // Use edit provider blocks if in editor context, otherwise use the blocks we have
+    final finalBlocks = isInEditorContext ? editProvider.blocks : blocksToRender;
 
     // In editor context, show all blocks (even hidden ones, with opacity)
     // In normal mode, filter by visibility
     final visibleBlocks = List<Map<String, dynamic>>.from(
-      blocksToRender.where((block) {
+      finalBlocks.where((block) {
         if (isInEditorContext) return true; // Show all blocks in editor context
         
         final isGloballyVisible = block['is_visible'] ?? true;
@@ -503,6 +599,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
       sectionSpacing: sectionSpacing,
       containerPadding: containerPadding,
       tenantId: tenantProvider.tenantId,
+      isInitialLoading: isInitialLoading,
     );
 
     // Just return the page content - toolbar and side panel are handled by PublicStoreLayout
@@ -525,15 +622,22 @@ class _PublicHomePageState extends State<PublicHomePage> {
     required double sectionSpacing,
     required double containerPadding,
     String? tenantId,
+    bool isInitialLoading = false,
   }) {
+    // If still loading initial data, show empty container (not "Próximamente")
+    // This prevents the flash of "Coming Soon" while blocks are loading
+    if (isInitialLoading && visibleBlocks.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
     if (visibleBlocks.isNotEmpty) {
       return SingleChildScrollView(
         child: Column(
           children: [
             for (int i = 0; i < visibleBlocks.length; i++) ...[
               KeyedSubtree(
-                // Use hash of block_data to force rebuild when content changes
-                key: ValueKey('${visibleBlocks[i]['id']}_${visibleBlocks[i]['block_data']?.toString().hashCode ?? 0}'),
+                // Use hash of block_data + tenantId to force rebuild when content or tenant changes
+                key: ValueKey('${visibleBlocks[i]['id']}_${visibleBlocks[i]['block_data']?.toString().hashCode ?? 0}_$tenantId'),
                 child: _buildBlockFromData(
                   visibleBlocks[i],
                   primaryColor,
@@ -701,7 +805,13 @@ class _PublicHomePageState extends State<PublicHomePage> {
     final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
     final isVisible = blockData['is_visible'] ?? true;
     
-    debugPrint('🧱 [PublicHomePage] Rendering block: type=$blockType, id=$blockId, isEditMode=$isEditMode');
+    // Debug logging for products block
+    if (blockType == 'products') {
+      debugPrint('📦 [HomePage._buildBlockFromData] Building products block');
+      debugPrint('📦 [HomePage._buildBlockFromData] tenantId: $tenantId');
+      debugPrint('📦 [HomePage._buildBlockFromData] _featuredProducts: ${_featuredProducts.length}');
+      debugPrint('📦 [HomePage._buildBlockFromData] isEditMode: $isEditMode');
+    }
     
     data.remove('visibility');
     final resolvedHeadingFont = headingFont.isNotEmpty ? headingFont : null;
@@ -743,6 +853,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
             bodySize: bodySize,
             onNavigate: (route) => context.go(route),
             isVisible: isVisible,
+            tenantId: tenantId,
           )
         : WebsiteBlockRenderer.build(
             context: context,

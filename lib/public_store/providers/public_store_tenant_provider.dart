@@ -37,19 +37,21 @@ class PublicStoreTenantProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      debugPrint('[PublicStoreTenantProvider] Starting tenant detection...');
+      debugPrint('🏪 [TenantProvider] Starting tenant detection...');
       _currentTenant = await _detectionService.detectTenant();
       
       if (_currentTenant == null) {
         _error = 'No se encontró la tienda. Verifica la URL.';
-        debugPrint('[PublicStoreTenantProvider] No tenant detected');
+        debugPrint('🏪 [TenantProvider] ❌ No tenant detected');
       } else {
-        debugPrint('[PublicStoreTenantProvider] Tenant detected: ${_currentTenant!.shopName}');
+        debugPrint('🏪 [TenantProvider] ✅ Detected tenant: ${_currentTenant!.id}');
+        debugPrint('🏪 [TenantProvider] Subdomain: ${_currentTenant!.subdomain}');
+        debugPrint('🏪 [TenantProvider] Shop name: ${_currentTenant!.shopName}');
       }
     } catch (e) {
       _error = 'Error cargando la tienda: $e';
-      debugPrint('[PublicStoreTenantProvider] Error detecting tenant: $e');
       _currentTenant = null;
+      debugPrint('🏪 [TenantProvider] ❌ Error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -61,7 +63,6 @@ class PublicStoreTenantProvider extends ChangeNotifier {
     _currentTenant = tenant;
     _error = null;
     _isLoading = false;
-    debugPrint('[PublicStoreTenantProvider] Tenant set manually: ${tenant.shopName}');
     notifyListeners();
   }
 
@@ -70,19 +71,16 @@ class PublicStoreTenantProvider extends ChangeNotifier {
     _currentTenant = null;
     _error = null;
     _isLoading = false;
-    debugPrint('[PublicStoreTenantProvider] Tenant cleared');
     notifyListeners();
   }
 
   /// Retry detection (for error recovery)
   Future<void> retry() async {
-    debugPrint('[PublicStoreTenantProvider] Retrying tenant detection...');
     await detectTenant();
   }
 
   @override
   void dispose() {
-    debugPrint('[PublicStoreTenantProvider] Disposed');
     super.dispose();
   }
 }

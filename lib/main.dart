@@ -56,6 +56,7 @@ import 'shared/services/backup_service.dart';
 import 'shared/services/window_zoom_service.dart';
 import 'shared/widgets/window_zoom_scope.dart';
 import 'shared/widgets/branded_loading.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 
 // Custom scroll behavior to prevent browser navigation gestures on trackpad
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -71,6 +72,9 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 Future<void> main() async {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    
+    // Use clean URLs (no hash #) for web
+    usePathUrlStrategy();
 
     if (!SupabaseConfig.isConfigured && kDebugMode) {
       debugPrint(
@@ -315,29 +319,57 @@ class VinabikeApp extends StatelessWidget {
 
           final isPublicStoreHost = _detectPublicStoreHost();
 
-          // Detect tenant for public store (subdomain-based routing)
-          if (isPublicStoreHost) {
-            WidgetsBinding.instance.addPostFrameCallback((_) async {
-              final tenantProvider = context.read<PublicStoreTenantProvider>();
-              if (!tenantProvider.hasTenant && !tenantProvider.isLoading) {
-                debugPrint('[Main] Triggering tenant detection for public store...');
-                await tenantProvider.detectTenant();
-                
-                // After tenant detection, load website settings ONCE
-                if (tenantProvider.tenantId != null) {
-                  debugPrint('[Main] Tenant detected, loading website settings...');
-                  final websiteService = context.read<WebsiteService>();
-                  await websiteService.loadSettingsForTenant(tenantProvider.tenantId!);
-                  await websiteService.loadBlocksForTenant(tenantProvider.tenantId!);
-                  debugPrint('[Main] Website settings loaded for tenant: ${tenantProvider.tenantId}');
-                }
-              }
-            });
-          }
-
           // CRITICAL: Use context.watch() to rebuild when auth state changes
           final authService = context.watch<AuthService>();
           final appearanceService = context.watch<AppearanceService>();
+          
+          // For public store: watch tenant provider to trigger rebuild when ready
+          final tenantProvider = isPublicStoreHost 
+              ? context.watch<PublicStoreTenantProvider>() 
+              : null;
+          final websiteService = isPublicStoreHost 
+              ? context.watch<WebsiteService>() 
+              : null;
+          
+          // PUBLIC STORE: Load everything BEFORE showing the app
+          if (isPublicStoreHost && tenantProvider != null && websiteService != null) {
+            final publicInventoryService = context.read<PublicInventoryService>();
+            
+            // Start detection if not started
+            if (!tenantProvider.hasTenant && !tenantProvider.isLoading) {
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
+                await tenantProvider.detectTenant();
+                if (tenantProvider.tenantId != null) {
+                  final tid = tenantProvider.tenantId!;
+                  // PARALLEL loading - settings, blocks, products, and categories
+                  await Future.wait([
+                    websiteService.loadSettingsForTenant(tid),
+                    websiteService.loadBlocksForTenant(tid),
+                    // Preload products and categories for instant navigation
+                    publicInventoryService.getProductsForTenant(tenantId: tid),
+                    publicInventoryService.getCategoriesForTenant(tenantId: tid),
+                  ]);
+                }
+              });
+            }
+            
+            // BLOCK RENDERING until data is ready
+            // Show minimal loading only if we don't have blocks yet
+            final hasBlocks = websiteService.blocks.isNotEmpty;
+            final isStillLoading = tenantProvider.isLoading || 
+                (tenantProvider.hasTenant && !hasBlocks);
+            
+            if (isStillLoading) {
+              // Simple white screen - no spinner, no logo, just wait
+              return const MaterialApp(
+                debugShowCheckedModeBanner: false,
+                home: Scaffold(
+                  backgroundColor: Colors.white,
+                  body: SizedBox.shrink(),
+                ),
+              );
+            }
+          }
           
           // Initialize data preload service (preloads critical data after auth)
           final dataPreloadService = context.read<DataPreloadService>();
@@ -356,22 +388,17 @@ class VinabikeApp extends StatelessWidget {
             });
           }
           
-          debugPrint('🔐 [Main] Auth check: isAuthenticated=${authService.isAuthenticated}, isInitializing=${authService.isInitializing}');
-          debugPrint('📍 [Main] isPublicStoreHost=$isPublicStoreHost');
-          debugPrint('🎨 [Main] Theme mode: ${appearanceService.themeMode}');
-
           // Reload appearance settings after authentication completes
           // Use hasLoadedWithTenant to ensure we reload if initial load had no tenant
           if (authService.isAuthenticated && !appearanceService.hasLoadedWithTenant) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              debugPrint('🎨 [Main] Reloading appearance settings after authentication');
               appearanceService.reloadSettings();
             });
           }
 
           // Show loading screen while auth is initializing
-          if (authService.isInitializing) {
-            debugPrint('⏳ [Main] Auth still initializing, showing loading screen...');
+          // BUT skip for public store hosts - they don't need auth
+          if (authService.isInitializing && !isPublicStoreHost) {
             return MaterialApp(
               title: 'Viñabike ERP',
               theme: AppTheme.lightTheme,
@@ -385,8 +412,6 @@ class VinabikeApp extends StatelessWidget {
 
           // Public store or not authenticated = single router
           if (isPublicStoreHost || !authService.isAuthenticated) {
-            debugPrint('⚠️ [Main] Using SINGLE ROUTER (no workspace system)');
-            debugPrint('   Reason: ${isPublicStoreHost ? "Public store host" : "Not authenticated"}');
             
             return MaterialApp.router(
               title: 'Viñabike ERP',
@@ -397,7 +422,7 @@ class VinabikeApp extends StatelessWidget {
               routerConfig: AppRouter.createRouter(
                 authService,
                 forcePublicStoreHost: isPublicStoreHost,
-                initialLocationOverride: isPublicStoreHost ? '/tienda' : null,
+                initialLocationOverride: isPublicStoreHost ? '/' : null,
               ),
               debugShowCheckedModeBanner: false,
               localizationsDelegates: const [

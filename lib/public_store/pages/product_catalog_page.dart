@@ -34,38 +34,40 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   }
 
   Future<void> _loadProducts() async {
+    // Get tenant from provider (detected from subdomain)
+    final tenantProvider = context.read<PublicStoreTenantProvider>();
+    final tenantId = tenantProvider.tenantId;
+
+    if (tenantId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    // Use public inventory service (works for anonymous users)
+    final publicInventoryService = context.read<PublicInventoryService>();
+    
+    // Check if we already have cached products - instant render!
+    if (publicInventoryService.hasProductsCache(tenantId)) {
+      _allProducts = await publicInventoryService.getProductsForTenant(
+        tenantId: tenantId,
+        onlyInStock: false,
+      );
+      _updatePriceRange();
+      _applyFilters();
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    // No cache - show loading and fetch
     setState(() => _isLoading = true);
 
     try {
-      // Get tenant from provider (detected from subdomain)
-      final tenantProvider = context.read<PublicStoreTenantProvider>();
-      final tenantId = tenantProvider.tenantId;
-
-      if (tenantId == null) {
-        debugPrint('[ProductCatalogPage] No tenant detected - cannot load products');
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      debugPrint('[ProductCatalogPage] Loading products for tenant: $tenantId');
-
-      // Use public inventory service (works for anonymous users)
-      final publicInventoryService = context.read<PublicInventoryService>();
       _allProducts = await publicInventoryService.getProductsForTenant(
         tenantId: tenantId,
         onlyInStock: false, // Show all products
       );
 
-      debugPrint('[ProductCatalogPage] Loaded ${_allProducts.length} products');
-
-      // Calculate price range
-      if (_allProducts.isNotEmpty) {
-        _minPrice =
-            _allProducts.map((p) => p.price).reduce((a, b) => a < b ? a : b);
-        _maxPrice =
-            _allProducts.map((p) => p.price).reduce((a, b) => a > b ? a : b);
-      }
-
+      _updatePriceRange();
       _applyFilters();
     } catch (e) {
       debugPrint('[ProductCatalogPage] Error loading products: $e');
@@ -73,6 +75,15 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  void _updatePriceRange() {
+    if (_allProducts.isNotEmpty) {
+      _minPrice =
+          _allProducts.map((p) => p.price).reduce((a, b) => a < b ? a : b);
+      _maxPrice =
+          _allProducts.map((p) => p.price).reduce((a, b) => a > b ? a : b);
     }
   }
 

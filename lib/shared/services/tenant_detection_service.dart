@@ -76,11 +76,30 @@ class TenantDetectionService {
     return regex.hasMatch(subdomain) && subdomain.length >= 2;
   }
 
+  /// OPTIMIZED: Get tenant by subdomain OR custom domain in a single query
+  Future<Tenant?> _getTenantBySubdomainOrDomain(String? subdomain, String domain) async {
+    try {
+      // Use OR filter to check both in one query
+      final response = await _supabase
+          .from('tenants')
+          .select()
+          .eq('is_active', true)
+          .or('subdomain.eq.$subdomain,custom_domain.eq.$domain')
+          .maybeSingle();
+
+      if (response == null) {
+        return null;
+      }
+
+      return Tenant.fromJson(response);
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Get tenant by subdomain from database
   Future<Tenant?> getTenantBySubdomain(String subdomain) async {
     try {
-      debugPrint('[TenantDetection] Querying tenant by subdomain: $subdomain');
-      
       final response = await _supabase
           .from('tenants')
           .select()
@@ -89,15 +108,11 @@ class TenantDetectionService {
           .maybeSingle();
 
       if (response == null) {
-        debugPrint('[TenantDetection] No tenant found for subdomain: $subdomain');
         return null;
       }
 
-      final tenant = Tenant.fromJson(response);
-      debugPrint('[TenantDetection] Found tenant: ${tenant.shopName} (${tenant.id})');
-      return tenant;
+      return Tenant.fromJson(response);
     } catch (e) {
-      debugPrint('[TenantDetection] Error fetching tenant by subdomain: $e');
       return null;
     }
   }
@@ -105,8 +120,6 @@ class TenantDetectionService {
   /// Get tenant by custom domain from database
   Future<Tenant?> getTenantByCustomDomain(String domain) async {
     try {
-      debugPrint('[TenantDetection] Querying tenant by custom domain: $domain');
-      
       final response = await _supabase
           .from('tenants')
           .select()
@@ -115,15 +128,11 @@ class TenantDetectionService {
           .maybeSingle();
 
       if (response == null) {
-        debugPrint('[TenantDetection] No tenant found for custom domain: $domain');
         return null;
       }
 
-      final tenant = Tenant.fromJson(response);
-      debugPrint('[TenantDetection] Found tenant: ${tenant.shopName} (${tenant.id})');
-      return tenant;
+      return Tenant.fromJson(response);
     } catch (e) {
-      debugPrint('[TenantDetection] Error fetching tenant by custom domain: $e');
       return null;
     }
   }
@@ -131,83 +140,84 @@ class TenantDetectionService {
   /// Detect tenant from current URL
   /// Tries subdomain first, then custom domain lookup, then authenticated user's tenant
   Future<Tenant?> detectTenant() async {
+    debugPrint('🔍 [TenantDetection] Starting detectTenant()...');
+    
     // For non-web platforms (macOS, Windows, iOS, Android), use authenticated user's tenant
     if (!kIsWeb) {
-      debugPrint('[TenantDetection] Desktop/mobile platform, checking authenticated user...');
+      debugPrint('🔍 [TenantDetection] Non-web platform, checking auth user');
       final user = _supabase.auth.currentUser;
       if (user != null) {
         final tenantFromAuth = await _getTenantFromAuthenticatedUser(user.id);
         if (tenantFromAuth != null) {
-          debugPrint('[TenantDetection] ✅ Using authenticated user\'s tenant: ${tenantFromAuth.shopName}');
+          debugPrint('🔍 [TenantDetection] Found tenant from auth: ${tenantFromAuth.id}');
           return tenantFromAuth;
         }
       }
-      debugPrint('[TenantDetection] No authenticated user on desktop/mobile');
+      debugPrint('🔍 [TenantDetection] No auth user on non-web platform');
       return null;
     }
 
     final host = Uri.base.host;
-    debugPrint('[TenantDetection] Detecting tenant for host: $host');
+    final normalizedHost = host.toLowerCase();
+    final hostWithoutWww = normalizedHost.startsWith('www.')
+      ? normalizedHost.substring(4)
+      : normalizedHost;
+
+    debugPrint('🔍 [TenantDetection] Host: $host');
+    debugPrint('🔍 [TenantDetection] Normalized: $hostWithoutWww');
 
     // Development: Check for FORCE_SUBDOMAIN environment variable
-    // This allows testing public store locally without real subdomain
     const forceSubdomain = String.fromEnvironment('FORCE_SUBDOMAIN');
     if (forceSubdomain.isNotEmpty) {
-      debugPrint('[TenantDetection] 🧪 FORCE_SUBDOMAIN=$forceSubdomain (development override)');
+      debugPrint('🔍 [TenantDetection] Using FORCE_SUBDOMAIN: $forceSubdomain');
       final tenant = await getTenantBySubdomain(forceSubdomain);
       if (tenant != null) {
-        debugPrint('[TenantDetection] ✅ Using forced tenant: ${tenant.shopName}');
+        debugPrint('🔍 [TenantDetection] Found tenant via FORCE_SUBDOMAIN: ${tenant.id}');
         return tenant;
       }
-      debugPrint('[TenantDetection] ⚠️ Forced subdomain "$forceSubdomain" not found in database');
     }
 
+    // OPTIMIZED: Single query that checks BOTH subdomain AND custom_domain
+    // This reduces 2 DB calls to 1 for most cases
+    String? subdomain;
+    
     // Special handling for Firebase Hosting site-specific domains
-    // vinabike-store.web.app → lookup subdomain "vinabike"
     if (host == 'vinabike-store.web.app' || host == 'vinabike-store.firebaseapp.com') {
-      debugPrint('[TenantDetection] Detected vinabike-store Firebase domain, looking up vinabike tenant');
-      final tenant = await getTenantBySubdomain('vinabike');
-      if (tenant != null) {
-        return tenant;
-      }
+      subdomain = 'vinabike';
+      debugPrint('🔍 [TenantDetection] Firebase store domain detected, subdomain: vinabike');
+    } else {
+      subdomain = extractSubdomain(hostWithoutWww);
+      debugPrint('🔍 [TenantDetection] Extracted subdomain: $subdomain');
     }
-
-    // Try subdomain extraction first
-    final subdomain = extractSubdomain(host);
-    if (subdomain != null) {
-      debugPrint('[TenantDetection] Extracted subdomain: $subdomain');
-      final tenant = await getTenantBySubdomain(subdomain);
-      if (tenant != null) {
-        return tenant;
-      }
-    }
-
-    // Try custom domain lookup
-    final tenant = await getTenantByCustomDomain(host);
+    
+    // Single optimized query: check subdomain OR custom_domain in one call
+    final tenant = await _getTenantBySubdomainOrDomain(subdomain, hostWithoutWww);
     if (tenant != null) {
+      debugPrint('🔍 [TenantDetection] Found tenant via subdomain/domain: ${tenant.id}');
       return tenant;
     }
 
     // FALLBACK: On localhost/ERP domain, use authenticated user's tenant
-    // This allows admins to preview their store without real subdomain
-    final isLocalOrErpDomain = host.contains('localhost') || 
-        host.contains('127.0.0.1') ||
-        host == 'project-vinabike.web.app' ||
-        host == 'project-vinabike.firebaseapp.com';
+    final isLocalOrErpDomain = hostWithoutWww.contains('localhost') || 
+      hostWithoutWww.contains('127.0.0.1') ||
+      hostWithoutWww == 'project-vinabike.web.app' ||
+      hostWithoutWww == 'project-vinabike.firebaseapp.com';
+    
+    debugPrint('🔍 [TenantDetection] isLocalOrErpDomain: $isLocalOrErpDomain');
     
     if (isLocalOrErpDomain) {
-      debugPrint('[TenantDetection] On localhost/ERP domain, checking authenticated user...');
       final user = _supabase.auth.currentUser;
+      debugPrint('🔍 [TenantDetection] Checking auth fallback, user: ${user?.id}');
       if (user != null) {
         final tenantFromAuth = await _getTenantFromAuthenticatedUser(user.id);
         if (tenantFromAuth != null) {
-          debugPrint('[TenantDetection] ✅ Using authenticated user\'s tenant: ${tenantFromAuth.shopName}');
+          debugPrint('🔍 [TenantDetection] Found tenant from auth fallback: ${tenantFromAuth.id}');
           return tenantFromAuth;
         }
       }
     }
 
-    debugPrint('[TenantDetection] No tenant found for host: $host');
+    debugPrint('🔍 [TenantDetection] No tenant found');
     return null;
   }
 

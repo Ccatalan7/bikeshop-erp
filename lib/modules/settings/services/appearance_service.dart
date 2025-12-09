@@ -30,9 +30,7 @@ class AppearanceService extends ChangeNotifier {
   /// Listen to auth state changes and reload settings when user logs in
   void _listenToAuthChanges() {
     _authSubscription = _supabase.auth.onAuthStateChange.listen((data) {
-      debugPrint('[AppearanceService] Auth state changed: ${data.event}');
       if (data.event == AuthChangeEvent.signedIn && !_hasLoadedWithTenant) {
-        debugPrint('[AppearanceService] User signed in, reloading settings...');
         _loadSettings();
       } else if (data.event == AuthChangeEvent.signedOut) {
         // Reset state on logout
@@ -118,7 +116,6 @@ class AppearanceService extends ChangeNotifier {
       // Get tenant_id for loading settings
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
-        debugPrint('[AppearanceService] No tenant found, skipping settings load');
         _isInitialized = true;
         _hasLoadedWithTenant = false; // Mark that we didn't load with tenant
         notifyListeners();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
+import '../providers/public_store_tenant_provider.dart';
 import '../theme/public_store_theme.dart';
 
 class CustomerAuthPage extends StatefulWidget {
@@ -40,6 +41,10 @@ class _CustomerAuthPageState extends State<CustomerAuthPage> {
 
     try {
       final accountService = context.read<CustomerAccountService>();
+      
+      // CRITICAL: Set tenant_id before any auth operations
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      accountService.setTenantId(tenantProvider.tenantId);
 
       if (_isLogin) {
         await accountService.signIn(
@@ -124,28 +129,53 @@ class _CustomerAuthPageState extends State<CustomerAuthPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 450),
-            padding: const EdgeInsets.all(24),
-            child: Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+    // No Scaffold - wrapped by PublicStoreLayout
+    return Column(
+      children: [
+        // Header bar
+        Container(
+          color: Theme.of(context).primaryColor,
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top,
+            left: 4,
+            right: 16,
+            bottom: 8,
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => context.go('/'),
+              ),
+              Expanded(
+                child: Text(
+                  _isLogin ? 'Iniciar Sesión' : 'Crear Cuenta',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(width: 48), // Balance for back button
+            ],
+          ),
+        ),
+        // Content
+        Container(
+          constraints: const BoxConstraints(maxWidth: 450),
+          padding: const EdgeInsets.all(24),
+          child: Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                         if (_showVerificationNotice && _verificationEmail != null) ...[
                           Container(
                             margin: const EdgeInsets.only(bottom: 16),
@@ -415,8 +445,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage> {
               ),
             ),
           ),
-        ),
-      ),
+      ],
     );
   }
 }

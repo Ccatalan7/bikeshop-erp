@@ -52,16 +52,17 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: _isLoading
-          ? const Center(child: BrandedLoading())
-          : _error != null
-              ? _buildError()
-              : _order == null
-                  ? _buildNotFound()
-                  : _buildConfirmation(),
-    );
+    // Return just the content - PublicStoreLayout handles Scaffold and scrolling
+    if (_isLoading) {
+      return const Center(child: BrandedLoading());
+    }
+    if (_error != null) {
+      return _buildError();
+    }
+    if (_order == null) {
+      return _buildNotFound();
+    }
+    return _buildConfirmation();
   }
 
   Widget _buildError() {

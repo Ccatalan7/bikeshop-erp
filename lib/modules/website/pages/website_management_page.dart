@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../services/website_service.dart';
 import 'featured_products_page.dart';
 import 'content_management_page.dart';
@@ -11,6 +13,7 @@ import 'website_settings_page.dart';
 import 'online_orders_page.dart';
 import 'page_management_page.dart';
 import 'navigation_management_page.dart';
+import 'integrations_page.dart';
 
 /// Main hub for website content management
 class WebsiteManagementPage extends StatefulWidget {
@@ -81,11 +84,11 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  // Single Preview Button - Navigate to /tienda
+                  // Vista Previa Button - Navigate to /tienda with preview mode
                   FilledButton.icon(
                     onPressed: () {
-                      debugPrint('🎬 [WebsiteManagementPage] Vista Previa button clicked - navigating to /tienda');
-                      context.go('/tienda');
+                      debugPrint('👁️ [WebsiteManagementPage] Vista Previa button clicked - navigating to /tienda?preview=true');
+                      context.go('/tienda?preview=true');
                     },
                     icon: const Icon(Icons.visibility),
                     label: const Text('Vista Previa'),
@@ -237,112 +240,68 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                 mainAxisSpacing: 16,
                 childAspectRatio: 1.5,
                 children: [
-                  // Pages - NEW! Main page management
+                  // Pages - Main page management
                   _buildManagementCard(
                     context: context,
                     title: 'Páginas',
                     subtitle: 'Crea y gestiona páginas del sitio',
                     icon: Icons.web_stories,
                     color: Colors.indigo,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PageManagementPage(),
-                        ),
-                      );
-                    },
+                    onTap: () => context.go('/website/pages'),
                   ),
-                  // Navigation - NEW! Menu management
+                  // Navigation - Menu management
                   _buildManagementCard(
                     context: context,
                     title: 'Navegación',
                     subtitle: 'Configura menús y enlaces',
                     icon: Icons.menu_book,
                     color: Colors.teal,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const NavigationManagementPage(),
-                        ),
-                      );
-                    },
+                    onTap: () => context.go('/website/navigation'),
                   ),
-                  // Banners module removed - use Editor instead (hero/carousel blocks)
+                  // Featured Products
                   _buildManagementCard(
                     context: context,
                     title: 'Productos Destacados',
                     subtitle: 'Selecciona productos para la home',
                     icon: Icons.star,
                     color: Colors.orange,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const FeaturedProductsPage(),
-                        ),
-                      );
-                    },
+                    onTap: () => context.go('/website/featured'),
                   ),
+                  // Content Management
                   _buildManagementCard(
                     context: context,
                     title: 'Contenido',
                     subtitle: 'Textos, páginas y descripciones',
                     icon: Icons.article,
                     color: Colors.blue,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ContentManagementPage(),
-                        ),
-                      );
-                    },
+                    onTap: () => context.go('/website/content'),
                   ),
+                  // Online Orders
                   _buildManagementCard(
                     context: context,
                     title: 'Pedidos Online',
                     subtitle: 'Gestiona pedidos del sitio web',
                     icon: Icons.shopping_bag,
                     color: Colors.green,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const OnlineOrdersPage(),
-                        ),
-                      );
-                    },
+                    onTap: () => context.go('/website/orders'),
                   ),
+                  // Website Settings
                   _buildManagementCard(
                     context: context,
                     title: 'Configuración',
                     subtitle: 'Ajustes de la tienda online',
                     icon: Icons.settings,
                     color: Colors.grey,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const WebsiteSettingsPage(),
-                        ),
-                      );
-                    },
+                    onTap: () => context.go('/website/settings'),
                   ),
+                  // Integrations
                   _buildManagementCard(
                     context: context,
-                    title: 'Google Merchant',
-                    subtitle: 'Feed para Google Shopping',
-                    icon: Icons.feed,
+                    title: 'Integraciones',
+                    subtitle: 'Google Merchant, Analytics y más',
+                    icon: Icons.hub,
                     color: Colors.red,
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Próximamente: Google Merchant Center'),
-                        ),
-                      );
-                    },
+                    onTap: () => context.go('/website/integrations'),
                   ),
                 ],
               ),
@@ -532,5 +491,202 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
     if (width > 1000) return 3;
     if (width > 600) return 2;
     return 1;
+  }
+
+  /// Show Google Merchant Center feed URL dialog
+  Future<void> _showGoogleMerchantDialog(BuildContext context) async {
+    final theme = Theme.of(context);
+    
+    // Get tenant subdomain
+    String? subdomain;
+    String? customDomain;
+    
+    try {
+      final tenantService = TenantService();
+      final tenantData = await tenantService.getCurrentTenant();
+      subdomain = tenantData?['subdomain'] as String?;
+      customDomain = tenantData?['custom_domain'] as String?;
+    } catch (e) {
+      debugPrint('Error getting tenant data: $e');
+    }
+
+    if (!context.mounted) return;
+
+    // Build the feed URL
+    final supabaseUrl = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1';
+    String feedUrl;
+    
+    if (customDomain != null && customDomain.isNotEmpty) {
+      feedUrl = '$supabaseUrl/google-merchant-feed?domain=$customDomain';
+    } else if (subdomain != null && subdomain.isNotEmpty) {
+      feedUrl = '$supabaseUrl/google-merchant-feed?tenant=$subdomain';
+    } else {
+      feedUrl = 'Error: No se pudo determinar el tenant';
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.feed, color: Colors.red),
+            ),
+            const SizedBox(width: 12),
+            const Text('Google Merchant Center'),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Feed de Productos',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Usa esta URL para configurar tu feed de productos en Google Merchant Center:',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: theme.colorScheme.outlineVariant,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        feedUrl,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.copy, size: 20),
+                      tooltip: 'Copiar URL',
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: feedUrl));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('URL copiada al portapapeles'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Instrucciones:',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildInstruction('1', 'Ve a Google Merchant Center'),
+              _buildInstruction('2', 'Navega a Productos > Feeds'),
+              _buildInstruction('3', 'Crea un nuevo feed principal'),
+              _buildInstruction('4', 'Selecciona "Recuperación programada"'),
+              _buildInstruction('5', 'Pega la URL de arriba'),
+              _buildInstruction('6', 'Configura actualización cada 24 horas'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Solo se incluyen productos activos, publicados, con precio > 0 y con imagen.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+          FilledButton.icon(
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: const Text('Probar Feed'),
+            onPressed: () async {
+              final uri = Uri.parse(feedUrl);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstruction(String number, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              number,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

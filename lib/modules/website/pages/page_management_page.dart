@@ -576,9 +576,24 @@ class _PageManagementPageState extends State<PageManagementPage> {
   }
 
   void _openPageEditor(WebsitePage page) {
-    // TODO: Navigate to page-specific editor
-    // For now, go to the main editor
-    Navigator.pushNamed(context, '/website/editor', arguments: page);
+    // Dec 2025: Multi-page editing not yet supported in inline editor
+    // For now, show a message directing users to edit via public store
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          page.isHome 
+            ? 'Para editar la página de inicio, ve a la tienda y haz clic en "Editar Sitio"'
+            : 'La edición de páginas secundarias aún no está disponible. Próximamente.',
+        ),
+        duration: const Duration(seconds: 4),
+        action: page.isHome ? SnackBarAction(
+          label: 'Ir a Tienda',
+          onPressed: () {
+            Navigator.pushNamed(context, '/tienda');
+          },
+        ) : null,
+      ),
+    );
   }
 
   void _confirmDelete(WebsitePage page) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
@@ -7,6 +8,7 @@ import '../../../shared/services/inventory_service.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/widgets/main_layout.dart';
 
 /// Page for selecting and managing featured products shown on website homepage
 class FeaturedProductsPage extends StatefulWidget {
@@ -94,27 +96,38 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
             ))
         .toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text('Productos Destacados'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              websiteService.loadFeaturedProducts();
-              _loadProducts();
-            },
-            tooltip: 'Actualizar',
+    return MainLayout(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => context.go('/website'),
+                ),
+                const SizedBox(width: 8),
+                Text('Productos Destacados', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () {
+                    websiteService.loadFeaturedProducts();
+                    _loadProducts();
+                  },
+                  tooltip: 'Actualizar',
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      body: websiteService.isLoading && featured.isEmpty
-          ? const Center(child: BrandedLoading())
-          : Column(
+          // Content
+          Expanded(
+            child: websiteService.isLoading && featured.isEmpty
+                ? const Center(child: BrandedLoading())
+                : Column(
               children: [
                 // Info banner
                 Container(
@@ -284,6 +297,9 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
     );
   }
 

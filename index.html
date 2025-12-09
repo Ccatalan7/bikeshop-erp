@@ -107,9 +107,29 @@
 <body>
   <!-- Initial loading screen (shown while Flutter loads) -->
   <div id="loading" class="loading-container">
-    <div class="loading-spinner"></div>
+    <!-- Default to Vinabike logo; fallback to spinner only for ERP hosts -->
+    <img id="loading-logo" class="loading-logo"
+         src="https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/company_logos/1763412155458_Logo-vinabike_ai_to_png.png"
+         alt="Vinabike" />
+    <div id="loading-spinner" class="loading-spinner" style="display:none;"></div>
     <div class="loading-text">Cargando...</div>
   </div>
+  
+  <script>
+    // Public store hosts show logo (default); ERP hosts show spinner
+    (function() {
+      var host = window.location.hostname.toLowerCase();
+      var isPublicStore = host.includes('vinabike.cl') ||
+                          host.includes('vinabike-store.web.app') ||
+                          host.endsWith('.vinabike-store.web.app');
+      if (!isPublicStore) {
+        var logo = document.getElementById('loading-logo');
+        var spinner = document.getElementById('loading-spinner');
+        if (logo) logo.style.display = 'none';
+        if (spinner) spinner.style.display = 'block';
+      }
+    })();
+  </script>
   
   <script>
     // Detect dark mode preference

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/models/tenant.dart';
@@ -178,46 +180,57 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text('Configuración del Sitio'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadSettings,
-            tooltip: 'Recargar',
+    return MainLayout(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => context.go('/website'),
+                ),
+                const SizedBox(width: 8),
+                const Text('Configuración del Sitio', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _loadSettings,
+                  tooltip: 'Recargar',
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: BrandedLoading())
-          : Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(24),
-                children: [
-                  // Store Information Section
-                  _buildSection(
-                    icon: Icons.store,
-                    title: 'Información de la Tienda',
-                    color: Colors.blue,
-                    children: [
-                      TextFormField(
-                        controller: _storeNameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nombre de la Tienda',
-                          hintText: 'Ej: Vinabike',
-                          prefixIcon: Icon(Icons.storefront),
-                        ),
-                        validator: (value) =>
-                            value?.isEmpty ?? true ? 'Campo requerido' : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
+          // Content
+          Expanded(
+            child: _isLoading
+                ? const Center(child: BrandedLoading())
+                : Form(
+                    key: _formKey,
+                    child: ListView(
+                      padding: const EdgeInsets.all(24),
+                      children: [
+                        // Store Information Section
+                        _buildSection(
+                          icon: Icons.store,
+                          title: 'Información de la Tienda',
+                          color: Colors.blue,
+                          children: [
+                            TextFormField(
+                              controller: _storeNameController,
+                              decoration: const InputDecoration(
+                                labelText: 'Nombre de la Tienda',
+                                hintText: 'Ej: Vinabike',
+                                prefixIcon: Icon(Icons.storefront),
+                              ),
+                              validator: (value) =>
+                                  value?.isEmpty ?? true ? 'Campo requerido' : null,
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
                         controller: _storeUrlController,
                         decoration: const InputDecoration(
                           labelText: 'URL de la Tienda',
@@ -490,6 +503,9 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                 ],
               ),
             ),
+          ),
+        ],
+      ),
     );
   }
 

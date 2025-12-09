@@ -8,6 +8,7 @@ import '../../modules/website/models/website_block_registry.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../shared/models/product.dart';
+import '../../shared/widgets/branded_loading.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../theme/public_store_theme.dart';
@@ -132,11 +133,7 @@ class _EditableWebsiteState extends State<EditableWebsite> {
       Colors.white,
     );
     
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+    // Don't show loading screen - just render with defaults until data loads
     
     return Scaffold(
       backgroundColor: backgroundColor,

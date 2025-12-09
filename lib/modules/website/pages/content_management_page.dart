@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/widgets/main_layout.dart';
 
 /// Page for managing website content (text blocks, pages, etc.)
 class ContentManagementPage extends StatefulWidget {
@@ -236,24 +238,35 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
     final theme = Theme.of(context);
     final websiteService = context.watch<WebsiteService>();
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text('Contenido del Sitio'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => websiteService.loadContents(),
-            tooltip: 'Actualizar',
+    return MainLayout(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => context.go('/website'),
+                ),
+                const SizedBox(width: 8),
+                Text('Contenido del Sitio', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () => websiteService.loadContents(),
+                  tooltip: 'Actualizar',
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      body: websiteService.isLoading && websiteService.contents.isEmpty
-          ? const Center(child: BrandedLoading())
-          : Column(
+          // Content
+          Expanded(
+            child: websiteService.isLoading && websiteService.contents.isEmpty
+                ? const Center(child: BrandedLoading())
+                : Column(
               children: [
                 // Info banner
                 Container(
@@ -326,6 +339,9 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
                 ),
               ],
             ),
+          ),
+        ],
+      ),
     );
   }
 
