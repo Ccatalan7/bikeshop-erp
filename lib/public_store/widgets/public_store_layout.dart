@@ -109,14 +109,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         navLinks = [
           {'label': 'Inicio', 'url': '/tienda'},
           {'label': 'Productos', 'url': '/tienda/productos'},
-          {'label': 'Contacto', 'url': '/tienda/contacto'},
         ];
       }
     } else {
       navLinks = [
         {'label': 'Inicio', 'url': '/tienda'},
         {'label': 'Productos', 'url': '/tienda/productos'},
-        {'label': 'Contacto', 'url': '/tienda/contacto'},
       ];
     }
 
@@ -800,8 +798,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                             _buildNavLink(context, 'Productos', '/tienda/productos', textColor),
                             const SizedBox(width: 24),
                             _buildInfoDropdown(context, textColor),
-                            const SizedBox(width: 24),
-                            _buildNavLink(context, 'Contacto', '/tienda/contacto', textColor),
                           ]
                         : [
                             ...navLinks.map((link) {
@@ -1304,7 +1300,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final isActive = GoRouterState.of(context).matchedLocation == path;
 
     return InkWell(
-      onTap: () => context.go(path),
+      onTap: () {
+        debugPrint('🔗 [NavLink] Navigating to: $path');
+        context.go(path);
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
@@ -1337,37 +1336,45 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       elevation: 8,
       color: Colors.white,
       onSelected: (String path) {
+        debugPrint('🔗 [InfoDropdown] Selected: $path');
         context.go(path);
       },
       itemBuilder: (BuildContext context) {
-        final basePath = _isPublicStoreDomain() ? '/pagina' : '/tienda/pagina';
+        // Clean URLs: /nosotros, /devoluciones, etc. (routes defined in app_router.dart)
+        final basePath = _isPublicStoreDomain() ? '' : '/tienda/pagina';
         return <PopupMenuEntry<String>>[
           _buildDropdownItem(
             icon: Icons.info_outline,
             label: 'Sobre Nosotros',
-            value: '$basePath/nosotros',
+            value: _isPublicStoreDomain() ? '/nosotros' : '$basePath/nosotros',
+          ),
+          const PopupMenuDivider(height: 1),
+          _buildDropdownItem(
+            icon: Icons.contact_page_outlined,
+            label: 'Contacto',
+            value: _isPublicStoreDomain() ? '/tienda/contacto' : '/tienda/contacto',
           ),
           const PopupMenuDivider(height: 1),
           _buildDropdownItem(
             icon: Icons.local_shipping_outlined,
             label: 'Envíos',
-            value: '$basePath/envios',
+            value: _isPublicStoreDomain() ? '/envios' : '$basePath/envios',
           ),
           _buildDropdownItem(
             icon: Icons.replay_outlined,
             label: 'Devoluciones',
-            value: '$basePath/devoluciones',
+            value: _isPublicStoreDomain() ? '/devoluciones' : '$basePath/devoluciones',
           ),
           const PopupMenuDivider(height: 1),
           _buildDropdownItem(
             icon: Icons.gavel_outlined,
             label: 'Términos y Condiciones',
-            value: '$basePath/terminos',
+            value: _isPublicStoreDomain() ? '/terminos' : '$basePath/terminos',
           ),
           _buildDropdownItem(
             icon: Icons.privacy_tip_outlined,
             label: 'Privacidad',
-            value: '$basePath/privacidad',
+            value: _isPublicStoreDomain() ? '/privacidad' : '$basePath/privacidad',
           ),
         ];
       },
@@ -1375,7 +1382,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Información',
+            'Conócenos',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.normal,
                   color: textColor,

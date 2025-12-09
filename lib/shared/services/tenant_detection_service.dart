@@ -80,12 +80,19 @@ class TenantDetectionService {
   Future<Tenant?> _getTenantBySubdomainOrDomain(String? subdomain, String domain) async {
     try {
       // Use OR filter to check both in one query
-      final response = await _supabase
+      var query = _supabase
           .from('tenants')
           .select()
-          .eq('is_active', true)
-          .or('subdomain.eq.$subdomain,custom_domain.eq.$domain')
-          .maybeSingle();
+          .eq('is_active', true);
+          
+      if (subdomain != null && subdomain.isNotEmpty) {
+        query = query.or('subdomain.eq.$subdomain,custom_domain.eq.$domain');
+      } else {
+        // If subdomain is null, only check custom_domain
+        query = query.eq('custom_domain', domain);
+      }
+
+      final response = await query.maybeSingle();
 
       if (response == null) {
         return null;

@@ -63,6 +63,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
   @override
   void initState() {
     super.initState();
+    debugPrint('🚀 [DynamicWebsitePage] Init with slug: "${widget.slug}"');
     _loadPageData();
   }
   
@@ -257,8 +258,6 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
   }
 
   Future<void> _loadPageData() async {
-    debugPrint('🔄 [DynamicPage] _loadPageData() called for slug: "${widget.slug}"');
-    
     setState(() {
       _isLoading = true;
       _error = null;
@@ -274,9 +273,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
       try {
         final tenantProvider = context.read<PublicStoreTenantProvider>();
         tenantId = tenantProvider.tenantId;
-        debugPrint('🔄 [DynamicPage] Got tenantId from provider: $tenantId (isLoading: ${tenantProvider.isLoading})');
-      } catch (e) {
-        debugPrint('🔄 [DynamicPage] PublicStoreTenantProvider not available: $e');
+      } catch (_) {
         // PublicStoreTenantProvider not available, try TenantService
       }
       

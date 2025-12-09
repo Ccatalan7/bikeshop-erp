@@ -113,7 +113,8 @@ class Product {
       barcode: json['barcode'] as String?,
       price: (json['price'] as num).toDouble(),
       cost: (json['cost'] as num).toDouble(),
-      stockQuantity: json['stock_quantity'] as int? ?? 0,
+      // Use inventory_qty as primary (legacy), fallback to stock_quantity
+      stockQuantity: json['inventory_qty'] as int? ?? json['stock_quantity'] as int? ?? 0,
       minStockLevel: json['min_stock_level'] as int? ?? 5,
       maxStockLevel: json['max_stock_level'] as int? ?? 100,
       imageUrl: json['image_url'] as String?,

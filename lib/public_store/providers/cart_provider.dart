@@ -20,11 +20,15 @@ class CartProvider with ChangeNotifier {
 
   int get itemCount => _items.fold(0, (sum, item) => sum + item.quantity);
 
-  double get subtotal => _items.fold(0.0, (sum, item) => sum + item.subtotal);
+  /// Total amount (what customer pays) - prices already INCLUDE IVA
+  double get total => _items.fold(0.0, (sum, item) => sum + item.subtotal);
 
-  double get ivaAmount => subtotal * 0.19; // 19% IVA
+  /// Net amount (subtotal without IVA) - extracted from total
+  /// Since prices include IVA: net = total / 1.19
+  double get subtotal => total / 1.19;
 
-  double get total => subtotal + ivaAmount;
+  /// IVA amount extracted from total (19% of net, or total - net)
+  double get ivaAmount => total - subtotal;
 
   bool get isEmpty => _items.isEmpty;
 

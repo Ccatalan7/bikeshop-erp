@@ -384,19 +384,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
         }
       }
 
-      // Filter out out-of-stock products unless in edit mode (admin editing website)
-      final editProvider = context.read<WebsiteEditModeProvider>();
-      final isEditMode = editProvider.isEditMode || editProvider.isPreviewMode;
-      
-      var result = orderedProducts.take(8).toList();
-      if (!isEditMode) {
-        result = result.where((p) => p.stockQuantity > 0).toList();
-        debugPrint('🏠 [HomePage] Filtered out-of-stock products (edit mode: false), result: ${result.length}');
-      } else {
-        debugPrint('🏠 [HomePage] Edit mode - showing ALL products including out-of-stock');
-      }
-      
-      return result;
+      return orderedProducts.take(8).toList();
     } catch (error) {
       return const [];
     }

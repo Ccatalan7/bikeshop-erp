@@ -101,6 +101,7 @@ import '../../public_store/pages/customer_orders_page.dart';
 import '../../public_store/pages/customer_bikes_page.dart';
 import '../../public_store/pages/customer_service_history_page.dart';
 import '../../public_store/pages/dynamic_website_page.dart';
+import '../../public_store/pages/static_policy_page.dart';
 import '../../public_store/widgets/public_store_layout.dart';
 
 // Helper wrapper for public store pages
@@ -121,8 +122,9 @@ Page<dynamic> _buildPageWithNoTransition(
   GoRouterState state,
   Widget child,
 ) {
+  // Use path-based key to ensure pages are completely replaced, not rebuilt
   return NoTransitionPage<void>(
-    key: state.pageKey,
+    key: ValueKey('page_${state.uri.path}'),
     child: child,
   );
 }
@@ -138,8 +140,15 @@ class AppRouter {
 
     final router = GoRouter(
       initialLocation: effectiveInitialLocation,
-      refreshListenable: authService,
+      // Only use refreshListenable on ERP (admin) routes
+      // On public store, auth changes shouldn't cause route refreshes
+      // This prevents the bug where authService.notifyListeners() causes unwanted navigation to /
+      refreshListenable: forcePublicStoreHost ? null : authService,
       redirect: (context, state) {
+        debugPrint('🔀 [Router] redirect() called for path: ${state.uri.path}');
+        debugPrint('🔀 [Router] state.matchedLocation: ${state.matchedLocation}');
+        debugPrint('🔀 [Router] state.fullPath: ${state.fullPath}');
+        
         if (authService.isInitializing) {
           debugPrint('🔄 [Router] Auth still initializing, allowing navigation to: ${state.uri.path}');
           return null;
@@ -160,6 +169,12 @@ class AppRouter {
             '/cuenta',
             '/pagina',
             '/tienda',
+            // Policy pages (clean URLs)
+            '/nosotros',
+            '/terminos',
+            '/privacidad',
+            '/devoluciones',
+            '/envios',
           ];
 
           for (final prefix in publicPrefixes) {
@@ -176,21 +191,22 @@ class AppRouter {
         // Public store host (vinabike-store.web.app): ONLY allow public routes
         // Customer auth on store is for orders/addresses, NOT for ERP access
         if (forcePublicStoreHost) {
-          if (kDebugMode) {
-            debugPrint('🌐 [Router] Public store host redirect check: path=${state.uri.path}, isPublicRoute=$isPublicRoute');
-          }
+          debugPrint('🌐 [Router] forcePublicStoreHost=true, path=$path, isPublicRoute=$isPublicRoute');
 
           // Redirect legacy /tienda paths to clean paths
           if (state.uri.path.startsWith('/tienda')) {
             final newPath = state.uri.path.replaceFirst('/tienda', '');
+            debugPrint('🔀 [Router] Redirecting /tienda path to: ${newPath.isEmpty ? '/' : newPath}');
             return newPath.isEmpty ? '/' : newPath;
           }
 
           // If somehow a non-public path sneaks in, send to home (should be rare)
           if (!isPublicRoute) {
+            debugPrint('⚠️ [Router] Non-public path on store host, redirecting to /');
             return '/';
           }
 
+          debugPrint('✅ [Router] Public store path OK: $path');
           return null;
         }
 
@@ -310,6 +326,60 @@ class AppRouter {
           ),
         ),
 
+        // ========================================
+        // POLICY PAGES (Clean URLs - No /pagina/ prefix)
+        // ========================================
+        GoRoute(
+          path: '/nosotros',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(
+              child: StaticPolicyPage(slug: 'nosotros', fallbackTitle: 'Sobre Nosotros'),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/terminos',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(
+              child: StaticPolicyPage(slug: 'terminos', fallbackTitle: 'Términos y Condiciones'),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/privacidad',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(
+              child: StaticPolicyPage(slug: 'privacidad', fallbackTitle: 'Política de Privacidad'),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/devoluciones',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(
+              child: StaticPolicyPage(slug: 'devoluciones', fallbackTitle: 'Política de Devoluciones'),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/envios',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(
+              child: StaticPolicyPage(slug: 'envios', fallbackTitle: 'Información de Envíos'),
+            ),
+          ),
+        ),
+
         // Customer Account Routes (clean URLs)
         GoRoute(
           path: '/cuenta/login',
@@ -376,6 +446,7 @@ class AppRouter {
           path: '/pagina/:slug',
           pageBuilder: (context, state) {
             final slug = state.pathParameters['slug'] ?? 'home';
+            debugPrint('🛣️ [Router] Matched /pagina/:slug with slug="$slug"');
             return _buildPageWithNoTransition(
               context,
               state,

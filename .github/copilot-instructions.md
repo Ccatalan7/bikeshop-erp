@@ -2261,6 +2261,12 @@ Pages are created in the Website Editor:
 /cuenta                    - Customer account
 ```
 
+### Policy Pages Routing (Dec 2025 fix)
+- Use `StaticPolicyPage` (in `lib/public_store/pages/static_policy_page.dart`) for policy/info slugs like `/nosotros`, `/terminos`, `/privacidad`, `/devoluciones`, `/envios`.
+- Wrap it in `PublicStoreWrapper` in `app_router.dart`; do **not** route these to `DynamicWebsitePage` (causes redirect loops and loses inline editing).
+- `StaticPolicyPage` already wires `WebsiteEditModeProvider` + `EditableBlockRenderer`, so `?edit=true` / `?preview=true` keep inline editing on these pages.
+- Provide a `fallbackTitle` per slug to avoid null titles when the page row is missing or unpublished.
+
 ---
 
 ## 🎨 Theme System

@@ -58,7 +58,7 @@ class AddressAutocompleteService extends ChangeNotifier {
   final http.Client _httpClient;
   final Uuid _uuid = const Uuid();
 
-  String? _apiKey;
+  String? _tenantId;
   bool _isInitialized = false;
   bool _isEnabled = false;
   String? _sessionToken;
@@ -70,14 +70,16 @@ class AddressAutocompleteService extends ChangeNotifier {
     if (_isInitialized) return;
 
     try {
+      // Check if API key exists for any tenant (we'll get tenant from context later)
       final response = await _supabase
           .from('website_settings')
-          .select('value')
+          .select('value, tenant_id')
           .eq('key', 'google_places_api_key')
           .maybeSingle();
 
-      _apiKey = (response?['value'] as String?)?.trim();
-      _isEnabled = _apiKey != null && _apiKey!.isNotEmpty;
+      final apiKey = (response?['value'] as String?)?.trim();
+      _tenantId = response?['tenant_id'] as String?;
+      _isEnabled = apiKey != null && apiKey.isNotEmpty && _tenantId != null;
     } catch (error) {
       debugPrint('AddressAutocompleteService.init error: $error');
       _isEnabled = false;
@@ -92,45 +94,46 @@ class AddressAutocompleteService extends ChangeNotifier {
       await initialize();
     }
 
-    if (!_isEnabled || query.trim().length < 3) {
+    if (!_isEnabled || query.trim().length < 3 || _tenantId == null) {
       return [];
     }
 
-    final uri = Uri.https(
-      'maps.googleapis.com',
-      '/maps/api/place/autocomplete/json',
-      {
-        'input': query,
-        'types': 'address',
-        'components': 'country:cl',
-        'language': 'es',
-        'sessiontoken': sessionToken,
-        'key': _apiKey!,
-      },
-    );
+    try {
+      // Use Supabase Edge Function as proxy to avoid CORS issues
+      final response = await _supabase.functions.invoke(
+        'google-places-proxy',
+        body: {
+          'action': 'autocomplete',
+          'input': query,
+          'sessionToken': sessionToken,
+          'tenantId': _tenantId,
+        },
+      );
 
-    final response = await _httpClient.get(uri);
+      if (response.status != 200) {
+        debugPrint('Google Places proxy error: ${response.data}');
+        return [];
+      }
 
-    if (response.statusCode != 200) {
-      debugPrint('Google Places autocomplete error: ${response.body}');
+      final data = response.data as Map<String, dynamic>;
+      final status = data['status'] as String?;
+
+      if (status != 'OK') {
+        debugPrint('Google Places status: $status - ${data['error_message'] ?? ''}');
+        return [];
+      }
+
+      final predictions = data['predictions'] as List<dynamic>? ?? [];
+      return predictions
+          .map((raw) => AddressSuggestion(
+                placeId: raw['place_id'] as String,
+                description: raw['description'] as String,
+              ))
+          .toList();
+    } catch (error) {
+      debugPrint('Google Places autocomplete error: $error');
       return [];
     }
-
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final status = data['status'] as String?;
-
-    if (status != 'OK') {
-      debugPrint('Google Places status: $status');
-      return [];
-    }
-
-    final predictions = data['predictions'] as List<dynamic>;
-    return predictions
-        .map((raw) => AddressSuggestion(
-              placeId: raw['place_id'] as String,
-              description: raw['description'] as String,
-            ))
-        .toList();
   }
 
   Future<ResolvedAddress?> resolvePlace(String placeId) async {
@@ -138,78 +141,80 @@ class AddressAutocompleteService extends ChangeNotifier {
       await initialize();
     }
 
-    if (!_isEnabled) return null;
+    if (!_isEnabled || _tenantId == null) return null;
 
-    final uri = Uri.https(
-      'maps.googleapis.com',
-      '/maps/api/place/details/json',
-      {
-        'place_id': placeId,
-        'fields': 'formatted_address,address_component,geometry',
-        'language': 'es',
-        'sessiontoken': sessionToken,
-        'key': _apiKey!,
-      },
-    );
+    try {
+      // Use Supabase Edge Function as proxy to avoid CORS issues
+      final response = await _supabase.functions.invoke(
+        'google-places-proxy',
+        body: {
+          'action': 'details',
+          'placeId': placeId,
+          'sessionToken': sessionToken,
+          'tenantId': _tenantId,
+        },
+      );
 
-    final response = await _httpClient.get(uri);
-
-    if (response.statusCode != 200) {
-      debugPrint('Google Places details error: ${response.body}');
-      return null;
-    }
-
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final status = data['status'] as String?;
-
-    if (status != 'OK') {
-      debugPrint('Google Places detail status: $status');
-      return null;
-    }
-
-    final result = data['result'] as Map<String, dynamic>;
-    final components = result['address_components'] as List<dynamic>? ?? [];
-
-    String? getComponent(String type) {
-      try {
-        return components.firstWhere((component) {
-          final types = (component['types'] as List<dynamic>).cast<String>();
-          return types.contains(type);
-        })['long_name']?.toString();
-      } catch (_) {
+      if (response.status != 200) {
+        debugPrint('Google Places proxy error: ${response.data}');
         return null;
       }
+
+      final data = response.data as Map<String, dynamic>;
+      final status = data['status'] as String?;
+
+      if (status != 'OK') {
+        debugPrint('Google Places detail status: $status');
+        return null;
+      }
+
+      final result = data['result'] as Map<String, dynamic>;
+      final components = result['address_components'] as List<dynamic>? ?? [];
+
+      String? getComponent(String type) {
+        try {
+          return components.firstWhere((component) {
+            final types = (component['types'] as List<dynamic>).cast<String>();
+            return types.contains(type);
+          })['long_name']?.toString();
+        } catch (_) {
+          return null;
+        }
+      }
+
+      final street = getComponent('route') ?? '';
+      final number = getComponent('street_number');
+      final apartment = getComponent('subpremise') ?? getComponent('premise');
+      final comuna = getComponent('administrative_area_level_3') ??
+          getComponent('locality') ??
+          getComponent('sublocality_level_1') ??
+          getComponent('sublocality') ??
+          '';
+      final city = getComponent('administrative_area_level_2') ??
+          getComponent('locality') ??
+          comuna;
+      final region = getComponent('administrative_area_level_1') ?? '';
+      final postalCode = getComponent('postal_code');
+
+      final geometry = result['geometry'] as Map<String, dynamic>?;
+      final location = geometry?['location'] as Map<String, dynamic>?;
+
+      return ResolvedAddress(
+        formattedAddress: (result['formatted_address'] as String?)?.trim() ?? '',
+        street: street,
+        streetNumber: number,
+        apartment: apartment,
+        comuna: comuna,
+        city: city,
+        region: region,
+        postalCode: postalCode,
+        latitude: (location?['lat'] as num?)?.toDouble(),
+        longitude: (location?['lng'] as num?)?.toDouble(),
+      );
+    } catch (error) {
+      debugPrint('Google Places details error: $error');
+      return null;
     }
-
-    final street = getComponent('route') ?? '';
-    final number = getComponent('street_number');
-    final apartment = getComponent('subpremise') ?? getComponent('premise');
-    final comuna = getComponent('administrative_area_level_3') ??
-        getComponent('locality') ??
-        getComponent('sublocality_level_1') ??
-        getComponent('sublocality') ??
-        '';
-    final city = getComponent('administrative_area_level_2') ??
-        getComponent('locality') ??
-        comuna;
-    final region = getComponent('administrative_area_level_1') ?? '';
-    final postalCode = getComponent('postal_code');
-
-    final geometry = result['geometry'] as Map<String, dynamic>?;
-    final location = geometry?['location'] as Map<String, dynamic>?;
-
-    return ResolvedAddress(
-      formattedAddress: (result['formatted_address'] as String?)?.trim() ?? '',
-      street: street,
-      streetNumber: number,
-      apartment: apartment,
-      comuna: comuna,
-      city: city,
-      region: region,
-      postalCode: postalCode,
-      latitude: (location?['lat'] as num?)?.toDouble(),
-      longitude: (location?['lng'] as num?)?.toDouble(),
-    );
   }
 
   void resetSessionToken() {

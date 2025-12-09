@@ -8,6 +8,7 @@ import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../providers/cart_provider.dart';
 import '../../shared/widgets/branded_loading.dart';
+import '../../modules/website/providers/website_edit_mode_provider.dart';
 
 class ProductCatalogPage extends StatefulWidget {
   const ProductCatalogPage({super.key});
@@ -46,12 +47,23 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
     // Use public inventory service (works for anonymous users)
     final publicInventoryService = context.read<PublicInventoryService>();
     
+    // Check if we're in edit mode (admin editing website) - show all products including out of stock
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final isEditMode = editProvider.isEditMode;
+    
     // Check if we already have cached products - instant render!
     if (publicInventoryService.hasProductsCache(tenantId)) {
-      _allProducts = await publicInventoryService.getProductsForTenant(
+      var products = await publicInventoryService.getProductsForTenant(
         tenantId: tenantId,
-        onlyInStock: false,
+        onlyInStock: false, // Fetch all, we'll filter below
       );
+      
+      // Filter out out-of-stock products unless in edit mode
+      if (!isEditMode) {
+        products = products.where((p) => p.stockQuantity > 0).toList();
+      }
+      
+      _allProducts = products;
       _updatePriceRange();
       _applyFilters();
       setState(() => _isLoading = false);
@@ -62,10 +74,17 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
     setState(() => _isLoading = true);
 
     try {
-      _allProducts = await publicInventoryService.getProductsForTenant(
+      var products = await publicInventoryService.getProductsForTenant(
         tenantId: tenantId,
-        onlyInStock: false, // Show all products
+        onlyInStock: false, // Fetch all, we'll filter below
       );
+      
+      // Filter out out-of-stock products unless in edit mode
+      if (!isEditMode) {
+        products = products.where((p) => p.stockQuantity > 0).toList();
+      }
+      
+      _allProducts = products;
 
       _updatePriceRange();
       _applyFilters();

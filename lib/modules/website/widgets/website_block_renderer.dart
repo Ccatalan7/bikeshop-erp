@@ -3792,6 +3792,16 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
 
       debugPrint('[ProductsBlock] Loaded ${products.length} products');
 
+      // Filter out out-of-stock products unless in preview mode (admin editing)
+      // In preview mode (editor), show all products including out of stock
+      if (!widget.previewMode) {
+        final originalCount = products.length;
+        products = products.where((p) => p.stockQuantity > 0).toList();
+        debugPrint('[ProductsBlock] Filtered ${originalCount - products.length} out-of-stock products (previewMode: false)');
+      } else {
+        debugPrint('[ProductsBlock] Preview mode - showing ALL products including out-of-stock');
+      }
+
       if (mounted) {
         setState(() {
           _products = products.take(_maxProducts).toList();
