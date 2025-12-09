@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -440,6 +442,17 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
           ),
           if (backup.status == 'completed')
             const PopupMenuItem(
+              value: 'download',
+              child: Row(
+                children: [
+                  Icon(Icons.download, color: Colors.blue),
+                  SizedBox(width: 12),
+                  Text('Descargar JSON', style: TextStyle(color: Colors.blue)),
+                ],
+              ),
+            ),
+          if (backup.status == 'completed')
+            const PopupMenuItem(
               value: 'restore',
               child: Row(
                 children: [
@@ -464,6 +477,9 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
           switch (value) {
             case 'view':
               _showBackupDetails(backup);
+              break;
+            case 'download':
+              _downloadBackup(backup);
               break;
             case 'restore':
               _confirmRestore(backup);
@@ -750,6 +766,71 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _downloadBackup(DatabaseBackup backup) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    scaffoldMessenger.showSnackBar(
+      const SnackBar(content: Text('Preparando descarga...')),
+    );
+
+    try {
+      // Get backup data from service
+      final backupData = await _backupService.getBackupData(backup.id);
+      
+      if (backupData == null) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Error: No se pudo obtener los datos del respaldo'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Convert to JSON string
+      final jsonString = _backupService.backupToJsonString(backupData);
+      
+      if (jsonString == null) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Error: No se pudo convertir el respaldo a JSON'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Create download file name
+      final fileName = 'backup_${backup.backupName.replaceAll(' ', '_').replaceAll(':', '-')}_${DateFormat('yyyyMMdd_HHmmss').format(backup.createdAt)}.json';
+
+      // Trigger download using dart:html (Web only)
+      final bytes = utf8.encode(jsonString);
+      final blob = html.Blob([bytes], 'application/json');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', fileName)
+        ..click();
+      
+      html.Url.revokeObjectUrl(url);
+
+      scaffoldMessenger.hideCurrentSnackBar();
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Respaldo descargado: $fileName'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Error al descargar: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _deleteBackup(DatabaseBackup backup) async {

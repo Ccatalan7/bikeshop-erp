@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/backup.dart';
@@ -146,6 +147,40 @@ class BackupService extends ChangeNotifier {
     } catch (e) {
       debugPrint('❌ Error deleting backup: $e');
       rethrow;
+    }
+  }
+
+  /// Get backup data for download
+  Future<Map<String, dynamic>?> getBackupData(String backupId) async {
+    try {
+      final response = await _client
+          .from('database_backups')
+          .select('backup_data, backup_name, created_at, summary')
+          .eq('id', backupId)
+          .single();
+
+      if (response == null) return null;
+
+      return {
+        'backup_name': response['backup_name'],
+        'created_at': response['created_at'],
+        'summary': response['summary'],
+        'data': response['backup_data'],
+      };
+    } catch (e) {
+      debugPrint('❌ Error getting backup data: $e');
+      return null;
+    }
+  }
+
+  /// Convert backup data to downloadable JSON string
+  String? backupToJsonString(Map<String, dynamic> backupData) {
+    try {
+      const encoder = JsonEncoder.withIndent('  ');
+      return encoder.convert(backupData);
+    } catch (e) {
+      debugPrint('❌ Error converting backup to JSON: $e');
+      return null;
     }
   }
 

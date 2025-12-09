@@ -24,25 +24,44 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
   @override
   void initState() {
     super.initState();
+    debugPrint('🎉 [OrderConfirmationPage] initState() - orderId: ${widget.orderId}');
     _loadOrder();
   }
 
   Future<void> _loadOrder() async {
+    debugPrint('🎉 [OrderConfirmationPage] _loadOrder() started');
+    if (!mounted) {
+      debugPrint('🎉 [OrderConfirmationPage] Widget not mounted, aborting');
+      return;
+    }
+    
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
+      debugPrint('🎉 [OrderConfirmationPage] Getting WebsiteService from Provider...');
       final websiteService =
           Provider.of<WebsiteService>(context, listen: false);
+      debugPrint('🎉 [OrderConfirmationPage] Calling getOrderById(${widget.orderId})...');
       final order = await websiteService.getOrderById(widget.orderId);
+      debugPrint('🎉 [OrderConfirmationPage] Order loaded: ${order?.orderNumber ?? 'NULL'}');
 
+      if (!mounted) {
+        debugPrint('🎉 [OrderConfirmationPage] Widget unmounted after loading, aborting setState');
+        return;
+      }
+      
       setState(() {
         _order = order;
         _isLoading = false;
       });
-    } catch (e) {
+      debugPrint('🎉 [OrderConfirmationPage] setState complete, _order is ${_order == null ? 'NULL' : 'SET'}');
+    } catch (e, stackTrace) {
+      debugPrint('🎉 [OrderConfirmationPage] ERROR loading order: $e');
+      debugPrint('🎉 [OrderConfirmationPage] Stack trace: $stackTrace');
+      if (!mounted) return;
       setState(() {
         _error = 'Error al cargar el pedido: $e';
         _isLoading = false;
@@ -233,9 +252,10 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
                       ...order.items.map((item) => _buildOrderItem(item)),
                       const Divider(height: 32),
 
-                      // Totals
+                      // Totals - Only show IVA if taxAmount > 0 (MercadoPago/Card)
                       _buildTotalRow('Subtotal', order.subtotal),
-                      _buildTotalRow('IVA (19%)', order.taxAmount),
+                      if (order.taxAmount > 0)
+                        _buildTotalRow('IVA (19%)', order.taxAmount),
                       if (order.shippingCost > 0)
                         _buildTotalRow('Envío', order.shippingCost),
                       if (order.discountAmount > 0)

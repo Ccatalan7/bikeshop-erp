@@ -3652,6 +3652,14 @@ begin
     raise notice 'Created payment method: Tarjeta';
   end if;
 
+  -- MercadoPago with IVA (tax_included) - for online payments
+  if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'mercadopago') then
+    insert into payment_methods (tenant_id, code, name, account_id, requires_reference, default_tax_treatment, icon, sort_order, is_active)
+    values (p_tenant_id, 'mercadopago', 'MercadoPago', v_bank_account_id, true, 'tax_included', 'payment', 5, true);
+    v_count := v_count + 1;
+    raise notice 'Created payment method: MercadoPago';
+  end if;
+
   return format('✓ Created %s payment methods for tenant %s', v_count, p_tenant_id);
 end;
 $$;
@@ -13997,10 +14005,19 @@ end $$;
 -- ============================================================================
 
 -- Function to automatically create sales invoice from online order
--- This function:
--- 1. Creates a sales_invoice linked to the order
--- 2. Creates a payment record if order is paid
--- 3. The invoice trigger handles: inventory deduction + journal entry
+-- This function handles different payment methods with different tax treatments:
+--
+-- MERCADOPAGO/CARD:
+--   - tax_treatment = 'tax_included' (IVA 19%)
+--   - invoice_status = 'paid' (if payment confirmed) or 'confirmed' (if pending)
+--   - Creates payment record automatically
+--   - Triggers inventory deduction + journal entry
+--
+-- WIRE TRANSFER/CASH:
+--   - tax_treatment = 'no_tax' (no IVA on informal sales)
+--   - invoice_status = 'sent' (pending manual confirmation)
+--   - NO payment record (user confirms manually in ERP)
+--   - Inventory NOT deducted until confirmed
 create or replace function public.process_online_order(p_order_id uuid)
 returns uuid -- Returns sales_invoice_id
 language plpgsql
@@ -14014,9 +14031,13 @@ declare
   v_items jsonb;
   v_next_number integer;
   v_year text;
-  v_payment_method_id uuid;
+  v_payment_method record;
   v_tenant_id uuid;
   v_net_amount numeric(12,2);
+  v_iva_amount numeric(12,2);
+  v_tax_treatment text;
+  v_invoice_status text;
+  v_should_create_payment boolean;
 begin
   -- Get order details
   select * into v_order
@@ -14036,6 +14057,62 @@ begin
   -- Check if invoice already exists
   if v_order.sales_invoice_id is not null then
     return v_order.sales_invoice_id;
+  end if;
+  
+  -- Get payment method configuration
+  select * into v_payment_method
+  from payment_methods
+  where tenant_id = v_tenant_id
+    and lower(code) = lower(coalesce(v_order.payment_method, 'mercadopago'))
+    and is_active = true
+  limit 1;
+  
+  -- If payment method not found, try fallback
+  if v_payment_method is null then
+    select * into v_payment_method
+    from payment_methods
+    where tenant_id = v_tenant_id
+      and is_active = true
+    order by sort_order
+    limit 1;
+  end if;
+  
+  -- ============================================================================
+  -- DETERMINE TAX TREATMENT BASED ON PAYMENT METHOD
+  -- ============================================================================
+  -- MercadoPago/Card = tax_included (IVA 19%)
+  -- Transfer/Cash = no_tax (use tax_amount from order, which frontend sets to 0)
+  -- ============================================================================
+  if v_order.tax_amount > 0 then
+    v_tax_treatment := 'tax_included';
+    -- Calculate IVA: net = total / 1.19, iva = total - net
+    v_net_amount := round(v_order.total / 1.19, 2);
+    v_iva_amount := round(v_order.total - v_net_amount, 2);
+  else
+    -- Transfer, cash, check = no tax
+    v_tax_treatment := 'no_tax';
+    v_net_amount := v_order.subtotal;
+    v_iva_amount := 0;
+  end if;
+  
+  -- ============================================================================
+  -- DETERMINE INVOICE STATUS BASED ON PAYMENT METHOD + STATUS
+  -- ============================================================================
+  -- MercadoPago + paid = 'paid' (fully processed)
+  -- MercadoPago + pending = 'confirmed' (waiting for webhook)
+  -- Transfer = 'sent' (waiting for manual bank confirmation)
+  -- Cash on delivery = 'sent' (waiting for delivery confirmation)
+  -- ============================================================================
+  if v_order.payment_status = 'paid' then
+    v_invoice_status := 'paid';
+    v_should_create_payment := true;
+  elsif lower(v_order.payment_method) = 'mercadopago' and v_order.payment_status = 'pending' then
+    v_invoice_status := 'confirmed';
+    v_should_create_payment := false;
+  else
+    -- Transfer, cash on delivery, or unknown = sent (pending)
+    v_invoice_status := 'sent';
+    v_should_create_payment := false;
   end if;
   
   -- Generate invoice number PER TENANT in format: INV-25-00001
@@ -14068,20 +14145,10 @@ begin
     v_items := '[]'::jsonb;
   end if;
   
-  -- Calculate net amount (assuming tax_included for online orders)
-  -- net = total / 1.19 when IVA is included
-  if v_order.tax_amount > 0 then
-    v_net_amount := round(v_order.total / 1.19, 2);
-  else
-    v_net_amount := v_order.subtotal;
-  end if;
-  
   -- Create sales invoice WITH tenant_id
-  -- Status 'pagado' will trigger the invoice trigger to:
-  -- - Deduct inventory via consume_sales_invoice_inventory()
-  -- - Create journal entry via create_sales_invoice_journal_entry()
+  -- Only 'paid' status triggers inventory deduction + journal entry
   insert into sales_invoices (
-    tenant_id, -- CRITICAL: Include tenant_id
+    tenant_id,
     invoice_number,
     customer_id,
     customer_name,
@@ -14098,95 +14165,72 @@ begin
     items,
     reference
   ) values (
-    v_tenant_id, -- CRITICAL: Use order's tenant_id
+    v_tenant_id,
     v_invoice_number,
     v_order.customer_id,
     v_order.customer_name,
     now(),
     now() + interval '30 days',
-    case when v_order.payment_status = 'paid' then 'pagado' else 'enviado' end,
-    case when v_order.tax_amount > 0 then 'tax_included' else 'no_tax' end,
+    v_invoice_status,
+    v_tax_treatment,
     v_net_amount,
     v_order.subtotal,
-    v_order.tax_amount,
+    v_iva_amount,
     v_order.total,
-    case when v_order.payment_status = 'paid' then v_order.total else 0 end,
-    case when v_order.payment_status = 'paid' then 0 else v_order.total end,
+    case when v_should_create_payment then v_order.total else 0 end,
+    case when v_should_create_payment then 0 else v_order.total end,
     v_items,
-    'Pedido online #' || v_order.order_number
+    'Pedido online #' || v_order.order_number || 
+    case 
+      when v_order.delivery_type = 'pickup' then ' (Retiro en tienda)'
+      else ' (Envío)'
+    end
   )
   returning id into v_invoice_id;
   
-  raise notice 'Created invoice % for online order %', v_invoice_number, v_order.order_number;
+  raise notice 'Created invoice % (status: %, tax: %) for online order %', 
+    v_invoice_number, v_invoice_status, v_tax_treatment, v_order.order_number;
   
-  -- Link invoice to order
+  -- Link invoice to order + update order status
   update online_orders
-  set sales_invoice_id = v_invoice_id,
-      status = case when status = 'pending' then 'confirmed' else status end,
-      updated_at = now()
+  set 
+    sales_invoice_id = v_invoice_id,
+    invoice_id = v_invoice_id,  -- Alias
+    status = case 
+      when status = 'pending' then 'confirmed' 
+      else status 
+    end,
+    updated_at = now()
   where id = p_order_id;
   
-  -- If order is already paid, create payment record
-  if v_order.payment_status = 'paid' then
-    -- Get payment method ID by code (default to MercadoPago if not found)
-    -- Look in tenant's payment methods first
-    select id into v_payment_method_id
-    from payment_methods
-    where tenant_id = v_tenant_id
-      and lower(code) = lower(coalesce(v_order.payment_method, 'mercadopago'))
-      and is_active = true
-    limit 1;
+  -- Create payment record ONLY if payment is confirmed
+  if v_should_create_payment and v_payment_method.id is not null then
+    insert into sales_payments (
+      tenant_id,
+      invoice_id,
+      invoice_reference,
+      payment_method_id,
+      amount,
+      payment_date,
+      reference,
+      notes
+    ) values (
+      v_tenant_id,
+      v_invoice_id,
+      v_invoice_number,
+      v_payment_method.id,
+      v_order.total,
+      coalesce(v_order.paid_at, now()),
+      v_order.payment_reference,
+      'Pago automático - Pedido online #' || v_order.order_number ||
+      ' (' || coalesce(v_payment_method.name, v_order.payment_method) || ')'
+    );
     
-    -- If payment method not found, try any MercadoPago for tenant
-    if v_payment_method_id is null then
-      select id into v_payment_method_id
-      from payment_methods
-      where tenant_id = v_tenant_id
-        and lower(code) = 'mercadopago'
-        and is_active = true
-      limit 1;
-    end if;
-    
-    -- If still not found, try any transfer method
-    if v_payment_method_id is null then
-      select id into v_payment_method_id
-      from payment_methods
-      where tenant_id = v_tenant_id
-        and lower(code) in ('transfer', 'transferencia', 'bank_transfer')
-        and is_active = true
-      limit 1;
-    end if;
-    
-    -- Create payment record if we found a payment method
-    if v_payment_method_id is not null then
-      insert into sales_payments (
-        tenant_id, -- CRITICAL: Include tenant_id
-        invoice_id,
-        invoice_reference,
-        payment_method_id,
-        amount,
-        payment_date,
-        reference,
-        notes
-      ) values (
-        v_tenant_id, -- CRITICAL: Use order's tenant_id
-        v_invoice_id,
-        v_invoice_number,
-        v_payment_method_id,
-        v_order.total,
-        coalesce(v_order.paid_at, now()),
-        v_order.payment_reference,
-        'Pago automático - Pedido online #' || v_order.order_number
-      );
-      
-      raise notice 'Created payment record for invoice %', v_invoice_number;
-      
-      -- The trigger on sales_payments will automatically:
-      -- 1. Create the journal entry (Dr: Bank, Cr: AR)
-      -- 2. Update paid_amount and balance on the invoice
-    else
-      raise notice 'Warning: No payment method found for tenant %, order paid but no payment record created', v_tenant_id;
-    end if;
+    raise notice 'Created payment record for invoice % (method: %)', 
+      v_invoice_number, v_payment_method.name;
+  elsif not v_should_create_payment then
+    raise notice 'Invoice % pending manual payment confirmation (method: %)',
+      v_invoice_number, v_order.payment_method;
   end if;
   
   return v_invoice_id;
@@ -14290,6 +14334,163 @@ begin
   return v_result;
 end;
 $$;
+
+--------------------------------------------------------------------------------
+-- FUNCTION: confirm_online_order_payment
+-- PURPOSE: Manually confirm wire transfer or other pending payments
+-- CALLED BY: ERP admin panel when customer confirms bank transfer
+-- This function:
+-- 1. Updates invoice status to 'confirmed' (triggers inventory deduction)
+-- 2. Creates payment record (triggers journal entry + updates invoice to paid)
+-- 3. Updates order payment_status to 'paid'
+--------------------------------------------------------------------------------
+create or replace function public.confirm_online_order_payment(
+  p_order_id uuid,
+  p_payment_reference text default null,
+  p_payment_date timestamp with time zone default now()
+)
+returns uuid -- Returns payment_id
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order record;
+  v_invoice record;
+  v_payment_method_id uuid;
+  v_payment_id uuid;
+begin
+  -- Get order with tenant context
+  select * into v_order
+  from online_orders
+  where id = p_order_id
+    and tenant_id = public.user_tenant_id();
+  
+  if not found then
+    raise exception 'Order not found or access denied: %', p_order_id;
+  end if;
+  
+  -- Check order has invoice
+  if v_order.sales_invoice_id is null then
+    raise exception 'Order has no invoice. Call process_online_order first.';
+  end if;
+  
+  -- Get invoice
+  select * into v_invoice
+  from sales_invoices
+  where id = v_order.sales_invoice_id;
+  
+  if not found then
+    raise exception 'Invoice not found: %', v_order.sales_invoice_id;
+  end if;
+  
+  -- Check invoice isn't already paid
+  if v_invoice.status = 'paid' then
+    raise notice 'Invoice already paid';
+    return null;
+  end if;
+  
+  -- Get payment method
+  select id into v_payment_method_id
+  from payment_methods
+  where tenant_id = v_order.tenant_id
+    and lower(code) = lower(coalesce(v_order.payment_method, 'transfer'))
+    and is_active = true
+  limit 1;
+  
+  -- Fallback to any transfer method
+  if v_payment_method_id is null then
+    select id into v_payment_method_id
+    from payment_methods
+    where tenant_id = v_order.tenant_id
+      and lower(code) in ('transfer', 'transferencia', 'bank_transfer')
+      and is_active = true
+    limit 1;
+  end if;
+  
+  if v_payment_method_id is null then
+    raise exception 'No payment method found for tenant %', v_order.tenant_id;
+  end if;
+  
+  -- Update invoice to confirmed (triggers inventory deduction if not already done)
+  update sales_invoices
+  set 
+    status = 'confirmed',
+    updated_at = now()
+  where id = v_invoice.id
+    and status != 'paid'; -- Only update if not already paid
+  
+  -- Create payment record (triggers journal entry + updates invoice to paid)
+  insert into sales_payments (
+    tenant_id,
+    invoice_id,
+    invoice_reference,
+    payment_method_id,
+    amount,
+    payment_date,
+    reference,
+    notes
+  ) values (
+    v_order.tenant_id,
+    v_invoice.id,
+    v_invoice.invoice_number,
+    v_payment_method_id,
+    v_order.total,
+    p_payment_date,
+    p_payment_reference,
+    'Confirmación manual - Transferencia bancaria - Pedido #' || v_order.order_number
+  )
+  returning id into v_payment_id;
+  
+  -- Update order payment status
+  update online_orders
+  set 
+    payment_status = 'paid',
+    paid_at = p_payment_date,
+    payment_reference = coalesce(p_payment_reference, payment_reference),
+    updated_at = now()
+  where id = p_order_id;
+  
+  raise notice 'Payment confirmed for order % (invoice %)', 
+    v_order.order_number, v_invoice.invoice_number;
+  
+  return v_payment_id;
+end;
+$$;
+
+grant execute on function public.confirm_online_order_payment(uuid, text, timestamp with time zone) to authenticated;
+
+--------------------------------------------------------------------------------
+-- TRIGGER: Auto-create invoice for non-MercadoPago orders on creation
+-- MercadoPago orders wait for webhook confirmation before invoice creation
+--------------------------------------------------------------------------------
+create or replace function public.handle_new_online_order()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Only create invoice immediately for non-MercadoPago orders
+  -- MercadoPago orders wait for webhook confirmation
+  if lower(coalesce(NEW.payment_method, '')) not in ('mercadopago', 'mercado_pago') then
+    -- Create invoice with 'sent' status (pending payment)
+    perform public.process_online_order(NEW.id);
+    raise notice 'Auto-created invoice for non-MercadoPago order %', NEW.order_number;
+  else
+    raise notice 'MercadoPago order % - invoice will be created on payment confirmation', NEW.order_number;
+  end if;
+  
+  return NEW;
+end;
+$$;
+
+-- Create trigger (replace if exists)
+drop trigger if exists trg_online_order_auto_invoice on online_orders;
+create trigger trg_online_order_auto_invoice
+  after insert on online_orders
+  for each row
+  execute function public.handle_new_online_order();
 
 --------------------------------------------------------------------------------
 -- FUNCTION: update_online_order_status

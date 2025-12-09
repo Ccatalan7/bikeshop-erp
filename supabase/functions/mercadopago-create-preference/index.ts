@@ -17,21 +17,27 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get MercadoPago credentials from database
-    const { data: settings } = await supabase
+    // Parse request body first to get tenant_id
+    const { order_id, order_number, total, items, payer, back_urls, notification_url, tenant_id } = await req.json()
+
+    // Get MercadoPago credentials from database (filtered by tenant_id)
+    let query = supabase
       .from('website_settings')
       .select('key, value')
       .in('key', ['mercadopago_access_token', 'mercadopago_test_mode'])
+    
+    if (tenant_id) {
+      query = query.eq('tenant_id', tenant_id)
+    }
+    
+    const { data: settings } = await query
 
     const accessToken = settings?.find(s => s.key === 'mercadopago_access_token')?.value
     const isTestMode = settings?.find(s => s.key === 'mercadopago_test_mode')?.value === 'true'
 
     if (!accessToken) {
-      throw new Error('MercadoPago not configured')
+      throw new Error('MercadoPago not configured for this tenant')
     }
-
-    // Parse request body
-    const { order_id, order_number, total, items, payer, back_urls, notification_url } = await req.json()
 
     // Create preference in MercadoPago
     const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {

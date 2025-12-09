@@ -784,14 +784,21 @@ class WebsiteService extends ChangeNotifier {
 
   Future<OnlineOrder?> getOrderById(String id) async {
     try {
+      debugPrint('🎉 [WebsiteService] getOrderById($id) called');
       final response =
           await _supabase.from('online_orders').select().eq('id', id).single();
+      debugPrint('🎉 [WebsiteService] Order response received');
 
       final order = OnlineOrder.fromJson(response);
+      debugPrint('🎉 [WebsiteService] Order parsed: ${order.orderNumber}');
+      
       final items = await _loadOrderItems(order.id);
+      debugPrint('🎉 [WebsiteService] Order items loaded: ${items.length}');
+      
       return order.copyWith(items: items);
-    } catch (e) {
-      debugPrint('Error loading order: $e');
+    } catch (e, stackTrace) {
+      debugPrint('❌ [WebsiteService] Error loading order: $e');
+      debugPrint('❌ [WebsiteService] Stack trace: $stackTrace');
       return null;
     }
   }
@@ -800,6 +807,8 @@ class WebsiteService extends ChangeNotifier {
   Future<String> createOrder(Map<String, dynamic> orderData,
       List<Map<String, dynamic>> orderItems) async {
     try {
+      debugPrint('🛒 [WebsiteService] createOrder() called');
+      
       // Insert order and get the generated ID
       final orderResponse = await _supabase
           .from('online_orders')
@@ -808,6 +817,7 @@ class WebsiteService extends ChangeNotifier {
           .single();
 
       final orderId = orderResponse['id'] as String;
+      debugPrint('🛒 [WebsiteService] Order inserted, id: $orderId');
 
       // Insert order items
       final itemsToInsert = orderItems.map((item) {
@@ -818,14 +828,18 @@ class WebsiteService extends ChangeNotifier {
       }).toList();
 
       await _supabase.from('online_order_items').insert(itemsToInsert);
+      debugPrint('🛒 [WebsiteService] Order items inserted: ${itemsToInsert.length}');
 
-      // Reload orders
-      await loadOrders();
-
+      // DON'T call loadOrders() here - it causes a full rebuild of the widget tree
+      // which triggers navigation issues in the public store.
+      // The checkout page only needs the orderId to proceed.
+      // Admin pages can refresh orders list separately if needed.
+      
+      debugPrint('🛒 [WebsiteService] ✅ createOrder() completed successfully');
       return orderId;
     } catch (e) {
       _error = 'Error al crear pedido: $e';
-      debugPrint(_error);
+      debugPrint('🛒 [WebsiteService] ❌ createOrder() error: $_error');
       _safeNotifyListeners();
       rethrow;
     }
@@ -918,7 +932,7 @@ class WebsiteService extends ChangeNotifier {
           .from('products')
           .select()
           .eq('show_on_website', true)
-          .gt('stock_quantity', 0)
+          .gt('inventory_qty', 0)
           .order('name');
 
       return (response as List).map((json) => Product.fromJson(json)).toList();

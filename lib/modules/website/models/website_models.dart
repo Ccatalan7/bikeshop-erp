@@ -436,10 +436,10 @@ class OnlineOrder {
     return OnlineOrder(
       id: json['id'] as String,
       tenantId: json['tenant_id']?.toString() ?? '',
-      orderNumber: json['order_number'] as String,
+      orderNumber: json['order_number']?.toString() ?? 'N/A',
       customerId: json['customer_id'] as String?,
-      customerEmail: json['customer_email'] as String,
-      customerName: json['customer_name'] as String,
+      customerEmail: json['customer_email']?.toString() ?? '',
+      customerName: json['customer_name']?.toString() ?? 'Cliente',
       customerPhone: json['customer_phone'] as String?,
       customerAddress: json['customer_address'] as String?,
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
@@ -621,15 +621,17 @@ class OnlineOrderItem {
 
   factory OnlineOrderItem.fromJson(Map<String, dynamic> json) {
     return OnlineOrderItem(
-      id: json['id'] as String,
-      orderId: json['order_id'] as String,
+      id: json['id']?.toString() ?? '',
+      orderId: json['order_id']?.toString() ?? '',
       productId: json['product_id'] as String?,
-      productName: json['product_name'] as String,
+      productName: json['product_name']?.toString() ?? 'Producto',
       productSku: json['product_sku'] as String?,
-      quantity: json['quantity'] as int,
-      unitPrice: (json['unit_price'] as num).toDouble(),
-      subtotal: (json['subtotal'] as num).toDouble(),
-      createdAt: DateTime.parse(json['created_at'] as String),
+      quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+      unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0.0,
+      subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
+      createdAt: json['created_at'] != null 
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
     );
   }
 

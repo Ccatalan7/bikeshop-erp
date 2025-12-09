@@ -17,16 +17,28 @@ class MercadoPagoService extends ChangeNotifier {
   String? _accessToken;
   bool _isTestMode = true; // Start in test mode
   String? _storeUrl;
+  String? _tenantId; // Tenant ID for multi-tenant filtering
 
   String? get publicKey => _publicKey;
   bool get isTestMode => _isTestMode;
   bool get isConfigured => _publicKey != null && _accessToken != null;
 
+  /// Set the tenant ID for multi-tenant filtering
+  void setTenantId(String tenantId) {
+    _tenantId = tenantId;
+    debugPrint('🔧 [MercadoPago] Set tenant_id: $tenantId');
+  }
+
   /// Initialize MercadoPago with credentials from database settings
-  Future<void> initialize() async {
+  /// If tenantId is provided, filters by tenant. Otherwise uses RLS.
+  Future<void> initialize({String? tenantId}) async {
+    if (tenantId != null) {
+      _tenantId = tenantId;
+    }
+    
     try {
       // Load MercadoPago settings from website_settings table
-      final response = await _supabase
+      var query = _supabase
           .from('website_settings')
           .select('key, value')
           .inFilter('key', [
@@ -35,6 +47,13 @@ class MercadoPagoService extends ChangeNotifier {
         'mercadopago_test_mode',
         'store_url',
       ]);
+      
+      // Filter by tenant if available
+      if (_tenantId != null) {
+        query = query.eq('tenant_id', _tenantId!);
+      }
+
+      final response = await query;
 
       for (final setting in response as List) {
         final key = setting['key'] as String;
@@ -55,6 +74,8 @@ class MercadoPagoService extends ChangeNotifier {
             break;
         }
       }
+      
+      debugPrint('🔧 [MercadoPago] Initialized - configured: $isConfigured, tenant: $_tenantId');
 
       notifyListeners();
     } catch (e) {
@@ -63,22 +84,28 @@ class MercadoPagoService extends ChangeNotifier {
   }
 
   /// Save MercadoPago credentials to database
+  /// Requires tenant_id to be set first via setTenantId() or initialize(tenantId:)
   Future<void> saveCredentials({
     required String publicKey,
     required String accessToken,
     required bool testMode,
   }) async {
+    if (_tenantId == null) {
+      throw Exception('tenant_id not set. Call setTenantId() first.');
+    }
+    
     try {
       await _supabase.from('website_settings').upsert([
-        {'key': 'mercadopago_public_key', 'value': publicKey},
-        {'key': 'mercadopago_access_token', 'value': accessToken},
-        {'key': 'mercadopago_test_mode', 'value': testMode ? 'true' : 'false'},
-      ]);
+        {'tenant_id': _tenantId, 'key': 'mercadopago_public_key', 'value': publicKey},
+        {'tenant_id': _tenantId, 'key': 'mercadopago_access_token', 'value': accessToken},
+        {'tenant_id': _tenantId, 'key': 'mercadopago_test_mode', 'value': testMode ? 'true' : 'false'},
+      ], onConflict: 'tenant_id,key');
 
       _publicKey = publicKey;
       _accessToken = accessToken;
       _isTestMode = testMode;
 
+      debugPrint('✅ [MercadoPago] Credentials saved for tenant: $_tenantId');
       notifyListeners();
     } catch (e) {
       debugPrint('Error saving MercadoPago credentials: $e');
@@ -109,6 +136,7 @@ class MercadoPagoService extends ChangeNotifier {
       final response = await _supabase.functions.invoke(
         'mercadopago-create-preference',
         body: {
+          'tenant_id': _tenantId, // Pass tenant_id for multi-tenant filtering
           'order_id': orderId,
           'order_number': orderNumber,
           'total': total,

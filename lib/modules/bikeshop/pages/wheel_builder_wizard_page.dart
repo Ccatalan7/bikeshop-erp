@@ -1134,7 +1134,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                           const Divider(height: 16),
                           ...compatibleLeftSpokes.map((spoke) {
                             final spokeModel = WheelSpoke.fromJson(spoke);
-                            final stock = spoke['stock_quantity'] as int? ?? 0;
+                            final stock = spoke['inventory_qty'] as int? ?? spoke['stock_quantity'] as int? ?? 0;
                             final diff = spoke['length_difference_mm'] as double;
                             
                             return ListTile(
@@ -1176,7 +1176,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                           const Divider(height: 16),
                           ...compatibleRightSpokes.map((spoke) {
                             final spokeModel = WheelSpoke.fromJson(spoke);
-                            final stock = spoke['stock_quantity'] as int? ?? 0;
+                            final stock = spoke['inventory_qty'] as int? ?? spoke['stock_quantity'] as int? ?? 0;
                             final diff = spoke['length_difference_mm'] as double;
                             
                             return ListTile(

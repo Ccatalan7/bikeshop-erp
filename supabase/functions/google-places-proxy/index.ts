@@ -1,4 +1,6 @@
+// @ts-ignore - Deno imports (VS Code TS server doesn't know Deno fetch/URL)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// @ts-ignore - Deno imports
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -7,17 +9,26 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-serve(async (req) => {
+// @ts-ignore - Deno serve function
+serve(async (req: Request): Promise<Response> => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { action, input, placeId, sessionToken, tenantId } = await req.json();
+    const { action, input, placeId, sessionToken, tenantId } = (await req.json()) as {
+      action: string;
+      input?: string;
+      placeId?: string;
+      sessionToken?: string;
+      tenantId: string;
+    };
 
     // Get API key from website_settings
+    // @ts-ignore - Deno.env is available in Deno runtime
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    // @ts-ignore - Deno.env is available in Deno runtime
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -72,10 +83,11 @@ serve(async (req) => {
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
-    console.error("Google Places proxy error:", error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Google Places proxy error:", message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -294,7 +294,7 @@ class SmartPurchaseListService extends ChangeNotifier {
       return;
     }
     
-    final newStock = payload.newRecord['stock_quantity'] as int? ?? 0;
+    final newStock = payload.newRecord['inventory_qty'] as int? ?? payload.newRecord['stock_quantity'] as int? ?? 0;
     final minStock = payload.newRecord['min_stock_level'] as int? ?? 0;
     final productName = payload.newRecord['name'] as String? ?? 'Unknown';
     
@@ -585,7 +585,7 @@ class SmartPurchaseListService extends ChangeNotifier {
           .eq('id', productId)
           .single();
 
-      final currentStock = product['stock_quantity'] as int? ?? 0;
+      final currentStock = product['inventory_qty'] as int? ?? product['stock_quantity'] as int? ?? 0;
       final minStock = product['min_stock_level'] as int? ?? 0;
 
       debugPrint('📦 Product: ${product['name']} | Stock: $currentStock / $minStock');
@@ -932,7 +932,7 @@ class SmartPurchaseListService extends ChangeNotifier {
         
         final product = productMap[productId];
         if (product != null) {
-          final stockQty = product['stock_quantity'] as int? ?? 0;
+          final stockQty = product['inventory_qty'] as int? ?? product['stock_quantity'] as int? ?? 0;
           final minStock = product['min_stock_level'] as int? ?? 0;
           
           // Remove if stock is now above minimum (no longer needed)
@@ -951,7 +951,7 @@ class SmartPurchaseListService extends ChangeNotifier {
       // 2. ADD: Find products with low stock that aren't in the list yet
       final lowStockProducts = (allProducts as List).where((product) {
         final productId = product['id']?.toString();
-        final stockQty = product['stock_quantity'] as int? ?? 0;
+        final stockQty = product['inventory_qty'] as int? ?? product['stock_quantity'] as int? ?? 0;
         final minStock = product['min_stock_level'] as int? ?? 0;
         
         // Skip if already in purchase list (any status)
@@ -1030,11 +1030,11 @@ class SmartPurchaseListService extends ChangeNotifier {
       // Get current stock
       final product = await _client
           .from('products')
-          .select('stock_quantity')
+          .select('inventory_qty, stock_quantity')
           .eq('id', productId)
           .single();
 
-      final currentStock = product['stock_quantity'] as int? ?? 0;
+      final currentStock = product['inventory_qty'] as int? ?? product['stock_quantity'] as int? ?? 0;
 
       // Calculate estimated stockout date
       String? estimatedStockoutDate;

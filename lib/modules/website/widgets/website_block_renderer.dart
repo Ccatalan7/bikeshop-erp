@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../public_store/theme/public_store_theme.dart';
+// import '../../../public_store/theme/public_store_theme.dart'; // Unused
 import '../../../shared/models/product.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/website_block_type.dart';
@@ -3831,7 +3831,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           sku: map['sku']?.toString() ?? '',
           price: (map['price'] as num?)?.toDouble() ?? 0,
           cost: (map['cost'] as num?)?.toDouble() ?? 0,
-          stockQuantity: (map['stock_quantity'] as num?)?.toInt() ?? 0,
+          stockQuantity: (map['inventory_qty'] as num?)?.toInt() ?? (map['stock_quantity'] as num?)?.toInt() ?? 0,
           imageUrl: map['image_url']?.toString(),
           imageUrls: (map['image_urls'] as List?)?.cast<String>() ?? [],
           description: map['description']?.toString() ?? '',

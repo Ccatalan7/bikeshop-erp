@@ -2142,7 +2142,7 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
             
             final isActive = product['is_active'] == true;
             final isPublished = product['is_published'] == true;
-            final stockQty = (product['stock_quantity'] as num?)?.toInt() ?? 0;
+            final stockQty = (product['inventory_qty'] as num?)?.toInt() ?? (product['stock_quantity'] as num?)?.toInt() ?? 0;
             final isAvailable = isActive && isPublished && stockQty > 0;
             final statusText = !isActive ? 'Inactivo' : stockQty <= 0 ? 'Sin stock' : !isPublished ? 'No publicado' : null;
             
@@ -2348,7 +2348,7 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                   final productId = product['id'].toString();
                   final isSelected = _selected.contains(productId);
                   final isPublished = product['is_published'] == true;
-                  final stockQty = (product['stock_quantity'] as num?)?.toInt() ?? 0;
+                  final stockQty = (product['inventory_qty'] as num?)?.toInt() ?? (product['stock_quantity'] as num?)?.toInt() ?? 0;
                   final isAvailable = isPublished && stockQty > 0;
                   
                   return InkWell(

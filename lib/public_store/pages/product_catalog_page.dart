@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../theme/public_store_theme.dart';
+// import '../theme/public_store_theme.dart'; // Unused
 import '../services/public_inventory_service.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
-import '../providers/cart_provider.dart';
+// import '../providers/cart_provider.dart'; // Unused
 import '../../shared/widgets/branded_loading.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 
@@ -21,6 +21,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
   bool _isLoading = true;
+  
+  // Pagination state
+  int _currentPage = 1;
+  int _itemsPerPage = 20; // Default: 20 items per page
+  static const List<int> _itemsPerPageOptions = [20, 50, 100];
 
   String _searchQuery = '';
   String? _selectedCategoryId;
@@ -51,40 +56,18 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
     final editProvider = context.read<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
     
-    // Check if we already have cached products - instant render!
-    if (publicInventoryService.hasProductsCache(tenantId)) {
-      var products = await publicInventoryService.getProductsForTenant(
-        tenantId: tenantId,
-        onlyInStock: false, // Fetch all, we'll filter below
-      );
-      
-      // Filter out out-of-stock products unless in edit mode
-      if (!isEditMode) {
-        products = products.where((p) => p.stockQuantity > 0).toList();
-      }
-      
-      _allProducts = products;
-      _updatePriceRange();
-      _applyFilters();
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    // No cache - show loading and fetch
     setState(() => _isLoading = true);
 
     try {
+      // Load ALL products at once (no pagination) so search works across entire catalog
       var products = await publicInventoryService.getProductsForTenant(
         tenantId: tenantId,
-        onlyInStock: false, // Fetch all, we'll filter below
+        onlyInStock: !isEditMode, // Filter by stock unless in edit mode
+        // No limit - fetch all products
       );
       
-      // Filter out out-of-stock products unless in edit mode
-      if (!isEditMode) {
-        products = products.where((p) => p.stockQuantity > 0).toList();
-      }
-      
       _allProducts = products;
+      debugPrint('[ProductCatalogPage] Loaded ${products.length} products');
 
       _updatePriceRange();
       _applyFilters();
@@ -108,6 +91,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
 
   void _applyFilters() {
     setState(() {
+      // Reset to first page when filters change
+      _currentPage = 1;
+      
       _filteredProducts = _allProducts.where((product) {
         // Search filter
         if (_searchQuery.isNotEmpty) {
@@ -244,25 +230,25 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   }
 
   Widget _buildCategoryFilters() {
-    final categories = _allProducts
-        .where((p) => p.categoryId != null)
-        .map((p) =>
-            {'id': p.categoryId!, 'name': p.categoryName ?? 'Sin categoría'})
-        .toSet()
-        .toList();
+    // Use a Map to properly deduplicate categories by ID
+    final categoriesMap = <String, String>{};
+    for (final p in _allProducts) {
+      if (p.categoryId != null) {
+        categoriesMap[p.categoryId!] = p.categoryName ?? 'Sin categoría';
+      }
+    }
+    
+    // Sort categories alphabetically by name
+    final sortedCategories = categoriesMap.entries.toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
 
     return Column(
       children: [
         _buildCategoryOption(null, 'Todas', _allProducts.length),
-        ...categories.map((category) {
-          final count =
-              _allProducts.where((p) => p.categoryId == category['id']).length;
-          return _buildCategoryOption(
-            category['id'] as String,
-            category['name'] as String,
-            count,
-          );
-        }).toList(),
+        ...sortedCategories.map((entry) {
+          final count = _allProducts.where((p) => p.categoryId == entry.key).length;
+          return _buildCategoryOption(entry.key, entry.value, count);
+        }),
       ],
     );
   }
@@ -307,54 +293,97 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   }
 
   Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.end,
+    final totalProducts = _filteredProducts.length;
+    final totalPages = (totalProducts / _itemsPerPage).ceil();
+    final startIndex = ((_currentPage - 1) * _itemsPerPage) + 1;
+    final endIndex = (_currentPage * _itemsPerPage).clamp(0, totalProducts);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 4,
-                  height: 24,
-                  color: Colors.black,
-                  margin: const EdgeInsets.only(right: 12),
+                Row(
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 24,
+                      color: Colors.black,
+                      margin: const EdgeInsets.only(right: 12),
+                    ),
+                    const Text(
+                      'PRODUCTOS',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ],
                 ),
-                const Text(
-                  'PRODUCTOS',
+                const SizedBox(height: 8),
+                Text(
+                  totalProducts > 0 
+                      ? 'Mostrando $startIndex - $endIndex de $totalProducts productos'
+                      : '0 productos encontrados',
                   style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                    color: Colors.black,
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              '${_filteredProducts.length} productos encontrados',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade600,
-              ),
-            ),
           ],
         ),
-
-        // Sort Dropdown
+        const SizedBox(height: 16),
+        // Controls row: Items per page, Sort, View toggle
         Row(
           children: [
+            // Items per page selector
             Text(
-              'Ordenar por',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade600,
+              'Mostrar:',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _itemsPerPage,
+                  style: const TextStyle(fontSize: 13, color: Colors.black87),
+                  items: _itemsPerPageOptions.map((count) {
+                    return DropdownMenuItem(
+                      value: count,
+                      child: Text('$count por página'),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _itemsPerPage = value;
+                        _currentPage = 1; // Reset to first page
+                      });
+                    }
+                  },
+                ),
               ),
             ),
-            const SizedBox(width: 12),
+            const Spacer(),
+            // Sort Dropdown
+            Text(
+              'Ordenar por:',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
@@ -363,15 +392,12 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _sortBy,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.black87,
-                  ),
+                  style: const TextStyle(fontSize: 13, color: Colors.black87),
                   items: const [
                     DropdownMenuItem(value: 'name', child: Text('Nombre')),
-                    DropdownMenuItem(value: 'price_asc', child: Text('Precio: Menor a Mayor')),
-                    DropdownMenuItem(value: 'price_desc', child: Text('Precio: Mayor a Menor')),
-                    DropdownMenuItem(value: 'newest', child: Text('Más Recientes')),
+                    DropdownMenuItem(value: 'price_asc', child: Text('Precio, menor a mayor')),
+                    DropdownMenuItem(value: 'price_desc', child: Text('Precio, mayor a menor')),
+                    DropdownMenuItem(value: 'newest', child: Text('Más recientes')),
                   ],
                   onChanged: (value) {
                     if (value != null) {
@@ -423,19 +449,157 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
       );
     }
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.72,
-        crossAxisSpacing: 20,
-        mainAxisSpacing: 20,
+    // Calculate pagination
+    final totalProducts = _filteredProducts.length;
+    final totalPages = (totalProducts / _itemsPerPage).ceil();
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = (startIndex + _itemsPerPage).clamp(0, totalProducts);
+    final paginatedProducts = _filteredProducts.sublist(startIndex, endIndex);
+
+    return Column(
+      children: [
+        // Product Grid
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            childAspectRatio: 0.72,
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 20,
+          ),
+          itemCount: paginatedProducts.length,
+          itemBuilder: (context, index) {
+            return _CatalogProductCard(product: paginatedProducts[index]);
+          },
+        ),
+        
+        // Pagination Controls
+        if (totalPages > 1) ...[          const SizedBox(height: 32),
+          _buildPaginationControls(totalPages),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPaginationControls(int totalPages) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Previous button
+        if (_currentPage > 1)
+          TextButton(
+            onPressed: () => setState(() => _currentPage--),
+            child: Row(
+              children: [
+                Icon(Icons.chevron_left, size: 20, color: Colors.grey.shade700),
+                Text('Anterior', style: TextStyle(color: Colors.grey.shade700)),
+              ],
+            ),
+          )
+        else
+          const SizedBox(width: 100),
+        
+        const SizedBox(width: 16),
+        
+        // Page numbers
+        ..._buildPageNumbers(totalPages),
+        
+        const SizedBox(width: 16),
+        
+        // Next button
+        if (_currentPage < totalPages)
+          TextButton(
+            onPressed: () => setState(() => _currentPage++),
+            child: Row(
+              children: [
+                Text('Siguiente', style: TextStyle(color: Colors.grey.shade700)),
+                Icon(Icons.chevron_right, size: 20, color: Colors.grey.shade700),
+              ],
+            ),
+          )
+        else
+          const SizedBox(width: 100),
+      ],
+    );
+  }
+
+  List<Widget> _buildPageNumbers(int totalPages) {
+    final List<Widget> pages = [];
+    
+    // Show first page, last page, current page, and neighbors
+    // Pattern: 1 2 3 ... 28 29 30 (when on page 1-3)
+    // Pattern: 1 ... 5 6 7 ... 30 (when on page 6)
+    // Pattern: 1 ... 28 29 30 (when on page 28-30)
+    
+    final Set<int> pagesToShow = {};
+    
+    // Always show first and last page
+    pagesToShow.add(1);
+    pagesToShow.add(totalPages);
+    
+    // Show current page and neighbors
+    for (int i = _currentPage - 1; i <= _currentPage + 1; i++) {
+      if (i >= 1 && i <= totalPages) {
+        pagesToShow.add(i);
+      }
+    }
+    
+    // Show pages 2, 3 if we're near the start
+    if (_currentPage <= 3) {
+      pagesToShow.addAll([2, 3].where((p) => p <= totalPages));
+    }
+    
+    // Show last few pages if we're near the end
+    if (_currentPage >= totalPages - 2) {
+      pagesToShow.addAll([totalPages - 2, totalPages - 1].where((p) => p >= 1));
+    }
+    
+    final sortedPages = pagesToShow.toList()..sort();
+    
+    for (int i = 0; i < sortedPages.length; i++) {
+      final page = sortedPages[i];
+      
+      // Add ellipsis if there's a gap
+      if (i > 0 && page - sortedPages[i - 1] > 1) {
+        pages.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text('...', style: TextStyle(color: Colors.grey.shade600)),
+          ),
+        );
+      }
+      
+      pages.add(_buildPageButton(page));
+    }
+    
+    return pages;
+  }
+
+  Widget _buildPageButton(int page) {
+    final isSelected = page == _currentPage;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: InkWell(
+        onTap: () => setState(() => _currentPage = page),
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFB71C1C) : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '$page',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected ? Colors.white : Colors.grey.shade700,
+            ),
+          ),
+        ),
       ),
-      itemCount: _filteredProducts.length,
-      itemBuilder: (context, index) {
-        return _CatalogProductCard(product: _filteredProducts[index]);
-      },
     );
   }
 }

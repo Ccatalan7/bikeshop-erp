@@ -437,14 +437,26 @@ class CustomerAccountService extends ChangeNotifier {
     if (_customerProfile == null) return;
 
     try {
+      // Load orders with their items using Supabase foreign key relationship
       final response = await _supabase
           .from('online_orders')
-          .select()
+          .select('''
+            *,
+            online_order_items (*)
+          ''')
           .eq('customer_id', _customerProfile!['id'])
           .order('created_at', ascending: false);
 
-      _orders =
-          (response as List).map((json) => OnlineOrder.fromJson(json)).toList();
+      _orders = (response as List).map((json) {
+        // Extract items from the nested response
+        final itemsJson = json['online_order_items'] as List? ?? [];
+        final items = itemsJson
+            .map((item) => OnlineOrderItem.fromJson(item as Map<String, dynamic>))
+            .toList();
+        
+        // Create order with items
+        return OnlineOrder.fromJson(json).copyWith(items: items);
+      }).toList();
 
       notifyListeners();
     } catch (e) {
@@ -454,13 +466,23 @@ class CustomerAccountService extends ChangeNotifier {
 
   Future<OnlineOrder?> getOrderById(String orderId) async {
     try {
+      // Load order with items
       final response = await _supabase
           .from('online_orders')
-          .select()
+          .select('''
+            *,
+            online_order_items (*)
+          ''')
           .eq('id', orderId)
           .single();
 
-      return OnlineOrder.fromJson(response);
+      // Extract items
+      final itemsJson = response['online_order_items'] as List? ?? [];
+      final items = itemsJson
+          .map((item) => OnlineOrderItem.fromJson(item as Map<String, dynamic>))
+          .toList();
+
+      return OnlineOrder.fromJson(response).copyWith(items: items);
     } catch (e) {
       debugPrint('Error loading order: $e');
       return null;

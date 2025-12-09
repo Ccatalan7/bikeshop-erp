@@ -93,7 +93,7 @@ class PaymentMethodService extends ChangeNotifier {
           .select()
           .single();
 
-      final created = PaymentMethod.fromJson(response as Map<String, dynamic>);
+      final created = PaymentMethod.fromJson(response);
       await refresh();
       return created;
     } catch (e) {
@@ -114,7 +114,7 @@ class PaymentMethodService extends ChangeNotifier {
           .select()
           .single();
 
-      final updated = PaymentMethod.fromJson(response as Map<String, dynamic>);
+      final updated = PaymentMethod.fromJson(response);
       await refresh();
       return updated;
     } catch (e) {

@@ -149,6 +149,12 @@ class AppRouter {
         debugPrint('🔀 [Router] state.matchedLocation: ${state.matchedLocation}');
         debugPrint('🔀 [Router] state.fullPath: ${state.fullPath}');
         
+        // DEBUG: Print stack trace when navigating to / from another page
+        if (state.uri.path == '/' && state.matchedLocation == '/') {
+          debugPrint('📍 [Router] Navigation to / detected! Stack trace:');
+          debugPrint(StackTrace.current.toString().split('\n').take(15).join('\n'));
+        }
+        
         if (authService.isInitializing) {
           debugPrint('🔄 [Router] Auth still initializing, allowing navigation to: ${state.uri.path}');
           return null;
@@ -193,12 +199,9 @@ class AppRouter {
         if (forcePublicStoreHost) {
           debugPrint('🌐 [Router] forcePublicStoreHost=true, path=$path, isPublicRoute=$isPublicRoute');
 
-          // Redirect legacy /tienda paths to clean paths
-          if (state.uri.path.startsWith('/tienda')) {
-            final newPath = state.uri.path.replaceFirst('/tienda', '');
-            debugPrint('🔀 [Router] Redirecting /tienda path to: ${newPath.isEmpty ? '/' : newPath}');
-            return newPath.isEmpty ? '/' : newPath;
-          }
+          // REMOVED: /tienda stripping logic - it was causing redirect loops
+          // Both /tienda/checkout and /checkout routes exist and work fine
+          // No need to force one over the other
 
           // If somehow a non-public path sneaks in, send to home (should be rare)
           if (!isPublicRoute) {

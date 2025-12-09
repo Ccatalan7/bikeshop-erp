@@ -71,11 +71,11 @@ class PublicInventoryService extends ChangeNotifier {
     bool onlyInStock = true,
     double? minPrice,
     double? maxPrice,
-    int limit = 100,
+    int? limit, // null = no limit (fetch all)
     int offset = 0,
   }) async {
     try {
-      // Check cache first (only if no filters applied)
+      // Check cache first (only if no filters/pagination applied)
       final cacheKey = 'products_$tenantId';
       if (categoryId == null && 
           searchQuery == null && 
@@ -83,6 +83,7 @@ class PublicInventoryService extends ChangeNotifier {
           minPrice == null && 
           maxPrice == null &&
           offset == 0 &&
+          limit == null &&
           _isCacheValid(cacheKey)) {
         return _productsCache[cacheKey] ?? [];
       }
@@ -92,7 +93,11 @@ class PublicInventoryService extends ChangeNotifier {
           .select()
           .eq('tenant_id', tenantId);
 
-      // RLS policy already filters for is_active=true and inventory_qty>0 for anon users
+      // Filter by stock if requested (RLS only filters is_active=true)
+      if (onlyInStock) {
+        query = query.gt('inventory_qty', 0);
+      }
+
       // Apply additional filters
 
       if (categoryId != null && categoryId.isNotEmpty) {
@@ -117,9 +122,12 @@ class PublicInventoryService extends ChangeNotifier {
       }
 
       // Apply ordering and pagination last
-      final response = await query
-          .order('name', ascending: true)
-          .range(offset, offset + limit - 1);
+      var orderedQuery = query.order('name', ascending: true);
+      
+      // Only apply range if limit is specified
+      final response = limit != null
+          ? await orderedQuery.range(offset, offset + limit - 1)
+          : await orderedQuery;
       
       final products = (response as List)
           .map((json) => Product.fromJson(json))

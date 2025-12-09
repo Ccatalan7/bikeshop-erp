@@ -245,7 +245,8 @@ class VinabikeApp extends StatelessWidget {
                 )),
         ChangeNotifierProvider(create: (_) => WebsiteService()),
         ChangeNotifierProvider(create: (_) => WebsiteEditModeProvider()),
-        ChangeNotifierProvider(create: (_) => MercadoPagoService()..initialize()),
+        // MercadoPago: Don't auto-initialize - checkout will init with proper tenant_id
+        ChangeNotifierProvider(create: (_) => MercadoPagoService()),
         ChangeNotifierProvider(create: (_) => BackupService()),
         
         // Public store services

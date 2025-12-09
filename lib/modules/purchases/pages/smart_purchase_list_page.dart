@@ -218,9 +218,9 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       // Build search query - match products with same category and similar keywords
       var query = Supabase.instance.client
           .from('products')
-          .select('id, name, sku, stock_quantity, cost, price')
+          .select('id, name, sku, inventory_qty, stock_quantity, cost, price')
           .eq('tenant_id', tenantId)
-          .gt('stock_quantity', 0); // Only products with stock
+          .gt('inventory_qty', 0); // Only products with stock
 
       // Filter by category if available
       if (item.categoryId != null && item.categoryId!.isNotEmpty) {
@@ -312,7 +312,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             'id': product['id'],
             'name': product['name'],
             'sku': product['sku'],
-            'stock': product['stock_quantity'],
+            'stock': product['inventory_qty'] ?? product['stock_quantity'] ?? 0,
             'cost': product['cost'],
             'price': product['price'],
             'match_score': specMatchScore + keywordMatches,
