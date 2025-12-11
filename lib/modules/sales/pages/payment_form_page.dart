@@ -26,7 +26,14 @@ class _PaymentsPageState extends State<PaymentsPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final salesService = context.read<SalesService>();
-      await salesService.loadPayments(forceRefresh: true);
+      final paymentMethodService = context.read<PaymentMethodService>();
+      
+      // Load both payments and payment methods in parallel
+      await Future.wait([
+        salesService.loadPayments(forceRefresh: true),
+        paymentMethodService.loadPaymentMethods(),
+      ]);
+      
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -36,6 +43,8 @@ class _PaymentsPageState extends State<PaymentsPage> {
   @override
   Widget build(BuildContext context) {
     final salesService = context.watch<SalesService>();
+    // Watch payment methods to trigger rebuild when loaded
+    context.watch<PaymentMethodService>();
     final payments = _filterPayments(salesService.payments, _searchTerm);
 
     return MainLayout(

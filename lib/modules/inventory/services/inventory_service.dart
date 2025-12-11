@@ -103,14 +103,18 @@ class InventoryService extends ChangeNotifier {
       if (!isFilteredQuery) {
         _cachedProducts = sortedProducts;
         _productsCacheTime = DateTime.now();
-        debugPrint('✅ [InventoryService] Cached ${sortedProducts.length} products');
+        if (!kReleaseMode) {
+          debugPrint('✅ [InventoryService] Cached ${sortedProducts.length} products');
+        }
         _isLoadingProducts = false;
       }
       
       return sortedProducts;
     } catch (e) {
       _isLoadingProducts = false;
-      if (kDebugMode) print('Error fetching products: $e');
+      if (!kReleaseMode) {
+        debugPrint('Error fetching products: $e');
+      }
       rethrow;
     }
   }

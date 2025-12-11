@@ -42,13 +42,11 @@ class BrandService extends ChangeNotifier {
       
       // Return cached data if valid and not a filtered query
       if (!forceRefresh && !isFilteredQuery && _isCacheValid(_brandsCacheTime) && _cachedBrands != null) {
-        debugPrint('📦 [BrandService] Using cached brands (${_cachedBrands!.length} items)');
         return _cachedBrands!;
       }
       
       // Prevent concurrent fetches
       if (_isLoadingBrands && !isFilteredQuery) {
-        debugPrint('⏳ [BrandService] Already loading brands, waiting...');
         while (_isLoadingBrands) {
           await Future.delayed(const Duration(milliseconds: 50));
         }
@@ -93,16 +91,12 @@ class BrandService extends ChangeNotifier {
       if (!isFilteredQuery) {
         _cachedBrands = brands;
         _brandsCacheTime = DateTime.now();
-        debugPrint('✅ [BrandService] Cached ${brands.length} brands');
         _isLoadingBrands = false;
       }
       
       return brands;
     } catch (e) {
       _isLoadingBrands = false;
-      if (kDebugMode) {
-        debugPrint('Error fetching brands: $e');
-      }
       rethrow;
     }
   }

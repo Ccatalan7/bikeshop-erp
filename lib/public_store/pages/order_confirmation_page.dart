@@ -1,71 +1,270 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/public_store_theme.dart';
+import '../providers/public_store_tenant_provider.dart';
+import '../providers/cart_provider.dart';
 import '../../modules/website/services/website_service.dart';
+import '../../modules/website/services/mercadopago_service.dart';
 import '../../modules/website/models/website_models.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../shared/widgets/branded_loading.dart';
 
 class OrderConfirmationPage extends StatefulWidget {
   final String orderId;
+  final String? paymentStatus; // 'success', 'failure', 'pending' from MercadoPago callback
 
-  const OrderConfirmationPage({super.key, required this.orderId});
+  const OrderConfirmationPage({
+    super.key, 
+    required this.orderId,
+    this.paymentStatus,
+  });
 
   @override
   State<OrderConfirmationPage> createState() => _OrderConfirmationPageState();
+}
+
+// Static cache to persist state across widget rebuilds during provider notifications
+class _OrderConfirmationCache {
+  static final Set<String> processedOrderIds = {};
+  static final Map<String, OnlineOrder> loadedOrders = {};
+  static final Set<String> currentlyLoading = {};
+  static final Map<String, String?> loadErrors = {};
+  static final Map<String, String?> paymentMessages = {};
+  
+  static void clear(String orderId) {
+    processedOrderIds.remove(orderId);
+    loadedOrders.remove(orderId);
+    currentlyLoading.remove(orderId);
+    loadErrors.remove(orderId);
+    paymentMessages.remove(orderId);
+  }
 }
 
 class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
   OnlineOrder? _order;
   bool _isLoading = true;
   String? _error;
+  String? _paymentMessage;
+  bool _callbackProcessed = false;
 
   @override
   void initState() {
     super.initState();
-    debugPrint('🎉 [OrderConfirmationPage] initState() - orderId: ${widget.orderId}');
-    _loadOrder();
+    debugPrint('🎉 [OrderConfirmationPage] initState() - orderId: ${widget.orderId}, status: ${widget.paymentStatus}');
+    
+    // Check if order is already cached (survives widget rebuilds)
+    if (_OrderConfirmationCache.loadedOrders.containsKey(widget.orderId)) {
+      debugPrint('🎉 [OrderConfirmationPage] Using cached order data');
+      _order = _OrderConfirmationCache.loadedOrders[widget.orderId];
+      _paymentMessage = _OrderConfirmationCache.paymentMessages[widget.orderId];
+      _error = _OrderConfirmationCache.loadErrors[widget.orderId];
+      _isLoading = false;
+      _callbackProcessed = true;
+      return;
+    }
+    
+    // Check if this order was already processed (prevents duplicate on page rebuild)
+    if (_OrderConfirmationCache.processedOrderIds.contains(widget.orderId)) {
+      debugPrint('🎉 [OrderConfirmationPage] Order already processed, skipping callback');
+      _callbackProcessed = true;
+      // Check if another instance is already loading
+      if (!_OrderConfirmationCache.currentlyLoading.contains(widget.orderId)) {
+        _loadOrder();
+      } else {
+        debugPrint('🎉 [OrderConfirmationPage] Another instance is loading, waiting...');
+        _waitForLoading();
+      }
+    } else {
+      _handleMercadoPagoCallback();
+    }
+  }
+  
+  /// Wait for another instance to finish loading, then use cached data
+  Future<void> _waitForLoading() async {
+    // Poll until loading is complete
+    while (_OrderConfirmationCache.currentlyLoading.contains(widget.orderId)) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (!mounted) return;
+    }
+    
+    // Use cached data
+    if (mounted) {
+      setState(() {
+        _order = _OrderConfirmationCache.loadedOrders[widget.orderId];
+        _paymentMessage = _OrderConfirmationCache.paymentMessages[widget.orderId];
+        _error = _OrderConfirmationCache.loadErrors[widget.orderId];
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// Handle MercadoPago callback when returning from payment
+  Future<void> _handleMercadoPagoCallback() async {
+    final status = widget.paymentStatus;
+    
+    if (status == null || status.isEmpty) {
+      // No payment callback, just load the order
+      _loadOrder();
+      return;
+    }
+
+    debugPrint('🎉 [OrderConfirmationPage] Processing MercadoPago callback: status=$status');
+    
+    // Mark as processed to prevent duplicate calls on rebuild
+    _OrderConfirmationCache.processedOrderIds.add(widget.orderId);
+    _callbackProcessed = true;
+    
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Get payment_id from URL query params (MercadoPago adds it)
+      String? paymentId;
+      if (kIsWeb) {
+        final params = Uri.base.queryParameters;
+        paymentId = params['payment_id'] ?? params['collection_id'];
+        debugPrint('🎉 [OrderConfirmationPage] Payment ID from URL: $paymentId');
+      }
+
+      if (status == 'success' || status == 'approved') {
+        // Payment successful - update order status
+        debugPrint('🎉 [OrderConfirmationPage] Payment SUCCESS - processing...');
+        
+        final mercadopagoService = Provider.of<MercadoPagoService>(context, listen: false);
+        final tenantProvider = Provider.of<PublicStoreTenantProvider>(context, listen: false);
+        
+        if (tenantProvider.tenantId != null) {
+          await mercadopagoService.initialize(tenantId: tenantProvider.tenantId!);
+        }
+        
+        // Process the payment callback
+        // NOTE: This updates the order status. The webhook will create the invoice.
+        // If webhook already processed, this will just update the order.
+        await mercadopagoService.processPaymentCallback(
+          orderId: widget.orderId,
+          paymentId: paymentId ?? 'unknown',
+          status: 'approved',
+        );
+        
+        _paymentMessage = '¡Pago exitoso! Tu pedido está siendo procesado.';
+        
+        // Clear the cart
+        if (mounted) {
+          final cart = Provider.of<CartProvider>(context, listen: false);
+          cart.clear();
+        }
+        
+      } else if (status == 'pending' || status == 'in_process') {
+        _paymentMessage = 'Tu pago está pendiente de confirmación. Te notificaremos cuando se procese.';
+        
+      } else if (status == 'failure' || status == 'rejected') {
+        _paymentMessage = 'El pago no se completó. Puedes intentar nuevamente.';
+      }
+      
+    } catch (e) {
+      debugPrint('🎉 [OrderConfirmationPage] Error processing callback: $e');
+      // Don't show error to user - the order was created, payment might have gone through
+    }
+    
+    // Load the order regardless of payment processing result
+    await _loadOrder();
   }
 
   Future<void> _loadOrder() async {
     debugPrint('🎉 [OrderConfirmationPage] _loadOrder() started');
-    if (!mounted) {
-      debugPrint('🎉 [OrderConfirmationPage] Widget not mounted, aborting');
+    
+    // Check if already loading (another instance might be doing it)
+    if (_OrderConfirmationCache.currentlyLoading.contains(widget.orderId)) {
+      debugPrint('🎉 [OrderConfirmationPage] Already loading in another instance, waiting...');
+      await _waitForLoading();
       return;
     }
     
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    // Check if already cached
+    if (_OrderConfirmationCache.loadedOrders.containsKey(widget.orderId)) {
+      debugPrint('🎉 [OrderConfirmationPage] Using cached order');
+      if (mounted) {
+        setState(() {
+          _order = _OrderConfirmationCache.loadedOrders[widget.orderId];
+          _paymentMessage = _OrderConfirmationCache.paymentMessages[widget.orderId];
+          _error = _OrderConfirmationCache.loadErrors[widget.orderId];
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+    
+    // Mark as loading
+    _OrderConfirmationCache.currentlyLoading.add(widget.orderId);
+    
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    }
 
     try {
-      debugPrint('🎉 [OrderConfirmationPage] Getting WebsiteService from Provider...');
-      final websiteService =
-          Provider.of<WebsiteService>(context, listen: false);
-      debugPrint('🎉 [OrderConfirmationPage] Calling getOrderById(${widget.orderId})...');
-      final order = await websiteService.getOrderById(widget.orderId);
-      debugPrint('🎉 [OrderConfirmationPage] Order loaded: ${order?.orderNumber ?? 'NULL'}');
-
-      if (!mounted) {
-        debugPrint('🎉 [OrderConfirmationPage] Widget unmounted after loading, aborting setState');
-        return;
+      // Small delay to let database trigger complete
+      await Future.delayed(const Duration(milliseconds: 800));
+      
+      debugPrint('🎉 [OrderConfirmationPage] Loading order directly from Supabase...');
+      
+      // Load order directly from Supabase - NO Provider dependency
+      // This prevents issues when widget rebuilds during provider notifications
+      final supabase = Supabase.instance.client;
+      
+      final response = await supabase
+          .from('online_orders')
+          .select('''
+            *,
+            online_order_items (*)
+          ''')
+          .eq('id', widget.orderId)
+          .maybeSingle();
+      
+      if (response == null) {
+        throw Exception('Order not found');
       }
       
-      setState(() {
-        _order = order;
-        _isLoading = false;
-      });
-      debugPrint('🎉 [OrderConfirmationPage] setState complete, _order is ${_order == null ? 'NULL' : 'SET'}');
+      debugPrint('🎉 [OrderConfirmationPage] Order data received: ${response['order_number']}');
+      
+      final order = OnlineOrder.fromJson(response);
+      debugPrint('🎉 [OrderConfirmationPage] Order parsed: ${order.orderNumber}');
+
+      // Cache the result regardless of mount state
+      _OrderConfirmationCache.loadedOrders[widget.orderId] = order;
+      _OrderConfirmationCache.paymentMessages[widget.orderId] = _paymentMessage;
+      _OrderConfirmationCache.currentlyLoading.remove(widget.orderId);
+      
+      if (mounted) {
+        setState(() {
+          _order = order;
+          _isLoading = false;
+        });
+        debugPrint('🎉 [OrderConfirmationPage] setState complete, _order is SET');
+      } else {
+        debugPrint('🎉 [OrderConfirmationPage] Widget unmounted but order cached for next instance');
+      }
     } catch (e, stackTrace) {
       debugPrint('🎉 [OrderConfirmationPage] ERROR loading order: $e');
       debugPrint('🎉 [OrderConfirmationPage] Stack trace: $stackTrace');
-      if (!mounted) return;
-      setState(() {
-        _error = 'Error al cargar el pedido: $e';
-        _isLoading = false;
-      });
+      
+      // Cache the error
+      _OrderConfirmationCache.loadErrors[widget.orderId] = 'Error al cargar el pedido: $e';
+      _OrderConfirmationCache.currentlyLoading.remove(widget.orderId);
+      
+      if (mounted) {
+        setState(() {
+          _error = 'Error al cargar el pedido: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -199,6 +398,49 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              
+              // Payment Status Message (from MercadoPago callback)
+              if (_paymentMessage != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _paymentMessage!.contains('exitoso') || _paymentMessage!.contains('confirmado')
+                        ? const Color(0xFF10B981).withOpacity(0.1)
+                        : Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _paymentMessage!.contains('exitoso') || _paymentMessage!.contains('confirmado')
+                          ? const Color(0xFF10B981)
+                          : Colors.orange,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _paymentMessage!.contains('exitoso') || _paymentMessage!.contains('confirmado')
+                            ? Icons.check_circle
+                            : Icons.info_outline,
+                        color: _paymentMessage!.contains('exitoso') || _paymentMessage!.contains('confirmado')
+                            ? const Color(0xFF10B981)
+                            : Colors.orange,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _paymentMessage!,
+                          style: TextStyle(
+                            color: _paymentMessage!.contains('exitoso') || _paymentMessage!.contains('confirmado')
+                                ? const Color(0xFF059669)
+                                : Colors.orange.shade800,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 32),
 
               // Order Details Card

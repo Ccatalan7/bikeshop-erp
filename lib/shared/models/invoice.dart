@@ -209,16 +209,24 @@ class InvoiceItem {
   });
 
   factory InvoiceItem.fromJson(Map<String, dynamic> json) {
+    // Handle both 'price' (from process_online_order) and 'unit_price' (from manual invoices)
+    final price = (json['unit_price'] as num?)?.toDouble() ?? 
+                  (json['price'] as num?)?.toDouble() ?? 0.0;
+    // Handle 'total', 'line_total', and 'subtotal' (from process_online_order)
+    final total = (json['total'] as num?)?.toDouble() ?? 
+                  (json['line_total'] as num?)?.toDouble() ?? 
+                  (json['subtotal'] as num?)?.toDouble() ?? 0.0;
+    
     return InvoiceItem(
-      id: json['id'] as String,
-      invoiceId: json['invoice_id'] as String,
-      productId: json['product_id'] as String,
-      productSku: json['product_sku'] as String,
-      productName: json['product_name'] as String,
-      quantity: (json['quantity'] as num).toDouble(),
-      unitPrice: (json['unit_price'] as num).toDouble(),
+      id: json['id']?.toString() ?? '',
+      invoiceId: json['invoice_id']?.toString() ?? '',
+      productId: json['product_id']?.toString() ?? '',
+      productSku: json['product_sku']?.toString() ?? '',
+      productName: json['product_name']?.toString() ?? '',
+      quantity: (json['quantity'] as num?)?.toDouble() ?? 0.0,
+      unitPrice: price,
       discount: (json['discount'] as num?)?.toDouble() ?? 0.0,
-      total: (json['total'] as num).toDouble(),
+      total: total,
     );
   }
 

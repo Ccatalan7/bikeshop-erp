@@ -224,21 +224,52 @@ class JobStatusService extends ChangeNotifier {
   /// Update job to use a specific status
   Future<bool> updateJobStatus(String jobId, String statusId) async {
     try {
-      final status = getStatusById(statusId);
-      if (status == null) throw Exception('Status not found');
+      // Ensure statuses are loaded
+      if (_statuses.isEmpty) {
+        debugPrint('⚠️ [JobStatusService.updateJobStatus] Statuses not loaded, loading now...');
+        await loadStatuses();
+      }
+      
+      var status = getStatusById(statusId);
+      
+      // If still not found, try fetching fresh from DB
+      if (status == null) {
+        debugPrint('⚠️ [JobStatusService.updateJobStatus] Status $statusId not in cache, reloading...');
+        await loadStatuses();
+        status = getStatusById(statusId);
+      }
+      
+      if (status == null) {
+        debugPrint('❌ [JobStatusService.updateJobStatus] Status still not found after reload: $statusId');
+        debugPrint('   Available statuses: ${_statuses.map((s) => '${s.id}: ${s.name}').join(', ')}');
+        throw Exception('Status not found: $statusId');
+      }
 
-      await Supabase.instance.client
+      debugPrint('🔄 [JobStatusService.updateJobStatus] Updating job $jobId to status: ${status.name} (${status.code})');
+      debugPrint('   → status_id: $statusId');
+      debugPrint('   → status (legacy): ${status.code}');
+
+      final response = await Supabase.instance.client
           .from('mechanic_jobs')
           .update({
             'status_id': statusId,
             'status': status.code, // Keep legacy field in sync
             'updated_at': DateTime.now().toIso8601String(),
           })
-          .eq('id', jobId);
+          .eq('id', jobId)
+          .select(); // Add select to get the response back
+      
+      if ((response as List).isEmpty) {
+        debugPrint('⚠️ [JobStatusService.updateJobStatus] Empty response - job may not exist: $jobId');
+        return false;
+      }
+      
+      debugPrint('✅ [JobStatusService.updateJobStatus] DB update successful. Response: ${response.first}');
       
       return true;
-    } catch (e) {
-      debugPrint('❌ Error updating job status: $e');
+    } catch (e, stackTrace) {
+      debugPrint('❌ [JobStatusService.updateJobStatus] Error: $e');
+      debugPrint('   Stack: $stackTrace');
       return false;
     }
   }

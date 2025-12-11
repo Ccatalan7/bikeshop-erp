@@ -58,6 +58,15 @@ class _PegasTablePageState extends State<PegasTablePage>
   bool _needsRefresh = false;
   Timer? _reloadDebounceTimer;
   String _searchTerm = '';
+  
+  // Track when we do local updates to suppress unnecessary reloads
+  // Grace period must be > realtime latency (~100-500ms) + debounce time (500ms) + network jitter
+  // Using 3000ms to be extra safe
+  DateTime? _lastLocalUpdate;
+  static const Duration _localUpdateGracePeriod = Duration(milliseconds: 3000);
+  
+  // Track number of active local operations (prevents reload while ANY operation is in progress)
+  int _activeLocalOperations = 0;
 
   // Scroll controller for synchronized horizontal scrolling
   final ScrollController _horizontalScrollController = ScrollController();
@@ -79,7 +88,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   // Filters
   String _statusFilter = 'active';
-  final Set<JobStatus> _customStatusFilter = {};
+  final Set<String> _customStatusFilter = {}; // Uses status IDs (UUIDs) not legacy enum
   final Set<JobPriority> _priorityFilter = {};
   bool _showOnlyOverdue = false;
   bool _showOnlyUnpaid = false;
@@ -136,14 +145,66 @@ class _PegasTablePageState extends State<PegasTablePage>
     _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
     _customerService = Provider.of<CustomerService>(context, listen: false);
     _jobStatusService = Provider.of<JobStatusService>(context, listen: false);
+    
+    // Listen to BikeshopService changes (realtime updates for jobs AND invoices)
+    _bikeshopService.addListener(_onBikeshopServiceChanged);
+    
     _initializeColumns();
     _loadColumnOrder(); // Load saved column order
     _loadListPaneWidth();
     _loadData();
   }
 
+  /// Called when BikeshopService notifies (e.g., realtime update from another client)
+  void _onBikeshopServiceChanged() {
+    // Skip reload if we have active local operations in progress
+    if (_activeLocalOperations > 0) {
+      debugPrint('🔇 [PegasTablePage] Skipping reload - $_activeLocalOperations active operation(s) in progress');
+      return;
+    }
+    
+    // Skip reload if we just did a local update (optimistic update already applied)
+    if (_lastLocalUpdate != null) {
+      final elapsed = DateTime.now().difference(_lastLocalUpdate!);
+      if (elapsed < _localUpdateGracePeriod) {
+        debugPrint('🔇 [PegasTablePage] Skipping reload - local update ${elapsed.inMilliseconds}ms ago (grace: ${_localUpdateGracePeriod.inMilliseconds}ms)');
+        return;
+      }
+      debugPrint('🔔 [PegasTablePage] Grace period expired (${elapsed.inMilliseconds}ms), reloading...');
+    } else {
+      debugPrint('🔔 [PegasTablePage] BikeshopService notified (external change), reloading data...');
+    }
+    
+    // Invalidate cache to force fresh data fetch
+    _bikeshopService.invalidateJobsCache();
+    _loadData();
+  }
+  
+  /// Mark that we're starting a local operation (to suppress unnecessary reloads)
+  void _startLocalOperation() {
+    _activeLocalOperations++;
+    _lastLocalUpdate = DateTime.now();
+    debugPrint('📌 [PegasTablePage] Started local operation #$_activeLocalOperations at $_lastLocalUpdate');
+  }
+  
+  /// Mark that a local operation has completed
+  void _endLocalOperation() {
+    if (_activeLocalOperations > 0) {
+      _activeLocalOperations--;
+    }
+    _lastLocalUpdate = DateTime.now();
+    debugPrint('📌 [PegasTablePage] Ended local operation, $_activeLocalOperations remaining');
+  }
+  
+  /// Legacy method - calls _startLocalOperation for backward compatibility
+  void _markLocalUpdate() {
+    _lastLocalUpdate = DateTime.now();
+    debugPrint('📌 [PegasTablePage] Marked local update at $_lastLocalUpdate');
+  }
+
   @override
   void dispose() {
+    _bikeshopService.removeListener(_onBikeshopServiceChanged);
     _reloadDebounceTimer?.cancel();
     _horizontalScrollController.dispose();
     WidgetsBinding.instance.removeObserver(this);
@@ -484,17 +545,24 @@ class _PegasTablePageState extends State<PegasTablePage>
     final hasCustomStatusFilter = _customStatusFilter.isNotEmpty;
 
     var filtered = _jobs.where((job) {
-      // Status filter
+      // Get the job's phase from custom status, or infer from legacy status
+      final jobPhase = job.customStatus?.phase ?? _inferPhaseFromLegacyStatus(job.status);
+      
+      // Smart filter (Activos, Completados, etc.) - uses phase
       switch (_statusFilter) {
         case 'active':
-          if (!hasCustomStatusFilter &&
-              (job.status == JobStatus.entregado ||
-                  job.status == JobStatus.cancelado)) {
+          // Active = todo + in_progress phases (exclude complete)
+          if (!hasCustomStatusFilter && jobPhase == StatusPhase.complete) {
             return false;
           }
           break;
         case 'completed':
-          if (job.status != JobStatus.finalizado) return false;
+          // Completed = only complete phase with finalizado status
+          if (jobPhase != StatusPhase.complete || 
+              job.status == JobStatus.entregado ||
+              job.status == JobStatus.cancelado) {
+            return false;
+          }
           break;
         case 'delivered':
           if (job.status != JobStatus.entregado) return false;
@@ -520,9 +588,12 @@ class _PegasTablePageState extends State<PegasTablePage>
         if (!matches) return false;
       }
 
-      // Custom status filter
-      if (hasCustomStatusFilter && !_customStatusFilter.contains(job.status)) {
-        return false;
+      // Custom status filter - now uses status IDs
+      if (hasCustomStatusFilter) {
+        final jobStatusId = job.statusId;
+        if (jobStatusId == null || !_customStatusFilter.contains(jobStatusId)) {
+          return false;
+        }
       }
 
       // Priority filter
@@ -717,6 +788,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                   }
                 },
                 onStatusChange: (newStatus) async {
+                  // Start local operation to suppress reload from service notification
+                  _startLocalOperation();
+                  
                   // Optimistic update
                   setState(() {
                     final index =
@@ -790,6 +864,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                         await _loadJobDetails(_selectedJob!);
                       }
                     }
+                  } finally {
+                    _endLocalOperation();
                   }
                 },
                 onItemRemoved: (itemId) async {
@@ -2001,6 +2077,9 @@ class _PegasTablePageState extends State<PegasTablePage>
             String? workPerformed,
             String? notes,
           }) async {
+            // Start local operation to suppress reload from service notification
+            _startLocalOperation();
+            
             // Helper to get the new value: null means unchanged, empty string means clear
             String? resolveField(String? newValue, String? oldValue) {
               if (newValue == null) return oldValue; // Unchanged
@@ -2074,6 +2153,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   ),
                 );
               }
+            } finally {
+              _endLocalOperation();
             }
           },
         );
@@ -2445,81 +2526,176 @@ class _PegasTablePageState extends State<PegasTablePage>
                             ),
                           ),
                           const Divider(height: 1),
-                          // Status list
+                          // Status list - uses custom statuses from JobStatusService
                           Flexible(
                             child: SingleChildScrollView(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: JobStatus.values.map((status) {
-                                  final isSelected =
-                                      _customStatusFilter.contains(status);
-                                  final statusColor =
-                                      _getStatusColorForFilter(status);
+                              child: ListenableBuilder(
+                                listenable: _jobStatusService,
+                                builder: (context, _) {
+                                  final customStatuses = _jobStatusService.activeStatuses;
+                                  if (customStatuses.isEmpty) {
+                                    // Fallback to legacy enum if no custom statuses
+                                    return Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: JobStatus.values.map((status) {
+                                        final statusCode = status.name.toUpperCase();
+                                        final isSelected = _customStatusFilter.contains(statusCode);
+                                        final statusColor = _getLegacyStatusColor(status);
 
-                                  return InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        if (_customStatusFilter
-                                            .contains(status)) {
-                                          _customStatusFilter.remove(status);
-                                        } else {
-                                          _customStatusFilter.add(status);
-                                        }
-                                      });
-                                      setDialogState(() {});
-                                      _applyFiltersAndSort();
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 10),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 20,
-                                            height: 20,
-                                            decoration: BoxDecoration(
-                                              color: isSelected
-                                                  ? statusColor
-                                                  : Colors.transparent,
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                              border: Border.all(
-                                                color: isSelected
-                                                    ? statusColor
-                                                    : Colors.grey.shade400,
-                                                width: 1.5,
+                                        return InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              if (_customStatusFilter.contains(statusCode)) {
+                                                _customStatusFilter.remove(statusCode);
+                                              } else {
+                                                _customStatusFilter.add(statusCode);
+                                              }
+                                            });
+                                            setDialogState(() {});
+                                            _applyFiltersAndSort();
+                                          },
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 16, vertical: 10),
+                                            child: Row(
+                                              children: [
+                                                Container(
+                                                  width: 20,
+                                                  height: 20,
+                                                  decoration: BoxDecoration(
+                                                    color: isSelected
+                                                        ? statusColor
+                                                        : Colors.transparent,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(
+                                                      color: isSelected
+                                                          ? statusColor
+                                                          : Colors.grey.shade400,
+                                                      width: 1.5,
+                                                    ),
+                                                  ),
+                                                  child: isSelected
+                                                      ? const Icon(Icons.check,
+                                                          size: 14, color: Colors.white)
+                                                      : null,
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Container(
+                                                  width: 10,
+                                                  height: 10,
+                                                  decoration: BoxDecoration(
+                                                    color: statusColor,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  _getStatusLabel(status),
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: isSelected
+                                                        ? FontWeight.w600
+                                                        : FontWeight.normal,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    );
+                                  }
+                                  
+                                  // Use custom statuses grouped by phase
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      for (final phase in StatusPhase.values) ...[
+                                        if (_jobStatusService.statusesByPhase[phase]?.isNotEmpty ?? false) ...[
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 16, vertical: 8),
+                                            child: Text(
+                                              phase.displayName.toUpperCase(),
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.grey.shade500,
+                                                letterSpacing: 0.5,
                                               ),
                                             ),
-                                            child: isSelected
-                                                ? const Icon(Icons.check,
-                                                    size: 14,
-                                                    color: Colors.white)
-                                                : null,
                                           ),
-                                          const SizedBox(width: 12),
-                                          Container(
-                                            width: 10,
-                                            height: 10,
-                                            decoration: BoxDecoration(
-                                              color: statusColor,
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            _getStatusLabel(status),
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: isSelected
-                                                  ? FontWeight.w600
-                                                  : FontWeight.normal,
-                                            ),
-                                          ),
+                                          ...(_jobStatusService.statusesByPhase[phase] ?? []).map((status) {
+                                            final isSelected = _customStatusFilter.contains(status.id);
+                                            final statusColor = status.colorValue;
+
+                                            return InkWell(
+                                              onTap: () {
+                                                setState(() {
+                                                  if (_customStatusFilter.contains(status.id)) {
+                                                    _customStatusFilter.remove(status.id);
+                                                  } else {
+                                                    _customStatusFilter.add(status.id!);
+                                                  }
+                                                });
+                                                setDialogState(() {});
+                                                _applyFiltersAndSort();
+                                              },
+                                              child: Padding(
+                                                padding: const EdgeInsets.symmetric(
+                                                    horizontal: 16, vertical: 10),
+                                                child: Row(
+                                                  children: [
+                                                    Container(
+                                                      width: 20,
+                                                      height: 20,
+                                                      decoration: BoxDecoration(
+                                                        color: isSelected
+                                                            ? statusColor
+                                                            : Colors.transparent,
+                                                        borderRadius: BorderRadius.circular(4),
+                                                        border: Border.all(
+                                                          color: isSelected
+                                                              ? statusColor
+                                                              : Colors.grey.shade400,
+                                                          width: 1.5,
+                                                        ),
+                                                      ),
+                                                      child: isSelected
+                                                          ? const Icon(Icons.check,
+                                                              size: 14, color: Colors.white)
+                                                          : null,
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    Container(
+                                                      width: 10,
+                                                      height: 10,
+                                                      decoration: BoxDecoration(
+                                                        color: statusColor,
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      status.name,
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight: isSelected
+                                                            ? FontWeight.w600
+                                                            : FontWeight.normal,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          }),
                                         ],
-                                      ),
-                                    ),
+                                      ],
+                                    ],
                                   );
-                                }).toList(),
+                                },
                               ),
                             ),
                           ),
@@ -2611,6 +2787,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
 
     if (confirmed == true && mounted) {
+      // Start local operation to suppress reload from realtime notifications
+      _startLocalOperation();
+      
       // Optimistic update
       setState(() {
         final index = _jobs.indexWhere((j) => j.id == job.id);
@@ -2678,6 +2857,8 @@ class _PegasTablePageState extends State<PegasTablePage>
             SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
           );
         }
+      } finally {
+        _endLocalOperation();
       }
     }
   }
@@ -2706,6 +2887,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
 
     if (confirmed == true && mounted) {
+      // Start local operation to suppress reload from realtime notifications
+      _startLocalOperation();
+      
       // Optimistic update - remove from list immediately
       final deletedJob = job;
       setState(() {
@@ -2733,6 +2917,8 @@ class _PegasTablePageState extends State<PegasTablePage>
             SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
           );
         }
+      } finally {
+        _endLocalOperation();
       }
     }
   }
@@ -2754,6 +2940,9 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Future<void> _updateJobToCustomStatus(
       MechanicJob job, JobStatusCustom newStatus) async {
+    // Start local operation to suppress reload from realtime notifications
+    _startLocalOperation();
+    
     // Map custom status code to legacy JobStatus for backward compatibility
     final legacyStatus = _mapCodeToLegacyStatus(newStatus.code);
     final oldStatusId = job.statusId;
@@ -2776,7 +2965,16 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Update in background
     try {
-      await _jobStatusService.updateJobStatus(job.id!, newStatus.id!);
+      final success = await _jobStatusService.updateJobStatus(job.id!, newStatus.id!);
+      
+      if (!success) {
+        // Update returned false - revert the optimistic update
+        throw Exception('Error al guardar en la base de datos');
+      }
+      
+      // Also invalidate bikeshop service cache to ensure fresh data on next load
+      _bikeshopService.invalidateJobsCache();
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -2787,6 +2985,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       }
     } catch (e) {
       // Revert on error
+      debugPrint('❌ [_updateJobToCustomStatus] Error: $e - reverting optimistic update');
       if (mounted) {
         setState(() {
           final index = _jobs.indexWhere((j) => j.id == job.id);
@@ -2806,6 +3005,9 @@ class _PegasTablePageState extends State<PegasTablePage>
           ),
         );
       }
+    } finally {
+      // Always end the local operation, whether success or failure
+      _endLocalOperation();
     }
   }
 
@@ -2968,6 +3170,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                                 );
 
                                 // Optimistic update
+                                _startLocalOperation();
                                 setState(() {
                                   final index =
                                       _jobs.indexWhere((j) => j.id == job.id);
@@ -3001,6 +3204,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                                       ),
                                     );
                                   }
+                                } finally {
+                                  _endLocalOperation();
                                 }
                               } catch (e) {
                                 if (mounted) {
@@ -3098,39 +3303,73 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Future<void> _editDeadline(MechanicJob job) async {
+    bool clearDeadline = false;
+    
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: job.deadline ?? DateTime.now(),
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       helpText: 'Seleccionar fecha límite',
+      cancelText: job.deadline != null ? 'SIN PLAZO' : 'CANCELAR',
+      confirmText: 'ACEPTAR',
     );
 
-    if (picked != null && mounted) {
-      // Optimistic update - update UI immediately
-      setState(() {
-        final index = _jobs.indexWhere((j) => j.id == job.id);
-        if (index != -1) {
-          _jobs[index] = MechanicJob(
-            id: job.id,
-            tenantId: job.tenantId,
-            jobNumber: job.jobNumber,
-            customerId: job.customerId,
-            bikeId: job.bikeId,
-            arrivalDate: job.arrivalDate,
-            deadline: picked, // NEW DEADLINE
-            startedAt: job.startedAt,
-            completedAt: job.completedAt,
-            deliveredAt: job.deliveredAt,
-            status: job.status,
-            priority: job.priority,
-            clientRequest: job.clientRequest,
-            diagnosis: job.diagnosis,
-            workPerformed: job.workPerformed,
-            notes: job.notes,
-            assignedTo: job.assignedTo,
-            assignedTechnicianName: job.assignedTechnicianName,
-            servicePackageId: job.servicePackageId,
+    // If user pressed "SIN PLAZO" (cancel) when there was a deadline, clear it
+    if (picked == null && job.deadline != null) {
+      // Show confirmation since cancel could mean "nevermind" or "clear deadline"
+      final clear = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          content: const Text('¿Quitar el plazo de entrega?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('No'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sí, quitar'),
+            ),
+          ],
+        ),
+      );
+      if (clear == true) {
+        clearDeadline = true;
+      }
+    }
+
+    final newDeadline = clearDeadline ? null : picked;
+    if (!clearDeadline && picked == null) return;
+    if (!mounted) return;
+
+    // Start local operation to suppress reload from service notification
+    _startLocalOperation();
+    
+    // Optimistic update - update UI immediately
+    setState(() {
+      final index = _jobs.indexWhere((j) => j.id == job.id);
+      if (index != -1) {
+        _jobs[index] = MechanicJob(
+          id: job.id,
+          tenantId: job.tenantId,
+          jobNumber: job.jobNumber,
+          customerId: job.customerId,
+          bikeId: job.bikeId,
+          arrivalDate: job.arrivalDate,
+          deadline: newDeadline, // NEW DEADLINE (or null)
+          startedAt: job.startedAt,
+          completedAt: job.completedAt,
+          deliveredAt: job.deliveredAt,
+          status: job.status,
+          priority: job.priority,
+          clientRequest: job.clientRequest,
+          diagnosis: job.diagnosis,
+          workPerformed: job.workPerformed,
+          notes: job.notes,
+          assignedTo: job.assignedTo,
+          assignedTechnicianName: job.assignedTechnicianName,
+          servicePackageId: job.servicePackageId,
             estimatedCost: job.estimatedCost,
             finalCost: job.finalCost,
             partsCost: job.partsCost,
@@ -3166,7 +3405,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           customerId: job.customerId,
           bikeId: job.bikeId,
           arrivalDate: job.arrivalDate,
-          deadline: picked,
+          deadline: newDeadline,
           startedAt: job.startedAt,
           completedAt: job.completedAt,
           deliveredAt: job.deliveredAt,
@@ -3205,8 +3444,9 @@ class _PegasTablePageState extends State<PegasTablePage>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                  'Plazo actualizado: ${DateFormat('dd/MM/yyyy').format(picked)}'),
+              content: Text(newDeadline != null
+                  ? 'Plazo: ${DateFormat('dd/MM/yyyy').format(newDeadline)}'
+                  : 'Plazo eliminado'),
               duration: const Duration(seconds: 1),
             ),
           );
@@ -3225,12 +3465,30 @@ class _PegasTablePageState extends State<PegasTablePage>
             SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
           );
         }
+      } finally {
+        _endLocalOperation();
       }
-    }
   }
 
   void _showInvoiceGenerationDialog(MechanicJob job) {
     _createInvoiceForJob(job);
+  }
+
+  /// Infers the phase from a legacy JobStatus enum
+  StatusPhase _inferPhaseFromLegacyStatus(JobStatus status) {
+    switch (status) {
+      case JobStatus.pendiente:
+        return StatusPhase.todo;
+      case JobStatus.diagnostico:
+      case JobStatus.esperandoAprobacion:
+      case JobStatus.enCurso:
+      case JobStatus.esperandoRepuestos:
+        return StatusPhase.inProgress;
+      case JobStatus.finalizado:
+      case JobStatus.entregado:
+      case JobStatus.cancelado:
+        return StatusPhase.complete;
+    }
   }
 
   /// Gets status color - prefers custom status color, falls back to legacy
@@ -3519,6 +3777,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     // Map to legacy status for backward compatibility
     final legacyStatus = _mapCodeToLegacyStatus(newCustomStatus.code);
 
+    // Start local operation to suppress reload from realtime notifications
+    _startLocalOperation();
+    
     // Optimistic update - update all selected jobs immediately
     setState(() {
       for (var job in selectedJobs) {
@@ -3560,6 +3821,8 @@ class _PegasTablePageState extends State<PegasTablePage>
           ),
         );
       }
+    } finally {
+      _endLocalOperation();
     }
   }
 
@@ -3580,30 +3843,186 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   // ========== BOARD VIEW (Kanban) ==========
   Widget _buildBoardView() {
-    final statuses = [
-      JobStatus.pendiente,
-      JobStatus.diagnostico,
-      JobStatus.esperandoRepuestos,
-      JobStatus.enCurso,
-      JobStatus.finalizado,
-      JobStatus.entregado,
-    ];
+    // Use custom statuses from JobStatusService, grouped by phase
+    return ListenableBuilder(
+      listenable: _jobStatusService,
+      builder: (context, _) {
+        final customStatuses = _jobStatusService.activeStatuses;
+        
+        if (customStatuses.isEmpty) {
+          // Fallback to legacy statuses if no custom statuses
+          final legacyStatuses = [
+            JobStatus.pendiente,
+            JobStatus.diagnostico,
+            JobStatus.esperandoRepuestos,
+            JobStatus.enCurso,
+            JobStatus.finalizado,
+            JobStatus.entregado,
+          ];
+          
+          // Build columns and filter out empty ones
+          final columns = <Widget>[];
+          for (final status in legacyStatuses) {
+            final jobsInStatus =
+                _filteredJobs.where((j) => j.status == status).toList();
+            // Only show columns with jobs
+            if (jobsInStatus.isNotEmpty) {
+              columns.add(_buildLegacyBoardColumn(status, jobsInStatus));
+            }
+          }
+          
+          if (columns.isEmpty) {
+            return const Center(
+              child: Text('No hay trabajos que mostrar', 
+                style: TextStyle(color: Colors.grey)),
+            );
+          }
+          
+          return Align(
+            alignment: Alignment.topLeft,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.all(24),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: columns,
+              ),
+            ),
+          );
+        }
+        
+        // Use custom statuses - only show columns with jobs
+        final columns = <Widget>[];
+        for (final customStatus in customStatuses) {
+          final jobsInStatus = _filteredJobs.where((j) => 
+            j.statusId == customStatus.id || 
+            (j.statusId == null && j.status.name.toUpperCase() == customStatus.code)
+          ).toList();
+          // Only show columns with jobs
+          if (jobsInStatus.isNotEmpty) {
+            columns.add(_buildCustomBoardColumn(customStatus, jobsInStatus));
+          }
+        }
+        
+        if (columns.isEmpty) {
+          return const Center(
+            child: Text('No hay trabajos que mostrar', 
+              style: TextStyle(color: Colors.grey)),
+          );
+        }
+        
+        return Align(
+          alignment: Alignment.topLeft,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: columns,
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.all(24),
-      child: Row(
+  /// Board column for custom status
+  Widget _buildCustomBoardColumn(JobStatusCustom status, List<MechanicJob> jobs) {
+    final statusColor = status.colorValue;
+    final bgColor = Color.lerp(statusColor, Colors.white, 0.85)!;
+
+    return Container(
+      width: 320,
+      margin: const EdgeInsets.only(right: 16),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: statuses.map((status) {
-          final jobsInStatus =
-              _filteredJobs.where((j) => j.status == status).toList();
-          return _buildBoardColumn(status, jobsInStatus);
-        }).toList(),
+        children: [
+          // Column header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
+              border: Border.all(color: statusColor.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    status.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: statusColor.computeLuminance() > 0.5 
+                          ? Colors.black87 
+                          : statusColor,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${jobs.length}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Cards
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius:
+                    const BorderRadius.vertical(bottom: Radius.circular(12)),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: jobs.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Sin trabajos',
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: jobs.length,
+                      itemBuilder: (context, index) {
+                        final job = jobs[index];
+                        return _buildBoardCard(job);
+                      },
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildBoardColumn(JobStatus status, List<MechanicJob> jobs) {
+  /// Legacy board column (fallback when no custom statuses)
+  Widget _buildLegacyBoardColumn(JobStatus status, List<MechanicJob> jobs) {
     final statusColors = {
       JobStatus.pendiente: Colors.blue[100],
       JobStatus.diagnostico: Colors.orange[100],
@@ -4087,7 +4506,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     final barLeft = clampedStart * dayWidth;
     final barWidth = (clampedEnd - clampedStart) * dayWidth;
 
-    // Determine bar color
+    // Determine bar color - use custom status color if available
     final isOverdue =
         job.deadline != null && job.deadline!.isBefore(DateTime.now());
     final isCompleted =
@@ -4098,8 +4517,11 @@ class _PegasTablePageState extends State<PegasTablePage>
       barColor = Colors.green[400]!;
     } else if (isOverdue) {
       barColor = Colors.red[400]!;
+    } else if (job.customStatus != null) {
+      // Use custom status color
+      barColor = job.customStatus!.colorValue;
     } else {
-      // Color by status
+      // Fallback to legacy status colors
       final statusColors = {
         JobStatus.pendiente: Colors.blue[300]!,
         JobStatus.diagnostico: Colors.orange[300]!,

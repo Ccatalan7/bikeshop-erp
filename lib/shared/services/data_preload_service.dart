@@ -18,16 +18,21 @@ import '../../modules/hr/services/hr_service.dart';
 /// 2. Populating service caches before user navigates
 /// 3. Making subsequent page navigation feel instant
 /// 
-/// Usage: Called automatically when user authenticates
+/// IMPORTANT: This service should ONLY run on ERP/admin contexts,
+/// NOT on the public store (vinabike.cl, vinabike-store.web.app)
+/// 
+/// Usage: Called automatically when user authenticates on ERP
 class DataPreloadService extends ChangeNotifier {
   bool _isPreloading = false;
   bool _hasPreloaded = false;
+  bool _isEnabled = true; // Can be disabled for public store
   String? _preloadError;
   DateTime? _lastPreloadTime;
   
   // Preload status
   bool get isPreloading => _isPreloading;
   bool get hasPreloaded => _hasPreloaded;
+  bool get isEnabled => _isEnabled;
   String? get preloadError => _preloadError;
   
   // Service references (set via initialize)
@@ -42,7 +47,15 @@ class DataPreloadService extends ChangeNotifier {
   
   StreamSubscription<AuthState>? _authSubscription;
   
+  /// Disable preloading (call this on public store hosts)
+  void disable() {
+    _isEnabled = false;
+    _authSubscription?.cancel();
+    _authSubscription = null;
+  }
+
   /// Initialize with service references and start listening to auth
+  /// Set isPublicStore=true to skip preloading (for customer-facing pages)
   void initialize({
     required BikeshopService bikeshopService,
     required CustomerService customerService,
@@ -52,7 +65,17 @@ class DataPreloadService extends ChangeNotifier {
     SalesService? salesService,
     PurchaseService? purchaseService,
     HRService? hrService,
+    bool isPublicStore = false, // NEW: Skip preload on public store
   }) {
+    // Skip everything if this is a public store context
+    if (isPublicStore) {
+      if (!kReleaseMode) {
+        debugPrint('🏪 [DataPreloadService] Public store detected - skipping preload');
+      }
+      _isEnabled = false;
+      return;
+    }
+    
     _bikeshopService = bikeshopService;
     _customerService = customerService;
     _inventoryService = inventoryService;
@@ -64,8 +87,12 @@ class DataPreloadService extends ChangeNotifier {
     
     // Listen to auth state changes
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (!_isEnabled) return;
+      
       if (data.event == AuthChangeEvent.signedIn && !_hasPreloaded) {
-        debugPrint('🚀 [DataPreloadService] User signed in - starting preload...');
+        if (!kReleaseMode) {
+          debugPrint('🚀 [DataPreloadService] User signed in - starting preload...');
+        }
         preloadAllData();
       } else if (data.event == AuthChangeEvent.signedOut) {
         // Reset state on sign out
@@ -77,15 +104,21 @@ class DataPreloadService extends ChangeNotifier {
     
     // If user is already logged in, preload immediately
     if (Supabase.instance.client.auth.currentUser != null && !_hasPreloaded) {
-      debugPrint('🚀 [DataPreloadService] User already logged in - starting preload...');
+      if (!kReleaseMode) {
+        debugPrint('🚀 [DataPreloadService] User already logged in - starting preload...');
+      }
       preloadAllData();
     }
   }
   
   /// Preload all critical data in parallel
   Future<void> preloadAllData() async {
+    if (!_isEnabled) return;
+    
     if (_isPreloading) {
-      debugPrint('⏳ [DataPreloadService] Already preloading, skipping...');
+      if (!kReleaseMode) {
+        debugPrint('⏳ [DataPreloadService] Already preloading, skipping...');
+      }
       return;
     }
     
@@ -96,7 +129,9 @@ class DataPreloadService extends ChangeNotifier {
     final stopwatch = Stopwatch()..start();
     
     try {
-      debugPrint('🚀 [DataPreloadService] Starting parallel preload...');
+      if (!kReleaseMode) {
+        debugPrint('🚀 [DataPreloadService] Starting parallel preload...');
+      }
       
       // Load all data in parallel for maximum speed
       await Future.wait([
@@ -122,12 +157,16 @@ class DataPreloadService extends ChangeNotifier {
       _hasPreloaded = true;
       _lastPreloadTime = DateTime.now();
       
-      debugPrint('✅ [DataPreloadService] Preload complete in ${stopwatch.elapsedMilliseconds}ms');
+      if (!kReleaseMode) {
+        debugPrint('✅ [DataPreloadService] Preload complete in ${stopwatch.elapsedMilliseconds}ms');
+      }
       
     } catch (e) {
       stopwatch.stop();
       _preloadError = e.toString();
-      debugPrint('❌ [DataPreloadService] Preload failed after ${stopwatch.elapsedMilliseconds}ms: $e');
+      if (!kReleaseMode) {
+        debugPrint('❌ [DataPreloadService] Preload failed after ${stopwatch.elapsedMilliseconds}ms: $e');
+      }
     } finally {
       _isPreloading = false;
       notifyListeners();
@@ -136,6 +175,7 @@ class DataPreloadService extends ChangeNotifier {
   
   /// Force refresh all cached data
   Future<void> refreshAllData() async {
+    if (!_isEnabled) return;
     _hasPreloaded = false;
     await preloadAllData();
   }
@@ -145,90 +185,130 @@ class DataPreloadService extends ChangeNotifier {
   Future<void> _preloadJobs() async {
     try {
       final jobs = await _bikeshopService?.getJobs(includeCompleted: true);
-      debugPrint('📦 [Preload] Jobs: ${jobs?.length ?? 0} items');
+      if (!kReleaseMode) {
+        debugPrint('📦 [Preload] Jobs: ${jobs?.length ?? 0} items');
+      }
     } catch (e) {
-      debugPrint('⚠️ [Preload] Jobs failed: $e');
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Jobs failed: $e');
+      }
     }
   }
   
   Future<void> _preloadBikes() async {
     try {
       final bikes = await _bikeshopService?.getBikes();
-      debugPrint('📦 [Preload] Bikes: ${bikes?.length ?? 0} items');
+      if (!kReleaseMode) {
+        debugPrint('📦 [Preload] Bikes: ${bikes?.length ?? 0} items');
+      }
     } catch (e) {
-      debugPrint('⚠️ [Preload] Bikes failed: $e');
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Bikes failed: $e');
+      }
     }
   }
   
   Future<void> _preloadCustomers() async {
     try {
       final customers = await _customerService?.getCustomers();
-      debugPrint('📦 [Preload] Customers: ${customers?.length ?? 0} items');
+      if (!kReleaseMode) {
+        debugPrint('📦 [Preload] Customers: ${customers?.length ?? 0} items');
+      }
     } catch (e) {
-      debugPrint('⚠️ [Preload] Customers failed: $e');
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Customers failed: $e');
+      }
     }
   }
   
   Future<void> _preloadProducts() async {
     try {
       final products = await _inventoryService?.getProducts();
-      debugPrint('📦 [Preload] Products: ${products?.length ?? 0} items');
+      if (!kReleaseMode) {
+        debugPrint('📦 [Preload] Products: ${products?.length ?? 0} items');
+      }
     } catch (e) {
-      debugPrint('⚠️ [Preload] Products failed: $e');
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Products failed: $e');
+      }
     }
   }
   
   Future<void> _preloadCategories() async {
     try {
       final categories = await _categoryService?.getCategories();
-      debugPrint('📦 [Preload] Categories: ${categories?.length ?? 0} items');
+      if (!kReleaseMode) {
+        debugPrint('📦 [Preload] Categories: ${categories?.length ?? 0} items');
+      }
     } catch (e) {
-      debugPrint('⚠️ [Preload] Categories failed: $e');
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Categories failed: $e');
+      }
     }
   }
   
   Future<void> _preloadBrands() async {
     try {
       final brands = await _brandService?.getBrands();
-      debugPrint('📦 [Preload] Brands: ${brands?.length ?? 0} items');
+      if (!kReleaseMode) {
+        debugPrint('📦 [Preload] Brands: ${brands?.length ?? 0} items');
+      }
     } catch (e) {
-      debugPrint('⚠️ [Preload] Brands failed: $e');
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Brands failed: $e');
+      }
     }
   }
   
   Future<void> _preloadSalesInvoices() async {
     try {
       await _salesService?.loadInvoices();
-      debugPrint('📦 [Preload] Sales Invoices: ${_salesService?.invoices.length ?? 0} items');
+      if (!kReleaseMode) {
+        debugPrint('📦 [Preload] Sales Invoices: ${_salesService?.invoices.length ?? 0} items');
+      }
     } catch (e) {
-      debugPrint('⚠️ [Preload] Sales Invoices failed: $e');
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Sales Invoices failed: $e');
+      }
     }
   }
   
   Future<void> _preloadPurchaseInvoices() async {
     try {
       final invoices = await _purchaseService?.getPurchaseInvoices();
-      debugPrint('📦 [Preload] Purchase Invoices: ${invoices?.length ?? 0} items');
+      if (!kReleaseMode) {
+        debugPrint('📦 [Preload] Purchase Invoices: ${invoices?.length ?? 0} items');
+      }
     } catch (e) {
-      debugPrint('⚠️ [Preload] Purchase Invoices failed: $e');
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Purchase Invoices failed: $e');
+      }
     }
   }
   
   Future<void> _preloadSuppliers() async {
     try {
       final suppliers = await _purchaseService?.getSuppliers();
-      debugPrint('📦 [Preload] Suppliers: ${suppliers?.length ?? 0} items');
+      if (!kReleaseMode) {
+        debugPrint('📦 [Preload] Suppliers: ${suppliers?.length ?? 0} items');
+      }
     } catch (e) {
-      debugPrint('⚠️ [Preload] Suppliers failed: $e');
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Suppliers failed: $e');
+      }
     }
   }
   
   Future<void> _preloadEmployees() async {
     try {
       final employees = await _hrService?.getEmployees();
-      debugPrint('📦 [Preload] Employees: ${employees?.length ?? 0} items');
+      if (!kReleaseMode) {
+        debugPrint('📦 [Preload] Employees: ${employees?.length ?? 0} items');
+      }
     } catch (e) {
-      debugPrint('⚠️ [Preload] Employees failed: $e');
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Employees failed: $e');
+      }
     }
   }
   

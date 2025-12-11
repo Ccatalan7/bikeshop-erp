@@ -447,18 +447,16 @@ class _SmartProductFieldState extends State<SmartProductField> {
             maxLines: 3,
             minLines: 3,
             onChanged: (value) {
-              // Notify parent of description change
+              // Notify parent of description change ONLY
+              // Use price: 0 to signal this is a description-only update
+              // This prevents the price field from being reset on every keystroke
               widget.onProductChanged(ProductFieldSelection(
                 product: _product,
                 productName: _productName,
                 productSku: _productSku,
                 isCatalogProduct: _isCatalogProduct,
                 description: value,
-                price: _product != null 
-                    ? (widget.showCost 
-                        ? (_product!.cost > 0 ? _product!.cost : _product!.price)
-                        : _product!.price)
-                    : 0,
+                price: 0, // Don't send price on description changes - prevents infinite loop!
               ));
             },
           ),

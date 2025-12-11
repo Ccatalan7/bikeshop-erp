@@ -228,6 +228,14 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     return _getJobsForDate(_selectedDate);
   }
 
+  /// Gets color for a job - prefers custom status color, falls back to legacy
+  Color _getJobColor(MechanicJob job) {
+    if (job.customStatus != null) {
+      return job.customStatus!.colorValue;
+    }
+    return _getStatusColor(job.status);
+  }
+
   Color _getStatusColor(JobStatus status) {
     switch (status) {
       case JobStatus.pendiente:
@@ -247,6 +255,14 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
       case JobStatus.cancelado:
         return Colors.red;
     }
+  }
+
+  /// Gets status text - prefers custom status name, falls back to legacy
+  String _getJobStatusText(MechanicJob job) {
+    if (job.customStatus != null) {
+      return job.customStatus!.name;
+    }
+    return _getStatusText(job.status);
   }
 
   String _getStatusText(JobStatus status) {
@@ -443,7 +459,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                                     itemBuilder: (context, index) {
                                       final job = jobsOnDay[index];
                                       final customerName = _customerNames[job.customerId] ?? 'Cliente';
-                                      final statusColor = _getStatusColor(job.status);
+                                      final statusColor = _getJobColor(job);
 
                                       return InkWell(
                                         onTap: () async {
@@ -559,7 +575,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
   }
 
   Widget _buildJobCard(MechanicJob job) {
-    final statusColor = _getStatusColor(job.status);
+    final statusColor = _getJobColor(job);
     final customerName = _customerNames[job.customerId] ?? 'Cliente';
     final bikeName = _bikeNames[job.bikeId];
 
@@ -650,8 +666,8 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
   }
 
   Widget _buildJobDetails(MechanicJob job) {
-    final statusColor = _getStatusColor(job.status);
-    final statusText = _getStatusText(job.status);
+    final statusColor = _getJobColor(job);
+    final statusText = _getJobStatusText(job);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),

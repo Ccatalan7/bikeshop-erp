@@ -550,6 +550,80 @@ create trigger customer_address_default_trigger
   when (new.is_default = true)
   execute function ensure_single_default_address();
 
+-- Enable RLS for customer_addresses table
+alter table customer_addresses enable row level security;
+
+-- Drop any existing policies
+drop policy if exists "customer_addresses_select" on customer_addresses;
+drop policy if exists "customer_addresses_insert" on customer_addresses;
+drop policy if exists "customer_addresses_update" on customer_addresses;
+drop policy if exists "customer_addresses_delete" on customer_addresses;
+drop policy if exists "public_customer_addresses_select_own" on customer_addresses;
+drop policy if exists "public_customer_addresses_insert_own" on customer_addresses;
+drop policy if exists "public_customer_addresses_update_own" on customer_addresses;
+drop policy if exists "public_customer_addresses_delete_own" on customer_addresses;
+
+-- ERP POLICIES (for tenant users via user_tenant_id())
+create policy "customer_addresses_select" on customer_addresses 
+  for select 
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "customer_addresses_insert" on customer_addresses 
+  for insert 
+  to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "customer_addresses_update" on customer_addresses 
+  for update 
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "customer_addresses_delete" on customer_addresses 
+  for delete 
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- PUBLIC STORE POLICIES (for website customers via auth_user_id)
+-- Website customers don't have user_profiles, so user_tenant_id() returns NULL
+-- They can only access their OWN addresses linked to their customer record
+create policy "public_customer_addresses_select_own" on customer_addresses 
+  for select 
+  to authenticated
+  using (
+    customer_id IN (
+      SELECT id FROM customers WHERE auth_user_id = auth.uid()
+    )
+  );
+
+create policy "public_customer_addresses_insert_own" on customer_addresses 
+  for insert 
+  to authenticated
+  with check (
+    customer_id IN (
+      SELECT id FROM customers WHERE auth_user_id = auth.uid()
+    )
+    AND tenant_id IS NOT NULL
+  );
+
+create policy "public_customer_addresses_update_own" on customer_addresses 
+  for update 
+  to authenticated
+  using (
+    customer_id IN (
+      SELECT id FROM customers WHERE auth_user_id = auth.uid()
+    )
+  );
+
+create policy "public_customer_addresses_delete_own" on customer_addresses 
+  for delete 
+  to authenticated
+  using (
+    customer_id IN (
+      SELECT id FROM customers WHERE auth_user_id = auth.uid()
+    )
+  );
+
 -- Loyalty table for customer loyalty program
 create table if not exists loyalty (
   id uuid primary key default gen_random_uuid(),
@@ -2445,7 +2519,11 @@ begin
     -- Formula: rotation * 0.6 + urgency * 0.3 + days_since_purchase * 0.1
     v_priority := least(100, greatest(0,
       (v_rotation_kpi * 10 * 0.6) + -- rotation scaled to 0-100
-      (case when v_current_stock = 0 then 100 else (1 - (v_current_stock::numeric / NEW.min_stock_level)) * 100 end * 0.3) + -- urgency
+      (case 
+        when v_current_stock = 0 then 100 
+        when coalesce(NEW.min_stock_level, 0) = 0 then 50 -- Default urgency when min_stock_level is 0 or null
+        else (1 - (v_current_stock::numeric / NEW.min_stock_level)) * 100 
+      end * 0.3) + -- urgency
       (least(v_days_since_last_purchase, 100) * 0.1) -- days since last purchase capped at 100
     ));
     
@@ -4451,6 +4529,12 @@ begin
 
   v_tenant_id := p_payment.tenant_id;
 
+  -- CRITICAL: Validate tenant_id for service role context (webhooks)
+  if v_tenant_id is null then
+    raise warning 'create_sales_payment_journal_entry: No tenant_id on payment %, skipping', p_payment.id;
+    return;
+  end if;
+
   select exists (
            select 1
              from public.journal_entries
@@ -4492,6 +4576,7 @@ begin
   v_cash_account_name := v_payment_method.account_name;
 
   v_receivable_account_id := public.ensure_account(
+    v_tenant_id,
     v_receivable_account_code,
     v_receivable_account_name,
     'asset',
@@ -5214,6 +5299,12 @@ begin
 
   v_tenant_id := p_invoice.tenant_id;
 
+  -- CRITICAL: Validate tenant_id for service role context (webhooks)
+  if v_tenant_id is null then
+    raise warning 'create_sales_invoice_journal_entry: No tenant_id on invoice %, skipping', p_invoice.id;
+    return;
+  end if;
+
   select exists (
            select 1
              from public.journal_entries
@@ -5239,6 +5330,7 @@ begin
   end if;
 
   v_receivable_account_id := public.ensure_account(
+    v_tenant_id,
     v_receivable_account_code,
     v_receivable_account_name,
     'asset',
@@ -5248,6 +5340,7 @@ begin
   );
 
   v_revenue_account_id := public.ensure_account(
+    v_tenant_id,
     v_revenue_account_code,
     v_revenue_account_name,
     'income',
@@ -5257,6 +5350,7 @@ begin
   );
 
   v_iva_account_id := public.ensure_account(
+    v_tenant_id,
     v_iva_account_code,
     v_iva_account_name,
     'liability',
@@ -5273,6 +5367,7 @@ begin
 
   if v_total_cost > 0 then
     v_inventory_account_id := public.ensure_account(
+      v_tenant_id,
       v_inventory_account_code,
       v_inventory_account_name,
       'asset',
@@ -5282,6 +5377,7 @@ begin
     );
 
     v_cogs_account_id := public.ensure_account(
+      v_tenant_id,
       v_cogs_account_code,
       v_cogs_account_name,
       'expense',
@@ -5548,7 +5644,7 @@ begin
       raise notice 'handle_sales_invoice_change: reverting to non-posted, deleting journal entry';
       delete from public.journal_entries
       where source_module = 'sales_invoices'
-        and source_reference = OLD.id::text;
+        and source_reference = OLD.invoice_number;
         
     elsif not v_old_posted and v_new_posted then
       -- Draft/Sent → Confirmed: CREATE journal entry
@@ -5560,7 +5656,7 @@ begin
       raise notice 'handle_sales_invoice_change: both posted, recreating journal entry';
       delete from public.journal_entries
       where source_module = 'sales_invoices'
-        and source_reference = OLD.id::text;
+        and source_reference = OLD.invoice_number;
       perform public.create_sales_invoice_journal_entry(NEW);
     else
       -- Both non-posted: no journal entry action
@@ -9476,17 +9572,9 @@ create table if not exists mechanic_jobs (
   delivered_at timestamp with time zone,
   
   -- Status and priority
-  status text not null default 'PENDIENTE'
-    check (status in (
-      'PENDIENTE',         -- Waiting to start
-      'DIAGNOSTICO',       -- Being diagnosed
-      'ESPERANDO_APROBACION', -- Waiting for customer approval
-      'ESPERANDO_REPUESTOS',  -- Waiting for parts
-      'EN_CURSO',          -- Work in progress
-      'FINALIZADO',        -- Work completed
-      'ENTREGADO',         -- Delivered to customer
-      'CANCELADO'          -- Cancelled
-    )),
+  -- NOTE: status CHECK constraint removed (Oct 2025) to support flexible job_statuses system
+  -- Valid statuses are now managed via job_statuses table (Notion-style custom statuses)
+  status text not null default 'PENDIENTE',
   priority text not null default 'NORMAL'
     check (priority in ('URGENTE','ALTA','NORMAL','BAJA')),
   
@@ -13825,9 +13913,8 @@ create table if not exists online_orders (
   refund_amount numeric(12,2) default 0,
   refunded_at timestamp with time zone,
   
-  -- ERP integration (renamed for clarity, aliased from sales_invoice_id)
-  invoice_id uuid references sales_invoices(id) on delete set null,
-  sales_invoice_id uuid references sales_invoices(id) on delete set null, -- Legacy alias, kept for backward compatibility
+  -- ERP integration: Link to sales invoice when order is processed
+  sales_invoice_id uuid references sales_invoices(id) on delete set null,
   
   -- Notes
   customer_notes text,
@@ -13859,9 +13946,6 @@ do $$ begin
   alter table online_orders add column if not exists refund_amount numeric(12,2) default 0;
   alter table online_orders add column if not exists refunded_at timestamp with time zone;
   
-  -- Invoice reference (new standard name)
-  alter table online_orders add column if not exists invoice_id uuid references sales_invoices(id) on delete set null;
-  
   -- Admin notes
   alter table online_orders add column if not exists notes text;
   
@@ -13874,6 +13958,15 @@ do $$ begin
   alter table online_orders drop constraint if exists online_orders_delivery_type_check;
   alter table online_orders add constraint online_orders_delivery_type_check 
     check (delivery_type in ('shipping', 'pickup'));
+  
+  -- CLEANUP: Remove duplicate invoice_id column (consolidated to sales_invoice_id)
+  -- First copy any data from invoice_id to sales_invoice_id if sales_invoice_id is null
+  update online_orders 
+  set sales_invoice_id = invoice_id 
+  where sales_invoice_id is null and invoice_id is not null;
+  
+  -- Drop the redundant column
+  alter table online_orders drop column if exists invoice_id;
     
   raise notice '✅ Added new columns to online_orders table';
 exception
@@ -14039,10 +14132,12 @@ declare
   v_invoice_status text;
   v_should_create_payment boolean;
 begin
-  -- Get order details
+  -- Get order details WITH ROW LOCK to prevent race conditions
+  -- This ensures only one process can create an invoice for this order
   select * into v_order
   from online_orders
-  where id = p_order_id;
+  where id = p_order_id
+  for update;
   
   if not found then
     raise exception 'Order not found: %', p_order_id;
@@ -14056,6 +14151,74 @@ begin
   
   -- Check if invoice already exists
   if v_order.sales_invoice_id is not null then
+    -- Invoice exists - check if we need to update it to 'paid' status
+    -- This handles the case where webhook arrives after invoice was created
+    if v_order.payment_status = 'paid' then
+      -- Get payment method for creating payment record
+      select * into v_payment_method
+      from payment_methods
+      where tenant_id = v_tenant_id
+        and lower(code) = lower(coalesce(v_order.payment_method, 'mercadopago'))
+        and is_active = true
+      limit 1;
+      
+      -- If payment method not found, try fallback
+      if v_payment_method is null then
+        select * into v_payment_method
+        from payment_methods
+        where tenant_id = v_tenant_id
+          and is_active = true
+        order by sort_order
+        limit 1;
+      end if;
+      
+      -- Check if invoice is not already paid
+      perform 1 from sales_invoices 
+      where id = v_order.sales_invoice_id 
+        and status != 'paid';
+        
+      if found then
+        -- Update invoice to paid status
+        update sales_invoices
+        set status = 'paid',
+            paid_amount = total,
+            balance = 0,
+            updated_at = now()
+        where id = v_order.sales_invoice_id;
+        
+        -- Create payment record if not exists
+        if not exists (
+          select 1 from sales_payments 
+          where invoice_id = v_order.sales_invoice_id
+        ) and v_payment_method.id is not null then
+          insert into sales_payments (
+            tenant_id,
+            invoice_id,
+            invoice_reference,
+            payment_method_id,
+            amount,
+            date,
+            reference,
+            notes
+          ) values (
+            v_tenant_id,
+            v_order.sales_invoice_id,
+            (select invoice_number from sales_invoices where id = v_order.sales_invoice_id),
+            v_payment_method.id,
+            v_order.total,
+            coalesce(v_order.paid_at, now()),
+            v_order.payment_reference,
+            'Pago automático - Pedido online #' || v_order.order_number ||
+            ' (' || coalesce(v_payment_method.name, v_order.payment_method) || ')'
+          );
+          
+          raise notice 'Created payment record for existing invoice (order: %)', v_order.order_number;
+        end if;
+        
+        raise notice 'Updated existing invoice to paid status (order: %)', v_order.order_number;
+      end if;
+    end if;
+    
     return v_order.sales_invoice_id;
   end if;
   
@@ -14195,7 +14358,6 @@ begin
   update online_orders
   set 
     sales_invoice_id = v_invoice_id,
-    invoice_id = v_invoice_id,  -- Alias
     status = case 
       when status = 'pending' then 'confirmed' 
       else status 
@@ -14211,7 +14373,7 @@ begin
       invoice_reference,
       payment_method_id,
       amount,
-      payment_date,
+      date,
       reference,
       notes
     ) values (
@@ -14273,10 +14435,10 @@ begin
   end if;
   
   -- Get associated invoice if exists
-  if v_order.invoice_id is not null then
+  if v_order.sales_invoice_id is not null then
     select * into v_invoice
     from sales_invoices
-    where id = v_order.invoice_id;
+    where id = v_order.sales_invoice_id;
   end if;
   
   -- Determine refund amount
@@ -14427,7 +14589,7 @@ begin
     invoice_reference,
     payment_method_id,
     amount,
-    payment_date,
+    date,
     reference,
     notes
   ) values (
@@ -14533,13 +14695,13 @@ begin
     -- Order confirmed (usually after payment)
     when 'confirmed' then
       -- If no invoice yet, create one
-      if v_order.invoice_id is null and v_order.payment_status = 'paid' then
+      if v_order.sales_invoice_id is null and v_order.payment_status = 'paid' then
         v_invoice_id := public.process_online_order(p_order_id);
       end if;
       
     -- Processing (preparing order)
     when 'processing' then
-      if v_order.invoice_id is null then
+      if v_order.sales_invoice_id is null then
         raise exception 'Cannot process order without invoice. Confirm order first.';
       end if;
       
@@ -14593,7 +14755,7 @@ begin
     'order_id', p_order_id,
     'old_status', v_order.status,
     'new_status', p_new_status,
-    'invoice_id', coalesce(v_invoice_id, v_order.invoice_id)
+    'invoice_id', coalesce(v_invoice_id, v_order.sales_invoice_id)
   );
 end;
 $$;
@@ -14602,6 +14764,7 @@ $$;
 -- TRIGGER: auto_process_paid_online_order
 -- PURPOSE: Automatically process order when payment is received
 -- FLOW: Customer pays → webhook updates payment_status → trigger creates invoice
+--       OR if invoice exists → updates invoice to 'paid' status
 --------------------------------------------------------------------------------
 create or replace function public.handle_online_order_payment()
 returns trigger
@@ -14614,14 +14777,12 @@ begin
   -- Only process when payment_status changes to 'paid'
   if NEW.payment_status = 'paid' and 
      (OLD.payment_status is null or OLD.payment_status != 'paid') and
-     NEW.invoice_id is null and  -- Don't duplicate
      NEW.status != 'cancelled' then
      
-    -- Automatically process the order to create invoice
+    -- Call process_online_order regardless of whether invoice exists
+    -- If invoice exists, it will update it to 'paid' status
+    -- If invoice doesn't exist, it will create one
     v_invoice_id := public.process_online_order(NEW.id);
-    
-    -- Update the order with invoice_id (trigger already updates status to confirmed)
-    -- Note: process_online_order already sets invoice_id and status
     
     raise notice 'Auto-processed order % -> Invoice %', NEW.order_number, v_invoice_id;
   end if;

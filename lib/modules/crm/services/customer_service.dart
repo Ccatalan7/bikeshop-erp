@@ -447,15 +447,18 @@ class CustomerService extends ChangeNotifier {
               value: tenantId,
             ),
             callback: (payload) {
-              debugPrint('🔔 [CustomerService] Customer changed: ${payload.eventType}');
               notifyListeners(); // Notify listeners to reload data
             },
           )
           .subscribe();
 
-      debugPrint('✅ [CustomerService] Realtime subscription active');
+      if (!kReleaseMode) {
+        debugPrint('✅ [CustomerService] Realtime subscription active');
+      }
     } catch (e) {
-      debugPrint('❌ [CustomerService] Failed to setup realtime: $e');
+      if (!kReleaseMode) {
+        debugPrint('❌ [CustomerService] Failed to setup realtime: $e');
+      }
     }
   }
 

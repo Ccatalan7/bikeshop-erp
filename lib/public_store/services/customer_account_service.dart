@@ -369,6 +369,7 @@ class CustomerAccountService extends ChangeNotifier {
     try {
       final data = address.toJson();
       data['customer_id'] = _customerProfile!['id'];
+      data['tenant_id'] = _customerProfile!['tenant_id']; // CRITICAL: Required for RLS
       data.remove('id'); // Let database generate ID
 
       await _supabase.from('customer_addresses').insert(data);

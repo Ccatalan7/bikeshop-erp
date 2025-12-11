@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -147,10 +148,14 @@ class AppearanceService extends ChangeNotifier {
 
       _isInitialized = true;
       _hasLoadedWithTenant = true; // Successfully loaded with tenant
-      debugPrint('[AppearanceService] Settings loaded. hasCustomLogo=$hasCustomLogo, logoUrl=$_companyLogoUrl');
+      if (!kReleaseMode) {
+        debugPrint('[AppearanceService] Settings loaded. hasCustomLogo=$hasCustomLogo, logoUrl=$_companyLogoUrl');
+      }
       notifyListeners();
     } catch (e) {
-      debugPrint('[AppearanceService] Error loading settings: $e');
+      if (!kReleaseMode) {
+        debugPrint('[AppearanceService] Error loading settings: $e');
+      }
       _isInitialized = true;
       _hasLoadedWithTenant = false;
       notifyListeners();
@@ -165,7 +170,6 @@ class AppearanceService extends ChangeNotifier {
 
   /// Reload settings from database (call after authentication)
   Future<void> reloadSettings() async {
-    debugPrint('[AppearanceService] reloadSettings() called');
     await _loadSettings();
   }
 

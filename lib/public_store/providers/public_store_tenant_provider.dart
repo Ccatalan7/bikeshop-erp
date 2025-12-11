@@ -37,21 +37,22 @@ class PublicStoreTenantProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      debugPrint('🏪 [TenantProvider] Starting tenant detection...');
       _currentTenant = await _detectionService.detectTenant();
       
       if (_currentTenant == null) {
         _error = 'No se encontró la tienda. Verifica la URL.';
-        debugPrint('🏪 [TenantProvider] ❌ No tenant detected');
-      } else {
-        debugPrint('🏪 [TenantProvider] ✅ Detected tenant: ${_currentTenant!.id}');
-        debugPrint('🏪 [TenantProvider] Subdomain: ${_currentTenant!.subdomain}');
-        debugPrint('🏪 [TenantProvider] Shop name: ${_currentTenant!.shopName}');
+        if (!kReleaseMode) {
+          debugPrint('🏪 [TenantProvider] ❌ No tenant detected');
+        }
+      } else if (!kReleaseMode) {
+        debugPrint('🏪 [TenantProvider] ✅ Detected: ${_currentTenant!.shopName}');
       }
     } catch (e) {
       _error = 'Error cargando la tienda: $e';
       _currentTenant = null;
-      debugPrint('🏪 [TenantProvider] ❌ Error: $e');
+      if (!kReleaseMode) {
+        debugPrint('🏪 [TenantProvider] ❌ Error: $e');
+      }
     } finally {
       _isLoading = false;
       notifyListeners();

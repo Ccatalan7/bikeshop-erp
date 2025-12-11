@@ -25,11 +25,9 @@ class PublicHomePage extends StatefulWidget {
 }
 
 class _PublicHomePageState extends State<PublicHomePage> {
-  // Start with false - we'll show content from WebsiteService immediately
-  bool _isLoading = false;
-  List<Map<String, dynamic>> _allBlocks = []; // All loaded blocks
   List<Product> _featuredProducts = [];
   bool _editModeChecked = false; // Track if we've checked edit mode for this navigation
+  bool _featuredProductsLoaded = false; // Load featured products once
 
   static const List<String> _responsiveBreakpoints = [
     'desktop',
@@ -37,49 +35,38 @@ class _PublicHomePageState extends State<PublicHomePage> {
     'mobile'
   ];
 
-  String? _lastLoadedTenantId; // Track which tenant we loaded data for
-  bool _tenantDetectionTriggered = false;
-
   @override
   void initState() {
     super.initState();
-    // Trigger tenant detection if not already done
+    // Load featured products once
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ensureTenantDetection();
+      _loadFeaturedProductsOnce();
     });
   }
   
-  /// Ensure tenant is detected - call this when page loads
-  Future<void> _ensureTenantDetection() async {
-    if (!mounted || _tenantDetectionTriggered) return;
+  Future<void> _loadFeaturedProductsOnce() async {
+    if (_featuredProductsLoaded || !mounted) return;
+    _featuredProductsLoaded = true;
     
     final tenantProvider = context.read<PublicStoreTenantProvider>();
+    final tenantId = tenantProvider.tenantId;
+    if (tenantId == null) return;
     
-    // If tenant not yet detected and not loading, trigger detection
-    if (!tenantProvider.hasTenant && !tenantProvider.isLoading) {
-      debugPrint('🏠 [HomePage] Triggering tenant detection from page...');
-      _tenantDetectionTriggered = true;
-      await tenantProvider.detectTenant();
-      debugPrint('🏠 [HomePage] Tenant detection complete: ${tenantProvider.tenantId}');
+    final websiteService = context.read<WebsiteService>();
+    final featuredEntries = await websiteService.loadFeaturedProductsForTenant(tenantId);
+    final activeFeatured = featuredEntries.where((fp) => fp.active).toList();
+    
+    if (activeFeatured.isNotEmpty && mounted) {
+      final products = await _fetchFeaturedProducts(activeFeatured);
+      if (mounted) {
+        setState(() => _featuredProducts = products);
+      }
     }
-  }
-  
-  Future<void> _loadDataIfReady() async {
-    if (!mounted) return;
-    
-    final tenantProvider = context.read<PublicStoreTenantProvider>();
-    
-    // Wait for tenant to be available (main.dart handles detection)
-    if (tenantProvider.tenantId != null && tenantProvider.tenantId != _lastLoadedTenantId) {
-      _lastLoadedTenantId = tenantProvider.tenantId;
-      await _loadData();
-      _checkAutoEditMode();
-    }
-    // No retry loop - we rely on didChangeDependencies to detect tenant changes
   }
   
   void _checkAutoEditMode() {
-    if (!mounted) return;
+    if (!mounted || _editModeChecked) return;
+    _editModeChecked = true;
     
     // Check URL for edit=true or preview=true parameters
     // Handle both regular URLs and hash-based routing (/#/path?edit=true)
@@ -165,33 +152,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    
-    // Reset edit mode check flag on each navigation
+    // Reset edit mode check on navigation
     _editModeChecked = false;
-    
-    // Check if tenant is now available and we haven't loaded data for it yet
-    final tenantProvider = context.read<PublicStoreTenantProvider>();
-    final tenantId = tenantProvider.tenantId;
-    
-    if (tenantId != null && tenantId != _lastLoadedTenantId) {
-      _lastLoadedTenantId = tenantId;
-      // Load data and then check edit mode after data is ready
-      _loadData().then((_) {
-        if (mounted) {
-          _checkAutoEditMode();
-          _updateEditProviderIfNeeded();
-        }
-      });
-    } else if (tenantId != null) {
-      // Tenant already loaded, but we still need to check edit mode
-      // (user might have navigated with ?edit=true or ?preview=true)
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _checkAutoEditMode();
-          _updateEditProviderIfNeeded();
-        }
-      });
-    }
   }
 
   /// Update the edit provider with home page blocks if we're in edit mode
@@ -291,52 +253,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
     return visibility;
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final websiteService = context.read<WebsiteService>();
-      
-      // Get tenant from provider (detected from subdomain - works for anonymous users)
-      final tenantProvider = context.read<PublicStoreTenantProvider>();
-      final tenantId = tenantProvider.tenantId;
-
-      if (tenantId == null) {
-        return;
-      }
-
-      // Settings are already loaded in main.dart after tenant detection
-      // Only load blocks if not already in service (blocks are cached in _allBlocks)
-      
-      // Get blocks from service (already loaded in main.dart, or load now)
-      List<Map<String, dynamic>> blocks;
-      if (websiteService.blocks.isNotEmpty) {
-        blocks = websiteService.blocks;
-      } else {
-        blocks = await websiteService.loadBlocksForTenant(tenantId);
-      }
-      
-      // Store all blocks for rendering
-      _allBlocks = blocks;
-
-      // ✅ Use tenant-aware method for featured products
-      debugPrint('🏠 [HomePage] Loading featured products for tenant: $tenantId');
-      final featuredEntries = await websiteService.loadFeaturedProductsForTenant(tenantId);
-      debugPrint('🏠 [HomePage] Found ${featuredEntries.length} featured entries');
-      final activeFeatured = featuredEntries.where((fp) => fp.active).toList();
-      debugPrint('🏠 [HomePage] Active featured entries: ${activeFeatured.length}');
-
-      _featuredProducts = await _fetchFeaturedProducts(activeFeatured);
-      debugPrint('🏠 [HomePage] Fetched ${_featuredProducts.length} featured products');
-    } catch (error) {
-      // Error loading data - silently fail, page will show empty state
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
   Future<List<Product>> _fetchFeaturedProducts(
     List<FeaturedProduct> featuredEntries,
   ) async {
@@ -391,9 +307,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
       var result = orderedProducts.take(8).toList();
       if (!isEditMode) {
         result = result.where((p) => p.stockQuantity > 0).toList();
-        debugPrint('🏠 [HomePage] Filtered out-of-stock products (edit mode: false), result: ${result.length}');
-      } else {
-        debugPrint('🏠 [HomePage] Edit mode - showing ALL products including out-of-stock');
       }
       
       return result;
@@ -478,22 +391,9 @@ class _PublicHomePageState extends State<PublicHomePage> {
     // Check for edit/preview mode from URL query parameters (using GoRouter)
     _checkEditModeFromRouter(context);
     
-    // Watch tenant provider to trigger rebuild when tenant is detected
-    final tenantProvider = context.watch<PublicStoreTenantProvider>();
-    final websiteService = context.watch<WebsiteService>();
-    
-    // If tenant is now available but we haven't loaded data, trigger load
-    if (tenantProvider.tenantId != null && 
-        tenantProvider.tenantId != _lastLoadedTenantId &&
-        !_isLoading) {
-      // Schedule data load for next frame to avoid calling setState during build
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && tenantProvider.tenantId != _lastLoadedTenantId) {
-          _lastLoadedTenantId = tenantProvider.tenantId;
-          _loadData();
-        }
-      });
-    }
+    // Read data from providers (already loaded by main.dart)
+    final tenantProvider = context.read<PublicStoreTenantProvider>();
+    final websiteService = context.read<WebsiteService>();
     
     final primaryColor = _resolveColor(
       websiteService.getSetting('theme_primary_color', ''),
@@ -534,18 +434,11 @@ class _PublicHomePageState extends State<PublicHomePage> {
       max: 64.0,
     );
 
-    // Use blocks from WebsiteService if we have them, or our local cache
-    final blocksToRender = websiteService.blocks.isNotEmpty 
-        ? websiteService.blocks 
-        : _allBlocks;
+    // Use blocks from WebsiteService (loaded by main.dart)
+    final blocksToRender = websiteService.blocks;
     
-    // Determine if we're still in initial loading state
-    // This happens when tenant is loading OR when tenant was just detected but blocks haven't loaded yet
-    final isInitialLoading = tenantProvider.isLoading || 
-        (tenantProvider.tenantId != null && blocksToRender.isEmpty && _isLoading);
-    
-    // Only show error if tenant detection completed and found nothing
-    if (tenantProvider.tenantId == null && !tenantProvider.isLoading && blocksToRender.isEmpty) {
+    // Show empty state if no tenant or no blocks
+    if (tenantProvider.tenantId == null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -611,7 +504,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
       sectionSpacing: sectionSpacing,
       containerPadding: containerPadding,
       tenantId: tenantProvider.tenantId,
-      isInitialLoading: isInitialLoading,
+      isInitialLoading: false, // Loading handled by main.dart
     );
 
     // Just return the page content - toolbar and side panel are handled by PublicStoreLayout

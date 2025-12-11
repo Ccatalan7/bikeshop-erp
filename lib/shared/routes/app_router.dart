@@ -122,9 +122,11 @@ Page<dynamic> _buildPageWithNoTransition(
   GoRouterState state,
   Widget child,
 ) {
-  // Use path-based key to ensure pages are completely replaced, not rebuilt
+  // Use full URI + extra hashCode to create unique keys per router instance
+  // This prevents key conflicts when multiple workspaces navigate to the same path
+  final uniqueKey = 'page_${state.uri}_${identityHashCode(child)}';
   return NoTransitionPage<void>(
-    key: ValueKey('page_${state.uri.path}'),
+    key: ValueKey(uniqueKey),
     child: child,
   );
 }
@@ -140,23 +142,18 @@ class AppRouter {
 
     final router = GoRouter(
       initialLocation: effectiveInitialLocation,
+      debugLogDiagnostics: true, // TEMP: Enable to debug routing issue
       // Only use refreshListenable on ERP (admin) routes
       // On public store, auth changes shouldn't cause route refreshes
       // This prevents the bug where authService.notifyListeners() causes unwanted navigation to /
       refreshListenable: forcePublicStoreHost ? null : authService,
       redirect: (context, state) {
-        debugPrint('🔀 [Router] redirect() called for path: ${state.uri.path}');
-        debugPrint('🔀 [Router] state.matchedLocation: ${state.matchedLocation}');
-        debugPrint('🔀 [Router] state.fullPath: ${state.fullPath}');
-        
-        // DEBUG: Print stack trace when navigating to / from another page
-        if (state.uri.path == '/' && state.matchedLocation == '/') {
-          debugPrint('📍 [Router] Navigation to / detected! Stack trace:');
-          debugPrint(StackTrace.current.toString().split('\n').take(15).join('\n'));
+        // Only log in debug mode to avoid performance impact
+        if (!kReleaseMode) {
+          debugPrint('🔀 [Router] redirect() for: ${state.uri.path}');
         }
         
         if (authService.isInitializing) {
-          debugPrint('🔄 [Router] Auth still initializing, allowing navigation to: ${state.uri.path}');
           return null;
         }
 
@@ -197,19 +194,10 @@ class AppRouter {
         // Public store host (vinabike-store.web.app): ONLY allow public routes
         // Customer auth on store is for orders/addresses, NOT for ERP access
         if (forcePublicStoreHost) {
-          debugPrint('🌐 [Router] forcePublicStoreHost=true, path=$path, isPublicRoute=$isPublicRoute');
-
-          // REMOVED: /tienda stripping logic - it was causing redirect loops
-          // Both /tienda/checkout and /checkout routes exist and work fine
-          // No need to force one over the other
-
           // If somehow a non-public path sneaks in, send to home (should be rare)
           if (!isPublicRoute) {
-            debugPrint('⚠️ [Router] Non-public path on store host, redirecting to /');
             return '/';
           }
-
-          debugPrint('✅ [Router] Public store path OK: $path');
           return null;
         }
 
@@ -218,33 +206,26 @@ class AppRouter {
         final resettingPassword = state.matchedLocation == '/reset-password';
         final acceptingInvitation = state.matchedLocation == '/accept-invitation';
 
-        debugPrint('🔍 [Router] Redirect check: path=${state.uri.path}, isLoggedIn=$isLoggedIn, loggingIn=$loggingIn');
-
         // Allow access to public store routes without authentication
         if (isPublicRoute) {
-          debugPrint('✅ [Router] Public route, allowing access');
           return null;
         }
 
         // Allow access to password reset and invitation acceptance without authentication
         if (resettingPassword || acceptingInvitation) {
-          debugPrint('✅ [Router] Password reset/invitation route, allowing access');
           return null;
         }
 
         // Admin/ERP routes require authentication
         if (!isLoggedIn && !loggingIn) {
-          debugPrint('🔐 [Router] Not logged in and not on login page, redirecting to /login');
           return '/login';
         }
 
         // Redirect logged-in users from login to dashboard
         if (isLoggedIn && loggingIn) {
-          debugPrint('✅ [Router] Already logged in, redirecting from login to /dashboard');
           return '/dashboard';
         }
 
-        debugPrint('✅ [Router] No redirect needed for: ${state.uri.path}');
         return null;
       },
       routes: [
@@ -522,11 +503,15 @@ class AppRouter {
           path: '/tienda/pedido/:id',
           pageBuilder: (context, state) {
             final orderId = state.pathParameters['id']!;
+            final status = state.uri.queryParameters['status']; // MercadoPago callback
             return _buildPageWithNoTransition(
               context,
               state,
               PublicStoreWrapper(
-                  child: OrderConfirmationPage(orderId: orderId)),
+                  child: OrderConfirmationPage(
+                    orderId: orderId,
+                    paymentStatus: status,
+                  )),
             );
           },
         ),

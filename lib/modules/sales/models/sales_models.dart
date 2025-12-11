@@ -337,6 +337,13 @@ class InvoiceItem {
   }
 
   factory InvoiceItem.fromJson(Map<String, dynamic> json) {
+    // Handle both 'price' (from process_online_order) and 'unit_price' (from manual invoices)
+    final price = (json['unit_price'] as num?)?.toDouble() ?? 
+                  (json['price'] as num?)?.toDouble() ?? 0;
+    // Handle both 'line_total' and 'subtotal' (from process_online_order)
+    final lineTotal = (json['line_total'] as num?)?.toDouble() ?? 
+                      (json['subtotal'] as num?)?.toDouble();
+    
     return InvoiceItem(
       id: json['id']?.toString(),
       invoiceId: json['invoice_id']?.toString(),
@@ -346,9 +353,9 @@ class InvoiceItem {
       description: json['description']?.toString(),
       isCatalogProduct: json['is_catalog_product'] ?? true,
       quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
-      unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0,
+      unitPrice: price,
       discount: (json['discount'] as num?)?.toDouble() ?? 0,
-      lineTotal: (json['line_total'] as num?)?.toDouble(),
+      lineTotal: lineTotal,
       cost: (json['cost'] as num?)?.toDouble() ?? 0,
       isService: json['is_service'] as bool? ?? false,
       hours: (json['hours'] as num?)?.toDouble(),

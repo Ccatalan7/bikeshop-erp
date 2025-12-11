@@ -277,17 +277,19 @@ class _EditableWebsiteState extends State<EditableWebsite> {
                     ),
                     if (cart.itemCount > 0)
                       Positioned(
-                        right: 4,
-                        top: 4,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: accentColor,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            '${cart.itemCount}',
-                            style: const TextStyle(color: Colors.white, fontSize: 10),
+                        right: 0,
+                        top: 0,
+                        child: IgnorePointer(
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: accentColor,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '${cart.itemCount}',
+                              style: const TextStyle(color: Colors.white, fontSize: 10),
+                            ),
                           ),
                         ),
                       ),

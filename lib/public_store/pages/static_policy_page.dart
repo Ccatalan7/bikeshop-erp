@@ -1,5 +1,4 @@
-import 'dart:convert';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -48,6 +47,10 @@ class _StaticPolicyPageState extends State<StaticPolicyPage> {
   }
 
   Future<void> _loadPage() async {
+    if (!kReleaseMode) {
+      debugPrint('📄 [StaticPolicyPage] Loading page: ${widget.slug}');
+    }
+    
     setState(() {
       _loading = true;
       _error = null;
@@ -55,12 +58,38 @@ class _StaticPolicyPageState extends State<StaticPolicyPage> {
 
     try {
       final tenantProvider = context.read<PublicStoreTenantProvider>();
-      final tenantId = tenantProvider.tenantId;
+      String? tenantId = tenantProvider.tenantId;
+      
+      if (!kReleaseMode) {
+        debugPrint('📄 [StaticPolicyPage] Tenant from provider: $tenantId');
+      }
+      
+      // If no tenant from URL detection, try getting from authenticated user
+      if (tenantId == null) {
+        final user = Supabase.instance.client.auth.currentUser;
+        if (!kReleaseMode) {
+          debugPrint('📄 [StaticPolicyPage] Checking authenticated user: ${user?.id}');
+        }
+        if (user != null) {
+          // Get tenant from user_profiles for authenticated users
+          final profileResp = await Supabase.instance.client
+              .from('user_profiles')
+              .select('tenant_id')
+              .eq('user_id', user.id)
+              .maybeSingle();
+          tenantId = profileResp?['tenant_id'] as String?;
+          if (!kReleaseMode) {
+            debugPrint('📄 [StaticPolicyPage] Tenant from user profile: $tenantId');
+          }
+        }
+      }
+      
       if (tenantId == null) {
         throw Exception('No tenant detected');
       }
 
       final client = Supabase.instance.client;
+      final isAuthenticated = client.auth.currentUser != null;
 
       // Load settings (optional, ignore errors)
       final settingsResp = await client
@@ -70,34 +99,72 @@ class _StaticPolicyPageState extends State<StaticPolicyPage> {
       _applySettings(settingsResp);
 
       // Load page by slug
-      final pagesResp = await client
-          .from('website_pages')
-          .select('id, title')
-          .eq('tenant_id', tenantId)
-          .eq('slug', widget.slug)
-          .eq('is_published', true)
-          .maybeSingle();
+      // For authenticated users, don't require is_published (they might be editing)
+      // For anonymous users, only show published pages
+      Map<String, dynamic>? pagesResp;
+      if (isAuthenticated) {
+        pagesResp = await client
+            .from('website_pages')
+            .select('id, title')
+            .eq('tenant_id', tenantId)
+            .eq('slug', widget.slug)
+            .maybeSingle();
+      } else {
+        pagesResp = await client
+            .from('website_pages')
+            .select('id, title')
+            .eq('tenant_id', tenantId)
+            .eq('slug', widget.slug)
+            .eq('is_published', true)
+            .maybeSingle();
+      }
 
       if (pagesResp == null) {
+        if (!kReleaseMode) {
+          debugPrint('📄 [StaticPolicyPage] Page not found: ${widget.slug} for tenant: $tenantId (authenticated: $isAuthenticated)');
+        }
         throw Exception('Página no encontrada');
+      }
+
+      if (!kReleaseMode) {
+        debugPrint('📄 [StaticPolicyPage] Found page: ${pagesResp['id']} - ${pagesResp['title']}');
       }
 
       final pageId = pagesResp['id'] as String;
   _pageId = pageId;
   _pageTitle = pagesResp['title'] as String? ?? widget.fallbackTitle;
 
-      // Load visible blocks ordered by order_index
-      final blocksResp = await client
-          .from('website_blocks')
-          .select()
-          .eq('tenant_id', tenantId)
-          .eq('page_id', pageId)
-          .eq('is_visible', true)
-          .order('order_index', ascending: true);
+      // Load blocks ordered by order_index
+      // Authenticated users see all blocks (for editing), anonymous only see visible
+      List<dynamic> blocksResp;
+      if (isAuthenticated) {
+        blocksResp = await client
+            .from('website_blocks')
+            .select()
+            .eq('tenant_id', tenantId)
+            .eq('page_id', pageId)
+            .order('order_index', ascending: true);
+      } else {
+        blocksResp = await client
+            .from('website_blocks')
+            .select()
+            .eq('tenant_id', tenantId)
+            .eq('page_id', pageId)
+            .eq('is_visible', true)
+            .order('order_index', ascending: true);
+      }
+
+      if (!kReleaseMode) {
+        debugPrint('📄 [StaticPolicyPage] Loaded ${blocksResp.length} blocks for page ${widget.slug}');
+      }
 
       _blocks = blocksResp.cast<Map<String, dynamic>>();
       setState(() => _loading = false);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      if (!kReleaseMode) {
+        debugPrint('📄 [StaticPolicyPage] ❌ Error loading ${widget.slug}: $e');
+        debugPrint('📄 [StaticPolicyPage] Stack: $stackTrace');
+      }
       setState(() {
         _loading = false;
         _error = e.toString();

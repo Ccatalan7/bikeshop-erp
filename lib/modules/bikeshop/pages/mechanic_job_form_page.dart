@@ -257,6 +257,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
 
         partItems.add(_JobPartItem(
+          id: item.id, // Preserve database ID for stable widget keys
           product: product,
           name: item.productName,
           isCatalogProduct: item.productId != null,
@@ -1980,7 +1981,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   /// Provides hover-based reorder arrows and consistent styling.
   Widget _buildPartRow(ThemeData theme, int index, _JobPartItem item, int itemIndex) {
     return LineRowWrapper(
-      key: ValueKey('part_${item.hashCode}_$index'),
+      key: ValueKey('part_${item.id}'),
       index: index,
       canMoveUp: itemIndex > 0,
       canMoveDown: itemIndex < _partItems.length - 1,
@@ -2014,7 +2015,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           minWidth: 250,
           padding: const EdgeInsets.all(12),
           child: SmartProductField(
-            key: ValueKey('smart_product_${item.hashCode}'),
+            key: ValueKey('smart_product_${item.id}'),
             initialData: item.product != null || item.name.isNotEmpty
                 ? ProductFieldData(
                     product: item.product,
@@ -2033,28 +2034,35 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               _addEmptyPartLine();
             },
             onProductChanged: (selection) {
-              setState(() {
-                if (selection == null) {
-                  // Product cleared - reset the item
-                  _partItems[itemIndex] = _JobPartItem(
-                    product: null,
+              if (selection == null) {
+                // Product cleared - reset the item but keep same ID
+                setState(() {
+                  _partItems[itemIndex] = item.copyWith(
+                    clearProduct: true,
                     name: '',
                     isCatalogProduct: false,
                     quantity: 1,
                     unitPrice: 0,
+                    notes: null,
                   );
-                } else {
-                  // Product selected or updated
-                  _partItems[itemIndex] = _JobPartItem(
+                });
+              } else if (selection.price == 0 && selection.description != null) {
+                // Description-only update - DON'T reset price, just update notes
+                // Update in-place without full setState to avoid focus loss
+                item.notes = selection.description;
+                // No setState needed - description field handles its own state
+              } else {
+                // Product selected - update with new price from cost
+                setState(() {
+                  _partItems[itemIndex] = item.copyWith(
                     product: selection.product,
                     name: selection.productName ?? '',
                     isCatalogProduct: selection.isCatalogProduct,
-                    quantity: item.quantity,
                     unitPrice: selection.product?.cost ?? item.unitPrice,
                     notes: selection.description,
                   );
-                }
-              });
+                });
+              }
             },
           ),
         ),
@@ -2065,6 +2073,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Center(
             child: TextFormField(
+              key: ValueKey('qty_${item.id}'),
               initialValue: item.quantity.toString(),
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
@@ -2079,16 +2088,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ],
               onChanged: (value) {
                 final newQty = int.tryParse(value) ?? 1;
-                setState(() {
-                  _partItems[itemIndex] = _JobPartItem(
-                    product: item.product,
-                    name: item.name,
-                    isCatalogProduct: item.isCatalogProduct,
-                    quantity: newQty,
-                    unitPrice: item.unitPrice,
-                    notes: item.notes,
-                  );
-                });
+                // Update in-place to avoid focus loss
+                item.quantity = newQty;
+                // Only setState to update total display
+                setState(() {});
               },
             ),
           ),
@@ -2099,6 +2102,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           width: _colPriceWidth,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: TextFormField(
+            key: ValueKey('price_${item.id}'),
             initialValue: item.unitPrice.toStringAsFixed(0),
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
@@ -2114,16 +2118,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ],
             onChanged: (value) {
               final newPrice = double.tryParse(value) ?? 0;
-              setState(() {
-                _partItems[itemIndex] = _JobPartItem(
-                  product: item.product,
-                  name: item.name,
-                  isCatalogProduct: item.isCatalogProduct,
-                  quantity: item.quantity,
-                  unitPrice: newPrice,
-                  notes: item.notes,
-                );
-              });
+              // Update in-place to avoid focus loss
+              item.unitPrice = newPrice;
+              // Only setState to update total display
+              setState(() {});
             },
           ),
         ),
@@ -2669,24 +2667,47 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
 // Helper classes for form items
 class _JobPartItem {
-  final Product? product; // Nullable for ad-hoc items
-  final String name; // For ad-hoc items
-  final bool isCatalogProduct;
-  final int quantity;
-  double unitPrice; // MUTABLE - allow price editing
-  String? notes; // MUTABLE - allow notes editing
+  final String id; // Unique stable ID for widget keys
+  Product? product; // Nullable for ad-hoc items
+  String name; // For ad-hoc items
+  bool isCatalogProduct;
+  int quantity;
+  double unitPrice;
+  String? notes;
 
   _JobPartItem({
+    String? id,
     this.product,
     required this.name,
     this.isCatalogProduct = true,
     required this.quantity,
     required this.unitPrice,
     this.notes,
-  });
+  }) : id = id ?? DateTime.now().microsecondsSinceEpoch.toString();
 
   String get displayName => product?.name ?? name;
   String? get sku => product?.sku;
+
+  /// Create a copy with the same ID (for preserving widget keys)
+  _JobPartItem copyWith({
+    Product? product,
+    String? name,
+    bool? isCatalogProduct,
+    int? quantity,
+    double? unitPrice,
+    String? notes,
+    bool clearProduct = false,
+  }) {
+    return _JobPartItem(
+      id: id, // Keep same ID!
+      product: clearProduct ? null : (product ?? this.product),
+      name: name ?? this.name,
+      isCatalogProduct: isCatalogProduct ?? this.isCatalogProduct,
+      quantity: quantity ?? this.quantity,
+      unitPrice: unitPrice ?? this.unitPrice,
+      notes: notes ?? this.notes,
+    );
+  }
 }
 
 class _JobServiceItem {

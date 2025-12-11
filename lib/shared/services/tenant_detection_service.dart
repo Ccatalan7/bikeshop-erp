@@ -147,20 +147,15 @@ class TenantDetectionService {
   /// Detect tenant from current URL
   /// Tries subdomain first, then custom domain lookup, then authenticated user's tenant
   Future<Tenant?> detectTenant() async {
-    debugPrint('🔍 [TenantDetection] Starting detectTenant()...');
-    
     // For non-web platforms (macOS, Windows, iOS, Android), use authenticated user's tenant
     if (!kIsWeb) {
-      debugPrint('🔍 [TenantDetection] Non-web platform, checking auth user');
       final user = _supabase.auth.currentUser;
       if (user != null) {
         final tenantFromAuth = await _getTenantFromAuthenticatedUser(user.id);
         if (tenantFromAuth != null) {
-          debugPrint('🔍 [TenantDetection] Found tenant from auth: ${tenantFromAuth.id}');
           return tenantFromAuth;
         }
       }
-      debugPrint('🔍 [TenantDetection] No auth user on non-web platform');
       return null;
     }
 
@@ -170,16 +165,11 @@ class TenantDetectionService {
       ? normalizedHost.substring(4)
       : normalizedHost;
 
-    debugPrint('🔍 [TenantDetection] Host: $host');
-    debugPrint('🔍 [TenantDetection] Normalized: $hostWithoutWww');
-
     // Development: Check for FORCE_SUBDOMAIN environment variable
     const forceSubdomain = String.fromEnvironment('FORCE_SUBDOMAIN');
     if (forceSubdomain.isNotEmpty) {
-      debugPrint('🔍 [TenantDetection] Using FORCE_SUBDOMAIN: $forceSubdomain');
       final tenant = await getTenantBySubdomain(forceSubdomain);
       if (tenant != null) {
-        debugPrint('🔍 [TenantDetection] Found tenant via FORCE_SUBDOMAIN: ${tenant.id}');
         return tenant;
       }
     }
@@ -191,16 +181,16 @@ class TenantDetectionService {
     // Special handling for Firebase Hosting site-specific domains
     if (host == 'vinabike-store.web.app' || host == 'vinabike-store.firebaseapp.com') {
       subdomain = 'vinabike';
-      debugPrint('🔍 [TenantDetection] Firebase store domain detected, subdomain: vinabike');
     } else {
       subdomain = extractSubdomain(hostWithoutWww);
-      debugPrint('🔍 [TenantDetection] Extracted subdomain: $subdomain');
     }
     
     // Single optimized query: check subdomain OR custom_domain in one call
     final tenant = await _getTenantBySubdomainOrDomain(subdomain, hostWithoutWww);
     if (tenant != null) {
-      debugPrint('🔍 [TenantDetection] Found tenant via subdomain/domain: ${tenant.id}');
+      if (!kReleaseMode) {
+        debugPrint('🔍 Auto-detected tenant: ${tenant.shopName} (${tenant.id})');
+      }
       return tenant;
     }
 
@@ -210,21 +200,16 @@ class TenantDetectionService {
       hostWithoutWww == 'project-vinabike.web.app' ||
       hostWithoutWww == 'project-vinabike.firebaseapp.com';
     
-    debugPrint('🔍 [TenantDetection] isLocalOrErpDomain: $isLocalOrErpDomain');
-    
     if (isLocalOrErpDomain) {
       final user = _supabase.auth.currentUser;
-      debugPrint('🔍 [TenantDetection] Checking auth fallback, user: ${user?.id}');
       if (user != null) {
         final tenantFromAuth = await _getTenantFromAuthenticatedUser(user.id);
         if (tenantFromAuth != null) {
-          debugPrint('🔍 [TenantDetection] Found tenant from auth fallback: ${tenantFromAuth.id}');
           return tenantFromAuth;
         }
       }
     }
 
-    debugPrint('🔍 [TenantDetection] No tenant found');
     return null;
   }
 
@@ -239,7 +224,6 @@ class TenantDetectionService {
           .maybeSingle();
       
       if (profileResponse == null || profileResponse['tenant_id'] == null) {
-        debugPrint('[TenantDetection] No tenant_id in user profile');
         return null;
       }
       
@@ -254,13 +238,11 @@ class TenantDetectionService {
           .maybeSingle();
       
       if (tenantResponse == null) {
-        debugPrint('[TenantDetection] Tenant not found or inactive: $tenantId');
         return null;
       }
       
       return Tenant.fromJson(tenantResponse);
     } catch (e) {
-      debugPrint('[TenantDetection] Error getting tenant from auth user: $e');
       return null;
     }
   }
@@ -270,7 +252,6 @@ class TenantDetectionService {
     try {
       // Validate format first
       if (!_isValidSubdomain(subdomain)) {
-        debugPrint('[TenantDetection] Invalid subdomain format: $subdomain');
         return false;
       }
 
@@ -282,7 +263,6 @@ class TenantDetectionService {
           .maybeSingle();
 
       if (reserved != null) {
-        debugPrint('[TenantDetection] Subdomain is reserved: $subdomain');
         return false;
       }
 
@@ -293,11 +273,8 @@ class TenantDetectionService {
           .eq('subdomain', subdomain)
           .maybeSingle();
 
-      final isAvailable = existing == null;
-      debugPrint('[TenantDetection] Subdomain "$subdomain" available: $isAvailable');
-      return isAvailable;
+      return existing == null;
     } catch (e) {
-      debugPrint('[TenantDetection] Error checking subdomain availability: $e');
       return false;
     }
   }

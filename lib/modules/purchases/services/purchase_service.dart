@@ -799,15 +799,21 @@ class PurchaseService extends ChangeNotifier {
               value: tenantId,
             ),
             callback: (payload) {
-              debugPrint('🔔 [PurchaseService] Purchase payment changed: ${payload.eventType}');
+              if (!kReleaseMode) {
+                debugPrint('🔔 [PurchaseService] Purchase payment changed');
+              }
               getPurchasePayments(forceRefresh: true);
             },
           )
           .subscribe();
 
-      debugPrint('✅ [PurchaseService] Realtime subscriptions active');
+      if (!kReleaseMode) {
+        debugPrint('✅ [PurchaseService] Realtime subscriptions active');
+      }
     } catch (e) {
-      debugPrint('❌ [PurchaseService] Failed to setup realtime: $e');
+      if (!kReleaseMode) {
+        debugPrint('❌ [PurchaseService] Failed to setup realtime: $e');
+      }
     }
   }
 

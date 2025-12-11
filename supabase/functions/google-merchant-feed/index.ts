@@ -213,8 +213,28 @@ function generateProductItem(
     .filter((img: string) => img !== imageUrl)
     .slice(0, 9) // Google allows max 10 images total
   
-  // Description - fallback to name if empty
-  const description = product.description || product.name
+  // Title - fix excessive caps (convert ALL CAPS to Title Case)
+  const rawTitle = product.name || ''
+  const title = fixExcessiveCaps(rawTitle)
+  
+  // Description - must be at least 150 characters for Google
+  // If too short, expand with brand, category, and store info
+  let description = product.description || ''
+  if (description.length < 150) {
+    // Build a proper description
+    const brand = product.brand_id && brandsMap.has(product.brand_id) 
+      ? brandsMap.get(product.brand_id)! 
+      : (product.brand || storeName)
+    const category = product.category_id && categoriesMap.has(product.category_id)
+      ? categoriesMap.get(product.category_id)!
+      : (product.category_name || 'Ciclismo')
+    
+    description = `${title}. ${description ? description + '. ' : ''}Producto de la marca ${brand}, categoría ${category}. Disponible en ${storeName}, tu tienda de bicicletas y accesorios en Chile. Envíos a todo el país.`
+  }
+  // Ensure minimum 150 chars
+  while (description.length < 150) {
+    description += ` Compra online en ${storeName}.`
+  }
   
   // Price with currency (default CLP)
   const currency = product.price_currency || 'CLP'
@@ -248,7 +268,7 @@ function generateProductItem(
   // Build item XML
   let itemXml = `    <item>
       <g:id>${escapeXml(product.id)}</g:id>
-      <g:title>${escapeXml(product.name)}</g:title>
+      <g:title>${escapeXml(title)}</g:title>
       <g:description>${escapeXml(description)}</g:description>
       <g:link>${escapeXml(productUrl)}</g:link>
       <g:image_link>${escapeXml(imageUrl)}</g:image_link>`
@@ -265,31 +285,63 @@ function generateProductItem(
       <g:condition>new</g:condition>`
   
   // Add GTIN if available (preferred by Google)
-  if (gtin) {
+  if (gtin && gtin.length >= 8) {
     itemXml += `\n      <g:gtin>${escapeXml(gtin)}</g:gtin>`
+  } else {
+    // No valid GTIN - must explicitly mark identifier_exists as false
+    itemXml += `\n      <g:identifier_exists>false</g:identifier_exists>`
   }
   
-  // Add MPN (required if no GTIN)
+  // Add MPN (SKU) - always add if available
   if (mpn) {
     itemXml += `\n      <g:mpn>${escapeXml(mpn)}</g:mpn>`
   }
   
-  // If no GTIN and no MPN, mark as identifier_exists = false
-  if (!gtin && !mpn) {
-    itemXml += `\n      <g:identifier_exists>false</g:identifier_exists>`
-  }
-  
-  // Add category path as product_type
+  // Add category path as product_type (merchant's own category)
   if (categoryPath) {
     itemXml += `\n      <g:product_type>${escapeXml(categoryPath)}</g:product_type>`
   }
   
-  // Google product category for cycling
-  itemXml += `\n      <g:google_product_category>Sporting Goods &gt; Cycling</g:google_product_category>`
+  // Google product category - USE NUMERIC ID, not text!
+  // 3618 = Sporting Goods > Outdoor Recreation > Cycling > Bicycle Parts & Accessories
+  // 1085 = Sporting Goods > Outdoor Recreation > Cycling > Bicycles
+  // For general cycling products, use the parent category ID
+  // See: https://www.google.com/basepages/producttype/taxonomy-with-ids.en-US.txt
+  itemXml += `\n      <g:google_product_category>3618</g:google_product_category>`
   
   itemXml += `\n    </item>`
   
   return itemXml
+}
+
+// Fix titles with excessive capitalization (ALL CAPS → Title Case)
+function fixExcessiveCaps(text: string): string {
+  if (!text) return ''
+  
+  // Count uppercase vs lowercase letters
+  const letters = text.replace(/[^a-zA-Z]/g, '')
+  const upperCount = (letters.match(/[A-Z]/g) || []).length
+  const lowerCount = (letters.match(/[a-z]/g) || []).length
+  
+  // If more than 60% uppercase, convert to Title Case
+  if (letters.length > 0 && upperCount / letters.length > 0.6) {
+    return text
+      .toLowerCase()
+      .split(' ')
+      .map(word => {
+        if (word.length === 0) return word
+        // Keep certain words lowercase (Spanish articles/prepositions)
+        const lowercaseWords = ['de', 'del', 'la', 'el', 'las', 'los', 'y', 'e', 'o', 'u', 'a', 'con', 'sin', 'para', 'por']
+        if (lowercaseWords.includes(word)) return word
+        // Capitalize first letter
+        return word.charAt(0).toUpperCase() + word.slice(1)
+      })
+      .join(' ')
+      // Ensure first character is always uppercase
+      .replace(/^./, c => c.toUpperCase())
+  }
+  
+  return text
 }
 
 function escapeXml(unsafe: string | null | undefined): string {

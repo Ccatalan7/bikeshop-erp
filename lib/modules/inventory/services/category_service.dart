@@ -44,13 +44,11 @@ class CategoryService extends ChangeNotifier {
       
       // Return cached data if valid and not a filtered query
       if (!forceRefresh && !isFilteredQuery && _isCacheValid(_categoriesCacheTime) && _cachedCategories != null) {
-        debugPrint('📦 [CategoryService] Using cached categories (${_cachedCategories!.length} items)');
         return _cachedCategories!;
       }
       
       // Prevent concurrent fetches
       if (_isLoadingCategories && !isFilteredQuery) {
-        debugPrint('⏳ [CategoryService] Already loading categories, waiting...');
         while (_isLoadingCategories) {
           await Future.delayed(const Duration(milliseconds: 50));
         }
@@ -92,14 +90,12 @@ class CategoryService extends ChangeNotifier {
       if (!isFilteredQuery) {
         _cachedCategories = categories;
         _categoriesCacheTime = DateTime.now();
-        debugPrint('✅ [CategoryService] Cached ${categories.length} categories');
         _isLoadingCategories = false;
       }
 
       return categories;
     } catch (e) {
       _isLoadingCategories = false;
-      if (kDebugMode) print('Error fetching categories: $e');
       rethrow;
     }
   }

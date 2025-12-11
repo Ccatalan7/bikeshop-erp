@@ -13,43 +13,75 @@ class TenantService extends ChangeNotifier {
   // Cache for tenant_id to avoid repeated database queries
   String? _cachedTenantId;
   String? _cachedUserId;
+  
+  // Track if a query is in progress to prevent duplicate concurrent queries
+  bool _isQuerying = false;
+  
+  // Completer for pending requests to wait on
+  Future<String?>? _pendingQuery;
 
   /// Get the current user's tenant_id from user_profiles table
   /// This is the single source of truth for tenant_id
+  /// 
+  /// OPTIMIZED: Uses caching to prevent multiple database queries
   Future<String?> getTenantId() async {
-    debugPrint('[TenantService] getTenantId called');
     final user = _supabase.auth.currentUser;
     if (user == null) {
-      debugPrint('[TenantService] No current user');
       return null;
     }
     
-    // Return cached value if same user
+    // FAST PATH: Return cached value immediately if same user
     if (_cachedTenantId != null && _cachedUserId == user.id) {
-      debugPrint('[TenantService] Returning cached tenant_id: $_cachedTenantId');
       return _cachedTenantId;
     }
     
+    // Prevent duplicate concurrent queries - wait for existing query
+    if (_isQuerying && _pendingQuery != null) {
+      return _pendingQuery;
+    }
+    
+    // Start new query
+    _isQuerying = true;
+    _pendingQuery = _fetchTenantId(user.id);
+    
     try {
-      debugPrint('[TenantService] Querying user_profiles...');
+      return await _pendingQuery;
+    } finally {
+      _isQuerying = false;
+      _pendingQuery = null;
+    }
+  }
+  
+  /// Internal method to fetch tenant_id from database
+  Future<String?> _fetchTenantId(String userId) async {
+    try {
+      if (!kReleaseMode) {
+        debugPrint('[TenantService] Querying user_profiles...');
+      }
       final response = await _supabase
           .from('user_profiles')
           .select('tenant_id')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .maybeSingle();
       
       if (response == null) {
-        debugPrint('[TenantService] No profile found');
+        if (!kReleaseMode) {
+          debugPrint('[TenantService] No profile found');
+        }
         return null;
       }
       
       // Cache the result
       _cachedTenantId = response['tenant_id'] as String?;
-      _cachedUserId = user.id;
-      debugPrint('[TenantService] Got tenant_id: $_cachedTenantId');
+      _cachedUserId = userId;
+      if (!kReleaseMode) {
+        debugPrint('[TenantService] Got tenant_id: $_cachedTenantId');
+      }
       return _cachedTenantId;
     } catch (e) {
-      debugPrint('❌ Error getting tenant_id: $e');
+      if (!kReleaseMode) {
+        debugPrint('❌ Error getting tenant_id: $e');
+      }
       return null;
     }
   }

@@ -830,24 +830,26 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         ),
                         if (cart.itemCount > 0)
                           Positioned(
-                            right: 4,
-                            top: 4,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: accentColor,
-                                shape: BoxShape.circle,
-                              ),
-                              constraints: const BoxConstraints(
-                                  minWidth: 20, minHeight: 20),
-                              child: Text(
-                                '${cart.itemCount}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
+                            right: 0,
+                            top: 0,
+                            child: IgnorePointer(
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: accentColor,
+                                  shape: BoxShape.circle,
                                 ),
-                                textAlign: TextAlign.center,
+                                constraints: const BoxConstraints(
+                                    minWidth: 18, minHeight: 18),
+                                child: Text(
+                                  '${cart.itemCount}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
                             ),
                           ),
@@ -1116,16 +1118,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                   ),
                         ),
                         const SizedBox(height: 16),
-                        _buildFooterLink(context, 'Sobre Nosotros',
-                            _isPublicStoreDomain() ? '/pagina/nosotros' : '/tienda/pagina/nosotros', primaryColor),
-                        _buildFooterLink(context, 'Términos y Condiciones',
-                            _isPublicStoreDomain() ? '/pagina/terminos' : '/tienda/pagina/terminos', primaryColor),
-                        _buildFooterLink(context, 'Política de Privacidad',
-                            _isPublicStoreDomain() ? '/pagina/privacidad' : '/tienda/pagina/privacidad', primaryColor),
-                        _buildFooterLink(context, 'Política de Devoluciones',
-                            _isPublicStoreDomain() ? '/pagina/devoluciones' : '/tienda/pagina/devoluciones', primaryColor),
-                        _buildFooterLink(context, 'Envíos',
-                            _isPublicStoreDomain() ? '/pagina/envios' : '/tienda/pagina/envios', primaryColor),
+                        _buildFooterLink(context, 'Sobre Nosotros', '/nosotros', primaryColor),
+                        _buildFooterLink(context, 'Términos y Condiciones', '/terminos', primaryColor),
+                        _buildFooterLink(context, 'Política de Privacidad', '/privacidad', primaryColor),
+                        _buildFooterLink(context, 'Política de Devoluciones', '/devoluciones', primaryColor),
+                        _buildFooterLink(context, 'Envíos', '/envios', primaryColor),
                       ],
                     ),
                   ),
@@ -1340,41 +1337,40 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         context.go(path);
       },
       itemBuilder: (BuildContext context) {
-        // Clean URLs: /nosotros, /devoluciones, etc. (routes defined in app_router.dart)
-        final basePath = _isPublicStoreDomain() ? '' : '/tienda/pagina';
+        // Always use clean URLs - these routes exist in app_router.dart
         return <PopupMenuEntry<String>>[
           _buildDropdownItem(
             icon: Icons.info_outline,
             label: 'Sobre Nosotros',
-            value: _isPublicStoreDomain() ? '/nosotros' : '$basePath/nosotros',
+            value: '/nosotros',
           ),
           const PopupMenuDivider(height: 1),
           _buildDropdownItem(
             icon: Icons.contact_page_outlined,
             label: 'Contacto',
-            value: _isPublicStoreDomain() ? '/tienda/contacto' : '/tienda/contacto',
+            value: '/contacto',
           ),
           const PopupMenuDivider(height: 1),
           _buildDropdownItem(
             icon: Icons.local_shipping_outlined,
             label: 'Envíos',
-            value: _isPublicStoreDomain() ? '/envios' : '$basePath/envios',
+            value: '/envios',
           ),
           _buildDropdownItem(
             icon: Icons.replay_outlined,
             label: 'Devoluciones',
-            value: _isPublicStoreDomain() ? '/devoluciones' : '$basePath/devoluciones',
+            value: '/devoluciones',
           ),
           const PopupMenuDivider(height: 1),
           _buildDropdownItem(
             icon: Icons.gavel_outlined,
             label: 'Términos y Condiciones',
-            value: _isPublicStoreDomain() ? '/terminos' : '$basePath/terminos',
+            value: '/terminos',
           ),
           _buildDropdownItem(
             icon: Icons.privacy_tip_outlined,
             label: 'Privacidad',
-            value: _isPublicStoreDomain() ? '/privacidad' : '$basePath/privacidad',
+            value: '/privacidad',
           ),
         ];
       },

@@ -192,6 +192,8 @@ class MercadoPagoService extends ChangeNotifier {
   /// Process payment confirmation from callback
   ///
   /// This is called when customer returns from MercadoPago after payment
+  /// NOTE: Only updates order status. The database trigger 
+  /// (trg_auto_process_paid_online_order) handles invoice creation.
   Future<void> processPaymentCallback({
     required String orderId,
     required String paymentId,
@@ -216,6 +218,9 @@ class MercadoPagoService extends ChangeNotifier {
           paymentStatus = 'pending';
       }
 
+      // Only update the order status
+      // The database trigger (trg_auto_process_paid_online_order) will 
+      // automatically call process_online_order when payment_status = 'paid'
       await _supabase.from('online_orders').update({
         'payment_status': paymentStatus,
         'payment_method': 'mercadopago',
@@ -225,11 +230,10 @@ class MercadoPagoService extends ChangeNotifier {
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', orderId);
 
-      // If payment is approved, process the order (create invoice + payment)
-      if (status == 'approved') {
-        await _supabase
-            .rpc('process_online_order', params: {'p_order_id': orderId});
-      }
+      // DO NOT call process_online_order here - the trigger handles it
+      // This was causing duplicate invoices!
+      
+      debugPrint('✅ [MercadoPago] Order $orderId updated to $paymentStatus');
     } catch (e) {
       debugPrint('Error processing payment callback: $e');
       rethrow;

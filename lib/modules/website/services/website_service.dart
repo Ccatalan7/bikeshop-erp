@@ -24,6 +24,7 @@ class WebsiteService extends ChangeNotifier {
   bool _isInitializing = false;
   String? _error;
   bool _disposed = false; // Track disposal state
+  bool _hasLoadedForTenant = false; // Track if loadBlocksForTenant completed (even with no blocks)
   
   // Realtime subscriptions
   RealtimeChannel? _ordersChannel;
@@ -37,6 +38,7 @@ class WebsiteService extends ChangeNotifier {
   List<Map<String, dynamic>> get blocks => _blocks;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get hasLoadedForTenant => _hasLoadedForTenant;
 
   /// Safe version of notifyListeners that checks disposal state
   void _safeNotifyListeners() {
@@ -192,7 +194,15 @@ class WebsiteService extends ChangeNotifier {
   /// This method does NOT require authentication - it uses the provided tenant_id
   /// from subdomain detection (PublicStoreTenantProvider)
   Future<List<Map<String, dynamic>>> loadBlocksForTenant(String tenantId) async {
+    // Prevent duplicate loads
+    if (_hasLoadedForTenant) {
+      debugPrint('[WebsiteService] Already loaded for tenant, returning cached blocks: ${_blocks.length}');
+      return _blocks;
+    }
+    
     try {
+      debugPrint('[WebsiteService] Loading blocks for tenant: $tenantId');
+      
       // First, find the home page for this tenant
       final pagesResponse = await _supabase
           .from('website_pages')
@@ -202,9 +212,12 @@ class WebsiteService extends ChangeNotifier {
           .eq('is_published', true)
           .limit(1);
       
+      debugPrint('[WebsiteService] Pages query response: $pagesResponse');
+      
       String? homePageId;
       if ((pagesResponse as List).isNotEmpty) {
         homePageId = pagesResponse[0]['id']?.toString();
+        debugPrint('[WebsiteService] Found home page: $homePageId');
       }
       
       // If no home page found, try to get the first published page
@@ -224,6 +237,8 @@ class WebsiteService extends ChangeNotifier {
       
       if (homePageId == null) {
         debugPrint('[WebsiteService] No home page found for tenant $tenantId');
+        _hasLoadedForTenant = true; // Mark as loaded even with no blocks
+        _safeNotifyListeners();
         return [];
       }
       
@@ -241,11 +256,14 @@ class WebsiteService extends ChangeNotifier {
       
       // Cache the blocks for reuse
       _blocks = data;
+      _hasLoadedForTenant = true; // Mark as loaded
       _safeNotifyListeners();
       
       return data;
     } catch (e) {
       debugPrint('[WebsiteService] Error loading blocks for tenant: $e');
+      _hasLoadedForTenant = true; // Mark as loaded even on error (don't block forever)
+      _safeNotifyListeners();
       return [];
     }
   }

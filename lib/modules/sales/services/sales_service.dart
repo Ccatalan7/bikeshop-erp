@@ -235,14 +235,19 @@ class SalesService extends ChangeNotifier {
   Future<Payment> registerPayment(Payment payment) async {
     try {
       final payload = payment.toFirestoreMap();
+      debugPrint('📝 [SalesService] Registering payment: $payload');
       final isNew = payment.id == null;
       Map<String, dynamic> result;
 
       if (isNew) {
+        debugPrint('📝 [SalesService] Inserting new payment...');
         result = await _databaseService.insert(_paymentsCollection, payload);
+        debugPrint('✅ [SalesService] Payment inserted: ${result['id']}');
       } else {
+        debugPrint('📝 [SalesService] Updating payment ${payment.id}...');
         result = await _databaseService.update(
             _paymentsCollection, payment.id!, payload);
+        debugPrint('✅ [SalesService] Payment updated: ${result['id']}');
       }
 
       final savedPayment = Payment.fromJson(result);
@@ -259,7 +264,8 @@ class SalesService extends ChangeNotifier {
       return savedPayment;
     } catch (e) {
       debugPrint('SalesService.registerPayment error: $e');
-      throw Exception('No se pudo registrar el pago.');
+      // Propagate actual error for debugging
+      rethrow;
     }
   }
 
@@ -408,9 +414,13 @@ class SalesService extends ChangeNotifier {
           )
           .subscribe();
 
-      debugPrint('✅ [SalesService] Realtime subscriptions active with tenant_id filter');
+      if (!kReleaseMode) {
+        debugPrint('✅ [SalesService] Realtime subscriptions active');
+      }
     } catch (e) {
-      debugPrint('❌ [SalesService] Failed to setup realtime: $e');
+      if (!kReleaseMode) {
+        debugPrint('❌ [SalesService] Failed to setup realtime: $e');
+      }
     }
   }
 

@@ -3299,6 +3299,361 @@ create policy "table_delete" on table_name
 
 ---
 
+# 🛒 GOOGLE MERCHANT CENTER INTEGRATION
+
+**Complete guide for feeding products to Google Merchant Center and getting approved.**
+
+## Architecture Overview
+
+```
+Products Table (with is_google_merchant=true)
+         ↓
+Supabase Edge Function (google-merchant-feed)
+         ↓
+XML RSS 2.0 Feed (https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-merchant-feed?tenant=vinabike)
+         ↓
+Google Merchant Center (fetches feed every 24h)
+         ↓
+Google Shopping / Free Listings
+```
+
+**Feed URL Pattern:**
+- By subdomain: `https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-merchant-feed?tenant={subdomain}`
+- By custom domain: `https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-merchant-feed?domain={custom_domain}`
+
+**Feed Location:** `supabase/functions/google-merchant-feed/index.ts`
+
+---
+
+## 🚨 CRITICAL: Product Approval Requirements
+
+### Mandatory Fields (Google WILL Reject Without These)
+
+| Field | Database Column | Description | Example |
+|-------|-----------------|-------------|---------|
+| **ID** | `id` (UUID) | Unique product identifier | `775815ba-4c04-4ad8-b037-33d9ed70f06a` |
+| **Title** | `name` | Product name (150 char max) | `Aceite Mineral Shimano SM-DBOIL 1 Litro` |
+| **Description** | `description` | Min 150 chars! | Detailed product description |
+| **Link** | Generated | Product URL | `https://vinabike.cl/productos/{id}` |
+| **Image Link** | `image_url` | Main product image | Must be HTTPS, min 100x100px |
+| **Price** | `price` + `price_currency` | With currency | `15990 CLP` |
+| **Availability** | `stock_quantity` | In stock / Out of stock | Based on stock > 0 |
+| **Brand** | `brand_id` → `product_brands.name` | Manufacturer | `Shimano`, `KMC` |
+| **Condition** | Hardcoded | Always `new` | `new` |
+
+### Product Identifiers: GTIN vs MPN vs identifier_exists
+
+**🚨 THE #1 REJECTION REASON: Incorrect identifier setup!**
+
+Google requires ONE of these combinations:
+1. ✅ **GTIN** (preferred) - Universal Product Code (UPC/EAN/ISBN)
+2. ✅ **Brand + MPN** - Manufacturer Part Number
+3. ✅ **identifier_exists=false** - For custom/handmade products only
+
+**Database Columns:**
+- `gtin` → `<g:gtin>` tag (12-14 digits)
+- `sku` → `<g:mpn>` tag (Manufacturer Part Number)
+
+---
+
+## 📋 REAL-WORLD EXAMPLE: Fixing Rejected Products
+
+### Case Study: Shimano SM-DBOIL Mineral Oil
+
+**Initial State (REJECTED):**
+```json
+{
+  "name": "ACEITE MINERAL SHIMANO SM-DBOIL 1 LITRO",
+  "sku": "S56467",
+  "gtin": null,           // ❌ EMPTY!
+  "mpn": "022255354042"   // ❌ WRONG FIELD! This is a UPC, not MPN
+}
+```
+
+**Google's Rejection Reason:** "Missing GTIN for this product"
+
+**The Problem:** The UPC barcode `022255354042` was stored in the wrong field (`mpn` instead of `gtin`).
+
+**The Fix:**
+```sql
+UPDATE products 
+SET gtin = '022255354042', 
+    mpn = null  -- Clear the wrong field
+WHERE id = '775815ba-4c04-4ad8-b037-33d9ed70f06a';
+```
+
+**Corrected State (APPROVED):**
+```json
+{
+  "name": "Aceite Mineral Shimano SM-DBOIL 1 Litro",
+  "sku": "S56467",
+  "gtin": "022255354042",  // ✅ CORRECT! UPC in GTIN field
+  "mpn": null
+}
+```
+
+**Feed Output After Fix:**
+```xml
+<item>
+  <g:id>775815ba-4c04-4ad8-b037-33d9ed70f06a</g:id>
+  <g:title>Aceite Mineral Shimano SM-DBOIL 1 Litro</g:title>
+  <g:gtin>022255354042</g:gtin>  <!-- ✅ Now in correct tag -->
+  <g:mpn>S56467</g:mpn>          <!-- SKU becomes MPN -->
+  <g:brand>Shimano</g:brand>
+  ...
+</item>
+```
+
+---
+
+## 🔤 UNDERSTANDING GTIN, MPN, SKU, and BARCODE
+
+### Field Definitions
+
+| Field | What It Is | Who Assigns It | Format | Example |
+|-------|-----------|----------------|--------|---------|
+| **GTIN** | Global Trade Item Number | Manufacturer | 8-14 digits (UPC/EAN) | `022255354042` |
+| **MPN** | Manufacturer Part Number | Manufacturer | Alphanumeric | `SM-DBOIL-1L` |
+| **SKU** | Stock Keeping Unit | Retailer (YOU) | Any format | `S56467` |
+| **Barcode** | Physical barcode on product | Usually = GTIN | Numeric | `022255354042` |
+
+### How to Identify a GTIN
+
+**GTIN is a UPC, EAN, or ISBN barcode number:**
+- **UPC-A** (USA/Canada): 12 digits, starts with 0-1 → `022255354042`
+- **EAN-13** (International): 13 digits → `4715575883212`
+- **ISBN** (Books): 13 digits, starts with 978/979 → `9780123456789`
+
+**To find GTIN:**
+1. Look at product barcode → that number IS the GTIN
+2. Search manufacturer's website for product specs
+3. Use barcode lookup sites: `https://www.barcodelookup.com/`
+
+### Database Column Mapping
+
+| Database Column | Feed Tag | What to Store |
+|-----------------|----------|---------------|
+| `gtin` | `<g:gtin>` | UPC/EAN barcode number (12-14 digits) |
+| `sku` | `<g:mpn>` | Your internal SKU (retailer code) |
+| `barcode` | Fallback for gtin | If gtin is empty, feed uses barcode |
+
+**⚠️ CRITICAL: `sku` maps to `<g:mpn>`, NOT the other way around!**
+
+Our feed logic:
+```typescript
+// GTIN: prefer gtin field, fallback to barcode
+const gtin = product.gtin || product.barcode || ''
+
+// MPN: use SKU (our internal code)
+const mpn = product.sku || ''
+```
+
+---
+
+## 🏷️ Products WITHOUT GTIN (identifier_exists=false)
+
+For products that genuinely don't have a GTIN:
+- Custom/handmade products
+- Local/artisan products
+- Very old products without barcodes
+- Store-branded items
+
+**Feed Logic:**
+```typescript
+if (gtin && gtin.length >= 8) {
+  itemXml += `<g:gtin>${gtin}</g:gtin>`
+} else {
+  // No valid GTIN - must explicitly mark
+  itemXml += `<g:identifier_exists>false</g:identifier_exists>`
+}
+```
+
+**⚠️ WARNING:** Google scrutinizes products with `identifier_exists=false`. Only use for genuinely unique products!
+
+---
+
+## 📝 Product Data Quality Checklist
+
+### Before Enabling Google Merchant for a Product:
+
+- [ ] **Title:** Clear, descriptive, NO ALL CAPS (feed auto-fixes excessive caps)
+- [ ] **Description:** Minimum 150 characters (feed auto-expands if shorter)
+- [ ] **Image:** At least 100x100px, HTTPS URL, white/clean background preferred
+- [ ] **Price:** Greater than 0, correct currency (CLP for Chile)
+- [ ] **Brand:** Must be set (either brand_id or brand text field)
+- [ ] **GTIN:** If product has barcode, enter the barcode number here
+- [ ] **SKU:** Your internal stock code (becomes MPN in feed)
+- [ ] **Stock:** Set accurate inventory (affects availability status)
+- [ ] **Category:** Assigned to a product category
+
+### Enable in Product Form:
+
+1. Set `is_published = true` (required for website)
+2. Set `is_google_merchant = true` (enables in feed)
+3. Set `lifecycle_status = 'active'`
+
+---
+
+## 🔧 Database Fields for Google Merchant
+
+### Products Table Columns (Relevant to Feed)
+
+```sql
+-- Core product data
+name text not null,
+sku text,                    -- Becomes <g:mpn>
+description text,
+price numeric not null,
+price_currency text default 'CLP',
+stock_quantity integer,
+
+-- Images
+image_url text,              -- Main image → <g:image_link>
+image_urls text[],           -- Gallery → <g:additional_image_link>
+
+-- Identifiers
+gtin text,                   -- UPC/EAN → <g:gtin>
+barcode text,                -- Fallback for GTIN
+
+-- Brand & Category
+brand_id uuid references product_brands(id),
+brand text,                  -- Fallback if no brand_id
+category_id uuid references product_categories(id),
+category_name text,          -- Fallback for category
+
+-- Visibility flags
+is_active boolean default true,
+is_published boolean default false,      -- Must be true for website
+is_google_merchant boolean default false, -- Must be true for feed
+lifecycle_status text default 'active',
+```
+
+### Updating GTIN via API
+
+```bash
+# Get product current state
+source .env && curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/products?id=eq.{PRODUCT_ID}" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" | jq '.[0] | {name, sku, gtin, mpn, barcode}'
+
+# Update GTIN
+source .env && curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/products?id=eq.{PRODUCT_ID}" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: return=representation" \
+  -X PATCH \
+  -d '{"gtin": "YOUR_BARCODE_NUMBER"}' | jq '.[0] | {name, sku, gtin}'
+```
+
+---
+
+## 🔄 Feed Refresh & Troubleshooting
+
+### Google Merchant Center Re-fetch
+
+After fixing product data:
+1. Wait 1-4 hours for feed cache to expire (Cache-Control: 1 hour)
+2. Or manually trigger re-fetch in Google Merchant Center:
+   - Products → Feeds → Your Feed → Fetch Now
+3. Products re-index within 24-48 hours
+
+### Common Rejection Reasons & Fixes
+
+| Rejection | Cause | Fix |
+|-----------|-------|-----|
+| "Missing GTIN" | GTIN field empty for branded product | Add barcode to `gtin` column |
+| "Invalid GTIN" | Wrong format or checksum | Verify barcode, use valid UPC/EAN |
+| "Mismatched identifiers" | GTIN doesn't match product | Double-check barcode matches product |
+| "Description too short" | Less than ~100 chars | Add more detail (feed auto-expands) |
+| "Image too small" | Less than 100x100px | Upload larger image |
+| "Price missing" | price = 0 or null | Set valid price > 0 |
+| "Generic image" | Product image shows brand logo only | Use actual product photo |
+
+### Testing Feed Locally
+
+```bash
+# Fetch feed and check product output
+curl "https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-merchant-feed?tenant=vinabike" | head -100
+
+# Count products in feed
+curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-merchant-feed?tenant=vinabike" | grep -c "<item>"
+```
+
+---
+
+## 🛠️ Flutter Product Form: Google Merchant Fields
+
+**Location:** `lib/modules/inventory/pages/product_form_page.dart`
+
+The product form includes these Google Merchant-relevant fields:
+
+1. **Basic Info Tab:**
+   - Name (becomes title)
+   - SKU (becomes MPN)
+   - Description (needs 150+ chars)
+   - Price & Currency
+
+2. **Details Tab:**
+   - Brand (dropdown from product_brands)
+   - GTIN field (for barcode)
+   - Category (for product_type)
+
+3. **Publishing Section:**
+   - `is_published` toggle → Required for website
+   - `is_google_merchant` toggle → Enables in feed
+
+---
+
+## 📊 Google Merchant Category (google_product_category)
+
+The feed uses numeric category IDs from Google's taxonomy:
+
+```typescript
+// Current hardcoded: Cycling Accessories
+itemXml += `<g:google_product_category>3618</g:google_product_category>`
+```
+
+**Common Cycling Categories:**
+- `1085` - Bicycles
+- `3618` - Bicycle Parts & Accessories
+- `3636` - Bicycle Tires & Tubes
+- `3612` - Bicycle Frames
+
+**Future Enhancement:** Map `product_categories` to Google taxonomy IDs.
+
+---
+
+## ✅ Copilot Checklist: Adding Products to Google Merchant
+
+When enabling a product for Google Merchant:
+
+1. ✅ **Verify product has GTIN or set `identifier_exists=false`**
+   - If barcode exists → Put it in `gtin` column
+   - If no barcode → Product needs `identifier_exists=false` (auto-handled by feed)
+
+2. ✅ **Check description length** → Must be 150+ characters
+
+3. ✅ **Verify image exists** → `image_url` must be set, HTTPS
+
+4. ✅ **Confirm price > 0** → Feed filters out $0 products
+
+5. ✅ **Set brand** → Either `brand_id` or `brand` text must be set
+
+6. ✅ **Enable flags:**
+   ```sql
+   UPDATE products SET
+     is_active = true,
+     is_published = true,
+     is_google_merchant = true,
+     lifecycle_status = 'active'
+   WHERE id = 'product-uuid';
+   ```
+
+7. ✅ **Test in feed** → Check XML output for correct tags
+
+---
+
 # 🧪 Testing Multi-Tenant Isolation
 
 ```sql

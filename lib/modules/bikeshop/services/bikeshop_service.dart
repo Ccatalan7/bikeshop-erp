@@ -26,6 +26,7 @@ class BikeshopService extends ChangeNotifier {
   final TenantService _tenantService = TenantService();
 
   RealtimeChannel? _mechanicJobsChannel;
+  RealtimeChannel? _salesInvoicesChannel;  // For invoice status updates
   Timer? _notifyDebounceTimer;
 
   // ============================================================
@@ -67,6 +68,7 @@ class BikeshopService extends ChangeNotifier {
   BikeshopService(this._db) {
     // Fire and forget - with debouncing, realtime is now safe!
     _setupMechanicJobsRealtime();
+    _setupSalesInvoicesRealtime();  // Also listen to invoice changes (for payment status)
   }
 
   // ============================================================
@@ -997,28 +999,64 @@ class BikeshopService extends ChangeNotifier {
               value: tenantId,
             ),
             callback: (payload) {
-              debugPrint(
-                  '🔔 [BikeshopService] Mechanic job changed: ${payload.eventType}');
-              debugPrint('🔔 [BikeshopService] Calling _debouncedNotify()');
               _debouncedNotify(); // Debounced to prevent spam
             },
           )
           .subscribe();
 
-      debugPrint('✅ [BikeshopService] Realtime subscription active');
+      if (!kReleaseMode) {
+        debugPrint('✅ [BikeshopService] Realtime subscription active');
+      }
     } catch (e) {
-      debugPrint('❌ [BikeshopService] Failed to setup realtime: $e');
+      if (!kReleaseMode) {
+        debugPrint('❌ [BikeshopService] Failed to setup realtime: $e');
+      }
+    }
+  }
+
+  /// Setup realtime subscription for sales_invoices (for invoice status updates)
+  /// This ensures the Pegas table updates when invoices are paid
+  Future<void> _setupSalesInvoicesRealtime() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        return;
+      }
+
+      await _salesInvoicesChannel?.unsubscribe();
+
+      _salesInvoicesChannel = Supabase.instance.client
+          .channel('sales_invoices_for_pegas')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update, // Only care about updates (status changes)
+            schema: 'public',
+            table: 'sales_invoices',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: (payload) {
+              _debouncedNotify(); // Trigger reload so Pegas table updates
+            },
+          )
+          .subscribe();
+
+      if (!kReleaseMode) {
+        debugPrint('✅ [BikeshopService] Sales invoices realtime subscription active');
+      }
+    } catch (e) {
+      if (!kReleaseMode) {
+        debugPrint('❌ [BikeshopService] Failed to setup sales invoices realtime: $e');
+      }
     }
   }
 
   /// Debounced notifyListeners - prevents excessive reloads
   void _debouncedNotify() {
-    debugPrint(
-        '🟡 [BikeshopService] _debouncedNotify() called, setting 500ms timer');
     _notifyDebounceTimer?.cancel();
     _notifyDebounceTimer = Timer(const Duration(milliseconds: 500), () {
       if (!mounted) return; // Don't notify if disposed
-      debugPrint('🟡 [BikeshopService] Timer fired, calling notifyListeners()');
       notifyListeners();
     });
   }
@@ -1103,6 +1141,7 @@ class BikeshopService extends ChangeNotifier {
     _isDisposed = true;
     _notifyDebounceTimer?.cancel();
     _mechanicJobsChannel?.unsubscribe();
+    _salesInvoicesChannel?.unsubscribe();  // Clean up sales invoices subscription
     super.dispose();
   }
 }

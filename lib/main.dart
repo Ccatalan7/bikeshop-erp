@@ -324,29 +324,25 @@ class VinabikeApp extends StatelessWidget {
           final authService = context.watch<AuthService>();
           final appearanceService = context.watch<AppearanceService>();
           
-          // For public store: watch tenant provider to trigger rebuild when ready
-          final tenantProvider = isPublicStoreHost 
-              ? context.watch<PublicStoreTenantProvider>() 
-              : null;
-          final websiteService = isPublicStoreHost 
-              ? context.watch<WebsiteService>() 
-              : null;
-          
-          // PUBLIC STORE: Load everything BEFORE showing the app
-          if (isPublicStoreHost && tenantProvider != null && websiteService != null) {
-            final publicInventoryService = context.read<PublicInventoryService>();
+          // PUBLIC STORE: Simple one-time initialization
+          // DON'T watch WebsiteService - it causes infinite rebuilds
+          if (isPublicStoreHost) {
+            final tenantProvider = context.watch<PublicStoreTenantProvider>();
+            final websiteService = context.watch<WebsiteService>();
             
-            // Start detection if not started
+            // If tenant not detected yet, start detection
             if (!tenantProvider.hasTenant && !tenantProvider.isLoading) {
               WidgetsBinding.instance.addPostFrameCallback((_) async {
                 await tenantProvider.detectTenant();
                 if (tenantProvider.tenantId != null) {
                   final tid = tenantProvider.tenantId!;
-                  // PARALLEL loading - settings, blocks, products, and categories
+                  final ws = context.read<WebsiteService>();
+                  final publicInventoryService = context.read<PublicInventoryService>();
+                  
+                  // Load all data in parallel (ONE TIME)
                   await Future.wait([
-                    websiteService.loadSettingsForTenant(tid),
-                    websiteService.loadBlocksForTenant(tid),
-                    // Preload products and categories for instant navigation
+                    ws.loadSettingsForTenant(tid),
+                    ws.loadBlocksForTenant(tid),
                     publicInventoryService.getProductsForTenant(tenantId: tid),
                     publicInventoryService.getCategoriesForTenant(tenantId: tid),
                   ]);
@@ -354,27 +350,50 @@ class VinabikeApp extends StatelessWidget {
               });
             }
             
-            // BLOCK RENDERING until data is ready
-            // Show minimal loading only if we don't have blocks yet
-            final hasBlocks = websiteService.blocks.isNotEmpty;
-            final isStillLoading = tenantProvider.isLoading || 
-                (tenantProvider.hasTenant && !hasBlocks);
-            
-            if (isStillLoading) {
-              // Simple white screen - no spinner, no logo, just wait
+            // Show loading while tenant is being detected OR data is loading
+            final isDataReady = websiteService.hasLoadedForTenant;
+            if (tenantProvider.isLoading || (tenantProvider.hasTenant && !isDataReady)) {
               return const MaterialApp(
                 debugShowCheckedModeBanner: false,
                 home: Scaffold(
                   backgroundColor: Colors.white,
-                  body: SizedBox.shrink(),
+                  body: Center(child: CircularProgressIndicator()),
                 ),
               );
             }
+            
+            // Tenant detection failed
+            if (!tenantProvider.hasTenant) {
+              return MaterialApp(
+                debugShowCheckedModeBanner: false,
+                home: Scaffold(
+                  backgroundColor: Colors.white,
+                  body: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.store, size: 64, color: Colors.grey),
+                        const SizedBox(height: 16),
+                        Text(tenantProvider.error ?? 'Tienda no encontrada'),
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: () => tenantProvider.retry(),
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+            
+            // Tenant is ready - proceed to app (data loads in background)
           }
           
           // Initialize data preload service (preloads critical data after auth)
+          // SKIP on public store - visitors don't need ERP data
           final dataPreloadService = context.read<DataPreloadService>();
-          if (!dataPreloadService.hasPreloaded && authService.isAuthenticated) {
+          if (!isPublicStoreHost && !dataPreloadService.hasPreloaded && authService.isAuthenticated) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               dataPreloadService.initialize(
                 bikeshopService: context.read<BikeshopService>(),
@@ -385,6 +404,7 @@ class VinabikeApp extends StatelessWidget {
                 salesService: context.read<SalesService>(),
                 purchaseService: context.read<PurchaseService>(),
                 hrService: context.read<HRService>(),
+                isPublicStore: isPublicStoreHost, // Disable on public store
               );
             });
           }
