@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../providers/cart_provider.dart';
@@ -623,6 +626,19 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
               Row(
                 children: [
                   Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _downloadOrderPdf(order),
+                      icon: const Icon(Icons.download, size: 18),
+                      label: const Text('Descargar'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: const BorderSide(
+                            color: PublicStoreTheme.primaryBlue),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
                     child: OutlinedButton(
                       onPressed: () => context.go('/tienda/productos'),
                       style: OutlinedButton.styleFrom(
@@ -633,7 +649,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
                       child: const Text('Seguir Comprando'),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () => context.go('/tienda'),
@@ -799,6 +815,192 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _downloadOrderPdf(OnlineOrder order) async {
+    final pdf = pw.Document();
+    
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Header
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'VIÑABIKE',
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                        'Comprobante de Pedido',
+                        style: pw.TextStyle(
+                          fontSize: 16,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        order.orderNumber,
+                        style: pw.TextStyle(
+                          fontSize: 14,
+                          color: PdfColors.blue700,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 20),
+              pw.Divider(),
+              pw.SizedBox(height: 20),
+              
+              // Customer Info
+              pw.Text(
+                'Datos del Cliente',
+                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text('Nombre: ${order.customerName}'),
+              pw.Text('Email: ${order.customerEmail}'),
+              if (order.customerPhone != null)
+                pw.Text('Teléfono: ${order.customerPhone}'),
+              if (order.customerAddress != null)
+                pw.Text('Dirección: ${order.customerAddress}'),
+              pw.SizedBox(height: 20),
+              
+              // Products
+              pw.Text(
+                'Productos',
+                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey300),
+                children: [
+                  // Header row
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text('Producto', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text('Cant.', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text('Precio', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text('Subtotal', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  // Product rows
+                  ...order.items.map((item) => pw.TableRow(
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text(item.productName),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text('${item.quantity}'),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text(ChileanUtils.formatCurrency(item.unitPrice)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text(ChileanUtils.formatCurrency(item.subtotal)),
+                      ),
+                    ],
+                  )),
+                ],
+              ),
+              pw.SizedBox(height: 20),
+              
+              // Totals
+              pw.Container(
+                alignment: pw.Alignment.centerRight,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Row(
+                      mainAxisSize: pw.MainAxisSize.min,
+                      children: [
+                        pw.SizedBox(width: 100, child: pw.Text('Subtotal:')),
+                        pw.SizedBox(width: 100, child: pw.Text(ChileanUtils.formatCurrency(order.subtotal), textAlign: pw.TextAlign.right)),
+                      ],
+                    ),
+                    if (order.taxAmount > 0)
+                      pw.Row(
+                        mainAxisSize: pw.MainAxisSize.min,
+                        children: [
+                          pw.SizedBox(width: 100, child: pw.Text('IVA (19%):')),
+                          pw.SizedBox(width: 100, child: pw.Text(ChileanUtils.formatCurrency(order.taxAmount), textAlign: pw.TextAlign.right)),
+                        ],
+                      ),
+                    if (order.shippingCost > 0)
+                      pw.Row(
+                        mainAxisSize: pw.MainAxisSize.min,
+                        children: [
+                          pw.SizedBox(width: 100, child: pw.Text('Envío:')),
+                          pw.SizedBox(width: 100, child: pw.Text(ChileanUtils.formatCurrency(order.shippingCost), textAlign: pw.TextAlign.right)),
+                        ],
+                      ),
+                    pw.Divider(),
+                    pw.Row(
+                      mainAxisSize: pw.MainAxisSize.min,
+                      children: [
+                        pw.SizedBox(width: 100, child: pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                        pw.SizedBox(width: 100, child: pw.Text(ChileanUtils.formatCurrency(order.total), style: pw.TextStyle(fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 30),
+              
+              // Footer
+              pw.Center(
+                child: pw.Text(
+                  'Gracias por tu compra en Viñabike',
+                  style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600),
+                ),
+              ),
+              pw.Center(
+                child: pw.Text(
+                  'vinabike.cl | +56 9 9835 7797',
+                  style: pw.TextStyle(fontSize: 10, color: PdfColors.grey500),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    
+    // Download/print the PDF
+    await Printing.sharePdf(
+      bytes: await pdf.save(),
+      filename: 'pedido_${order.orderNumber}.pdf',
     );
   }
 }

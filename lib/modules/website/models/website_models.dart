@@ -466,7 +466,9 @@ class OnlineOrder {
       internalNotes: json['internal_notes'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
-      items: [],
+      items: (json['online_order_items'] as List<dynamic>?)
+          ?.map((item) => OnlineOrderItem.fromJson(item as Map<String, dynamic>))
+          .toList() ?? [],
     );
   }
 

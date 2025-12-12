@@ -35,7 +35,7 @@ class MercadoPagoService extends ChangeNotifier {
     if (tenantId != null) {
       _tenantId = tenantId;
     }
-    
+
     try {
       // Load MercadoPago settings from website_settings table
       var query = _supabase
@@ -47,7 +47,7 @@ class MercadoPagoService extends ChangeNotifier {
         'mercadopago_test_mode',
         'store_url',
       ]);
-      
+
       // Filter by tenant if available
       if (_tenantId != null) {
         query = query.eq('tenant_id', _tenantId!);
@@ -74,8 +74,9 @@ class MercadoPagoService extends ChangeNotifier {
             break;
         }
       }
-      
-      debugPrint('🔧 [MercadoPago] Initialized - configured: $isConfigured, tenant: $_tenantId');
+
+      debugPrint(
+          '🔧 [MercadoPago] Initialized - configured: $isConfigured, tenant: $_tenantId');
 
       notifyListeners();
     } catch (e) {
@@ -93,12 +94,24 @@ class MercadoPagoService extends ChangeNotifier {
     if (_tenantId == null) {
       throw Exception('tenant_id not set. Call setTenantId() first.');
     }
-    
+
     try {
       await _supabase.from('website_settings').upsert([
-        {'tenant_id': _tenantId, 'key': 'mercadopago_public_key', 'value': publicKey},
-        {'tenant_id': _tenantId, 'key': 'mercadopago_access_token', 'value': accessToken},
-        {'tenant_id': _tenantId, 'key': 'mercadopago_test_mode', 'value': testMode ? 'true' : 'false'},
+        {
+          'tenant_id': _tenantId,
+          'key': 'mercadopago_public_key',
+          'value': publicKey
+        },
+        {
+          'tenant_id': _tenantId,
+          'key': 'mercadopago_access_token',
+          'value': accessToken
+        },
+        {
+          'tenant_id': _tenantId,
+          'key': 'mercadopago_test_mode',
+          'value': testMode ? 'true' : 'false'
+        },
       ], onConflict: 'tenant_id,key');
 
       _publicKey = publicKey;
@@ -135,12 +148,12 @@ class MercadoPagoService extends ChangeNotifier {
       final successUrl = _buildReturnUrl(orderId: orderId, status: 'success');
       final failureUrl = _buildReturnUrl(orderId: orderId, status: 'failure');
       final pendingUrl = _buildReturnUrl(orderId: orderId, status: 'pending');
-      
+
       debugPrint('🔗 [MercadoPago] Creating preference with back_urls:');
       debugPrint('   success: $successUrl');
       debugPrint('   failure: $failureUrl');
       debugPrint('   pending: $pendingUrl');
-      
+
       // Call our Supabase Edge Function to create the preference
       // (This keeps the access token secure on the server)
       final response = await _supabase.functions.invoke(
@@ -202,7 +215,7 @@ class MercadoPagoService extends ChangeNotifier {
   /// Process payment confirmation from callback
   ///
   /// This is called when customer returns from MercadoPago after payment
-  /// NOTE: Only updates order status. The database trigger 
+  /// NOTE: Only updates order status. The database trigger
   /// (trg_auto_process_paid_online_order) handles invoice creation.
   Future<void> processPaymentCallback({
     required String orderId,
@@ -229,7 +242,7 @@ class MercadoPagoService extends ChangeNotifier {
       }
 
       // Only update the order status
-      // The database trigger (trg_auto_process_paid_online_order) will 
+      // The database trigger (trg_auto_process_paid_online_order) will
       // automatically call process_online_order when payment_status = 'paid'
       await _supabase.from('online_orders').update({
         'payment_status': paymentStatus,
@@ -242,7 +255,7 @@ class MercadoPagoService extends ChangeNotifier {
 
       // DO NOT call process_online_order here - the trigger handles it
       // This was causing duplicate invoices!
-      
+
       debugPrint('✅ [MercadoPago] Order $orderId updated to $paymentStatus');
     } catch (e) {
       debugPrint('Error processing payment callback: $e');
@@ -269,15 +282,15 @@ class MercadoPagoService extends ChangeNotifier {
   // ============================================================================
 
   String _resolveStoreUrl() {
+    if (_storeUrl != null && _storeUrl!.isNotEmpty) {
+      return _storeUrl!;
+    }
+
     if (kIsWeb) {
       final origin = Uri.base.origin;
       if (origin.isNotEmpty) {
         return origin;
       }
-    }
-
-    if (_storeUrl != null && _storeUrl!.isNotEmpty) {
-      return _storeUrl!;
     }
 
     return 'https://vinabike-store.web.app';
@@ -288,11 +301,13 @@ class MercadoPagoService extends ChangeNotifier {
 
     String url;
     if (status == 'failure') {
-      url = '$base/tienda/checkout?pedido=$orderId&status=$status';
+      // Use clean public store routes (no /tienda prefix) for web callbacks.
+      // This also matches our canonical URLs on vinabike-store.web.app.
+      url = '$base/checkout?pedido=$orderId&status=$status';
     } else {
-      url = '$base/tienda/pedido/$orderId?status=$status';
+      url = '$base/pedido/$orderId?status=$status';
     }
-    
+
     debugPrint('🔗 [MercadoPago] Built return URL for $status: $url');
     return url;
   }

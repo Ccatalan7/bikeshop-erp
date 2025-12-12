@@ -30,6 +30,13 @@
 </head>
 <body>
   <script>
+    // Debug: Log URL info BEFORE Flutter loads
+    console.log('📍 [index.html] window.location.href =', window.location.href);
+    console.log('📍 [index.html] window.location.pathname =', window.location.pathname);
+    console.log('📍 [index.html] window.location.search =', window.location.search);
+    console.log('📍 [index.html] window.location.hash =', window.location.hash);
+    console.log('📍 [index.html] document.baseURI =', document.baseURI);
+    
     window.addEventListener('wheel', function(e) {
       if (Math.abs(e.deltaX) > 0) {
         let el = e.target, canScroll = false;

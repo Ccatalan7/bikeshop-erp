@@ -432,7 +432,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           // Open MercadoPago checkout
           final initPoint = preference['init_point'] as String?;
           debugPrint('🔵 [Checkout] init_point: $initPoint');
-          
+
           if (initPoint == null || initPoint.isEmpty) {
             debugPrint('❌ [Checkout] No init_point in preference!');
             throw Exception('MercadoPago no devolvió URL de pago');

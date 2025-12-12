@@ -153,8 +153,9 @@ class AppRouter {
       // ERP: default to login
       effectiveInitialLocation = '/login';
     }
-    
-    debugPrint('🧭 [Router] Creating router with initialLocation: $effectiveInitialLocation, forcePublicStoreHost: $forcePublicStoreHost, kIsWeb: $kIsWeb');
+
+    debugPrint(
+        '🧭 [Router] Creating router with initialLocation: $effectiveInitialLocation, forcePublicStoreHost: $forcePublicStoreHost, kIsWeb: $kIsWeb');
 
     final router = GoRouter(
       initialLocation: effectiveInitialLocation,
@@ -164,9 +165,109 @@ class AppRouter {
       // This prevents the bug where authService.notifyListeners() causes unwanted navigation to /
       refreshListenable: forcePublicStoreHost ? null : authService,
       redirect: (context, state) {
-        debugPrint('🧭 [Router] redirect called - path: ${state.uri.path}, matchedLocation: ${state.matchedLocation}');
+        debugPrint(
+            '🧭 [Router] redirect called - path: ${state.uri.path}, matchedLocation: ${state.matchedLocation}');
         if (authService.isInitializing) {
           return null;
+        }
+
+        // --------------------------------------------------------------------
+        // MercadoPago return safety net
+        // --------------------------------------------------------------------
+        // In some cases MercadoPago may return to the site root (/) with query
+        // parameters like external_reference/payment_id instead of our expected
+        // /pedido/:id route. If we can infer the order id, redirect to the
+        // order confirmation page so users don't end up on the homepage.
+        // NOTE: Some hosting/browser flows may put params into the URL fragment
+        // (e.g. https://site/#/?external_reference=...&collection_status=approved)
+        // so we fall back to parsing fragment query parameters when needed.
+        final Map<String, String> qp = () {
+          final direct = state.uri.queryParameters;
+          if (direct.isNotEmpty) return direct;
+
+          final fragment = state.uri.fragment;
+          if (fragment.isEmpty) return const <String, String>{};
+
+          final qIndex = fragment.indexOf('?');
+          if (qIndex < 0 || qIndex == fragment.length - 1) {
+            return const <String, String>{};
+          }
+
+          final queryString = fragment.substring(qIndex + 1);
+          try {
+            return Uri.splitQueryString(queryString);
+          } catch (_) {
+            return const <String, String>{};
+          }
+        }();
+        final externalReference =
+            qp['external_reference'] ?? qp['externalReference'];
+        final orderIdFromQuery =
+            qp['pedido'] ?? qp['order'] ?? qp['order_id'] ?? qp['orderId'];
+        final inferredOrderId = (externalReference?.isNotEmpty ?? false)
+            ? externalReference
+            : (orderIdFromQuery?.isNotEmpty ?? false)
+                ? orderIdFromQuery
+                : null;
+
+        String normalizePaymentStatus() {
+          final explicit = qp['status'];
+          if (explicit != null && explicit.isNotEmpty) return explicit;
+
+          final collectionStatus =
+              (qp['collection_status'] ?? qp['collectionStatus'] ?? '')
+                  .toLowerCase();
+          switch (collectionStatus) {
+            case 'approved':
+              return 'success';
+            case 'pending':
+            case 'in_process':
+              return 'pending';
+            case 'rejected':
+            case 'cancelled':
+              return 'failure';
+          }
+
+          final genericStatus =
+              (qp['payment_status'] ?? qp['paymentStatus'] ?? '').toLowerCase();
+          switch (genericStatus) {
+            case 'approved':
+              return 'success';
+            case 'pending':
+            case 'in_process':
+              return 'pending';
+            case 'rejected':
+            case 'cancelled':
+              return 'failure';
+          }
+
+          return '';
+        }
+
+        final path = state.uri.path;
+        final isAlreadyOnOrder =
+            path.startsWith('/pedido/') || path.startsWith('/tienda/pedido/');
+        final isHomeLike =
+            path == '/' || path == '/tienda' || path == '/tienda/';
+        if (!isAlreadyOnOrder && isHomeLike && inferredOrderId != null) {
+          final normalizedStatus = normalizePaymentStatus();
+          final nextQp = Map<String, String>.from(qp);
+          if (normalizedStatus.isNotEmpty) {
+            nextQp['status'] = normalizedStatus;
+          }
+
+          // Prefer clean URLs on the public store.
+          final destinationPath = normalizedStatus == 'failure'
+              ? '/checkout'
+              : '/pedido/$inferredOrderId';
+
+          final destination = Uri(
+            path: destinationPath,
+            queryParameters: nextQp.isEmpty ? null : nextQp,
+          ).toString();
+          debugPrint(
+              '🎯 [Router] MercadoPago return detected on home. Redirecting to: $destination');
+          return destination;
         }
 
         // Treat any customer-facing path as public (clean + legacy, with slug support)
@@ -200,7 +301,6 @@ class AppRouter {
           return false;
         }
 
-        final path = state.uri.path;
         final isPublicRoute = isPublicPath(path);
 
         // Public store host (vinabike-store.web.app): ONLY allow public routes
@@ -222,7 +322,8 @@ class AppRouter {
 
         final loggingIn = state.matchedLocation == '/login';
         final resettingPassword = state.matchedLocation == '/reset-password';
-        final acceptingInvitation = state.matchedLocation == '/accept-invitation';
+        final acceptingInvitation =
+            state.matchedLocation == '/accept-invitation';
 
         // Allow access to password reset and invitation acceptance without authentication
         if (resettingPassword || acceptingInvitation) {
@@ -275,7 +376,8 @@ class AppRouter {
             return _buildPageWithNoTransition(
               context,
               state,
-              PublicStoreWrapper(child: ProductDetailPage(productId: productId)),
+              PublicStoreWrapper(
+                  child: ProductDetailPage(productId: productId)),
             );
           },
         ),
@@ -305,10 +407,17 @@ class AppRouter {
           path: '/pedido/:id',
           pageBuilder: (context, state) {
             final orderId = state.pathParameters['id']!;
+            final status =
+                state.uri.queryParameters['status']; // MercadoPago callback
             return _buildPageWithNoTransition(
               context,
               state,
-              PublicStoreWrapper(child: OrderConfirmationPage(orderId: orderId)),
+              PublicStoreWrapper(
+                child: OrderConfirmationPage(
+                  orderId: orderId,
+                  paymentStatus: status,
+                ),
+              ),
             );
           },
         ),
@@ -332,7 +441,8 @@ class AppRouter {
             context,
             state,
             const PublicStoreWrapper(
-              child: StaticPolicyPage(slug: 'nosotros', fallbackTitle: 'Sobre Nosotros'),
+              child: StaticPolicyPage(
+                  slug: 'nosotros', fallbackTitle: 'Sobre Nosotros'),
             ),
           ),
         ),
@@ -342,7 +452,8 @@ class AppRouter {
             context,
             state,
             const PublicStoreWrapper(
-              child: StaticPolicyPage(slug: 'terminos', fallbackTitle: 'Términos y Condiciones'),
+              child: StaticPolicyPage(
+                  slug: 'terminos', fallbackTitle: 'Términos y Condiciones'),
             ),
           ),
         ),
@@ -352,7 +463,8 @@ class AppRouter {
             context,
             state,
             const PublicStoreWrapper(
-              child: StaticPolicyPage(slug: 'privacidad', fallbackTitle: 'Política de Privacidad'),
+              child: StaticPolicyPage(
+                  slug: 'privacidad', fallbackTitle: 'Política de Privacidad'),
             ),
           ),
         ),
@@ -362,7 +474,9 @@ class AppRouter {
             context,
             state,
             const PublicStoreWrapper(
-              child: StaticPolicyPage(slug: 'devoluciones', fallbackTitle: 'Política de Devoluciones'),
+              child: StaticPolicyPage(
+                  slug: 'devoluciones',
+                  fallbackTitle: 'Política de Devoluciones'),
             ),
           ),
         ),
@@ -372,7 +486,8 @@ class AppRouter {
             context,
             state,
             const PublicStoreWrapper(
-              child: StaticPolicyPage(slug: 'envios', fallbackTitle: 'Información de Envíos'),
+              child: StaticPolicyPage(
+                  slug: 'envios', fallbackTitle: 'Información de Envíos'),
             ),
           ),
         ),
@@ -433,7 +548,8 @@ class AppRouter {
             return _buildPageWithNoTransition(
               context,
               state,
-              PublicStoreWrapper(child: CustomerServiceHistoryPage(bikeId: bikeId)),
+              PublicStoreWrapper(
+                  child: CustomerServiceHistoryPage(bikeId: bikeId)),
             );
           },
         ),
@@ -521,7 +637,8 @@ class AppRouter {
           path: '/tienda/pedido/:id',
           pageBuilder: (context, state) {
             final orderId = state.pathParameters['id']!;
-            final status = state.uri.queryParameters['status']; // MercadoPago callback
+            final status =
+                state.uri.queryParameters['status']; // MercadoPago callback
             debugPrint('🎯 [Router] ORDER CONFIRMATION ROUTE MATCHED!');
             debugPrint('🎯 [Router] orderId: $orderId');
             debugPrint('🎯 [Router] status: $status');
@@ -531,9 +648,9 @@ class AppRouter {
               state,
               PublicStoreWrapper(
                   child: OrderConfirmationPage(
-                    orderId: orderId,
-                    paymentStatus: status,
-                  )),
+                orderId: orderId,
+                paymentStatus: status,
+              )),
             );
           },
         ),
@@ -620,7 +737,8 @@ class AppRouter {
             return _buildPageWithNoTransition(
               context,
               state,
-              PublicStoreWrapper(child: CustomerServiceHistoryPage(bikeId: bikeId)),
+              PublicStoreWrapper(
+                  child: CustomerServiceHistoryPage(bikeId: bikeId)),
             );
           },
         ),
@@ -935,7 +1053,7 @@ class AppRouter {
             const BikeBrandsPage(),
           ),
         ),
-        
+
         // Bike Encyclopedia
         GoRoute(
           path: '/taller/bike-encyclopedia',
@@ -945,7 +1063,7 @@ class AppRouter {
             const BikeEncyclopediaPage(),
           ),
         ),
-        
+
         // Wheel Building System
         GoRoute(
           path: '/taller/wheel-builder',
@@ -1236,7 +1354,7 @@ class AppRouter {
             final prepaymentParam = state.uri.queryParameters['prepayment'];
             final isPrepayment = prepaymentParam == 'true';
             debugPrint(
-              '🔍 DEBUG: prepayment param = "$prepaymentParam", isPrepayment = $isPrepayment');
+                '🔍 DEBUG: prepayment param = "$prepaymentParam", isPrepayment = $isPrepayment');
             return _buildPageWithNoTransition(
               context,
               state,
@@ -1615,7 +1733,8 @@ class AppRouter {
         GoRoute(
           path: '/tools/analytics',
           pageBuilder: (context, state) {
-            final url = state.uri.queryParameters['url'] ?? 'https://analytics.google.com';
+            final url = state.uri.queryParameters['url'] ??
+                'https://analytics.google.com';
             return _buildPageWithNoTransition(
               context,
               state,
@@ -1628,7 +1747,8 @@ class AppRouter {
         GoRoute(
           path: '/tools/web',
           pageBuilder: (context, state) {
-            final url = state.uri.queryParameters['url'] ?? 'https://www.google.com';
+            final url =
+                state.uri.queryParameters['url'] ?? 'https://www.google.com';
             final name = state.uri.queryParameters['name'] ?? 'Web Tool';
             return _buildPageWithNoTransition(
               context,

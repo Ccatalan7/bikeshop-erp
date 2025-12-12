@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'dart:html' as html show window;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -69,7 +70,17 @@ class AppScrollBehavior extends MaterialScrollBehavior {
       };
 }
 
+// CRITICAL: Capture the initial URL BEFORE usePathUrlStrategy() modifies it!
+// This is needed for MercadoPago redirects and direct URL navigation to work.
+String? _initialBrowserUrl;
+
 Future<void> main() async {
+  // Capture browser URL IMMEDIATELY, before anything else
+  if (kIsWeb) {
+    _initialBrowserUrl = html.window.location.href;
+    debugPrint('🚀 [Main] Captured initial URL: $_initialBrowserUrl');
+  }
+  
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     
@@ -433,6 +444,23 @@ class VinabikeApp extends StatelessWidget {
 
           // Public store or not authenticated = single router
           if (isPublicStoreHost || !authService.isAuthenticated) {
+            // Use the URL captured at startup (before usePathUrlStrategy modified it)
+            // This is critical for MercadoPago redirects and direct URL navigation
+            final initialLocationOverride = () {
+              if (kIsWeb && _initialBrowserUrl != null) {
+                final uri = Uri.parse(_initialBrowserUrl!);
+                debugPrint('🔍 [Main] Using captured initial URL: $_initialBrowserUrl');
+                debugPrint('🔍 [Main] parsed path = ${uri.path}');
+                debugPrint('🔍 [Main] parsed query = ${uri.query}');
+                final path = uri.path.isEmpty ? '/' : uri.path;
+                final query = uri.hasQuery ? '?${uri.query}' : '';
+                final fragment = uri.hasFragment ? '#${uri.fragment}' : '';
+                final result = '$path$query$fragment';
+                debugPrint('🔍 [Main] initialLocationOverride = $result');
+                return result;
+              }
+              return '/';
+            }();
             
             return MaterialApp.router(
               title: 'Viñabike ERP',
@@ -443,8 +471,7 @@ class VinabikeApp extends StatelessWidget {
               routerConfig: AppRouter.createRouter(
                 authService,
                 forcePublicStoreHost: isPublicStoreHost,
-                // Don't override initialLocation on web - let GoRouter read browser URL
-                // This is crucial for MercadoPago redirects to /tienda/pedido/{orderId}
+                initialLocationOverride: initialLocationOverride,
               ),
               debugShowCheckedModeBanner: false,
               localizationsDelegates: const [
