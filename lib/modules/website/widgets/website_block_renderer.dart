@@ -369,13 +369,6 @@ class WebsiteBlockRenderer {
     final slides = data['slides'];
     final slidesHash = slides != null ? slides.toString().hashCode : 0;
     
-    // Debug: Log slide data to trace video URL
-    if (slides is List && slides.isNotEmpty) {
-      final firstSlide = slides[0];
-      debugPrint('🎠 [_buildCarousel] First slide videoUrl: ${firstSlide['videoUrl']}');
-      debugPrint('🎠 [_buildCarousel] slidesHash: $slidesHash');
-    }
-    
     return _CarouselBanner(
       key: ValueKey('carousel_$slidesHash'),
       data: data,
@@ -3161,9 +3154,6 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     final videoUrl = slide['videoUrl']?.toString() ?? '';
     final videoFileUrl = slide['videoFileUrl']?.toString() ?? '';
     final showOverlay = (slide['showOverlay'] ?? true) == true;
-    
-    // Debug: Log video detection
-    debugPrint('🎬 [_buildSlide] index=$index, videoUrl="$videoUrl", videoFileUrl="$videoFileUrl"');
 
     double overlayOpacity = 0.55;
     final rawOverlay = slide['overlayOpacity'];
@@ -3180,8 +3170,6 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     final hasVideoFile = videoFileUrl.isNotEmpty;
     final youtubeId = videoUrl.isNotEmpty ? WebsiteBlockRenderer._extractYouTubeVideoId(videoUrl) : null;
     final hasYoutubeVideo = youtubeId != null;
-    
-    debugPrint('🎬 [_buildSlide] hasVideoFile=$hasVideoFile, youtubeId=$youtubeId, hasYoutubeVideo=$hasYoutubeVideo');
     final hasVideo = hasVideoFile || hasYoutubeVideo;
 
     final headingStyle =
@@ -3661,9 +3649,6 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
         oldWidget.tenantId != widget.tenantId;
         
     if (shouldReload) {
-      debugPrint('🔄 [ProductsBlock] didUpdateWidget triggered reload');
-      debugPrint('🔄 [ProductsBlock] oldTenantId: ${oldWidget.tenantId}');
-      debugPrint('🔄 [ProductsBlock] newTenantId: ${widget.tenantId}');
       _loadProducts();
     }
   }
@@ -3686,7 +3671,6 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
     
     // If no tenantId yet, stay in loading state and wait for didUpdateWidget
     if (tenantId == null || tenantId.isEmpty) {
-      debugPrint('🛒 [ProductsBlock] No tenantId yet, waiting for tenant detection...');
       // Keep _isLoading = true to show loading placeholders
       // Don't set error state - tenant detection may still be in progress
       return;
@@ -3701,19 +3685,11 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
       final supabase = Supabase.instance.client;
       List<Product> products = [];
 
-      debugPrint('🛒 [ProductsBlock] ========== LOADING PRODUCTS ==========');
-      debugPrint('🛒 [ProductsBlock] source: $_productSource');
-      debugPrint('🛒 [ProductsBlock] maxProducts: $_maxProducts');
-      debugPrint('🛒 [ProductsBlock] tenantId: $tenantId');
-      debugPrint('🛒 [ProductsBlock] selectedProductIds: $_selectedProductIds');
-      debugPrint('🛒 [ProductsBlock] featuredProducts passed: ${widget.featuredProducts?.length ?? 0}');
-
       // We have tenantId - fetch based on source
       switch (_productSource) {
         case 'manual':
           // Fetch specific products by ID
           if (_selectedProductIds.isNotEmpty) {
-            debugPrint('[ProductsBlock] Manual selection: ${_selectedProductIds.length} products');
             final response = await supabase
                 .from('products')
                 .select()
@@ -3732,7 +3708,6 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           case 'category':
             // Fetch products from a specific category
             if (_categoryId != null && _categoryId!.isNotEmpty) {
-              debugPrint('[ProductsBlock] Category selection: $_categoryId');
               final response = await supabase
                   .from('products')
                   .select()
@@ -3749,7 +3724,6 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
 
           case 'newest':
             // Fetch newest products
-            debugPrint('[ProductsBlock] Newest products');
             final response = await supabase
                 .from('products')
                 .select()
@@ -3766,14 +3740,12 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           default:
             // Use the passed featured products or fetch from featured_products table
             if (widget.featuredProducts != null && widget.featuredProducts!.isNotEmpty) {
-              debugPrint('[ProductsBlock] Using passed featured products: ${widget.featuredProducts!.length}');
               products = widget.featuredProducts!
                   .where((p) => p.isActive)
                   .take(_maxProducts)
                   .toList();
             } else {
               // Fallback: fetch products marked as show_on_website
-              debugPrint('[ProductsBlock] Fallback to show_on_website products for tenant: $tenantId');
               final response = await supabase
                   .from('products')
                   .select()
@@ -3783,23 +3755,14 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                   .order('name')
                   .limit(_maxProducts);
               
-              debugPrint('[ProductsBlock] Query response: ${response.length} rows');
               products = _parseProducts(response);
-              debugPrint('[ProductsBlock] Parsed ${products.length} products from response');
             }
             break;
       }
 
-      debugPrint('[ProductsBlock] Loaded ${products.length} products');
-
       // Filter out out-of-stock products unless in preview mode (admin editing)
-      // In preview mode (editor), show all products including out of stock
       if (!widget.previewMode) {
-        final originalCount = products.length;
         products = products.where((p) => p.stockQuantity > 0).toList();
-        debugPrint('[ProductsBlock] Filtered ${originalCount - products.length} out-of-stock products (previewMode: false)');
-      } else {
-        debugPrint('[ProductsBlock] Preview mode - showing ALL products including out-of-stock');
       }
 
       if (mounted) {
@@ -3809,7 +3772,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
         });
       }
     } catch (e) {
-      debugPrint('[ProductsBlock] Error loading products: $e');
+      debugPrint('[ProductsBlock] Error: $e');
       if (mounted) {
         setState(() {
           _hasError = true;

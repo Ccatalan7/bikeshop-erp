@@ -1,16 +1,16 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../modules/website/widgets/editable_block_renderer.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 
-/// Lightweight read-only page renderer for policy/info pages.
-/// Avoids WebsiteService/notifyListeners to prevent unwanted redirects.
+/// Policy page renderer that uses WebsiteService for caching.
+/// Much simpler than the old StaticPolicyPage - no duplicate DB logic!
 class StaticPolicyPage extends StatefulWidget {
   final String slug;
   final String fallbackTitle;
@@ -27,18 +27,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage> {
   List<Map<String, dynamic>> _blocks = [];
   String? _pageId;
   String? _pageTitle;
-  Map<String, dynamic> _settings = {};
   bool _editModeChecked = false;
-
-  // Theme defaults (will be overridden by settings if present)
-  Color _primaryColor = const Color(0xFF2E7D32);
-  Color _accentColor = const Color(0xFFFF6F00);
-  Color _textColor = Colors.black87;
-  String _headingFont = 'Roboto';
-  String _bodyFont = 'Roboto';
-  double _headingSize = 48.0;
-  double _bodySize = 16.0;
-  double _sectionSpacing = 64.0;
 
   @override
   void initState() {
@@ -47,40 +36,25 @@ class _StaticPolicyPageState extends State<StaticPolicyPage> {
   }
 
   Future<void> _loadPage() async {
-    if (!kReleaseMode) {
-      debugPrint('📄 [StaticPolicyPage] Loading page: ${widget.slug}');
-    }
-    
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
+      // Get tenant from provider or authenticated user
       final tenantProvider = context.read<PublicStoreTenantProvider>();
       String? tenantId = tenantProvider.tenantId;
       
-      if (!kReleaseMode) {
-        debugPrint('📄 [StaticPolicyPage] Tenant from provider: $tenantId');
-      }
-      
-      // If no tenant from URL detection, try getting from authenticated user
       if (tenantId == null) {
         final user = Supabase.instance.client.auth.currentUser;
-        if (!kReleaseMode) {
-          debugPrint('📄 [StaticPolicyPage] Checking authenticated user: ${user?.id}');
-        }
         if (user != null) {
-          // Get tenant from user_profiles for authenticated users
           final profileResp = await Supabase.instance.client
               .from('user_profiles')
               .select('tenant_id')
               .eq('user_id', user.id)
               .maybeSingle();
           tenantId = profileResp?['tenant_id'] as String?;
-          if (!kReleaseMode) {
-            debugPrint('📄 [StaticPolicyPage] Tenant from user profile: $tenantId');
-          }
         }
       }
       
@@ -88,125 +62,27 @@ class _StaticPolicyPageState extends State<StaticPolicyPage> {
         throw Exception('No tenant detected');
       }
 
-      final client = Supabase.instance.client;
-      final isAuthenticated = client.auth.currentUser != null;
+      // Use WebsiteService for cached page loading
+      final websiteService = context.read<WebsiteService>();
+      final cached = await websiteService.loadPageWithBlocks(
+        widget.slug,
+        tenantId: tenantId,
+      );
 
-      // Load settings (optional, ignore errors)
-      final settingsResp = await client
-          .from('website_settings')
-          .select('key, value')
-          .eq('tenant_id', tenantId);
-      _applySettings(settingsResp);
-
-      // Load page by slug
-      // For authenticated users, don't require is_published (they might be editing)
-      // For anonymous users, only show published pages
-      Map<String, dynamic>? pagesResp;
-      if (isAuthenticated) {
-        pagesResp = await client
-            .from('website_pages')
-            .select('id, title')
-            .eq('tenant_id', tenantId)
-            .eq('slug', widget.slug)
-            .maybeSingle();
-      } else {
-        pagesResp = await client
-            .from('website_pages')
-            .select('id, title')
-            .eq('tenant_id', tenantId)
-            .eq('slug', widget.slug)
-            .eq('is_published', true)
-            .maybeSingle();
-      }
-
-      if (pagesResp == null) {
-        if (!kReleaseMode) {
-          debugPrint('📄 [StaticPolicyPage] Page not found: ${widget.slug} for tenant: $tenantId (authenticated: $isAuthenticated)');
-        }
+      if (cached == null) {
         throw Exception('Página no encontrada');
       }
 
-      if (!kReleaseMode) {
-        debugPrint('📄 [StaticPolicyPage] Found page: ${pagesResp['id']} - ${pagesResp['title']}');
-      }
-
-      final pageId = pagesResp['id'] as String;
-  _pageId = pageId;
-  _pageTitle = pagesResp['title'] as String? ?? widget.fallbackTitle;
-
-      // Load blocks ordered by order_index
-      // Authenticated users see all blocks (for editing), anonymous only see visible
-      List<dynamic> blocksResp;
-      if (isAuthenticated) {
-        blocksResp = await client
-            .from('website_blocks')
-            .select()
-            .eq('tenant_id', tenantId)
-            .eq('page_id', pageId)
-            .order('order_index', ascending: true);
-      } else {
-        blocksResp = await client
-            .from('website_blocks')
-            .select()
-            .eq('tenant_id', tenantId)
-            .eq('page_id', pageId)
-            .eq('is_visible', true)
-            .order('order_index', ascending: true);
-      }
-
-      if (!kReleaseMode) {
-        debugPrint('📄 [StaticPolicyPage] Loaded ${blocksResp.length} blocks for page ${widget.slug}');
-      }
-
-      _blocks = blocksResp.cast<Map<String, dynamic>>();
+      _pageId = cached.page.id;
+      _pageTitle = cached.page.title ?? widget.fallbackTitle;
+      _blocks = cached.blocks;
+      
       setState(() => _loading = false);
-    } catch (e, stackTrace) {
-      if (!kReleaseMode) {
-        debugPrint('📄 [StaticPolicyPage] ❌ Error loading ${widget.slug}: $e');
-        debugPrint('📄 [StaticPolicyPage] Stack: $stackTrace');
-      }
+    } catch (e) {
       setState(() {
         _loading = false;
         _error = e.toString();
       });
-    }
-  }
-
-  void _applySettings(List<dynamic> rows) {
-    for (final row in rows) {
-      final key = row['key'] as String?;
-      final value = row['value'] as String? ?? '';
-      if (key == null) continue;
-      _settings[key] = value;
-      switch (key) {
-        case 'theme_primary_color':
-          _primaryColor = _parseColor(value) ?? _primaryColor;
-          break;
-        case 'theme_accent_color':
-          _accentColor = _parseColor(value) ?? _accentColor;
-          break;
-        case 'theme_text_color':
-          _textColor = _parseColor(value) ?? _textColor;
-          break;
-        case 'theme_heading_font':
-          if (value.isNotEmpty) _headingFont = value;
-          break;
-        case 'theme_body_font':
-          if (value.isNotEmpty) _bodyFont = value;
-          break;
-        case 'theme_heading_size':
-          final v = double.tryParse(value);
-          if (v != null) _headingSize = v.clamp(24.0, 72.0);
-          break;
-        case 'theme_body_size':
-          final v = double.tryParse(value);
-          if (v != null) _bodySize = v.clamp(12.0, 24.0);
-          break;
-        case 'theme_section_spacing':
-          final v = double.tryParse(value);
-          if (v != null) _sectionSpacing = v.clamp(32.0, 128.0);
-          break;
-      }
     }
   }
 
@@ -225,25 +101,135 @@ class _StaticPolicyPageState extends State<StaticPolicyPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final editProvider = context.read<WebsiteEditModeProvider>();
+      final websiteService = context.read<WebsiteService>();
       final blocks = List<Map<String, dynamic>>.from(_blocks);
-      final settingsCopy = Map<String, dynamic>.from(_settings);
+      final settings = Map<String, dynamic>.from(websiteService.settings);
 
       if (shouldEdit) {
         editProvider.enterEditMode(
           blocks,
-          settingsCopy,
+          settings,
           pageId: _pageId,
           pageSlug: widget.slug,
         );
       } else {
         editProvider.enterPreviewMode(
           blocks,
-          settingsCopy,
+          settings,
           pageId: _pageId,
           pageSlug: widget.slug,
         );
       }
     });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _checkEditModeFromRouter(context);
+
+    final editProvider = context.watch<WebsiteEditModeProvider>();
+    final websiteService = context.watch<WebsiteService>();
+    final isEditMode = editProvider.isEditMode;
+    final blocksToRender = isEditMode ? editProvider.blocks : _blocks;
+
+    // Get theme from WebsiteService (already cached)
+    final primaryColor = _parseColor(websiteService.getSetting('theme_primary_color', '')) 
+        ?? const Color(0xFF2E7D32);
+    final accentColor = _parseColor(websiteService.getSetting('theme_accent_color', '')) 
+        ?? const Color(0xFFFF6F00);
+    final headingFont = websiteService.getSetting('theme_heading_font', 'Roboto');
+    final bodyFont = websiteService.getSetting('theme_body_font', 'Roboto');
+    final headingSize = double.tryParse(websiteService.getSetting('theme_heading_size', '48')) ?? 48.0;
+    final bodySize = double.tryParse(websiteService.getSetting('theme_body_size', '16')) ?? 16.0;
+    final sectionSpacing = double.tryParse(websiteService.getSetting('theme_section_spacing', '64')) ?? 64.0;
+    final textColor = _parseColor(websiteService.getSetting('theme_text_color', '')) ?? Colors.black87;
+
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+              const SizedBox(height: 12),
+              Text(
+                widget.fallbackTitle,
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: textColor.withOpacity(0.7)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_blocks.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'Esta página está en construcción',
+            style: TextStyle(fontSize: 18, color: textColor.withOpacity(0.7)),
+          ),
+        ),
+      );
+    }
+
+    final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+
+    return Column(
+      children: blocksToRender.map((block) {
+        final data = block['block_data'] as Map<String, dynamic>? ?? {};
+        final isVisible = block['is_visible'] == true;
+        final blockType = block['block_type']?.toString() ?? 'hero';
+        final blockId = block['id']?.toString() ?? '';
+
+        final widgetBuilder = isEditMode
+            ? EditableBlockRenderer.build(
+                context: context,
+                blockId: blockId,
+                blockType: blockType,
+                data: data,
+                primaryColor: primaryColor,
+                accentColor: accentColor,
+                headingFont: headingFont,
+                bodyFont: bodyFont,
+                headingSize: headingSize,
+                bodySize: bodySize,
+                onNavigate: (route) => context.go(route),
+                isVisible: isVisible,
+                tenantId: tenantId,
+              )
+            : WebsiteBlockRenderer.build(
+                context: context,
+                blockType: blockType,
+                data: data,
+                primaryColor: primaryColor,
+                accentColor: accentColor,
+                headingFont: headingFont,
+                bodyFont: bodyFont,
+                headingSize: headingSize,
+                bodySize: bodySize,
+                onNavigate: (route) => context.go(route),
+                tenantId: tenantId,
+              );
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: sectionSpacing),
+          child: widgetBuilder,
+        );
+      }).toList(),
+    );
   }
 
   Color? _parseColor(String raw) {
@@ -269,101 +255,5 @@ class _StaticPolicyPageState extends State<StaticPolicyPage> {
     } catch (_) {
       return null;
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    _checkEditModeFromRouter(context);
-
-    final editProvider = context.watch<WebsiteEditModeProvider>();
-    final isEditMode = editProvider.isEditMode;
-    final blocksToRender = isEditMode ? editProvider.blocks : _blocks;
-
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
-              const SizedBox(height: 12),
-              Text(
-                widget.fallbackTitle,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _textColor),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: _textColor.withOpacity(0.7)),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_blocks.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            'Esta página está en construcción',
-            style: TextStyle(fontSize: 18, color: _textColor.withOpacity(0.7)),
-          ),
-        ),
-      );
-    }
-
-    // Render blocks; Editable when in edit mode
-    return Column(
-      children: blocksToRender.map((block) {
-        final data = block['block_data'] as Map<String, dynamic>? ?? {};
-        final isVisible = block['is_visible'] == true;
-        final blockType = block['block_type']?.toString() ?? 'hero';
-        final blockId = block['id']?.toString() ?? '';
-        final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
-
-        final widgetBuilder = isEditMode
-            ? EditableBlockRenderer.build(
-                context: context,
-                blockId: blockId,
-                blockType: blockType,
-                data: data,
-                primaryColor: _primaryColor,
-                accentColor: _accentColor,
-                headingFont: _headingFont,
-                bodyFont: _bodyFont,
-                headingSize: _headingSize,
-                bodySize: _bodySize,
-                onNavigate: (route) => context.go(route),
-                isVisible: isVisible,
-                tenantId: tenantId,
-              )
-            : WebsiteBlockRenderer.build(
-                context: context,
-                blockType: blockType,
-                data: data,
-                primaryColor: _primaryColor,
-                accentColor: _accentColor,
-                headingFont: _headingFont,
-                bodyFont: _bodyFont,
-                headingSize: _headingSize,
-                bodySize: _bodySize,
-                onNavigate: (route) => context.go(route),
-                tenantId: tenantId,
-              );
-
-        return Padding(
-          padding: EdgeInsets.only(bottom: _sectionSpacing),
-          child: widgetBuilder,
-        );
-      }).toList(),
-    );
   }
 }

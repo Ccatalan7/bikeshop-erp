@@ -5305,17 +5305,22 @@ begin
     return;
   end if;
 
+  -- Check for existing journal entry using invoice_number (consistent with INSERT)
   select exists (
            select 1
              from public.journal_entries
             where source_module = 'sales_invoices'
-              and source_reference = p_invoice.id::text
+              and source_reference = p_invoice.invoice_number
+              and tenant_id = v_tenant_id
        )
     into v_exists;
 
   if v_exists then
+    raise notice 'create_sales_invoice_journal_entry: Entry already exists for invoice %, skipping', p_invoice.invoice_number;
     return;
   end if;
+  
+  raise notice 'create_sales_invoice_journal_entry: Creating entry for invoice % (status: %)', p_invoice.invoice_number, p_invoice.status;
 
   -- ✅ CRITICAL: Use net_amount (tax-adjusted) if available, fallback to subtotal
   -- For tax_included invoices: net_amount = total ÷ 1.19, iva_amount = total - net_amount
@@ -12993,9 +12998,15 @@ drop policy if exists "website_pages_insert" on website_pages;
 drop policy if exists "website_pages_update" on website_pages;
 drop policy if exists "website_pages_delete" on website_pages;
 
+-- Authenticated users can:
+-- 1. View ANY published page (for browsing public stores while logged in)
+-- 2. View their own tenant's pages (including unpublished, for editing)
 create policy "website_pages_select" on website_pages
   for select to authenticated
-  using (tenant_id = public.user_tenant_id());
+  using (
+    is_published = true  -- Anyone can see published pages
+    OR tenant_id = public.user_tenant_id()  -- Owners can see all their pages
+  );
 
 create policy "website_pages_insert" on website_pages
   for insert to authenticated
@@ -14353,6 +14364,29 @@ begin
   
   raise notice 'Created invoice % (status: %, tax: %) for online order %', 
     v_invoice_number, v_invoice_status, v_tax_treatment, v_order.order_number;
+  
+  -- ============================================================================
+  -- CRITICAL: Directly call inventory and journal functions here
+  -- The trigger handle_sales_invoice_change has pg_trigger_depth() > 1 check
+  -- which blocks processing when called from within another trigger
+  -- So we call these functions directly to ensure they run
+  -- ============================================================================
+  if v_invoice_status in ('paid', 'confirmed') then
+    -- Need to fetch the full invoice record to pass to functions
+    declare
+      v_invoice_record sales_invoices%rowtype;
+    begin
+      select * into v_invoice_record from sales_invoices where id = v_invoice_id;
+      
+      -- Consume inventory (deduct stock)
+      raise notice 'Calling consume_sales_invoice_inventory for invoice %', v_invoice_number;
+      perform public.consume_sales_invoice_inventory(v_invoice_record);
+      
+      -- Create sale journal entry
+      raise notice 'Calling create_sales_invoice_journal_entry for invoice %', v_invoice_number;
+      perform public.create_sales_invoice_journal_entry(v_invoice_record);
+    end;
+  end if;
   
   -- Link invoice to order + update order status
   update online_orders

@@ -137,22 +137,34 @@ class AppRouter {
     String? initialLocationOverride,
     bool forcePublicStoreHost = false,
   }) {
-    final effectiveInitialLocation = initialLocationOverride ??
-        (forcePublicStoreHost ? '/' : '/login');
+    // For public store on web: DON'T override initialLocation
+    // Let GoRouter read from the browser URL (important for MercadoPago redirects)
+    // For ERP: Start at /login if not overridden
+    final String? effectiveInitialLocation;
+    if (initialLocationOverride != null) {
+      effectiveInitialLocation = initialLocationOverride;
+    } else if (forcePublicStoreHost && kIsWeb) {
+      // On web public store: let browser URL determine initial route
+      effectiveInitialLocation = null;
+    } else if (forcePublicStoreHost) {
+      // On non-web public store: default to home
+      effectiveInitialLocation = '/';
+    } else {
+      // ERP: default to login
+      effectiveInitialLocation = '/login';
+    }
+    
+    debugPrint('🧭 [Router] Creating router with initialLocation: $effectiveInitialLocation, forcePublicStoreHost: $forcePublicStoreHost, kIsWeb: $kIsWeb');
 
     final router = GoRouter(
       initialLocation: effectiveInitialLocation,
-      debugLogDiagnostics: true, // TEMP: Enable to debug routing issue
+      debugLogDiagnostics: false,
       // Only use refreshListenable on ERP (admin) routes
       // On public store, auth changes shouldn't cause route refreshes
       // This prevents the bug where authService.notifyListeners() causes unwanted navigation to /
       refreshListenable: forcePublicStoreHost ? null : authService,
       redirect: (context, state) {
-        // Only log in debug mode to avoid performance impact
-        if (!kReleaseMode) {
-          debugPrint('🔀 [Router] redirect() for: ${state.uri.path}');
-        }
-        
+        debugPrint('🧭 [Router] redirect called - path: ${state.uri.path}, matchedLocation: ${state.matchedLocation}');
         if (authService.isInitializing) {
           return null;
         }
@@ -202,14 +214,15 @@ class AppRouter {
         }
 
         final isLoggedIn = authService.isAuthenticated;
-        final loggingIn = state.matchedLocation == '/login';
-        final resettingPassword = state.matchedLocation == '/reset-password';
-        final acceptingInvitation = state.matchedLocation == '/accept-invitation';
 
         // Allow access to public store routes without authentication
         if (isPublicRoute) {
           return null;
         }
+
+        final loggingIn = state.matchedLocation == '/login';
+        final resettingPassword = state.matchedLocation == '/reset-password';
+        final acceptingInvitation = state.matchedLocation == '/accept-invitation';
 
         // Allow access to password reset and invitation acceptance without authentication
         if (resettingPassword || acceptingInvitation) {
@@ -447,11 +460,16 @@ class AppRouter {
         // Legacy Public Store Home
         GoRoute(
           path: '/tienda',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
-            context,
-            state,
-            const PublicStoreWrapper(child: PublicHomePage()),
-          ),
+          pageBuilder: (context, state) {
+            debugPrint('🏠 [Router] /tienda HOME ROUTE MATCHED!');
+            debugPrint('🏠 [Router] full URI: ${state.uri}');
+            debugPrint('🏠 [Router] matchedLocation: ${state.matchedLocation}');
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              const PublicStoreWrapper(child: PublicHomePage()),
+            );
+          },
         ),
 
         // Product Catalog
@@ -504,6 +522,10 @@ class AppRouter {
           pageBuilder: (context, state) {
             final orderId = state.pathParameters['id']!;
             final status = state.uri.queryParameters['status']; // MercadoPago callback
+            debugPrint('🎯 [Router] ORDER CONFIRMATION ROUTE MATCHED!');
+            debugPrint('🎯 [Router] orderId: $orderId');
+            debugPrint('🎯 [Router] status: $status');
+            debugPrint('🎯 [Router] full URI: ${state.uri}');
             return _buildPageWithNoTransition(
               context,
               state,

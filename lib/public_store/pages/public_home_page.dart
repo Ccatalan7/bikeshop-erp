@@ -710,14 +710,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
     final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
     final isVisible = blockData['is_visible'] ?? true;
     
-    // Debug logging for products block
-    if (blockType == 'products') {
-      debugPrint('📦 [HomePage._buildBlockFromData] Building products block');
-      debugPrint('📦 [HomePage._buildBlockFromData] tenantId: $tenantId');
-      debugPrint('📦 [HomePage._buildBlockFromData] _featuredProducts: ${_featuredProducts.length}');
-      debugPrint('📦 [HomePage._buildBlockFromData] isEditMode: $isEditMode');
-    }
-    
     data.remove('visibility');
     final resolvedHeadingFont = headingFont.isNotEmpty ? headingFont : null;
     final resolvedBodyFont = bodyFont.isNotEmpty ? bodyFont : null;

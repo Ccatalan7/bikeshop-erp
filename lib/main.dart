@@ -443,7 +443,8 @@ class VinabikeApp extends StatelessWidget {
               routerConfig: AppRouter.createRouter(
                 authService,
                 forcePublicStoreHost: isPublicStoreHost,
-                initialLocationOverride: isPublicStoreHost ? '/' : null,
+                // Don't override initialLocation on web - let GoRouter read browser URL
+                // This is crucial for MercadoPago redirects to /tienda/pedido/{orderId}
               ),
               debugShowCheckedModeBanner: false,
               localizationsDelegates: const [

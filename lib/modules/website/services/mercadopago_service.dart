@@ -131,6 +131,16 @@ class MercadoPagoService extends ChangeNotifier {
     }
 
     try {
+      // Build back_urls
+      final successUrl = _buildReturnUrl(orderId: orderId, status: 'success');
+      final failureUrl = _buildReturnUrl(orderId: orderId, status: 'failure');
+      final pendingUrl = _buildReturnUrl(orderId: orderId, status: 'pending');
+      
+      debugPrint('🔗 [MercadoPago] Creating preference with back_urls:');
+      debugPrint('   success: $successUrl');
+      debugPrint('   failure: $failureUrl');
+      debugPrint('   pending: $pendingUrl');
+      
       // Call our Supabase Edge Function to create the preference
       // (This keeps the access token secure on the server)
       final response = await _supabase.functions.invoke(
@@ -146,9 +156,9 @@ class MercadoPagoService extends ChangeNotifier {
             if (customerName != null) 'name': customerName,
           },
           'back_urls': {
-            'success': _buildReturnUrl(orderId: orderId, status: 'success'),
-            'failure': _buildReturnUrl(orderId: orderId, status: 'failure'),
-            'pending': _buildReturnUrl(orderId: orderId, status: 'pending'),
+            'success': successUrl,
+            'failure': failureUrl,
+            'pending': pendingUrl,
           },
           'auto_return': 'approved',
           'notification_url': _getWebhookUrl(),
@@ -276,11 +286,15 @@ class MercadoPagoService extends ChangeNotifier {
   String _buildReturnUrl({required String orderId, required String status}) {
     final base = _normalizeBaseUrl(_resolveStoreUrl());
 
+    String url;
     if (status == 'failure') {
-      return '$base/tienda/checkout?pedido=$orderId&status=$status';
+      url = '$base/tienda/checkout?pedido=$orderId&status=$status';
+    } else {
+      url = '$base/tienda/pedido/$orderId?status=$status';
     }
-
-    return '$base/tienda/pedido/$orderId?status=$status';
+    
+    debugPrint('🔗 [MercadoPago] Built return URL for $status: $url');
+    return url;
   }
 
   String _getWebhookUrl() {

@@ -28,6 +28,18 @@ class WebsiteService extends ChangeNotifier {
   
   // Realtime subscriptions
   RealtimeChannel? _ordersChannel;
+  
+  // ============================================================
+  // PAGE CACHE - Load once, instant on revisit (5 min TTL)
+  // ============================================================
+  static final Map<String, _CachedPage> _pageCache = {};
+  static const Duration _cacheTTL = Duration(minutes: 5);
+  
+  /// Clear all cached pages (call when content is edited)
+  static void clearPageCache() => _pageCache.clear();
+  
+  /// Clear cache for a specific slug
+  static void invalidatePageCache(String slug) => _pageCache.remove(slug);
 
   List<WebsiteBanner> get banners => _banners;
   List<FeaturedProduct> get featuredProducts => _featuredProducts;
@@ -1118,15 +1130,17 @@ class WebsiteService extends ChangeNotifier {
   }
 
   /// Get a page by slug
-  Future<WebsitePage?> getPageBySlug(String slug) async {
+  /// If [tenantId] is provided, uses that instead of the current user's tenant
+  /// (useful for public store where visitors may not be logged in)
+  Future<WebsitePage?> getPageBySlug(String slug, {String? tenantId}) async {
     try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) return null;
+      final effectiveTenantId = tenantId ?? await _tenantService.getTenantId();
+      if (effectiveTenantId == null) return null;
 
       final response = await _supabase
           .from('website_pages')
           .select()
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', effectiveTenantId)
           .eq('slug', slug)
           .maybeSingle();
 
@@ -1591,10 +1605,64 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  // ============================================================================
+  // CACHED PAGE LOADING - For public store policy pages
+  // ============================================================================
+  
+  /// Load a page by slug with caching (for instant revisits)
+  /// Returns page info and blocks, or null if not found
+  Future<_CachedPage?> loadPageWithBlocks(
+    String slug, {
+    required String tenantId,
+  }) async {
+    // Check cache first
+    final cacheKey = '$tenantId:$slug';
+    final cached = _pageCache[cacheKey];
+    if (cached != null && !cached.isExpired) {
+      return cached;
+    }
+    
+    try {
+      // Load page
+      final page = await getPageBySlug(slug, tenantId: tenantId);
+      if (page == null) return null;
+      
+      // Load blocks
+      final blocks = await loadBlocksForPage(page.id, tenantId: tenantId);
+      
+      // Cache and return
+      final result = _CachedPage(
+        page: page,
+        blocks: blocks,
+        cachedAt: DateTime.now(),
+      );
+      _pageCache[cacheKey] = result;
+      return result;
+    } catch (e) {
+      debugPrint('Error loading page with blocks: $e');
+      return null;
+    }
+  }
+
   @override
   void dispose() {
     _disposed = true;
     _ordersChannel?.unsubscribe();
     super.dispose();
   }
+}
+
+/// Cached page data with TTL
+class _CachedPage {
+  final WebsitePage page;
+  final List<Map<String, dynamic>> blocks;
+  final DateTime cachedAt;
+  
+  _CachedPage({
+    required this.page,
+    required this.blocks,
+    required this.cachedAt,
+  });
+  
+  bool get isExpired => DateTime.now().difference(cachedAt) > WebsiteService._cacheTTL;
 }

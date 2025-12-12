@@ -1324,6 +1324,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
   /// Build elegant dropdown menu for information/policy pages
   Widget _buildInfoDropdown(BuildContext context, Color textColor) {
+    // Capture the GoRouter instance from the correct context BEFORE building popup
+    final goRouter = GoRouter.of(context);
+    
     return PopupMenuButton<String>(
       offset: const Offset(0, 40),
       shape: RoundedRectangleBorder(
@@ -1333,10 +1336,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       elevation: 8,
       color: Colors.white,
       onSelected: (String path) {
-        debugPrint('🔗 [InfoDropdown] Selected: $path');
-        context.go(path);
+        goRouter.go(path);
       },
-      itemBuilder: (BuildContext context) {
+      itemBuilder: (BuildContext popupContext) {
         // Always use clean URLs - these routes exist in app_router.dart
         return <PopupMenuEntry<String>>[
           _buildDropdownItem(
