@@ -1076,34 +1076,202 @@ class MechanicJob {
 // MECHANIC JOB ITEM MODEL
 // ============================================================
 
+// ============================================================
+// MECHANIC JOB BIKE MODEL (Multi-bike support)
+// ============================================================
+// Links bikes to jobs with per-bike work details
+// Each bike in a job has its own: diagnosis, items, notes, costs
+
+class MechanicJobBike {
+  final String? id;
+  final String tenantId;
+  final String jobId;
+  final String bikeId;
+  final int orderIndex;
+  
+  // Per-bike work details
+  final String? diagnosis;
+  final String? workRequested;     // Solicitud del cliente
+  final String? workPerformed;     // Lo que se hizo
+  final String? technicianNotes;   // Notas del técnico
+  
+  // Per-bike costs (calculated from items)
+  final double partsCost;
+  final double laborCost;
+  final double subtotal;
+  
+  // Per-bike flags
+  final bool isWarrantyWork;
+  final bool requiresApproval;
+  final bool approvedByCustomer;
+  final DateTime? approvedAt;
+  
+  // Images for this specific bike work
+  final List<String> imageUrls;
+  
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  
+  // Runtime: loaded bike data (not persisted)
+  Bike? bike;
+
+  MechanicJobBike({
+    this.id,
+    required this.tenantId,
+    required this.jobId,
+    required this.bikeId,
+    this.orderIndex = 0,
+    this.diagnosis,
+    this.workRequested,
+    this.workPerformed,
+    this.technicianNotes,
+    this.partsCost = 0,
+    this.laborCost = 0,
+    this.subtotal = 0,
+    this.isWarrantyWork = false,
+    this.requiresApproval = false,
+    this.approvedByCustomer = false,
+    this.approvedAt,
+    this.imageUrls = const [],
+    this.bike,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory MechanicJobBike.fromJson(Map<String, dynamic> json) {
+    // Parse nested bike if available (from join)
+    Bike? bike;
+    if (json['bike'] != null && json['bike'] is Map) {
+      bike = Bike.fromJson(json['bike'] as Map<String, dynamic>);
+    }
+    
+    return MechanicJobBike(
+      id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
+      jobId: json['job_id']?.toString() ?? '',
+      bikeId: json['bike_id']?.toString() ?? '',
+      orderIndex: json['order_index'] as int? ?? 0,
+      diagnosis: json['diagnosis'] as String?,
+      workRequested: json['work_requested'] as String?,
+      workPerformed: json['work_performed'] as String?,
+      technicianNotes: json['technician_notes'] as String?,
+      partsCost: double.tryParse(json['parts_cost']?.toString() ?? '0') ?? 0,
+      laborCost: double.tryParse(json['labor_cost']?.toString() ?? '0') ?? 0,
+      subtotal: double.tryParse(json['subtotal']?.toString() ?? '0') ?? 0,
+      isWarrantyWork: json['is_warranty_work'] as bool? ?? false,
+      requiresApproval: json['requires_approval'] as bool? ?? false,
+      approvedByCustomer: json['approved_by_customer'] as bool? ?? false,
+      approvedAt: _parseDateNullable(json['approved_at']),
+      imageUrls: json['image_urls'] != null
+          ? List<String>.from(json['image_urls'] as List)
+          : [],
+      bike: bike,
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'job_id': jobId,
+      'bike_id': bikeId,
+      'order_index': orderIndex,
+      'diagnosis': diagnosis,
+      'work_requested': workRequested,
+      'work_performed': workPerformed,
+      'technician_notes': technicianNotes,
+      // Note: parts_cost, labor_cost, subtotal are calculated by trigger
+      'is_warranty_work': isWarrantyWork,
+      'requires_approval': requiresApproval,
+      'approved_by_customer': approvedByCustomer,
+      'approved_at': approvedAt?.toIso8601String(),
+      'image_urls': imageUrls,
+    };
+  }
+
+  MechanicJobBike copyWith({
+    String? id,
+    String? tenantId,
+    String? jobId,
+    String? bikeId,
+    int? orderIndex,
+    String? diagnosis,
+    String? workRequested,
+    String? workPerformed,
+    String? technicianNotes,
+    double? partsCost,
+    double? laborCost,
+    double? subtotal,
+    bool? isWarrantyWork,
+    bool? requiresApproval,
+    bool? approvedByCustomer,
+    DateTime? approvedAt,
+    List<String>? imageUrls,
+    Bike? bike,
+  }) {
+    return MechanicJobBike(
+      id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
+      jobId: jobId ?? this.jobId,
+      bikeId: bikeId ?? this.bikeId,
+      orderIndex: orderIndex ?? this.orderIndex,
+      diagnosis: diagnosis ?? this.diagnosis,
+      workRequested: workRequested ?? this.workRequested,
+      workPerformed: workPerformed ?? this.workPerformed,
+      technicianNotes: technicianNotes ?? this.technicianNotes,
+      partsCost: partsCost ?? this.partsCost,
+      laborCost: laborCost ?? this.laborCost,
+      subtotal: subtotal ?? this.subtotal,
+      isWarrantyWork: isWarrantyWork ?? this.isWarrantyWork,
+      requiresApproval: requiresApproval ?? this.requiresApproval,
+      approvedByCustomer: approvedByCustomer ?? this.approvedByCustomer,
+      approvedAt: approvedAt ?? this.approvedAt,
+      imageUrls: imageUrls ?? this.imageUrls,
+      bike: bike ?? this.bike,
+    );
+  }
+  
+  /// Display name for this bike entry
+  String get displayName => bike?.displayName ?? 'Bicicleta';
+}
+
+// ============================================================
+// MECHANIC JOB ITEM MODEL
+// ============================================================
+
 class MechanicJobItem {
   final String? id;
   final String tenantId;
   final String jobId;
+  final String? jobBikeId;  // ✅ NEW: Links item to specific bike in multi-bike jobs
   final String? productId;
-  final String? serviceProductId; // ✅ NEW: Links services to product catalog
+  final String? serviceProductId; // Links services to product catalog
   final String productName;
   final String? productSku;
   final double quantity;
   final double unitPrice;
   final double totalPrice;
   final String? notes;
-  final String itemType; // ✅ NEW: 'product' | 'service' | 'adhoc'
+  final String itemType; // 'product' | 'service' | 'adhoc'
   final DateTime createdAt;
 
   MechanicJobItem({
     this.id,
     required this.tenantId,
     required this.jobId,
+    this.jobBikeId,  // ✅ NEW
     this.productId,
-    this.serviceProductId, // ✅ NEW
+    this.serviceProductId,
     required this.productName,
     this.productSku,
     this.quantity = 1,
     this.unitPrice = 0,
     this.totalPrice = 0,
     this.notes,
-    this.itemType = 'product', // ✅ NEW: Default to product for backward compat
+    this.itemType = 'product',
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -1112,15 +1280,16 @@ class MechanicJobItem {
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
       jobId: json['job_id']?.toString() ?? '',
+      jobBikeId: json['job_bike_id']?.toString(),  // ✅ NEW
       productId: json['product_id']?.toString(),
-      serviceProductId: json['service_product_id']?.toString(), // ✅ NEW
+      serviceProductId: json['service_product_id']?.toString(),
       productName: json['product_name']?.toString() ?? '',
       productSku: json['product_sku'] as String?,
       quantity: double.tryParse(json['quantity']?.toString() ?? '1') ?? 1,
       unitPrice: double.tryParse(json['unit_price']?.toString() ?? '0') ?? 0,
       totalPrice: double.tryParse(json['total_price']?.toString() ?? '0') ?? 0,
       notes: json['notes'] as String?,
-      itemType: 'product', // ✅ ALWAYS use 'product' - ignore DB value
+      itemType: json['item_type'] as String? ?? 'product',
       createdAt: _parseDate(json['created_at']),
     );
   }
@@ -1130,21 +1299,55 @@ class MechanicJobItem {
       if (id != null) 'id': id,
       'tenant_id': tenantId,
       'job_id': jobId,
+      if (jobBikeId != null) 'job_bike_id': jobBikeId,  // ✅ NEW
       'product_id': productId,
-      'service_product_id': serviceProductId, // ✅ NEW
+      'service_product_id': serviceProductId,
       'product_name': productName,
       'product_sku': productSku,
       'quantity': quantity,
       'unit_price': unitPrice,
       'total_price': totalPrice,
       'notes': notes,
-      'item_type': 'product', // ✅ ALWAYS write 'product' to DB
+      'item_type': itemType,
       'created_at': createdAt.toIso8601String(),
     };
+  }
+  
+  MechanicJobItem copyWith({
+    String? id,
+    String? tenantId,
+    String? jobId,
+    String? jobBikeId,
+    String? productId,
+    String? serviceProductId,
+    String? productName,
+    String? productSku,
+    double? quantity,
+    double? unitPrice,
+    double? totalPrice,
+    String? notes,
+    String? itemType,
+  }) {
+    return MechanicJobItem(
+      id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
+      jobId: jobId ?? this.jobId,
+      jobBikeId: jobBikeId ?? this.jobBikeId,
+      productId: productId ?? this.productId,
+      serviceProductId: serviceProductId ?? this.serviceProductId,
+      productName: productName ?? this.productName,
+      productSku: productSku ?? this.productSku,
+      quantity: quantity ?? this.quantity,
+      unitPrice: unitPrice ?? this.unitPrice,
+      totalPrice: totalPrice ?? this.totalPrice,
+      notes: notes ?? this.notes,
+      itemType: itemType ?? this.itemType,
+    );
   }
 
   // All items treated uniformly - no service/product distinction
   bool get isAdhoc => itemType == 'adhoc';
+  bool get isService => itemType == 'service';
   double get lineTotal => totalPrice != 0 ? totalPrice : quantity * unitPrice;
 }
 

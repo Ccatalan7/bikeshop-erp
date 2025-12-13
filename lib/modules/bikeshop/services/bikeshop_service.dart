@@ -671,6 +671,87 @@ class BikeshopService extends ChangeNotifier {
   }
 
   // ============================================================
+  // JOB BIKES OPERATIONS (Multi-bike support)
+  // ============================================================
+
+  /// Get all bikes for a job (multi-bike support)
+  Future<List<MechanicJobBike>> getJobBikes(String jobId) async {
+    try {
+      final data = await Supabase.instance.client
+          .from('mechanic_job_bikes')
+          .select('''
+            *,
+            bike:bikes(*)
+          ''')
+          .eq('job_id', jobId)
+          .order('order_index');
+
+      return (data as List)
+          .map((json) => MechanicJobBike.fromJson(json))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching job bikes: $e');
+      rethrow;
+    }
+  }
+
+  /// Add a bike to a job
+  Future<MechanicJobBike> addBikeToJob(MechanicJobBike jobBike) async {
+    try {
+      final data = await _db.insert('mechanic_job_bikes', jobBike.toJson());
+      notifyListeners();
+      return MechanicJobBike.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error adding bike to job: $e');
+      rethrow;
+    }
+  }
+
+  /// Update a job bike entry
+  Future<MechanicJobBike> updateJobBike(MechanicJobBike jobBike) async {
+    try {
+      if (jobBike.id == null || jobBike.id!.isEmpty) {
+        throw Exception('ID de bicicleta de trabajo inválido');
+      }
+      final data = await _db.update('mechanic_job_bikes', jobBike.id!, jobBike.toJson());
+      notifyListeners();
+      return MechanicJobBike.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error updating job bike: $e');
+      rethrow;
+    }
+  }
+
+  /// Remove a bike from a job
+  Future<void> removeBikeFromJob(String jobBikeId) async {
+    try {
+      if (jobBikeId.isEmpty) throw Exception('ID inválido');
+      await _db.delete('mechanic_job_bikes', jobBikeId);
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) print('Error removing bike from job: $e');
+      rethrow;
+    }
+  }
+
+  /// Get items for a specific bike in a job
+  Future<List<MechanicJobItem>> getJobBikeItems(String jobBikeId) async {
+    try {
+      final data = await Supabase.instance.client
+          .from('mechanic_job_items')
+          .select()
+          .eq('job_bike_id', jobBikeId);
+
+      return (data as List)
+          .map((json) => MechanicJobItem.fromJson(json))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching job bike items: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================
   // TIMELINE OPERATIONS
   // ============================================================
 
