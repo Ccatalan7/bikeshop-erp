@@ -85,6 +85,9 @@ class NumberGenerationService {
   /// Preview stock adjustment number (e.g., AJ-0018)
   Future<String> previewStockAdjustmentNumber() => previewNextNumber('stock_adjustment');
 
+  /// Preview expense number (e.g., GTO-00001)
+  Future<String> previewExpenseNumber() => previewNextNumber('expense');
+
   // ============================================================
   // ACTUAL METHODS - Use only when SAVING (increments counter)
   // ============================================================
@@ -107,4 +110,7 @@ class NumberGenerationService {
 
   /// Generate stock adjustment number (e.g., AJ-0018)
   Future<String> nextStockAdjustmentNumber() => getNextNumber('stock_adjustment');
+
+  /// Generate expense number (e.g., GTO-00001)
+  Future<String> nextExpenseNumber() => getNextNumber('expense');
 }

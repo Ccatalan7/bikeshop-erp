@@ -6655,11 +6655,11 @@ declare
   v_next bigint;
 begin
   select nextval('expense_number_seq') into v_next;
-  return format('GTO-%s-%s', to_char(now(), 'YYYY'), lpad(v_next::text, 5, '0'));
+  return format('GTO-%s', lpad(v_next::text, 5, '0'));
 exception
   when others then
     raise notice 'generate_expense_number fallback due to %', SQLERRM;
-    return concat('GTO-', to_char(now(), 'YYYYMMDDHH24MISS'));
+    return concat('GTO-', lpad((extract(epoch from now())::bigint % 100000)::text, 5, '0'));
 end;
 $$;
 
@@ -6981,6 +6981,7 @@ begin
   v_liability_account_id := coalesce(
     v_expense.liability_account_id,
     public.ensure_account(
+      v_expense.tenant_id,
       v_liability_account_code,
       v_liability_account_name,
       'liability',
@@ -7004,6 +7005,7 @@ begin
   end if;
 
   v_tax_account_id := public.ensure_account(
+    v_expense.tenant_id,
     v_tax_account_code,
     v_tax_account_name,
     'asset',
@@ -7018,6 +7020,7 @@ begin
 
   insert into public.journal_entries (
     id,
+    tenant_id,
     entry_number,
     entry_date,
     description,
@@ -7031,12 +7034,13 @@ begin
     updated_at
   ) values (
     v_entry_id,
-    concat('GTO-', to_char(now(), 'YYYYMMDDHH24MISS')),
+    v_expense.tenant_id,
+    public.get_next_document_number(v_expense.tenant_id, 'journal_entry'),
     coalesce(v_expense.issue_date, now()),
     v_description,
     'purchase',
     'expenses',
-    v_expense.id::text,
+    v_expense.expense_number,
     'posted',
     v_total,
     v_total,
@@ -7053,6 +7057,7 @@ begin
     v_line_count := v_line_count + 1;
     insert into public.journal_lines (
       id,
+      tenant_id,
       entry_id,
       account_id,
       account_code,
@@ -7064,6 +7069,7 @@ begin
       updated_at
     ) values (
       gen_random_uuid(),
+      v_expense.tenant_id,
       v_entry_id,
       v_line.account_id,
       v_line.account_code,
@@ -7087,6 +7093,7 @@ begin
 
     if not found or v_default_account.id is null then
       select public.ensure_account(
+               v_expense.tenant_id,
                '5200',
                'Gastos Generales',
                'expense',
@@ -7101,6 +7108,7 @@ begin
 
     insert into public.journal_lines (
       id,
+      tenant_id,
       entry_id,
       account_id,
       account_code,
@@ -7112,6 +7120,7 @@ begin
       updated_at
     ) values (
       gen_random_uuid(),
+      v_expense.tenant_id,
       v_entry_id,
       v_default_account.id,
       v_default_account.code,
@@ -7128,6 +7137,7 @@ begin
   if v_tax_total <> 0 then
     insert into public.journal_lines (
       id,
+      tenant_id,
       entry_id,
       account_id,
       account_code,
@@ -7139,6 +7149,7 @@ begin
       updated_at
     ) values (
       gen_random_uuid(),
+      v_expense.tenant_id,
       v_entry_id,
       v_tax_account_id,
       v_tax_account_code,
@@ -7167,6 +7178,7 @@ begin
 
   insert into public.journal_lines (
     id,
+    tenant_id,
     entry_id,
     account_id,
     account_code,
@@ -7178,6 +7190,7 @@ begin
     updated_at
   ) values (
     gen_random_uuid(),
+    v_expense.tenant_id,
     v_entry_id,
     v_credit_account_id,
     v_credit_account_code,
@@ -7266,6 +7279,7 @@ begin
   v_liability_account_id := coalesce(
     v_expense.liability_account_id,
     public.ensure_account(
+      v_expense.tenant_id,
       v_liability_code,
       v_liability_name,
       'liability',
@@ -7300,6 +7314,7 @@ begin
 
   insert into public.journal_entries (
     id,
+    tenant_id,
     entry_number,
     entry_date,
     description,
@@ -7313,12 +7328,13 @@ begin
     updated_at
   ) values (
     v_entry_id,
-    concat('GTPAY-', to_char(now(), 'YYYYMMDDHH24MISS')),
+    v_expense.tenant_id,
+    public.get_next_document_number(v_expense.tenant_id, 'journal_entry'),
     coalesce(v_payment.payment_date, now()),
     v_description,
     'payment',
     'expense_payments',
-    v_payment.id::text,
+    v_expense.expense_number,
     'posted',
     v_payment.amount,
     v_payment.amount,
@@ -7328,6 +7344,7 @@ begin
 
   insert into public.journal_lines (
     id,
+    tenant_id,
     entry_id,
     account_id,
     account_code,
@@ -7339,6 +7356,7 @@ begin
     updated_at
   ) values (
     gen_random_uuid(),
+    v_expense.tenant_id,
     v_entry_id,
     v_liability_account_id,
     (select code from public.accounts where id = v_liability_account_id),
@@ -7352,6 +7370,7 @@ begin
 
   insert into public.journal_lines (
     id,
+    tenant_id,
     entry_id,
     account_id,
     account_code,
@@ -7363,6 +7382,7 @@ begin
     updated_at
   ) values (
     gen_random_uuid(),
+    v_expense.tenant_id,
     v_entry_id,
     v_cash_account.id,
     v_cash_account.code,
@@ -18702,6 +18722,7 @@ begin
     when 'journal_entry' then 'AC'
     when 'mechanic_job' then 'PG'
     when 'stock_adjustment' then 'AJ'
+    when 'expense' then 'GTO'
     else 'DOC'
   end);
   
@@ -18749,6 +18770,7 @@ begin
     when 'journal_entry' then 'AC'
     when 'mechanic_job' then 'PG'
     when 'stock_adjustment' then 'AJ'
+    when 'expense' then 'GTO'
     else 'DOC'
   end);
   
