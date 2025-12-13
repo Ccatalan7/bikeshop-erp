@@ -191,10 +191,12 @@ class WebsiteService extends ChangeNotifier {
       );
 
       _blocks = data;
+      _hasLoadedForTenant = true; // Also mark as loaded for ERP preview mode
       _error = null;
     } catch (e) {
       _error = 'Error al cargar bloques: $e';
       debugPrint(_error);
+      _hasLoadedForTenant = true; // Mark loaded even on error
     } finally {
       _isLoading = false;
       debugPrint('[WebsiteService] loadBlocks complete');
@@ -205,7 +207,11 @@ class WebsiteService extends ChangeNotifier {
   /// Load blocks for a specific tenant's HOME PAGE (used by public store for anonymous visitors)
   /// This method does NOT require authentication - it uses the provided tenant_id
   /// from subdomain detection (PublicStoreTenantProvider)
+  /// 
+  /// OPTIMIZED: Uses a single query with JOIN to get home page + blocks together
   Future<List<Map<String, dynamic>>> loadBlocksForTenant(String tenantId) async {
+    final sw = Stopwatch()..start();
+    
     // Prevent duplicate loads
     if (_hasLoadedForTenant) {
       debugPrint('[WebsiteService] Already loaded for tenant, returning cached blocks: ${_blocks.length}');
@@ -215,66 +221,66 @@ class WebsiteService extends ChangeNotifier {
     try {
       debugPrint('[WebsiteService] Loading blocks for tenant: $tenantId');
       
-      // First, find the home page for this tenant
-      final pagesResponse = await _supabase
+      // OPTIMIZED: Single query with JOIN - get home page with its blocks in one round trip
+      final pagesWithBlocks = await _supabase
           .from('website_pages')
-          .select('id')
+          .select('id, website_blocks(*)')
           .eq('tenant_id', tenantId)
           .eq('is_home', true)
           .eq('is_published', true)
           .limit(1);
       
-      debugPrint('[WebsiteService] Pages query response: $pagesResponse');
+      debugPrint('⏱️ [WebsiteService] Pages+Blocks JOIN query: ${sw.elapsedMilliseconds}ms');
       
-      String? homePageId;
-      if ((pagesResponse as List).isNotEmpty) {
-        homePageId = pagesResponse[0]['id']?.toString();
+      List<Map<String, dynamic>> data = [];
+      
+      if ((pagesWithBlocks as List).isNotEmpty) {
+        final homePage = pagesWithBlocks[0];
+        final homePageId = homePage['id']?.toString();
         debugPrint('[WebsiteService] Found home page: $homePageId');
-      }
-      
-      // If no home page found, try to get the first published page
-      if (homePageId == null) {
-        final firstPageResponse = await _supabase
+        
+        // Extract blocks from the JOIN result
+        final blocks = homePage['website_blocks'] as List? ?? [];
+        data = List<Map<String, dynamic>>.from(blocks);
+      } else {
+        // Fallback: try first published page
+        final firstPageWithBlocks = await _supabase
             .from('website_pages')
-            .select('id')
+            .select('id, website_blocks(*)')
             .eq('tenant_id', tenantId)
             .eq('is_published', true)
             .order('created_at', ascending: true)
             .limit(1);
         
-        if ((firstPageResponse as List).isNotEmpty) {
-          homePageId = firstPageResponse[0]['id']?.toString();
+        if ((firstPageWithBlocks as List).isNotEmpty) {
+          final blocks = firstPageWithBlocks[0]['website_blocks'] as List? ?? [];
+          data = List<Map<String, dynamic>>.from(blocks);
         }
       }
       
-      if (homePageId == null) {
-        debugPrint('[WebsiteService] No home page found for tenant $tenantId');
-        _hasLoadedForTenant = true; // Mark as loaded even with no blocks
+      if (data.isEmpty) {
+        debugPrint('[WebsiteService] No blocks found for tenant $tenantId');
+        _hasLoadedForTenant = true;
         _safeNotifyListeners();
         return [];
       }
       
-      final response = await _supabase
-          .from('website_blocks')
-          .select()
-          .eq('tenant_id', tenantId)
-          .eq('page_id', homePageId) // ✅ Filter by HOME PAGE ONLY
-          .order('order_index', ascending: true);
-      
-      final data = List<Map<String, dynamic>>.from(response as List);
+      // Sort by order_index
       data.sort(
         (a, b) => (a['order_index'] ?? 0).compareTo(b['order_index'] ?? 0),
       );
       
+      debugPrint('⏱️ [WebsiteService] Total loadBlocksForTenant: ${sw.elapsedMilliseconds}ms (${data.length} blocks)');
+      
       // Cache the blocks for reuse
       _blocks = data;
-      _hasLoadedForTenant = true; // Mark as loaded
+      _hasLoadedForTenant = true;
       _safeNotifyListeners();
       
       return data;
     } catch (e) {
       debugPrint('[WebsiteService] Error loading blocks for tenant: $e');
-      _hasLoadedForTenant = true; // Mark as loaded even on error (don't block forever)
+      _hasLoadedForTenant = true; // Mark as loaded even on error
       _safeNotifyListeners();
       return [];
     }
@@ -585,11 +591,14 @@ class WebsiteService extends ChangeNotifier {
   /// Load settings for a specific tenant (used by public store for anonymous visitors)
   /// This method does NOT require authentication
   Future<Map<String, String>> loadSettingsForTenant(String tenantId) async {
+    final sw = Stopwatch()..start();
     try {
       final response = await _supabase
           .from('website_settings')
           .select()
           .eq('tenant_id', tenantId);
+
+      debugPrint('⏱️ [WebsiteService] Settings query: ${sw.elapsedMilliseconds}ms');
 
       final settings = <String, String>{};
       for (final row in response as List) {
@@ -600,8 +609,10 @@ class WebsiteService extends ChangeNotifier {
       _settings = settings;
       _themePresets = _parseThemePresets(_settings['theme_presets']);
       
+      debugPrint('⏱️ [WebsiteService] Settings total: ${sw.elapsedMilliseconds}ms (${settings.length} settings)');
       return settings;
     } catch (e) {
+      debugPrint('⏱️ [WebsiteService] Settings ERROR: ${sw.elapsedMilliseconds}ms - $e');
       return {};
     }
   }
@@ -772,19 +783,18 @@ class WebsiteService extends ChangeNotifier {
     if (!_isInitializing) _safeNotifyListeners();
 
     try {
+      // Load orders with items in a SINGLE query (no N+1 problem)
+      // Limit to recent 100 orders for performance - use pagination for full list
       final response = await _supabase
           .from('online_orders')
-          .select()
-          .order('created_at', ascending: false);
+          .select('''
+            *,
+            online_order_items (*)
+          ''')
+          .order('created_at', ascending: false)
+          .limit(100);
 
-      _orders =
-          (response as List).map((json) => OnlineOrder.fromJson(json)).toList();
-
-      // Load items for each order
-      for (int i = 0; i < _orders.length; i++) {
-        final items = await _loadOrderItems(_orders[i].id);
-        _orders[i] = _orders[i].copyWith(items: items);
-      }
+      _orders = (response as List).map((json) => OnlineOrder.fromJson(json)).toList();
 
       _error = null;
     } catch (e) {
@@ -1552,7 +1562,7 @@ class WebsiteService extends ChangeNotifier {
         loadFeaturedProducts(),
         loadContents(),
         loadSettings(),
-        loadOrders(),
+        // Orders are lazy-loaded when OnlineOrdersPage is opened (performance)
         loadBlocks(), // Load Odoo-style blocks
         loadPages(),  // Load multi-page support
         loadNavigation(), // Load navigation menus
@@ -1561,11 +1571,18 @@ class WebsiteService extends ChangeNotifier {
       // Link navigation items to their pages
       await linkNavigationToPages();
       
-      _setupOrdersRealtime(); // Subscribe to real-time order updates
+      // Realtime subscriptions setup deferred until needed
     } finally {
       _isInitializing = false;
       _safeNotifyListeners();
     }
+  }
+
+  /// Initialize orders (call this when OnlineOrdersPage opens)
+  Future<void> initializeOrders() async {
+    if (_orders.isNotEmpty) return; // Already loaded
+    await loadOrders();
+    _setupOrdersRealtime(); // Subscribe to real-time order updates
   }
 
   /// Set up realtime subscription for online orders

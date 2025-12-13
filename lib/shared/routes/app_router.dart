@@ -285,6 +285,7 @@ class AppRouter {
             '/cuenta',
             '/pagina',
             '/tienda',
+            '/shop', // Legacy Google Merchant URLs
             // Policy pages (clean URLs)
             '/nosotros',
             '/terminos',
@@ -373,6 +374,38 @@ class AppRouter {
           path: '/producto/:id',
           pageBuilder: (context, state) {
             final productId = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(
+                  child: ProductDetailPage(productId: productId)),
+            );
+          },
+        ),
+
+        // Legacy /shop/:slug route for Google Merchant indexed URLs
+        // Format: /shop/{sku}-{name-slug}-{partial-id}
+        // Example: /shop/s56467-aceite-mineral-shimano-sm-dboil-1000cc-bulk-ksmdboilo-6876
+        GoRoute(
+          path: '/shop/:slug',
+          pageBuilder: (context, state) {
+            final slug = state.pathParameters['slug'] ?? '';
+            debugPrint('🔗 [Router] Legacy /shop/ URL detected: $slug');
+            
+            // Extract the SKU (first part, format: s56467 or S56467 or just 56467)
+            // Example: s56467-aceite-mineral... -> S56467
+            String productId = slug;
+            
+            final skuMatch = RegExp(r'^[sS]?(\d+)').firstMatch(slug);
+            if (skuMatch != null) {
+              // Get the full match (e.g., "s56467") and uppercase it
+              final sku = skuMatch.group(0)!.toUpperCase();
+              productId = 'sku:$sku';
+              debugPrint('🔗 [Router] Extracted SKU: $sku -> productId: $productId');
+            } else {
+              debugPrint('🔗 [Router] Could not extract SKU from slug: $slug');
+            }
+            
             return _buildPageWithNoTransition(
               context,
               state,

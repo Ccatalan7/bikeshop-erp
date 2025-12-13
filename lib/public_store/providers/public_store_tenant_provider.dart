@@ -21,6 +21,7 @@ class PublicStoreTenantProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get hasTenant => _currentTenant != null;
+  bool get hasError => _error != null && !_isLoading; // Error state (not loading, has error)
   String? get tenantId => _currentTenant?.id;
   String? get shopName => _currentTenant?.shopName;
   String? get subdomain => _currentTenant?.subdomain;

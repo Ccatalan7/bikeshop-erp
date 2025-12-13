@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +7,7 @@ import '../../../shared/services/backup_service.dart';
 import '../../../shared/models/backup.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/utils/file_download.dart';
 
 class BackupManagementPage extends StatefulWidget {
   const BackupManagementPage({super.key});
@@ -805,16 +805,13 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
       // Create download file name
       final fileName = 'backup_${backup.backupName.replaceAll(' ', '_').replaceAll(':', '-')}_${DateFormat('yyyyMMdd_HHmmss').format(backup.createdAt)}.json';
 
-      // Trigger download using dart:html (Web only)
+      // Trigger download using cross-platform utility
       final bytes = utf8.encode(jsonString);
-      final blob = html.Blob([bytes], 'application/json');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', fileName)
-        ..click();
-      
-      html.Url.revokeObjectUrl(url);
+      await downloadFile(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: 'application/json',
+      );
 
       scaffoldMessenger.hideCurrentSnackBar();
       scaffoldMessenger.showSnackBar(

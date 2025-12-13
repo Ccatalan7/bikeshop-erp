@@ -78,6 +78,7 @@ class TenantDetectionService {
 
   /// OPTIMIZED: Get tenant by subdomain OR custom domain in a single query
   Future<Tenant?> _getTenantBySubdomainOrDomain(String? subdomain, String domain) async {
+    final sw = Stopwatch()..start();
     try {
       // Use OR filter to check both in one query
       var query = _supabase
@@ -93,6 +94,7 @@ class TenantDetectionService {
       }
 
       final response = await query.maybeSingle();
+      debugPrint('⏱️ [TenantDetection] DB query took: ${sw.elapsedMilliseconds}ms');
 
       if (response == null) {
         return null;

@@ -74,6 +74,7 @@ class PublicInventoryService extends ChangeNotifier {
     int? limit, // null = no limit (fetch all)
     int offset = 0,
   }) async {
+    final sw = Stopwatch()..start();
     try {
       // Check cache first (only if no filters/pagination applied)
       final cacheKey = 'products_$tenantId';
@@ -85,6 +86,7 @@ class PublicInventoryService extends ChangeNotifier {
           offset == 0 &&
           limit == null &&
           _isCacheValid(cacheKey)) {
+        debugPrint('⏱️ [PublicInventory] Products from cache: ${sw.elapsedMilliseconds}ms');
         return _productsCache[cacheKey] ?? [];
       }
       // Build base query
@@ -129,9 +131,13 @@ class PublicInventoryService extends ChangeNotifier {
           ? await orderedQuery.range(offset, offset + limit - 1)
           : await orderedQuery;
       
+      debugPrint('⏱️ [PublicInventory] Products query: ${sw.elapsedMilliseconds}ms');
+      
       final products = (response as List)
           .map((json) => Product.fromJson(json))
           .toList();
+      
+      debugPrint('⏱️ [PublicInventory] Products total: ${sw.elapsedMilliseconds}ms (${products.length} products)');
 
       // Cache results if no filters (default view)
       if (categoryId == null && 
@@ -146,6 +152,7 @@ class PublicInventoryService extends ChangeNotifier {
 
       return products;
     } catch (e) {
+      debugPrint('⏱️ [PublicInventory] Products ERROR: ${sw.elapsedMilliseconds}ms - $e');
       return [];
     }
   }
@@ -159,10 +166,12 @@ class PublicInventoryService extends ChangeNotifier {
   Future<List<Category>> getCategoriesForTenant({
     required String tenantId,
   }) async {
+    final sw = Stopwatch()..start();
     try {
       // Check cache first
       final cacheKey = 'categories_$tenantId';
       if (_isCacheValid(cacheKey)) {
+        debugPrint('⏱️ [PublicInventory] Categories from cache: ${sw.elapsedMilliseconds}ms');
         return _categoriesCache[cacheKey] ?? [];
       }
 
@@ -171,12 +180,14 @@ class PublicInventoryService extends ChangeNotifier {
           .select()
           .eq('tenant_id', tenantId)
           .order('name', ascending: true);
+      
+      debugPrint('⏱️ [PublicInventory] Categories query: ${sw.elapsedMilliseconds}ms');
 
       final categories = (response as List)
           .map((json) => Category.fromJson(json))
           .toList();
 
-      debugPrint('✅ PublicInventoryService: Found ${categories.length} categories');
+      debugPrint('✅ PublicInventoryService: Found ${categories.length} categories (${sw.elapsedMilliseconds}ms)');
 
       // Cache results
       _categoriesCache[cacheKey] = categories;
@@ -184,7 +195,7 @@ class PublicInventoryService extends ChangeNotifier {
 
       return categories;
     } catch (e) {
-      debugPrint('❌ PublicInventoryService: Error fetching categories: $e');
+      debugPrint('❌ PublicInventoryService: Error fetching categories: $e (${sw.elapsedMilliseconds}ms)');
       return [];
     }
   }

@@ -391,9 +391,9 @@ class _PublicHomePageState extends State<PublicHomePage> {
     // Check for edit/preview mode from URL query parameters (using GoRouter)
     _checkEditModeFromRouter(context);
     
-    // Read data from providers (already loaded by main.dart)
+    // Read data from providers - WATCH WebsiteService to rebuild when blocks load
     final tenantProvider = context.read<PublicStoreTenantProvider>();
-    final websiteService = context.read<WebsiteService>();
+    final websiteService = context.watch<WebsiteService>(); // Changed to watch() for progressive loading
     
     final primaryColor = _resolveColor(
       websiteService.getSetting('theme_primary_color', ''),
@@ -434,11 +434,24 @@ class _PublicHomePageState extends State<PublicHomePage> {
       max: 64.0,
     );
 
-    // Use blocks from WebsiteService (loaded by main.dart)
+    // Use blocks from WebsiteService (loaded by main.dart progressively)
     final blocksToRender = websiteService.blocks;
+    final isDataLoading = !websiteService.hasLoadedForTenant;
     
-    // Show empty state if no tenant or no blocks
-    if (tenantProvider.tenantId == null) {
+    // Show loading skeleton if data is still loading (and we don't have blocks yet)
+    if (isDataLoading && blocksToRender.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(48),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    
+    // Show empty state ONLY if:
+    // 1. No tenant detected AND no blocks loaded (true public store failure)
+    // 2. NOT when blocks ARE loaded (ERP preview mode - blocks loaded via authenticated user)
+    if (tenantProvider.tenantId == null && blocksToRender.isEmpty && !websiteService.hasLoadedForTenant) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

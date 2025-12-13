@@ -20,6 +20,15 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   String _selectedPaymentStatus = 'all';
 
   @override
+  void initState() {
+    super.initState();
+    // Lazy load orders when this page opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<WebsiteService>().initializeOrders();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final websiteService = context.watch<WebsiteService>();

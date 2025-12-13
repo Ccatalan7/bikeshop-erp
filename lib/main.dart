@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'dart:html' as html show window;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -21,6 +20,7 @@ import 'shared/services/user_management_service.dart';
 import 'shared/services/workspace_manager.dart';
 import 'shared/config/supabase_config.dart';
 import 'shared/widgets/workspace_tab_bar.dart';
+import 'shared/utils/web_url.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/inventory/services/inventory_service.dart' as module_inventory;
 import 'modules/inventory/services/brand_service.dart';
@@ -74,18 +74,33 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 // This is needed for MercadoPago redirects and direct URL navigation to work.
 String? _initialBrowserUrl;
 
+// Performance timing for initialization
+final _initTimings = <String, int>{};
+late final Stopwatch _globalStopwatch;
+
+void _logTiming(String phase, [String? detail]) {
+  final elapsed = _globalStopwatch.elapsedMilliseconds;
+  _initTimings[phase] = elapsed;
+  debugPrint('⏱️ [PERF] $phase: ${elapsed}ms${detail != null ? ' ($detail)' : ''}');
+}
+
 Future<void> main() async {
+  _globalStopwatch = Stopwatch()..start();
+  
   // Capture browser URL IMMEDIATELY, before anything else
   if (kIsWeb) {
-    _initialBrowserUrl = html.window.location.href;
+    _initialBrowserUrl = getInitialBrowserUrl();
     debugPrint('🚀 [Main] Captured initial URL: $_initialBrowserUrl');
   }
+  _logTiming('URL_CAPTURED');
   
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    _logTiming('FLUTTER_BINDING');
     
     // Use clean URLs (no hash #) for web
     usePathUrlStrategy();
+    _logTiming('URL_STRATEGY');
 
     if (!SupabaseConfig.isConfigured && kDebugMode) {
       debugPrint(
@@ -100,6 +115,7 @@ Future<void> main() async {
         autoRefreshToken: true,
       ),
     );
+    _logTiming('SUPABASE_INIT');
 
     // Handle deep links for OAuth callbacks on desktop and mobile
     if (!kIsWeb) {
@@ -136,6 +152,7 @@ Future<void> main() async {
     };
 
     runApp(const VinabikeApp());
+    _logTiming('RUN_APP');
   }, (error, stack) {
     // Suppress Flutter Web-specific errors in zone guard as well
     final errorString = error.toString();
@@ -335,35 +352,33 @@ class VinabikeApp extends StatelessWidget {
           final authService = context.watch<AuthService>();
           final appearanceService = context.watch<AppearanceService>();
           
-          // PUBLIC STORE: Simple one-time initialization
-          // DON'T watch WebsiteService - it causes infinite rebuilds
+          // PUBLIC STORE: Wait for tenant detection, then render app
           if (isPublicStoreHost) {
             final tenantProvider = context.watch<PublicStoreTenantProvider>();
-            final websiteService = context.watch<WebsiteService>();
             
-            // If tenant not detected yet, start detection
-            if (!tenantProvider.hasTenant && !tenantProvider.isLoading) {
+            // Start tenant detection + data loading
+            if (!tenantProvider.hasTenant && !tenantProvider.isLoading && !tenantProvider.hasError) {
               WidgetsBinding.instance.addPostFrameCallback((_) async {
+                _logTiming('TENANT_DETECT_START');
                 await tenantProvider.detectTenant();
+                _logTiming('TENANT_DETECTED', tenantProvider.tenantId);
+                
+                // Load data in background
                 if (tenantProvider.tenantId != null) {
                   final tid = tenantProvider.tenantId!;
                   final ws = context.read<WebsiteService>();
-                  final publicInventoryService = context.read<PublicInventoryService>();
                   
-                  // Load all data in parallel (ONE TIME)
-                  await Future.wait([
-                    ws.loadSettingsForTenant(tid),
-                    ws.loadBlocksForTenant(tid),
-                    publicInventoryService.getProductsForTenant(tenantId: tid),
-                    publicInventoryService.getCategoriesForTenant(tenantId: tid),
-                  ]);
+                  _logTiming('DATA_LOAD_START');
+                  Future.wait([
+                    ws.loadSettingsForTenant(tid).then((_) => _logTiming('SETTINGS_LOADED')),
+                    ws.loadBlocksForTenant(tid).then((_) => _logTiming('BLOCKS_LOADED')),
+                  ]).then((_) => _logTiming('ALL_DATA_LOADED'));
                 }
               });
             }
             
-            // Show loading while tenant is being detected OR data is loading
-            final isDataReady = websiteService.hasLoadedForTenant;
-            if (tenantProvider.isLoading || (tenantProvider.hasTenant && !isDataReady)) {
+            // Show loading while tenant is being detected
+            if (tenantProvider.isLoading || (!tenantProvider.hasTenant && !tenantProvider.hasError)) {
               return const MaterialApp(
                 debugShowCheckedModeBanner: false,
                 home: Scaffold(
@@ -374,7 +389,7 @@ class VinabikeApp extends StatelessWidget {
             }
             
             // Tenant detection failed
-            if (!tenantProvider.hasTenant) {
+            if (tenantProvider.hasError) {
               return MaterialApp(
                 debugShowCheckedModeBanner: false,
                 home: Scaffold(

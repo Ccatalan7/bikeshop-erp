@@ -58,10 +58,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     try {
       final inventoryService = context.read<InventoryService>();
 
-      // Load the product
-      _product = await inventoryService.getProductById(widget.productId);
+      // Load the product - support both UUID and SKU-based lookups
+      // SKU format: "sku:S56467" (from legacy /shop/ URLs)
+      if (widget.productId.startsWith('sku:')) {
+        final sku = widget.productId.substring(4); // Remove "sku:" prefix
+        debugPrint('🔍 [ProductDetail] Looking up product by SKU: $sku');
+        _product = await inventoryService.getProductBySku(sku);
+      } else {
+        _product = await inventoryService.getProductById(widget.productId);
+      }
 
       if (_product != null) {
+        debugPrint('✅ [ProductDetail] Found product: ${_product!.name}');
         // Load related products (same category)
         final allProducts = await inventoryService.getProducts();
         _relatedProducts = allProducts
@@ -76,6 +84,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           _updateStructuredData();
         }
       } else {
+        debugPrint('❌ [ProductDetail] Product not found: ${widget.productId}');
         removeStructuredDataScript(_structuredDataScriptId);
       }
     } catch (e) {
