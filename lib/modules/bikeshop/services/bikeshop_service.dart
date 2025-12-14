@@ -695,6 +695,33 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  /// Get all job bikes (for list views - single query optimization)
+  Future<Map<String, List<MechanicJobBike>>> getAllJobBikes() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('mechanic_job_bikes')
+          .select('''
+            *,
+            bike:bikes(*)
+          ''')
+          .order('order_index');
+
+      final allJobBikes = (data as List)
+          .map((json) => MechanicJobBike.fromJson(json))
+          .toList();
+      
+      // Group by job_id
+      final result = <String, List<MechanicJobBike>>{};
+      for (final jb in allJobBikes) {
+        result.putIfAbsent(jb.jobId, () => []).add(jb);
+      }
+      return result;
+    } catch (e) {
+      if (kDebugMode) print('Error fetching all job bikes: $e');
+      return {};
+    }
+  }
+
   /// Add a bike to a job
   Future<MechanicJobBike> addBikeToJob(MechanicJobBike jobBike) async {
     try {

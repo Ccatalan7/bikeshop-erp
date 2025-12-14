@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -35,6 +36,7 @@ class _BikeTabData {
   String? jobBikeId; // Database ID from mechanic_job_bikes (null for new)
 
   // Per-bike text controllers
+  final TextEditingController clientRequestController = TextEditingController();
   final TextEditingController diagnosisController = TextEditingController();
   final TextEditingController workRequestedController = TextEditingController();
   final TextEditingController technicianNotesController =
@@ -52,6 +54,7 @@ class _BikeTabData {
       : tabId = tabId ?? DateTime.now().microsecondsSinceEpoch.toString();
 
   void dispose() {
+    clientRequestController.dispose();
     diagnosisController.dispose();
     workRequestedController.dispose();
     technicianNotesController.dispose();
@@ -274,108 +277,176 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final customer = _customers.firstWhere((c) => c.id == job.customerId);
       await _selectCustomer(customer);
 
-      // Select bike
-      final bike = _bikes.firstWhere((b) => b.id == job.bikeId);
+      // Load all job items (parts + services)
+      final allItems = await bikeshopService.getJobItems(job.id!);
+      
+      // Load multi-bike data from mechanic_job_bikes
+      final jobBikes = await bikeshopService.getJobBikes(job.id!);
+      debugPrint('📦 Loaded ${jobBikes.length} job bikes');
 
-      // Load items (parts + services)
-      final items = await bikeshopService.getJobItems(job.id!);
-
-      // Load tax treatment from job itself (primary source)
+      // Load tax treatment from job
       TaxTreatment loadedTaxTreatment = job.taxTreatment;
-      debugPrint('✅ Tax treatment loaded from job: $loadedTaxTreatment');
+      debugPrint('✅ Tax treatment loaded: $loadedTaxTreatment');
 
-      // Prepare part items outside setState to avoid async operations inside
-      final List<_JobPartItem> partItems = [];
-      for (final item in items) {
-        Product? product;
-        if (item.productId != null) {
+      // Helper to find/create product for an item
+      Future<Product?> getProductForItem(MechanicJobItem item) async {
+        if (item.productId == null) return null;
+        
+        try {
+          return _products.firstWhere((p) => p.id == item.productId);
+        } catch (_) {
           try {
-            product = _products.firstWhere((p) => p.id == item.productId);
-          } catch (_) {
-            // Fetch from catalog if missing in local cache
-            try {
-              product = await inventoryService.getProductById(item.productId!);
-            } catch (e) {
-              debugPrint('⚠️ Could not fetch product ${item.productId}: $e');
-            }
+            return await inventoryService.getProductById(item.productId!);
+          } catch (e) {
+            debugPrint('⚠️ Could not fetch product ${item.productId}: $e');
+            return Product(
+              id: item.productId!,
+              name: item.productName,
+              sku: item.productSku ?? 'N/A',
+              price: item.unitPrice,
+              cost: 0,
+              stockQuantity: 0,
+              category: ProductCategory.other,
+              productType: ProductType.product,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            );
           }
-
-          product ??= Product(
-            id: item.productId!,
-            name: item.productName,
-            sku: item.productSku ?? 'N/A',
-            price: item.unitPrice,
-            cost: 0,
-            stockQuantity: 0,
-            category: ProductCategory.other,
-            productType: ProductType.product,
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          );
         }
+      }
 
-        partItems.add(_JobPartItem(
-          id: item.id, // Preserve database ID for stable widget keys
-          product: product,
-          name: item.productName,
-          isCatalogProduct: item.productId != null,
-          quantity: item.quantity.toInt(),
-          unitPrice: item.unitPrice,
-          notes: item.notes,
-        ));
+      // Build bike tabs from job bikes data
+      final List<_BikeTabData> loadedBikeTabs = [];
+      
+      if (jobBikes.isNotEmpty) {
+        // Multi-bike job: create tab for each job bike
+        for (final jobBike in jobBikes) {
+          // Use bike from local cache, or from the joined data loaded by getJobBikes()
+          Bike? bike = _bikes.firstWhereOrNull((b) => b.id == jobBike.bikeId);
+          bike ??= jobBike.bike; // Fall back to bike loaded from join
+          
+          if (bike == null) {
+            debugPrint('⚠️ Bike ${jobBike.bikeId} not found for customer or in join data');
+            continue;
+          }
+          
+          // Make sure this bike is in _bikes for UI consistency
+          if (!_bikes.any((b) => b.id == bike!.id)) {
+            _bikes.add(bike);
+          }
+          
+          final tab = _BikeTabData(
+            bike: bike,
+            jobBikeId: jobBike.id,
+          );
+          
+          // Set per-bike fields
+          tab.clientRequestController.text = jobBike.workRequested ?? '';
+          tab.diagnosisController.text = jobBike.diagnosis ?? '';
+          tab.workRequestedController.text = jobBike.workPerformed ?? '';
+          tab.technicianNotesController.text = jobBike.technicianNotes ?? '';
+          tab.isWarrantyWork = jobBike.isWarrantyWork;
+          tab.requiresApproval = jobBike.requiresApproval;
+          tab.approvedByCustomer = jobBike.approvedByCustomer;
+          
+          // Load items for this specific bike
+          final bikeItems = allItems.where((item) => item.jobBikeId == jobBike.id).toList();
+          for (final item in bikeItems) {
+            final product = await getProductForItem(item);
+            tab.partItems.add(_JobPartItem(
+              id: item.id,
+              product: product,
+              name: item.productName,
+              isCatalogProduct: item.productId != null,
+              quantity: item.quantity.toInt(),
+              unitPrice: item.unitPrice,
+              notes: item.notes,
+            ));
+          }
+          
+          loadedBikeTabs.add(tab);
+          debugPrint('✅ Loaded bike tab: ${bike.displayName} with ${tab.partItems.length} items');
+        }
+      } else {
+        // Legacy single-bike job: create one tab from job data
+        final bike = _bikes.firstWhereOrNull((b) => b.id == job.bikeId);
+        if (bike != null) {
+          final tab = _BikeTabData(bike: bike);
+          
+          // Use job-level fields for the single bike
+          tab.clientRequestController.text = job.clientRequest ?? '';
+          tab.diagnosisController.text = job.diagnosis ?? '';
+          tab.workRequestedController.text = job.workPerformed ?? '';
+          tab.technicianNotesController.text = job.notes ?? '';
+          tab.isWarrantyWork = job.isWarrantyJob;
+          tab.requiresApproval = job.requiresApproval;
+          tab.approvedByCustomer = job.approvedByCustomer;
+          
+          // Load all items (no jobBikeId filtering for legacy)
+          for (final item in allItems) {
+            final product = await getProductForItem(item);
+            tab.partItems.add(_JobPartItem(
+              id: item.id,
+              product: product,
+              name: item.productName,
+              isCatalogProduct: item.productId != null,
+              quantity: item.quantity.toInt(),
+              unitPrice: item.unitPrice,
+              notes: item.notes,
+            ));
+          }
+          
+          loadedBikeTabs.add(tab);
+          debugPrint('✅ Loaded legacy single-bike tab: ${bike.displayName} with ${tab.partItems.length} items');
+        }
       }
 
       if (mounted) {
         setState(() {
           _existingJob = job;
           _selectedCustomer = customer;
-          _selectedBike = bike;
           _selectedPriority = job.priority;
           _selectedStatus = job.status;
-          // Load custom status if available
-          debugPrint(
-              '🔍 Loading custom status: statusId=${job.statusId}, customStatus=${job.customStatus?.name}');
-          debugPrint(
-              '🔍 Available custom statuses: ${_customStatuses.map((s) => '${s.id}:${s.name}').join(', ')}');
+          
+          // Load custom status
           if (job.customStatus != null) {
-            debugPrint('✅ Using job.customStatus: ${job.customStatus!.name}');
             _selectedCustomStatus = job.customStatus;
           } else if (job.statusId != null && _customStatuses.isNotEmpty) {
-            // Try to find by ID
-            debugPrint('🔍 Looking for status by ID: ${job.statusId}');
             final found = _customStatuses.where((s) => s.id == job.statusId);
             if (found.isNotEmpty) {
               _selectedCustomStatus = found.first;
-              debugPrint(
-                  '✅ Found status by ID: ${_selectedCustomStatus?.name}');
-            } else {
-              debugPrint(
-                  '⚠️ Status ID ${job.statusId} not found in custom statuses, keeping default');
             }
-          } else {
-            debugPrint(
-                '⚠️ No statusId or customStatus on job, keeping default: ${_selectedCustomStatus?.name}');
           }
+          
           _selectedDeadline = job.deadline;
           _selectedArrivalDate = job.arrivalDate;
-          _requiresApproval = job.requiresApproval;
-          _isWarrantyJob = job.isWarrantyJob;
-          _taxTreatment = loadedTaxTreatment; // ← Set the loaded tax treatment
-
-          _clientRequestController.text = job.clientRequest ?? '';
-          _diagnosisController.text = job.diagnosis ?? '';
-          _workSummaryController.text = job.workPerformed ?? '';
-          _technicianNotesController.text = job.notes ?? '';
+          _taxTreatment = loadedTaxTreatment;
           _discountController.text = job.discountAmount.toString();
           _estimatedDurationController.text = '';
-
-          _partItems
-            ..clear()
-            ..addAll(partItems);
+          
+          // Set bike tabs (multi-bike or legacy single-bike)
+          _bikeTabs.clear();
+          _bikeTabs.addAll(loadedBikeTabs);
+          _selectedBikeTabIndex = 0;
+          
+          // Set legacy fields for backward compat
+          if (loadedBikeTabs.isNotEmpty) {
+            _selectedBike = loadedBikeTabs.first.bike;
+            _clientRequestController.text = loadedBikeTabs.first.clientRequestController.text;
+            _diagnosisController.text = loadedBikeTabs.first.diagnosisController.text;
+            _workSummaryController.text = loadedBikeTabs.first.workRequestedController.text;
+            _technicianNotesController.text = loadedBikeTabs.first.technicianNotesController.text;
+            _requiresApproval = loadedBikeTabs.first.requiresApproval;
+            _isWarrantyJob = loadedBikeTabs.first.isWarrantyWork;
+          }
+          
+          // Clear legacy items (now per-bike)
+          _partItems.clear();
           _serviceItems.clear();
         });
       }
     } catch (e) {
+      debugPrint('❌ Error loading job: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al cargar pega: $e')),
@@ -803,9 +874,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return;
     }
 
-    if (_selectedBike == null) {
+    // MULTI-BIKE: Check that we have at least one bike tab
+    if (_bikeTabs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Debe seleccionar una bicicleta')),
+        const SnackBar(content: Text('Debe seleccionar al menos una bicicleta')),
       );
       return;
     }
@@ -823,36 +895,44 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         throw Exception('User does not have a tenant_id. Cannot proceed.');
       }
 
-      // Create MechanicJob object
+      // Use first bike as the "primary" bike for legacy compatibility
+      final primaryBike = _bikeTabs.first.bike;
+      if (primaryBike?.id == null) {
+        throw Exception('La primera bicicleta no tiene ID');
+      }
+
+      // Get combined data from first bike tab for job-level fields (legacy)
+      final firstTab = _bikeTabs.first;
+
+      // Create MechanicJob object (job-level data)
       final job = MechanicJob(
         id: widget.jobId,
         tenantId: tenantId,
         jobNumber:
             _existingJob?.jobNumber ?? '', // Will be auto-generated if empty
         customerId: _selectedCustomer!.id!,
-        bikeId: _selectedBike!.id!,
+        bikeId: primaryBike!.id!, // Primary bike for legacy
         priority: _selectedPriority,
         status: _selectedStatus,
         statusId: _selectedCustomStatus?.id, // Custom status ID
-        // Use selected arrival date (editable by user)
         arrivalDate: _selectedArrivalDate,
-        // CRITICAL: Preserve original created_at when updating
         createdAt: _existingJob?.createdAt ?? DateTime.now(),
-        clientRequest: _clientRequestController.text.trim().isEmpty
+        // Store first bike's data in legacy fields for backward compat
+        clientRequest: firstTab.clientRequestController.text.trim().isEmpty
             ? null
-            : _clientRequestController.text.trim(),
-        diagnosis: _diagnosisController.text.trim().isEmpty
+            : firstTab.clientRequestController.text.trim(),
+        diagnosis: firstTab.diagnosisController.text.trim().isEmpty
             ? null
-            : _diagnosisController.text.trim(),
-        workPerformed: _workSummaryController.text.trim().isEmpty
+            : firstTab.diagnosisController.text.trim(),
+        workPerformed: firstTab.workRequestedController.text.trim().isEmpty
             ? null
-            : _workSummaryController.text.trim(),
-        notes: _technicianNotesController.text.trim().isEmpty
+            : firstTab.workRequestedController.text.trim(),
+        notes: firstTab.technicianNotesController.text.trim().isEmpty
             ? null
-            : _technicianNotesController.text.trim(),
+            : firstTab.technicianNotesController.text.trim(),
         deadline: _selectedDeadline,
-        requiresApproval: _requiresApproval,
-        isWarrantyJob: _isWarrantyJob,
+        requiresApproval: firstTab.requiresApproval,
+        isWarrantyJob: firstTab.isWarrantyWork,
         discountAmount: _discountAmount,
         estimatedCost: 0,
         finalCost: 0,
@@ -860,8 +940,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         laborCost: 0,
         taxAmount: 0,
         totalCost: 0,
-        taxTreatment: _taxTreatment, // ← Add tax treatment
-        // CRITICAL: Preserve invoice_id and invoice flags when updating!
+        taxTreatment: _taxTreatment,
         invoiceId: _existingJob?.invoiceId,
         isInvoiced: _existingJob?.isInvoiced ?? false,
         isPaid: _existingJob?.isPaid ?? false,
@@ -879,7 +958,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         jobId = createdJob.id!;
       }
 
-      // Save items (products + services)
+      // ============================================================
+      // MULTI-BIKE: Save each bike tab as MechanicJobBike + its items
+      // ============================================================
+      
+      // First, delete all existing job items (we'll re-create them)
       if (widget.jobId != null) {
         final existingItems = await bikeshopService.getJobItems(jobId);
         for (final existing in existingItems) {
@@ -887,46 +970,95 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             await bikeshopService.deleteJobItem(existing.id!);
           }
         }
-      }
-
-      // Add new products/parts
-      final taskService = Provider.of<SmartTaskService>(context, listen: false);
-
-      for (final item in _partItems) {
-        final quantity = item.quantity.toDouble();
-        final unitPrice = item.unitPrice;
-        final jobItem = MechanicJobItem(
-          jobId: jobId,
-          tenantId: tenantId,
-          productId: item.product?.id, // Nullable for ad-hoc items
-          productName: item.name,
-          productSku: item.sku ?? '',
-          quantity: quantity,
-          unitPrice: unitPrice,
-          totalPrice: quantity * unitPrice,
-          itemType: 'product',
-        );
-        final created = await bikeshopService.createJobItem(jobItem);
-
-        // 🤖 Auto-generate tasks from product description if available
-        if (item.product != null &&
-            item.product!.description != null &&
-            item.product!.description!.isNotEmpty &&
-            created.id != null) {
-          try {
-            await taskService.generateAutoTasksFromDescription(
-              jobId: jobId,
-              parentItemId: created.id!,
-              description: item.product!.description!,
-            );
-            debugPrint('✅ Auto-tasks generated for ${item.name}');
-          } catch (e) {
-            debugPrint('⚠️ Failed to generate auto-tasks for ${item.name}: $e');
+        
+        // Delete existing job bikes (we'll re-create them)
+        final existingJobBikes = await bikeshopService.getJobBikes(jobId);
+        for (final existingJB in existingJobBikes) {
+          if (existingJB.id != null) {
+            await bikeshopService.removeBikeFromJob(existingJB.id!);
           }
         }
       }
 
-      // Add new services (stored as mechanic_job_items)
+      final taskService = Provider.of<SmartTaskService>(context, listen: false);
+
+      // Save each bike tab
+      for (int i = 0; i < _bikeTabs.length; i++) {
+        final tab = _bikeTabs[i];
+        if (tab.bike?.id == null) {
+          debugPrint('⚠️ Skipping bike tab $i - no bike ID');
+          continue;
+        }
+
+        // Create MechanicJobBike record for this bike
+        final jobBike = MechanicJobBike(
+          id: null, // Always create new (we deleted old ones)
+          tenantId: tenantId,
+          jobId: jobId,
+          bikeId: tab.bike!.id!,
+          orderIndex: i,
+          diagnosis: tab.diagnosisController.text.trim().isEmpty
+              ? null
+              : tab.diagnosisController.text.trim(),
+          workRequested: tab.clientRequestController.text.trim().isEmpty
+              ? null
+              : tab.clientRequestController.text.trim(),
+          workPerformed: tab.workRequestedController.text.trim().isEmpty
+              ? null
+              : tab.workRequestedController.text.trim(),
+          technicianNotes: tab.technicianNotesController.text.trim().isEmpty
+              ? null
+              : tab.technicianNotesController.text.trim(),
+          isWarrantyWork: tab.isWarrantyWork,
+          requiresApproval: tab.requiresApproval,
+          approvedByCustomer: tab.approvedByCustomer,
+        );
+
+        final createdJobBike = await bikeshopService.addBikeToJob(jobBike);
+        final jobBikeId = createdJobBike.id;
+
+        debugPrint('✅ Created job bike: ${tab.bike!.displayName} (id: $jobBikeId)');
+
+        // Save this bike's parts/products
+        for (final item in tab.partItems) {
+          if (item.name.isEmpty) continue; // Skip empty rows
+          
+          final quantity = item.quantity.toDouble();
+          final unitPrice = item.unitPrice;
+          final jobItem = MechanicJobItem(
+            jobId: jobId,
+            jobBikeId: jobBikeId, // Link to specific bike!
+            tenantId: tenantId,
+            productId: item.product?.id,
+            productName: item.name,
+            productSku: item.sku ?? '',
+            quantity: quantity,
+            unitPrice: unitPrice,
+            totalPrice: quantity * unitPrice,
+            itemType: 'product',
+          );
+          final created = await bikeshopService.createJobItem(jobItem);
+
+          // Auto-generate tasks from product description if available
+          if (item.product != null &&
+              item.product!.description != null &&
+              item.product!.description!.isNotEmpty &&
+              created.id != null) {
+            try {
+              await taskService.generateAutoTasksFromDescription(
+                jobId: jobId,
+                parentItemId: created.id!,
+                description: item.product!.description!,
+              );
+              debugPrint('✅ Auto-tasks generated for ${item.name}');
+            } catch (e) {
+              debugPrint('⚠️ Failed to generate auto-tasks for ${item.name}: $e');
+            }
+          }
+        }
+      }
+
+      // Add services (job-level, not per-bike for now)
       for (final service in _serviceItems) {
         final hoursWorked = service.hours;
         final hourlyRate = service.hourlyRate;
@@ -951,7 +1083,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
         final created = await bikeshopService.createJobItem(jobServiceItem);
 
-        // 🤖 Auto-generate tasks from service product description if available
         if (serviceProduct != null &&
             serviceProduct.description != null &&
             serviceProduct.description!.isNotEmpty &&
@@ -962,10 +1093,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               parentItemId: created.id!,
               description: serviceProduct.description!,
             );
-            debugPrint('✅ Auto-tasks generated for service ${name}');
+            debugPrint('✅ Auto-tasks generated for service $name');
           } catch (e) {
-            debugPrint(
-                '⚠️ Failed to generate auto-tasks for service ${name}: $e');
+            debugPrint('⚠️ Failed to generate auto-tasks for service $name: $e');
           }
         }
       }
@@ -974,16 +1104,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       if (_existingJob?.invoiceId != null) {
         debugPrint('🔄 Syncing job to invoice: ${_existingJob!.invoiceId}');
         await bikeshopService.syncJobToInvoice(jobId);
-
-        // Also update the invoice's tax treatment to match the pega
-        debugPrint('💰 Current tax treatment: $_taxTreatment');
         await _updateInvoiceTaxTreatment(_existingJob!.invoiceId!);
-      } else {
-        debugPrint('⚠️ No invoice linked to this job');
       }
 
-      // Create invoice AFTER items are added (awesome feature!)
-      // Only for new jobs to avoid recreating invoices on edits
+      // Create invoice AFTER items are added (only for new jobs)
       if (widget.jobId == null) {
         await bikeshopService.createInvoiceFromJob(jobId);
       }
@@ -997,11 +1121,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             backgroundColor: Colors.green,
           ),
         );
-        // Pop back and force refresh by passing true
         if (context.canPop()) {
-          context.pop(true); // Signal that data changed
+          context.pop(true);
         } else {
-          // Navigate to pegas list if we can't pop
           context.go('/taller/pegas');
         }
       }
@@ -1444,11 +1566,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     child: Column(
                       children: [
                         // Job details with embedded bike tabs
-                        if (_selectedCustomer != null && _bikeTabs.length > 1) ...[
-                          _buildBikeTabBar(theme),
-                          const SizedBox(height: 16),
-                        ],
-                        _buildSectionCard(
+                        _buildJobDetailsSectionCard(
                           theme,
                           icon: Icons.build_outlined,
                           title: 'Detalles del Trabajo',
@@ -1514,12 +1632,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   child: _buildCustomerBikeSection(),
                 ),
                 const SizedBox(height: 16),
-                // Bike tab bar for mobile (only when multiple bikes)
-                if (_selectedCustomer != null && _bikeTabs.length > 1) ...[
-                  _buildBikeTabBar(theme),
-                  const SizedBox(height: 16),
-                ],
-                _buildSectionCard(
+                // Job details with embedded bike tabs (mobile)
+                _buildJobDetailsSectionCard(
                   theme,
                   icon: Icons.build_outlined,
                   title: 'Detalles del Trabajo',
@@ -1589,6 +1703,146 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             child,
           ],
         ),
+      ),
+    );
+  }
+
+  /// Special section card with bike tabs embedded in header
+  Widget _buildJobDetailsSectionCard(
+    ThemeData theme, {
+    required IconData icon,
+    required String title,
+    required Widget child,
+  }) {
+    final hasBikeTabs = _selectedCustomer != null && _bikeTabs.isNotEmpty;
+    
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with icon, title, and bike tabs
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+                  child: Icon(icon, color: theme.colorScheme.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                // Bike tabs on the right side of header
+                if (hasBikeTabs) ...[
+                  const Spacer(),
+                  _buildInlineBikeTabs(theme),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Content
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: child,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Compact inline bike tabs for the card header
+  Widget _buildInlineBikeTabs(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ..._bikeTabs.asMap().entries.map((entry) {
+            final index = entry.key;
+            final tab = entry.value;
+            final isSelected = index == _selectedBikeTabIndex;
+
+            return Padding(
+              padding: const EdgeInsets.only(right: 2),
+              child: Material(
+                color: isSelected 
+                    ? theme.colorScheme.surface 
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                child: InkWell(
+                  onTap: () => setState(() => _selectedBikeTabIndex = index),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.pedal_bike,
+                          size: 14,
+                          color: isSelected 
+                              ? theme.colorScheme.primary 
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          tab.bike?.displayName ?? 'Bici ${index + 1}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                            color: isSelected 
+                                ? theme.colorScheme.primary 
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if (_bikeTabs.length > 1) ...[
+                          const SizedBox(width: 4),
+                          InkWell(
+                            onTap: () => _removeBikeTab(index),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Icon(
+                              Icons.close,
+                              size: 14,
+                              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+          // Add bike button
+          Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            child: InkWell(
+              onTap: _showAddBikeSelector,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                child: Icon(
+                  Icons.add,
+                  size: 16,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1696,18 +1950,28 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ),
             ),
             itemBuilder: (context) => [
-              // Bike list
-              ..._bikes.map((bike) => PopupMenuItem<String>(
+              // Bike list - add to tabs (not just select)
+              ..._bikes.map((bike) {
+                final alreadyInTabs = _bikeTabs.any((tab) => tab.bike?.id == bike.id);
+                return PopupMenuItem<String>(
                     value: 'bike_${bike.id}',
-                    child: Text(
-                      '${bike.displayName}${bike.serialNumber != null ? ' (S/N: ${bike.serialNumber})' : ''}',
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${bike.displayName}${bike.serialNumber != null ? ' (S/N: ${bike.serialNumber})' : ''}',
+                          ),
+                        ),
+                        if (alreadyInTabs)
+                          Icon(Icons.check, size: 16, color: Colors.green[600]),
+                      ],
                     ),
                     onTap: () {
-                      setState(() {
-                        _selectedBike = bike;
-                      });
+                      // Use _addBikeTab to properly add to multi-bike system
+                      _addBikeTab(bike);
                     },
-                  )),
+                  );
+              }),
               // Divider
               if (_bikes.isNotEmpty) const PopupMenuDivider(),
               // Nueva Bici button
@@ -1742,20 +2006,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
                   setState(() {
                     _bikes = bikes;
-                    // Auto-select the newly created bike
-                    if (newBike != null) {
-                      _selectedBike = _bikes.firstWhere(
-                        (bike) => bike.id == newBike.id,
-                        orElse: () => newBike,
-                      );
-                    }
                   });
 
-                  if (mounted && newBike != null) {
+                  // Add to multi-bike tabs
+                  if (newBike != null && mounted) {
+                    final addedBike = _bikes.firstWhere(
+                      (bike) => bike.id == newBike.id,
+                      orElse: () => newBike,
+                    );
+                    _addBikeTab(addedBike);
+                    
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                            'Bicicleta "${newBike.displayName}" creada exitosamente'),
+                            'Bicicleta "${newBike.displayName}" creada y agregada'),
                         backgroundColor: Colors.green,
                       ),
                     );
@@ -2022,10 +2286,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         ),
 
         // ========== PER-BIKE FIELDS (from current tab) ==========
-        // Note: When multiple bikes, the browser-style tabs above indicate which bike
+        // Using keys to force widget recreation when tab changes
         const SizedBox(height: 16),
         TextFormField(
-          controller: _clientRequestController,
+          key: ValueKey('clientRequest_${currentTab?.tabId ?? "legacy"}'),
+          controller: currentTab?.clientRequestController ?? _clientRequestController,
           decoration: const InputDecoration(
             labelText: 'Solicitud del cliente',
             border: OutlineInputBorder(),
@@ -2036,6 +2301,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         ),
         const SizedBox(height: 16),
         TextFormField(
+          key: ValueKey('diagnosis_${currentTab?.tabId ?? "legacy"}'),
           controller: diagnosisCtrl,
           decoration: const InputDecoration(
             labelText: 'Diagnóstico',
@@ -2047,6 +2313,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         ),
         const SizedBox(height: 16),
         TextFormField(
+          key: ValueKey('workRequested_${currentTab?.tabId ?? "legacy"}'),
           controller: workRequestedCtrl,
           decoration: const InputDecoration(
             labelText: 'Trabajos a realizar',
@@ -2058,6 +2325,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         ),
         const SizedBox(height: 16),
         TextFormField(
+          key: ValueKey('techNotes_${currentTab?.tabId ?? "legacy"}'),
           controller: techNotesCtrl,
           decoration: const InputDecoration(
             labelText: 'Notas del técnico',
@@ -2069,6 +2337,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         ),
         const SizedBox(height: 16),
         Row(
+          key: ValueKey('checkboxes_${currentTab?.tabId ?? "legacy"}'),
           children: [
             Expanded(
               child: CheckboxListTile(
@@ -2416,7 +2685,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   )
                 : null,
             enabled: true,
-            showCost: true, // Pegas use cost, not price
+            showCost: false, // Pegas bill customers at SALE price, not cost
             allowCustomItems: true,
             autoFocus: item.product == null &&
                 item.name.isEmpty, // Auto-focus empty rows
@@ -2444,13 +2713,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 item.notes = selection.description;
                 // No setState needed - description field handles its own state
               } else {
-                // Product selected - update with new price from cost
+                // Product selected - update with sale price (not cost)
                 setState(() {
                   partItems[itemIndex] = item.copyWith(
                     product: selection.product,
                     name: selection.productName ?? '',
                     isCatalogProduct: selection.isCatalogProduct,
-                    unitPrice: selection.product?.cost ?? item.unitPrice,
+                    unitPrice: selection.product?.price ?? item.unitPrice,
                     notes: selection.description,
                   );
                 });

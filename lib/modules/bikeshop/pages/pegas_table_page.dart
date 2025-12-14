@@ -53,6 +53,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   Map<String, Bike> _bikes = {};
   Map<String, Invoice> _invoices = {};
   Map<String, String> _productImages = {};
+  Map<String, List<MechanicJobBike>> _jobBikesMap = {}; // Multi-bike support
 
   bool _isLoading = true;
   bool _needsRefresh = false;
@@ -389,12 +390,14 @@ class _PegasTablePageState extends State<PegasTablePage>
         _customerService.getCustomers(),
         _bikeshopService.getBikes(),
         _loadInvoices(),
+        _bikeshopService.getAllJobBikes(), // Single query for all job bikes
       ]);
 
       final jobs = results[0] as List<MechanicJob>;
       final customers = results[1] as List<Customer>;
       final bikes = results[2] as List<Bike>;
       final invoices = results[3] as List<Invoice>;
+      final jobBikesMap = results[4] as Map<String, List<MechanicJobBike>>;
 
       final customerMap = <String, Customer>{};
       for (final customer in customers) {
@@ -418,6 +421,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           _customers = customerMap;
           _bikes = bikeMap;
           _invoices = invoiceMap;
+          _jobBikesMap = jobBikesMap;
           _isLoading = false;
         });
         _applyFiltersAndSort();
@@ -1651,6 +1655,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     final isSelected = _selectedJob?.id == job.id;
     final customer = _customers[job.customerId];
     final bike = _bikes[job.bikeId];
+    final jobBikes = _jobBikesMap[job.id]; // Multi-bike data
 
     return InkWell(
       onTap: () {
@@ -1674,7 +1679,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         ),
         child: Row(
           children: _displayColumns.map((col) {
-            return _buildDataCell(col, job, customer, bike);
+            return _buildDataCell(col, job, customer, bike, jobBikes);
           }).toList(),
         ),
       ),
@@ -1682,8 +1687,8 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _buildDataCell(
-      ColumnConfig col, MechanicJob job, Customer? customer, Bike? bike) {
-    final content = _getCellContent(col.id, job, customer, bike);
+      ColumnConfig col, MechanicJob job, Customer? customer, Bike? bike, List<MechanicJobBike>? jobBikes) {
+    final content = _getCellContent(col.id, job, customer, bike, jobBikes);
 
     if (col.maxWidth != null && col.maxWidth == col.width) {
       // Fixed width column
@@ -1706,7 +1711,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _getCellContent(
-      String columnId, MechanicJob job, Customer? customer, Bike? bike) {
+      String columnId, MechanicJob job, Customer? customer, Bike? bike, List<MechanicJobBike>? jobBikes) {
     switch (columnId) {
       case 'checkbox':
         return Checkbox(
@@ -1857,7 +1862,85 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'bike':
-        // Clickable bike with optional image preview
+        // Multi-bike support: show all bikes or just primary bike
+        final hasMultipleBikes = jobBikes != null && jobBikes.length > 1;
+        
+        if (hasMultipleBikes) {
+          // Show all bikes as a list
+          return InkWell(
+            onTap: () => _showBikeSelectorDialog(job, customer),
+            child: Row(
+              children: [
+                // Stacked bike icons to indicate multiple bikes
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Image.asset(
+                      'assets/icons/mtb_bike_v3.png',
+                      width: 28,
+                      height: 28,
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.pedal_bike,
+                        size: 28,
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                      ),
+                    ),
+                    Positioned(
+                      right: -8,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${jobBikes.length}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      for (int i = 0; i < jobBikes.length && i < 2; i++)
+                        Text(
+                          jobBikes[i].bike?.displayName ?? _bikes[jobBikes[i].bikeId]?.displayName ?? 'Bici ${i + 1}',
+                          style: TextStyle(
+                            fontSize: i == 0 ? 13 : 11,
+                            color: i == 0 
+                                ? null 
+                                : Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      if (jobBikes.length > 2)
+                        Text(
+                          '+${jobBikes.length - 2} más',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        
+        // Single bike (legacy or single-bike job)
         final bikeName = bike?.displayName ?? 'N/A';
         final bikeImageUrl = bike?.imageUrl;
         return InkWell(

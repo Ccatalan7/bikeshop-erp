@@ -9800,12 +9800,85 @@ exception
   when undefined_column then raise notice '⚠ Column missing in mechanic_jobs';
 end $$;
 
+-- ============================================================
+-- TABLE: mechanic_job_bikes (MULTI-BIKE SUPPORT)
+-- ============================================================
+-- Links bikes to jobs with per-bike details
+-- Each bike in a job has its own: diagnosis, items, notes, costs
+create table if not exists mechanic_job_bikes (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  job_id uuid not null references mechanic_jobs(id) on delete cascade,
+  bike_id uuid not null references bikes(id) on delete cascade,
+  order_index integer not null default 0,
+  
+  -- Per-bike work details
+  diagnosis text,
+  work_requested text,        -- Solicitud del cliente (per bike)
+  work_performed text,        -- Lo que se hizo
+  technician_notes text,      -- Notas del técnico
+  
+  -- Per-bike cost tracking (calculated from items)
+  parts_cost numeric(12,2) not null default 0,
+  labor_cost numeric(12,2) not null default 0,
+  subtotal numeric(12,2) not null default 0,
+  
+  -- Per-bike flags
+  is_warranty_work boolean not null default false,
+  requires_approval boolean not null default false,
+  approved_by_customer boolean not null default false,
+  approved_at timestamp with time zone,
+  
+  -- Images for this specific bike work
+  image_urls text[] not null default array[]::text[],
+  
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+-- Indexes for mechanic_job_bikes
+create index if not exists idx_mechanic_job_bikes_tenant on mechanic_job_bikes(tenant_id);
+create index if not exists idx_mechanic_job_bikes_job on mechanic_job_bikes(job_id);
+create index if not exists idx_mechanic_job_bikes_bike on mechanic_job_bikes(bike_id);
+
+-- Unique constraint: each bike can only appear once per job
+do $$ begin
+  alter table mechanic_job_bikes drop constraint if exists mechanic_job_bikes_job_bike_unique;
+  alter table mechanic_job_bikes add constraint mechanic_job_bikes_job_bike_unique unique (job_id, bike_id);
+exception when others then null;
+end $$;
+
+-- Enable RLS for mechanic_job_bikes
+alter table mechanic_job_bikes enable row level security;
+
+drop policy if exists "mechanic_job_bikes_select" on mechanic_job_bikes;
+drop policy if exists "mechanic_job_bikes_insert" on mechanic_job_bikes;
+drop policy if exists "mechanic_job_bikes_update" on mechanic_job_bikes;
+drop policy if exists "mechanic_job_bikes_delete" on mechanic_job_bikes;
+
+create policy "mechanic_job_bikes_select" on mechanic_job_bikes
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "mechanic_job_bikes_insert" on mechanic_job_bikes
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "mechanic_job_bikes_update" on mechanic_job_bikes
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "mechanic_job_bikes_delete" on mechanic_job_bikes
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
 -- Table: mechanic_job_items
 -- Parts/products used in a job
 create table if not exists mechanic_job_items (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   job_id uuid not null references mechanic_jobs(id) on delete cascade,
+  job_bike_id uuid references mechanic_job_bikes(id) on delete cascade, -- Multi-bike support
   product_id uuid references products(id) on delete set null,
   product_name text not null, -- Cached in case product is deleted
   product_sku text,
@@ -9849,10 +9922,16 @@ begin
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'updated_at') then
     alter table mechanic_job_items add column updated_at timestamp with time zone not null default now();
   end if;
+  -- Multi-bike support: add job_bike_id column
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'job_bike_id') then
+    alter table mechanic_job_items add column job_bike_id uuid references mechanic_job_bikes(id) on delete cascade;
+    raise notice '✅ Added job_bike_id column to mechanic_job_items';
+  end if;
 end $$;
 
 create index if not exists idx_mechanic_job_items_job_id on mechanic_job_items(job_id);
 create index if not exists idx_mechanic_job_items_product_id on mechanic_job_items(product_id) where product_id is not null;
+create index if not exists idx_mechanic_job_items_job_bike on mechanic_job_items(job_bike_id) where job_bike_id is not null;
 
 -- ✅ PHASE 1: Add columns to unify items and services
 -- item_type: 'product' (from products table), 'service' (from labor/services), 'adhoc' (manual entry)
@@ -9895,6 +9974,7 @@ create table if not exists mechanic_job_tasks (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   job_id uuid not null references mechanic_jobs(id) on delete cascade,
+  job_bike_id uuid references mechanic_job_bikes(id) on delete cascade, -- Multi-bike support
   
   -- Link to parent product/service (PRIMARY KEY BINDING)
   -- NULL = standalone ad-hoc task
@@ -10008,6 +10088,11 @@ begin
     update mechanic_job_tasks set updated_at = now() where updated_at is null;
     alter table mechanic_job_tasks alter column updated_at set not null;
     alter table mechanic_job_tasks alter column updated_at set default now();
+  end if;
+  -- Multi-bike support: add job_bike_id column
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'job_bike_id') then
+    alter table mechanic_job_tasks add column job_bike_id uuid references mechanic_job_bikes(id) on delete cascade;
+    raise notice '✅ Added job_bike_id column to mechanic_job_tasks';
   end if;
   
   -- ============================================================
@@ -16065,6 +16150,60 @@ create policy "mechanic_job_tasks_delete" on mechanic_job_tasks
   for delete
   to authenticated
   using (tenant_id = public.user_tenant_id());
+
+-- ============================================================
+-- FUNCTION: Recalculate per-bike costs (Multi-bike support)
+-- Called when items change to update the parent job_bike costs
+-- ============================================================
+create or replace function public.recalculate_job_bike_costs()
+returns trigger
+security definer
+language plpgsql
+as $$
+declare
+  v_job_bike_id uuid;
+  v_parts_cost numeric(12,2);
+  v_labor_cost numeric(12,2);
+begin
+  -- Get the job_bike_id from the changed item
+  if TG_OP = 'DELETE' then
+    v_job_bike_id := OLD.job_bike_id;
+  else
+    v_job_bike_id := NEW.job_bike_id;
+  end if;
+  
+  -- Skip if no job_bike_id (legacy single-bike jobs)
+  if v_job_bike_id is null then
+    return coalesce(NEW, OLD);
+  end if;
+  
+  -- Calculate costs for this bike
+  select 
+    coalesce(sum(case when item_type = 'product' or item_type is null then total_price else 0 end), 0),
+    coalesce(sum(case when item_type = 'service' then total_price else 0 end), 0)
+  into v_parts_cost, v_labor_cost
+  from mechanic_job_items
+  where job_bike_id = v_job_bike_id;
+  
+  -- Update the job_bike record
+  update mechanic_job_bikes
+  set 
+    parts_cost = v_parts_cost,
+    labor_cost = v_labor_cost,
+    subtotal = v_parts_cost + v_labor_cost,
+    updated_at = now()
+  where id = v_job_bike_id;
+  
+  return coalesce(NEW, OLD);
+end;
+$$;
+
+-- Trigger to recalculate bike costs when items change
+drop trigger if exists trg_mechanic_job_items_bike_costs on mechanic_job_items;
+create trigger trg_mechanic_job_items_bike_costs
+  after insert or update or delete on mechanic_job_items
+  for each row
+  execute function public.recalculate_job_bike_costs();
 
 -- Mechanic Job Task Preferences: User-specific (no tenant check needed, user_id is sufficient)
 alter table mechanic_job_task_preferences enable row level security;
