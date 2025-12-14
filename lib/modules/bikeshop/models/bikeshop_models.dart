@@ -1089,6 +1089,10 @@ class MechanicJobBike {
   final String bikeId;
   final int orderIndex;
   
+  // Per-bike status (each bike can have independent status)
+  final String? statusId;
+  JobStatusCustom? customStatus; // Runtime: loaded status data (not persisted directly)
+  
   // Per-bike work details
   final String? diagnosis;
   final String? workRequested;     // Solicitud del cliente
@@ -1121,6 +1125,8 @@ class MechanicJobBike {
     required this.jobId,
     required this.bikeId,
     this.orderIndex = 0,
+    this.statusId,
+    this.customStatus,
     this.diagnosis,
     this.workRequested,
     this.workPerformed,
@@ -1146,12 +1152,20 @@ class MechanicJobBike {
       bike = Bike.fromJson(json['bike'] as Map<String, dynamic>);
     }
     
+    // Parse nested status if available (from join)
+    JobStatusCustom? customStatus;
+    if (json['status'] != null && json['status'] is Map) {
+      customStatus = JobStatusCustom.fromJson(json['status'] as Map<String, dynamic>);
+    }
+    
     return MechanicJobBike(
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
       jobId: json['job_id']?.toString() ?? '',
       bikeId: json['bike_id']?.toString() ?? '',
       orderIndex: json['order_index'] as int? ?? 0,
+      statusId: json['status_id']?.toString(),
+      customStatus: customStatus,
       diagnosis: json['diagnosis'] as String?,
       workRequested: json['work_requested'] as String?,
       workPerformed: json['work_performed'] as String?,
@@ -1179,6 +1193,7 @@ class MechanicJobBike {
       'job_id': jobId,
       'bike_id': bikeId,
       'order_index': orderIndex,
+      if (statusId != null) 'status_id': statusId,
       'diagnosis': diagnosis,
       'work_requested': workRequested,
       'work_performed': workPerformed,
@@ -1198,6 +1213,8 @@ class MechanicJobBike {
     String? jobId,
     String? bikeId,
     int? orderIndex,
+    String? statusId,
+    JobStatusCustom? customStatus,
     String? diagnosis,
     String? workRequested,
     String? workPerformed,
@@ -1218,6 +1235,8 @@ class MechanicJobBike {
       jobId: jobId ?? this.jobId,
       bikeId: bikeId ?? this.bikeId,
       orderIndex: orderIndex ?? this.orderIndex,
+      statusId: statusId ?? this.statusId,
+      customStatus: customStatus ?? this.customStatus,
       diagnosis: diagnosis ?? this.diagnosis,
       workRequested: workRequested ?? this.workRequested,
       workPerformed: workPerformed ?? this.workPerformed,

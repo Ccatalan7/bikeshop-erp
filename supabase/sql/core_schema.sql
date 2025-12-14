@@ -9804,13 +9804,16 @@ end $$;
 -- TABLE: mechanic_job_bikes (MULTI-BIKE SUPPORT)
 -- ============================================================
 -- Links bikes to jobs with per-bike details
--- Each bike in a job has its own: diagnosis, items, notes, costs
+-- Each bike in a job has its own: diagnosis, items, notes, costs, STATUS
 create table if not exists mechanic_job_bikes (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   job_id uuid not null references mechanic_jobs(id) on delete cascade,
   bike_id uuid not null references bikes(id) on delete cascade,
   order_index integer not null default 0,
+  
+  -- Per-bike status (each bike can have independent status)
+  status_id uuid references job_statuses(id) on delete set null,
   
   -- Per-bike work details
   diagnosis text,
@@ -9836,10 +9839,14 @@ create table if not exists mechanic_job_bikes (
   updated_at timestamp with time zone not null default now()
 );
 
+-- Add status_id column if not exists (for existing tables)
+alter table mechanic_job_bikes add column if not exists status_id uuid references job_statuses(id) on delete set null;
+
 -- Indexes for mechanic_job_bikes
 create index if not exists idx_mechanic_job_bikes_tenant on mechanic_job_bikes(tenant_id);
 create index if not exists idx_mechanic_job_bikes_job on mechanic_job_bikes(job_id);
 create index if not exists idx_mechanic_job_bikes_bike on mechanic_job_bikes(bike_id);
+create index if not exists idx_mechanic_job_bikes_status on mechanic_job_bikes(status_id);
 
 -- Unique constraint: each bike can only appear once per job
 do $$ begin

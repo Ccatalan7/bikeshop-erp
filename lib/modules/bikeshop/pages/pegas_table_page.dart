@@ -55,17 +55,20 @@ class _PegasTablePageState extends State<PegasTablePage>
   Map<String, String> _productImages = {};
   Map<String, List<MechanicJobBike>> _jobBikesMap = {}; // Multi-bike support
 
+  // Expanded rows (multi-bike display)
+  final Set<String> _expandedJobIds = {};
+
   bool _isLoading = true;
   bool _needsRefresh = false;
   Timer? _reloadDebounceTimer;
   String _searchTerm = '';
-  
+
   // Track when we do local updates to suppress unnecessary reloads
   // Grace period must be > realtime latency (~100-500ms) + debounce time (500ms) + network jitter
   // Using 3000ms to be extra safe
   DateTime? _lastLocalUpdate;
   static const Duration _localUpdateGracePeriod = Duration(milliseconds: 3000);
-  
+
   // Track number of active local operations (prevents reload while ANY operation is in progress)
   int _activeLocalOperations = 0;
 
@@ -89,7 +92,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   // Filters
   String _statusFilter = 'active';
-  final Set<String> _customStatusFilter = {}; // Uses status IDs (UUIDs) not legacy enum
+  final Set<String> _customStatusFilter =
+      {}; // Uses status IDs (UUIDs) not legacy enum
   final Set<JobPriority> _priorityFilter = {};
   bool _showOnlyOverdue = false;
   bool _showOnlyUnpaid = false;
@@ -146,10 +150,10 @@ class _PegasTablePageState extends State<PegasTablePage>
     _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
     _customerService = Provider.of<CustomerService>(context, listen: false);
     _jobStatusService = Provider.of<JobStatusService>(context, listen: false);
-    
+
     // Listen to BikeshopService changes (realtime updates for jobs AND invoices)
     _bikeshopService.addListener(_onBikeshopServiceChanged);
-    
+
     _initializeColumns();
     _loadColumnOrder(); // Load saved column order
     _loadListPaneWidth();
@@ -160,44 +164,51 @@ class _PegasTablePageState extends State<PegasTablePage>
   void _onBikeshopServiceChanged() {
     // Skip reload if we have active local operations in progress
     if (_activeLocalOperations > 0) {
-      debugPrint('🔇 [PegasTablePage] Skipping reload - $_activeLocalOperations active operation(s) in progress');
+      debugPrint(
+          '🔇 [PegasTablePage] Skipping reload - $_activeLocalOperations active operation(s) in progress');
       return;
     }
-    
+
     // Skip reload if we just did a local update (optimistic update already applied)
     if (_lastLocalUpdate != null) {
       final elapsed = DateTime.now().difference(_lastLocalUpdate!);
       if (elapsed < _localUpdateGracePeriod) {
-        debugPrint('🔇 [PegasTablePage] Skipping reload - local update ${elapsed.inMilliseconds}ms ago (grace: ${_localUpdateGracePeriod.inMilliseconds}ms)');
+        debugPrint(
+            '🔇 [PegasTablePage] Skipping reload - local update ${elapsed.inMilliseconds}ms ago (grace: ${_localUpdateGracePeriod.inMilliseconds}ms)');
         return;
       }
-      debugPrint('🔔 [PegasTablePage] Grace period expired (${elapsed.inMilliseconds}ms), reloading...');
+      debugPrint(
+          '🔔 [PegasTablePage] Grace period expired (${elapsed.inMilliseconds}ms), reloading...');
     } else {
-      debugPrint('🔔 [PegasTablePage] BikeshopService notified (external change), reloading data...');
+      debugPrint(
+          '🔔 [PegasTablePage] BikeshopService notified (external change), reloading data...');
     }
-    
+
     // Invalidate cache to force fresh data fetch
     _bikeshopService.invalidateJobsCache();
     _loadData();
   }
-  
+
   /// Mark that we're starting a local operation (to suppress unnecessary reloads)
   void _startLocalOperation() {
     _activeLocalOperations++;
     _lastLocalUpdate = DateTime.now();
-    debugPrint('📌 [PegasTablePage] Started local operation #$_activeLocalOperations at $_lastLocalUpdate');
+    debugPrint(
+        '📌 [PegasTablePage] Started local operation #$_activeLocalOperations at $_lastLocalUpdate');
   }
-  
+
   /// Mark that a local operation has completed
   void _endLocalOperation() {
     if (_activeLocalOperations > 0) {
       _activeLocalOperations--;
     }
     _lastLocalUpdate = DateTime.now();
-    debugPrint('📌 [PegasTablePage] Ended local operation, $_activeLocalOperations remaining');
+    debugPrint(
+        '📌 [PegasTablePage] Ended local operation, $_activeLocalOperations remaining');
   }
-  
+
   /// Legacy method - calls _startLocalOperation for backward compatibility
+  // ignore: unused_element
   void _markLocalUpdate() {
     _lastLocalUpdate = DateTime.now();
     debugPrint('📌 [PegasTablePage] Marked local update at $_lastLocalUpdate');
@@ -550,8 +561,9 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     var filtered = _jobs.where((job) {
       // Get the job's phase from custom status, or infer from legacy status
-      final jobPhase = job.customStatus?.phase ?? _inferPhaseFromLegacyStatus(job.status);
-      
+      final jobPhase =
+          job.customStatus?.phase ?? _inferPhaseFromLegacyStatus(job.status);
+
       // Smart filter (Activos, Completados, etc.) - uses phase
       switch (_statusFilter) {
         case 'active':
@@ -562,7 +574,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           break;
         case 'completed':
           // Completed = only complete phase with finalizado status
-          if (jobPhase != StatusPhase.complete || 
+          if (jobPhase != StatusPhase.complete ||
               job.status == JobStatus.entregado ||
               job.status == JobStatus.cancelado) {
             return false;
@@ -794,7 +806,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 onStatusChange: (newStatus) async {
                   // Start local operation to suppress reload from service notification
                   _startLocalOperation();
-                  
+
                   // Optimistic update
                   setState(() {
                     final index =
@@ -1267,7 +1279,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         final tableWidth = totalColumnsWidth > constraints.maxWidth
             ? totalColumnsWidth
             : constraints.maxWidth;
-        
+
         // Check if horizontal scrolling is needed
         final needsHorizontalScroll = totalColumnsWidth > constraints.maxWidth;
 
@@ -1657,38 +1669,56 @@ class _PegasTablePageState extends State<PegasTablePage>
     final bike = _bikes[job.bikeId];
     final jobBikes = _jobBikesMap[job.id]; // Multi-bike data
 
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedJob = job;
-        });
-        _loadJobDetails(job);
-      },
-      child: Container(
-        width: tableWidth,
-        height: 60,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
-              : null,
-          border: Border(
-            bottom: BorderSide(
-              color: Theme.of(context).dividerColor.withOpacity(0.5),
+    final jobId = job.id;
+    final isExpanded = jobId != null && _expandedJobIds.contains(jobId);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: () {
+            setState(() {
+              _selectedJob = job;
+            });
+            _loadJobDetails(job);
+          },
+          child: Container(
+            width: tableWidth,
+            height: 60,
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? Theme.of(context)
+                      .colorScheme
+                      .primaryContainer
+                      .withOpacity(0.3)
+                  : null,
+              border: Border(
+                bottom: BorderSide(
+                  color: Theme.of(context).dividerColor.withOpacity(0.5),
+                ),
+              ),
+            ),
+            child: Row(
+              children: _displayColumns.map((col) {
+                return _buildDataCell(col, job, customer, bike, jobBikes);
+              }).toList(),
             ),
           ),
         ),
-        child: Row(
-          children: _displayColumns.map((col) {
-            return _buildDataCell(col, job, customer, bike, jobBikes);
-          }).toList(),
-        ),
-      ),
+        if (isExpanded && jobBikes != null && jobBikes.isNotEmpty)
+          _buildExpandedJobBikes(
+            job: job,
+            customer: customer,
+            jobBikes: jobBikes,
+            tableWidth: tableWidth,
+          ),
+      ],
     );
   }
 
-  Widget _buildDataCell(
-      ColumnConfig col, MechanicJob job, Customer? customer, Bike? bike, List<MechanicJobBike>? jobBikes) {
-    final content = _getCellContent(col.id, job, customer, bike, jobBikes);
+  Widget _buildDataCell(ColumnConfig col, MechanicJob job, Customer? customer,
+      Bike? bike, List<MechanicJobBike>? jobBikes, {MechanicJobBike? jobBike}) {
+    final content = _getCellContent(col.id, job, customer, bike, jobBikes, jobBike: jobBike);
 
     if (col.maxWidth != null && col.maxWidth == col.width) {
       // Fixed width column
@@ -1710,10 +1740,19 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
   }
 
-  Widget _getCellContent(
-      String columnId, MechanicJob job, Customer? customer, Bike? bike, List<MechanicJobBike>? jobBikes) {
+  Widget _getCellContent(String columnId, MechanicJob job, Customer? customer,
+      Bike? bike, List<MechanicJobBike>? jobBikes, {MechanicJobBike? jobBike}) {
+    // Determine if this is a multi-bike summary row (main row for multi-bike job)
+    final isMultiBikeSummary = jobBikes != null && jobBikes.length > 1 && jobBike == null;
+    // Determine if this is showing per-bike detail (expanded row)
+    final isPerBikeDetail = jobBike != null;
+    
     switch (columnId) {
       case 'checkbox':
+        // Per-bike detail: hide checkbox (selection is at job level)
+        if (isPerBikeDetail) {
+          return const SizedBox.shrink();
+        }
         return Checkbox(
           value: _selectedJobIds.contains(job.id),
           onChanged: (checked) {
@@ -1862,92 +1901,21 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'bike':
-        // Multi-bike support: show all bikes or just primary bike
-        final hasMultipleBikes = jobBikes != null && jobBikes.length > 1;
+        // Multi-bike modes:
+        // 1. isMultiBikeSummary: Main row shows "X Bicicletas" with expand button
+        // 2. isPerBikeDetail: Expanded row shows specific bike name
+        // 3. Single bike: Normal display
         
-        if (hasMultipleBikes) {
-          // Show all bikes as a list
-          return InkWell(
-            onTap: () => _showBikeSelectorDialog(job, customer),
-            child: Row(
-              children: [
-                // Stacked bike icons to indicate multiple bikes
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Image.asset(
-                      'assets/icons/mtb_bike_v3.png',
-                      width: 28,
-                      height: 28,
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.pedal_bike,
-                        size: 28,
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
-                      ),
-                    ),
-                    Positioned(
-                      right: -8,
-                      top: -4,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${jobBikes.length}',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      for (int i = 0; i < jobBikes.length && i < 2; i++)
-                        Text(
-                          jobBikes[i].bike?.displayName ?? _bikes[jobBikes[i].bikeId]?.displayName ?? 'Bici ${i + 1}',
-                          style: TextStyle(
-                            fontSize: i == 0 ? 13 : 11,
-                            color: i == 0 
-                                ? null 
-                                : Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      if (jobBikes.length > 2)
-                        Text(
-                          '+${jobBikes.length - 2} más',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
+        final jobId = job.id;
+        final isExpanded = jobId != null && _expandedJobIds.contains(jobId);
         
-        // Single bike (legacy or single-bike job)
-        final bikeName = bike?.displayName ?? 'N/A';
-        final bikeImageUrl = bike?.imageUrl;
-        return InkWell(
-          onTap: () => _showBikeSelectorDialog(job, customer),
-          child: Row(
+        // Per-bike detail row - show just the specific bike name
+        if (isPerBikeDetail) {
+          final bikeName = bike?.displayName ?? 'Sin nombre';
+          final bikeImageUrl = bike?.imageUrl;
+          
+          return Row(
             children: [
-              // MTB bike icon from local asset
               Image.asset(
                 'assets/icons/mtb_bike_v3.png',
                 width: 35,
@@ -1959,7 +1927,6 @@ class _PegasTablePageState extends State<PegasTablePage>
                 ),
               ),
               const SizedBox(width: 6),
-              // Bike image thumbnail if available
               if (bikeImageUrl != null) ...[
                 GestureDetector(
                   onTap: () => _showBikeImageModal(bikeImageUrl),
@@ -1984,9 +1951,118 @@ class _PegasTablePageState extends State<PegasTablePage>
               Expanded(
                 child: Text(
                   bikeName,
-                  style: const TextStyle(
-                    fontSize: 13,
+                  style: const TextStyle(fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          );
+        }
+        
+        // Multi-bike summary row - show count and expand button
+        if (isMultiBikeSummary) {
+          final bikeCount = jobBikes.length;
+          
+          return InkWell(
+            onTap: () {
+              setState(() {
+                if (_expandedJobIds.contains(jobId)) {
+                  _expandedJobIds.remove(jobId);
+                } else {
+                  _expandedJobIds.add(jobId!);
+                }
+              });
+            },
+            child: Row(
+              children: [
+                Image.asset(
+                  'assets/icons/mtb_bike_v3.png',
+                  width: 35,
+                  height: 35,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.pedal_bike,
+                    size: 35,
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
                   ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '$bikeCount Bicicletas',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  tooltip: isExpanded ? 'Contraer' : 'Expandir',
+                  icon: Icon(
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      if (_expandedJobIds.contains(jobId)) {
+                        _expandedJobIds.remove(jobId);
+                      } else {
+                        _expandedJobIds.add(jobId!);
+                      }
+                    });
+                  },
+                ),
+              ],
+            ),
+          );
+        }
+        
+        // Single bike - normal display
+        final bikeName = bike?.displayName ?? 'N/A';
+        final bikeImageUrl = bike?.imageUrl;
+
+        return InkWell(
+          onTap: () => _showBikeSelectorDialog(job, customer),
+          child: Row(
+            children: [
+              Image.asset(
+                'assets/icons/mtb_bike_v3.png',
+                width: 35,
+                height: 35,
+                errorBuilder: (context, error, stackTrace) => Icon(
+                  Icons.pedal_bike,
+                  size: 35,
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(width: 6),
+              if (bikeImageUrl != null) ...[
+                GestureDetector(
+                  onTap: () => _showBikeImageModal(bikeImageUrl),
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      image: DecorationImage(
+                        image: NetworkImage(bikeImageUrl),
+                        fit: BoxFit.cover,
+                      ),
+                      border: Border.all(
+                        color: Theme.of(context).dividerColor,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Expanded(
+                child: Text(
+                  bikeName,
+                  style: const TextStyle(fontSize: 13),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -2064,7 +2140,54 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'state':
-        // Clickable state badge - uses custom status color and name
+        // Per-bike detail: show per-bike status (independent per bike)
+        if (isPerBikeDetail) {
+          // Use per-bike status if set, otherwise fall back to job status
+          final bikeStatus = jobBike.customStatus;
+          final statusColor = bikeStatus != null 
+              ? bikeStatus.colorValue 
+              : _getJobStatusColor(job);
+          final statusName = bikeStatus?.name ?? job.statusDisplayName;
+          return InkWell(
+            onTap: () => _showBikeStatusMenu(job, jobBike),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: statusColor.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: statusColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    statusName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        
+        // Single bike job: show job-level status
         final statusColor = _getJobStatusColor(job);
         final statusName = job.statusDisplayName;
         return InkWell(
@@ -2143,7 +2266,93 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'diagnosis':
-        // Clickable job details cell with inline edit popup for all text fields
+        // Per-bike detail: show per-bike data from MechanicJobBike
+        if (isPerBikeDetail) {
+          final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
+          return _JobDetailsCell(
+            customerName: customer?.name,
+            bikeName: bike?.displayName,
+            clientRequest: jobBike.workRequested,
+            diagnosis: jobBike.diagnosis,
+            workPerformed: jobBike.workPerformed,
+            notes: jobBike.technicianNotes,
+            job: job,
+            invoice: invoice,
+            jobBike: jobBike, // Pass the jobBike for per-bike editing
+            onSave: ({
+              String? clientRequest,
+              String? diagnosis,
+              String? workPerformed,
+              String? notes,
+            }) async {
+              // Start local operation to suppress reload from service notification
+              _startLocalOperation();
+
+              // Helper to get the new value: null means unchanged, empty string means clear
+              String? resolveField(String? newValue, String? oldValue) {
+                if (newValue == null) return oldValue; // Unchanged
+                if (newValue.isEmpty) return null; // Cleared
+                return newValue; // New value
+              }
+
+              // Create updated MechanicJobBike with new values
+              final updatedJobBike = MechanicJobBike(
+                id: jobBike.id,
+                tenantId: jobBike.tenantId,
+                jobId: jobBike.jobId,
+                bikeId: jobBike.bikeId,
+                orderIndex: jobBike.orderIndex,
+                workRequested: resolveField(clientRequest, jobBike.workRequested),
+                diagnosis: resolveField(diagnosis, jobBike.diagnosis),
+                workPerformed: resolveField(workPerformed, jobBike.workPerformed),
+                technicianNotes: resolveField(notes, jobBike.technicianNotes),
+                partsCost: jobBike.partsCost,
+                laborCost: jobBike.laborCost,
+                subtotal: jobBike.subtotal,
+                isWarrantyWork: jobBike.isWarrantyWork,
+                requiresApproval: jobBike.requiresApproval,
+                approvedByCustomer: jobBike.approvedByCustomer,
+                approvedAt: jobBike.approvedAt,
+                imageUrls: jobBike.imageUrls,
+                bike: jobBike.bike,
+                createdAt: jobBike.createdAt,
+                updatedAt: DateTime.now(),
+              );
+
+              // Optimistic update in local cache
+              final jobId = job.id;
+              if (jobId != null && _jobBikesMap.containsKey(jobId)) {
+                final bikes = _jobBikesMap[jobId]!;
+                final index = bikes.indexWhere((b) => b.id == jobBike.id);
+                if (index != -1) {
+                  setState(() {
+                    bikes[index] = updatedJobBike;
+                  });
+                }
+              }
+
+              // Save in background
+              try {
+                await _bikeshopService.updateJobBike(updatedJobBike);
+              } catch (e) {
+                // Revert on error
+                if (mounted) {
+                  await _loadData();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error al guardar detalles: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              } finally {
+                _endLocalOperation();
+              }
+            },
+          );
+        }
+        
+        // Single bike: show job-level data (existing behavior)
         final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
         return _JobDetailsCell(
           customerName: customer?.name,
@@ -2162,7 +2371,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           }) async {
             // Start local operation to suppress reload from service notification
             _startLocalOperation();
-            
+
             // Helper to get the new value: null means unchanged, empty string means clear
             String? resolveField(String? newValue, String? oldValue) {
               if (newValue == null) return oldValue; // Unchanged
@@ -2243,7 +2452,19 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'total':
-        // Show invoice total if exists, otherwise job total cost
+        // Per-bike detail: show per-bike subtotal
+        if (isPerBikeDetail) {
+          return Text(
+            NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                .format(jobBike.subtotal),
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          );
+        }
+        
+        // Show invoice total if exists, otherwise job total cost (for summary and single bike)
         final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
         final displayTotal = invoice?.total ?? job.totalCost;
         return Text(
@@ -2451,8 +2672,76 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
   }
 
+  Widget _buildJobBikeSubRow({
+    required MechanicJob job,
+    required Customer? customer,
+    required MechanicJobBike jb,
+    required int index,
+    required int total,
+    required double tableWidth,
+  }) {
+    // Get the bike for this job-bike entry
+    final bike = jb.bike ?? _bikes[jb.bikeId];
+    final isSelected = _selectedJob?.id == job.id;
+
+    // Use the EXACT same row structure as main row but with distinct background
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedJob = job;
+        });
+        _loadJobDetails(job);
+      },
+      child: Container(
+        width: tableWidth,
+        height: 60,
+        decoration: BoxDecoration(
+          // Slightly different background for expanded sub-rows
+          color: isSelected
+              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+              : Theme.of(context).colorScheme.surfaceContainerLow,
+          border: Border(
+            bottom: BorderSide(
+              color: Theme.of(context).dividerColor.withOpacity(0.5),
+            ),
+          ),
+        ),
+        child: Row(
+          // Use the EXACT same _buildDataCell method but with jobBike for per-bike data
+          children: _displayColumns.map((col) {
+            return _buildDataCell(col, job, customer, bike, null, jobBike: jb);
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpandedJobBikes({
+    required MechanicJob job,
+    required Customer? customer,
+    required List<MechanicJobBike> jobBikes,
+    required double tableWidth,
+  }) {
+    // Show ALL bikes as expanded sub-rows (main row is now a summary)
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < jobBikes.length; i++)
+          _buildJobBikeSubRow(
+            job: job,
+            customer: customer,
+            jb: jobBikes[i],
+            index: i + 1, // Display as "Bici 1", "Bici 2", etc.
+            total: jobBikes.length,
+            tableWidth: tableWidth,
+          ),
+      ],
+    );
+  }
+
   // ========== STATUS FILTER BUTTON ==========
 
+  // ignore: unused_element
   Color _getStatusColorForFilter(JobStatus status) {
     switch (status) {
       case JobStatus.pendiente:
@@ -2615,23 +2904,30 @@ class _PegasTablePageState extends State<PegasTablePage>
                               child: ListenableBuilder(
                                 listenable: _jobStatusService,
                                 builder: (context, _) {
-                                  final customStatuses = _jobStatusService.activeStatuses;
+                                  final customStatuses =
+                                      _jobStatusService.activeStatuses;
                                   if (customStatuses.isEmpty) {
                                     // Fallback to legacy enum if no custom statuses
                                     return Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: JobStatus.values.map((status) {
-                                        final statusCode = status.name.toUpperCase();
-                                        final isSelected = _customStatusFilter.contains(statusCode);
-                                        final statusColor = _getLegacyStatusColor(status);
+                                        final statusCode =
+                                            status.name.toUpperCase();
+                                        final isSelected = _customStatusFilter
+                                            .contains(statusCode);
+                                        final statusColor =
+                                            _getLegacyStatusColor(status);
 
                                         return InkWell(
                                           onTap: () {
                                             setState(() {
-                                              if (_customStatusFilter.contains(statusCode)) {
-                                                _customStatusFilter.remove(statusCode);
+                                              if (_customStatusFilter
+                                                  .contains(statusCode)) {
+                                                _customStatusFilter
+                                                    .remove(statusCode);
                                               } else {
-                                                _customStatusFilter.add(statusCode);
+                                                _customStatusFilter
+                                                    .add(statusCode);
                                               }
                                             });
                                             setDialogState(() {});
@@ -2649,17 +2945,21 @@ class _PegasTablePageState extends State<PegasTablePage>
                                                     color: isSelected
                                                         ? statusColor
                                                         : Colors.transparent,
-                                                    borderRadius: BorderRadius.circular(4),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            4),
                                                     border: Border.all(
                                                       color: isSelected
                                                           ? statusColor
-                                                          : Colors.grey.shade400,
+                                                          : Colors
+                                                              .grey.shade400,
                                                       width: 1.5,
                                                     ),
                                                   ),
                                                   child: isSelected
                                                       ? const Icon(Icons.check,
-                                                          size: 14, color: Colors.white)
+                                                          size: 14,
+                                                          color: Colors.white)
                                                       : null,
                                                 ),
                                                 const SizedBox(width: 12),
@@ -2688,14 +2988,19 @@ class _PegasTablePageState extends State<PegasTablePage>
                                       }).toList(),
                                     );
                                   }
-                                  
+
                                   // Use custom statuses grouped by phase
                                   return Column(
                                     mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      for (final phase in StatusPhase.values) ...[
-                                        if (_jobStatusService.statusesByPhase[phase]?.isNotEmpty ?? false) ...[
+                                      for (final phase
+                                          in StatusPhase.values) ...[
+                                        if (_jobStatusService
+                                                .statusesByPhase[phase]
+                                                ?.isNotEmpty ??
+                                            false) ...[
                                           Padding(
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 16, vertical: 8),
@@ -2709,25 +3014,36 @@ class _PegasTablePageState extends State<PegasTablePage>
                                               ),
                                             ),
                                           ),
-                                          ...(_jobStatusService.statusesByPhase[phase] ?? []).map((status) {
-                                            final isSelected = _customStatusFilter.contains(status.id);
-                                            final statusColor = status.colorValue;
+                                          ...(_jobStatusService
+                                                      .statusesByPhase[phase] ??
+                                                  [])
+                                              .map((status) {
+                                            final isSelected =
+                                                _customStatusFilter
+                                                    .contains(status.id);
+                                            final statusColor =
+                                                status.colorValue;
 
                                             return InkWell(
                                               onTap: () {
                                                 setState(() {
-                                                  if (_customStatusFilter.contains(status.id)) {
-                                                    _customStatusFilter.remove(status.id);
+                                                  if (_customStatusFilter
+                                                      .contains(status.id)) {
+                                                    _customStatusFilter
+                                                        .remove(status.id);
                                                   } else {
-                                                    _customStatusFilter.add(status.id!);
+                                                    _customStatusFilter
+                                                        .add(status.id!);
                                                   }
                                                 });
                                                 setDialogState(() {});
                                                 _applyFiltersAndSort();
                                               },
                                               child: Padding(
-                                                padding: const EdgeInsets.symmetric(
-                                                    horizontal: 16, vertical: 10),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 10),
                                                 child: Row(
                                                   children: [
                                                     Container(
@@ -2736,18 +3052,25 @@ class _PegasTablePageState extends State<PegasTablePage>
                                                       decoration: BoxDecoration(
                                                         color: isSelected
                                                             ? statusColor
-                                                            : Colors.transparent,
-                                                        borderRadius: BorderRadius.circular(4),
+                                                            : Colors
+                                                                .transparent,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(4),
                                                         border: Border.all(
                                                           color: isSelected
                                                               ? statusColor
-                                                              : Colors.grey.shade400,
+                                                              : Colors.grey
+                                                                  .shade400,
                                                           width: 1.5,
                                                         ),
                                                       ),
                                                       child: isSelected
-                                                          ? const Icon(Icons.check,
-                                                              size: 14, color: Colors.white)
+                                                          ? const Icon(
+                                                              Icons.check,
+                                                              size: 14,
+                                                              color:
+                                                                  Colors.white)
                                                           : null,
                                                     ),
                                                     const SizedBox(width: 12),
@@ -2872,7 +3195,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     if (confirmed == true && mounted) {
       // Start local operation to suppress reload from realtime notifications
       _startLocalOperation();
-      
+
       // Optimistic update
       setState(() {
         final index = _jobs.indexWhere((j) => j.id == job.id);
@@ -2972,7 +3295,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     if (confirmed == true && mounted) {
       // Start local operation to suppress reload from realtime notifications
       _startLocalOperation();
-      
+
       // Optimistic update - remove from list immediately
       final deletedJob = job;
       setState(() {
@@ -3025,7 +3348,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       MechanicJob job, JobStatusCustom newStatus) async {
     // Start local operation to suppress reload from realtime notifications
     _startLocalOperation();
-    
+
     // Map custom status code to legacy JobStatus for backward compatibility
     final legacyStatus = _mapCodeToLegacyStatus(newStatus.code);
     final oldStatusId = job.statusId;
@@ -3048,16 +3371,17 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Update in background
     try {
-      final success = await _jobStatusService.updateJobStatus(job.id!, newStatus.id!);
-      
+      final success =
+          await _jobStatusService.updateJobStatus(job.id!, newStatus.id!);
+
       if (!success) {
         // Update returned false - revert the optimistic update
         throw Exception('Error al guardar en la base de datos');
       }
-      
+
       // Also invalidate bikeshop service cache to ensure fresh data on next load
       _bikeshopService.invalidateJobsCache();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -3068,7 +3392,8 @@ class _PegasTablePageState extends State<PegasTablePage>
       }
     } catch (e) {
       // Revert on error
-      debugPrint('❌ [_updateJobToCustomStatus] Error: $e - reverting optimistic update');
+      debugPrint(
+          '❌ [_updateJobToCustomStatus] Error: $e - reverting optimistic update');
       if (mounted) {
         setState(() {
           final index = _jobs.indexWhere((j) => j.id == job.id);
@@ -3090,6 +3415,89 @@ class _PegasTablePageState extends State<PegasTablePage>
       }
     } finally {
       // Always end the local operation, whether success or failure
+      _endLocalOperation();
+    }
+  }
+
+  /// Show status menu for a specific bike in a multi-bike job
+  void _showBikeStatusMenu(MechanicJob job, MechanicJobBike jobBike) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => _StatusManagerDialog(
+        job: job,
+        jobStatusService: _jobStatusService,
+        onStatusSelected: (status) async {
+          Navigator.pop(dialogContext);
+          await _updateJobBikeToCustomStatus(job, jobBike, status);
+        },
+      ),
+    );
+  }
+
+  /// Update the status of a specific bike in a multi-bike job
+  Future<void> _updateJobBikeToCustomStatus(
+      MechanicJob job, MechanicJobBike jobBike, JobStatusCustom newStatus) async {
+    // Start local operation to suppress reload from realtime notifications
+    _startLocalOperation();
+
+    final oldStatusId = jobBike.statusId;
+    final oldCustomStatus = jobBike.customStatus;
+
+    // Create updated MechanicJobBike with new status
+    final updatedJobBike = jobBike.copyWith(
+      statusId: newStatus.id,
+      customStatus: newStatus,
+    );
+
+    // Optimistic update in local cache
+    final jobId = job.id;
+    if (jobId != null && _jobBikesMap.containsKey(jobId)) {
+      final bikes = _jobBikesMap[jobId]!;
+      final index = bikes.indexWhere((b) => b.id == jobBike.id);
+      if (index != -1) {
+        setState(() {
+          bikes[index] = updatedJobBike;
+        });
+      }
+    }
+
+    // Save in background
+    try {
+      await _bikeshopService.updateJobBike(updatedJobBike);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Estado de bicicleta actualizado a ${newStatus.name}'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert on error
+      debugPrint(
+          '❌ [_updateJobBikeToCustomStatus] Error: $e - reverting optimistic update');
+      if (jobId != null && _jobBikesMap.containsKey(jobId)) {
+        final bikes = _jobBikesMap[jobId]!;
+        final index = bikes.indexWhere((b) => b.id == jobBike.id);
+        if (index != -1) {
+          setState(() {
+            bikes[index] = jobBike.copyWith(
+              statusId: oldStatusId,
+              customStatus: oldCustomStatus,
+            );
+          });
+        }
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
       _endLocalOperation();
     }
   }
@@ -3387,7 +3795,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Future<void> _editDeadline(MechanicJob job) async {
     bool clearDeadline = false;
-    
+
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: job.deadline ?? DateTime.now(),
@@ -3428,7 +3836,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Start local operation to suppress reload from service notification
     _startLocalOperation();
-    
+
     // Optimistic update - update UI immediately
     setState(() {
       final index = _jobs.indexWhere((j) => j.id == job.id);
@@ -3441,54 +3849,6 @@ class _PegasTablePageState extends State<PegasTablePage>
           bikeId: job.bikeId,
           arrivalDate: job.arrivalDate,
           deadline: newDeadline, // NEW DEADLINE (or null)
-          startedAt: job.startedAt,
-          completedAt: job.completedAt,
-          deliveredAt: job.deliveredAt,
-          status: job.status,
-          priority: job.priority,
-          clientRequest: job.clientRequest,
-          diagnosis: job.diagnosis,
-          workPerformed: job.workPerformed,
-          notes: job.notes,
-          assignedTo: job.assignedTo,
-          assignedTechnicianName: job.assignedTechnicianName,
-          servicePackageId: job.servicePackageId,
-            estimatedCost: job.estimatedCost,
-            finalCost: job.finalCost,
-            partsCost: job.partsCost,
-            laborCost: job.laborCost,
-            discountAmount: job.discountAmount,
-            taxAmount: job.taxAmount,
-            totalCost: job.totalCost,
-            taxTreatment: job.taxTreatment,
-            invoiceId: job.invoiceId,
-            isInvoiced: job.isInvoiced,
-            isPaid: job.isPaid,
-            isWarrantyJob: job.isWarrantyJob,
-            warrantyNotes: job.warrantyNotes,
-            requiresApproval: job.requiresApproval,
-            approvedByCustomer: job.approvedByCustomer,
-            approvedAt: job.approvedAt,
-            imageUrls: job.imageUrls,
-            createdAt: job.createdAt,
-            updatedAt: DateTime.now(),
-            deletedAt: job.deletedAt,
-            deletedBy: job.deletedBy,
-          );
-        }
-        _applyFiltersAndSort(); // Refresh filtered view
-      });
-
-      // Save in background
-      try {
-        final updatedJob = MechanicJob(
-          id: job.id,
-          tenantId: job.tenantId,
-          jobNumber: job.jobNumber,
-          customerId: job.customerId,
-          bikeId: job.bikeId,
-          arrivalDate: job.arrivalDate,
-          deadline: newDeadline,
           startedAt: job.startedAt,
           completedAt: job.completedAt,
           deliveredAt: job.deliveredAt,
@@ -3523,36 +3883,85 @@ class _PegasTablePageState extends State<PegasTablePage>
           deletedAt: job.deletedAt,
           deletedBy: job.deletedBy,
         );
-        await _bikeshopService.updateJob(updatedJob);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(newDeadline != null
-                  ? 'Plazo: ${DateFormat('dd/MM/yyyy').format(newDeadline)}'
-                  : 'Plazo eliminado'),
-              duration: const Duration(seconds: 1),
-            ),
-          );
-        }
-      } catch (e) {
-        // Revert on error
-        if (mounted) {
-          setState(() {
-            final index = _jobs.indexWhere((j) => j.id == job.id);
-            if (index != -1) {
-              _jobs[index] = job; // Restore original
-            }
-            _applyFiltersAndSort();
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-          );
-        }
-      } finally {
-        _endLocalOperation();
       }
+      _applyFiltersAndSort(); // Refresh filtered view
+    });
+
+    // Save in background
+    try {
+      final updatedJob = MechanicJob(
+        id: job.id,
+        tenantId: job.tenantId,
+        jobNumber: job.jobNumber,
+        customerId: job.customerId,
+        bikeId: job.bikeId,
+        arrivalDate: job.arrivalDate,
+        deadline: newDeadline,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        deliveredAt: job.deliveredAt,
+        status: job.status,
+        priority: job.priority,
+        clientRequest: job.clientRequest,
+        diagnosis: job.diagnosis,
+        workPerformed: job.workPerformed,
+        notes: job.notes,
+        assignedTo: job.assignedTo,
+        assignedTechnicianName: job.assignedTechnicianName,
+        servicePackageId: job.servicePackageId,
+        estimatedCost: job.estimatedCost,
+        finalCost: job.finalCost,
+        partsCost: job.partsCost,
+        laborCost: job.laborCost,
+        discountAmount: job.discountAmount,
+        taxAmount: job.taxAmount,
+        totalCost: job.totalCost,
+        taxTreatment: job.taxTreatment,
+        invoiceId: job.invoiceId,
+        isInvoiced: job.isInvoiced,
+        isPaid: job.isPaid,
+        isWarrantyJob: job.isWarrantyJob,
+        warrantyNotes: job.warrantyNotes,
+        requiresApproval: job.requiresApproval,
+        approvedByCustomer: job.approvedByCustomer,
+        approvedAt: job.approvedAt,
+        imageUrls: job.imageUrls,
+        createdAt: job.createdAt,
+        updatedAt: DateTime.now(),
+        deletedAt: job.deletedAt,
+        deletedBy: job.deletedBy,
+      );
+      await _bikeshopService.updateJob(updatedJob);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newDeadline != null
+                ? 'Plazo: ${DateFormat('dd/MM/yyyy').format(newDeadline)}'
+                : 'Plazo eliminado'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert on error
+      if (mounted) {
+        setState(() {
+          final index = _jobs.indexWhere((j) => j.id == job.id);
+          if (index != -1) {
+            _jobs[index] = job; // Restore original
+          }
+          _applyFiltersAndSort();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      _endLocalOperation();
+    }
   }
 
+  // ignore: unused_element
   void _showInvoiceGenerationDialog(MechanicJob job) {
     _createInvoiceForJob(job);
   }
@@ -3606,6 +4015,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
   }
 
+  // ignore: unused_element
   Color _getStatusColor(JobStatus status) {
     switch (status) {
       case JobStatus.pendiente:
@@ -3862,7 +4272,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Start local operation to suppress reload from realtime notifications
     _startLocalOperation();
-    
+
     // Optimistic update - update all selected jobs immediately
     setState(() {
       for (var job in selectedJobs) {
@@ -3931,7 +4341,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       listenable: _jobStatusService,
       builder: (context, _) {
         final customStatuses = _jobStatusService.activeStatuses;
-        
+
         if (customStatuses.isEmpty) {
           // Fallback to legacy statuses if no custom statuses
           final legacyStatuses = [
@@ -3942,7 +4352,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             JobStatus.finalizado,
             JobStatus.entregado,
           ];
-          
+
           // Build columns and filter out empty ones
           final columns = <Widget>[];
           for (final status in legacyStatuses) {
@@ -3953,14 +4363,14 @@ class _PegasTablePageState extends State<PegasTablePage>
               columns.add(_buildLegacyBoardColumn(status, jobsInStatus));
             }
           }
-          
+
           if (columns.isEmpty) {
             return const Center(
-              child: Text('No hay trabajos que mostrar', 
-                style: TextStyle(color: Colors.grey)),
+              child: Text('No hay trabajos que mostrar',
+                  style: TextStyle(color: Colors.grey)),
             );
           }
-          
+
           return Align(
             alignment: Alignment.topLeft,
             child: SingleChildScrollView(
@@ -3973,27 +4383,29 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
           );
         }
-        
+
         // Use custom statuses - only show columns with jobs
         final columns = <Widget>[];
         for (final customStatus in customStatuses) {
-          final jobsInStatus = _filteredJobs.where((j) => 
-            j.statusId == customStatus.id || 
-            (j.statusId == null && j.status.name.toUpperCase() == customStatus.code)
-          ).toList();
+          final jobsInStatus = _filteredJobs
+              .where((j) =>
+                  j.statusId == customStatus.id ||
+                  (j.statusId == null &&
+                      j.status.name.toUpperCase() == customStatus.code))
+              .toList();
           // Only show columns with jobs
           if (jobsInStatus.isNotEmpty) {
             columns.add(_buildCustomBoardColumn(customStatus, jobsInStatus));
           }
         }
-        
+
         if (columns.isEmpty) {
           return const Center(
-            child: Text('No hay trabajos que mostrar', 
-              style: TextStyle(color: Colors.grey)),
+            child: Text('No hay trabajos que mostrar',
+                style: TextStyle(color: Colors.grey)),
           );
         }
-        
+
         return Align(
           alignment: Alignment.topLeft,
           child: SingleChildScrollView(
@@ -4010,7 +4422,8 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   /// Board column for custom status
-  Widget _buildCustomBoardColumn(JobStatusCustom status, List<MechanicJob> jobs) {
+  Widget _buildCustomBoardColumn(
+      JobStatusCustom status, List<MechanicJob> jobs) {
     final statusColor = status.colorValue;
     final bgColor = Color.lerp(statusColor, Colors.white, 0.85)!;
 
@@ -4046,8 +4459,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
-                      color: statusColor.computeLuminance() > 0.5 
-                          ? Colors.black87 
+                      color: statusColor.computeLuminance() > 0.5
+                          ? Colors.black87
                           : statusColor,
                     ),
                   ),
@@ -4716,6 +5129,7 @@ class _JobDetailsCell extends StatefulWidget {
   final String? notes;
   final MechanicJob? job;
   final Invoice? invoice;
+  final MechanicJobBike? jobBike; // Optional per-bike data
   final Future<void> Function({
     String? clientRequest,
     String? diagnosis,
@@ -4732,6 +5146,7 @@ class _JobDetailsCell extends StatefulWidget {
     required this.notes,
     this.job,
     this.invoice,
+    this.jobBike,
     required this.onSave,
   });
 
@@ -4938,8 +5353,8 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                                 ),
                                 // Divider
                                 Container(
-                                  margin:
-                                      const EdgeInsets.symmetric(horizontal: 10),
+                                  margin: const EdgeInsets.symmetric(
+                                      horizontal: 10),
                                   width: 1,
                                   height: 14,
                                   color: isDark
@@ -5102,7 +5517,9 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                                   'Click afuera para guardar',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: isDark ? Colors.grey[500] : Colors.grey[500],
+                                    color: isDark
+                                        ? Colors.grey[500]
+                                        : Colors.grey[500],
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),
@@ -5112,14 +5529,16 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                                 _ExportButton(
                                   icon: Icons.picture_as_pdf_outlined,
                                   tooltip: 'Exportar a PDF',
-                                  onTap: () => _showExportDialog(context, 'pdf'),
+                                  onTap: () =>
+                                      _showExportDialog(context, 'pdf'),
                                   isDark: isDark,
                                 ),
                                 const SizedBox(width: 4),
                                 _ExportButton(
                                   icon: Icons.description_outlined,
                                   tooltip: 'Exportar a Word',
-                                  onTap: () => _showExportDialog(context, 'word'),
+                                  onTap: () =>
+                                      _showExportDialog(context, 'word'),
                                   isDark: isDark,
                                 ),
                               ],
@@ -5294,20 +5713,21 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
   void _showExportDialog(BuildContext context, String format) {
     final hasInvoice = widget.invoice != null;
     bool includeInvoice = hasInvoice;
-    
+
     // Field selection - all checked by default if they have content
     bool exportSolicitud = _clientRequest.isNotEmpty;
     bool exportDiagnostico = _diagnosis.isNotEmpty;
     bool exportTrabajos = _workPerformed.isNotEmpty;
     bool exportNotas = _notes.isNotEmpty;
-    
+
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
           final isDark = Theme.of(context).brightness == Brightness.dark;
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             contentPadding: const EdgeInsets.all(20),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -5316,8 +5736,11 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                 Row(
                   children: [
                     Icon(
-                      format == 'pdf' ? Icons.picture_as_pdf : Icons.description,
-                      color: format == 'pdf' ? Colors.red[400] : Colors.blue[400],
+                      format == 'pdf'
+                          ? Icons.picture_as_pdf
+                          : Icons.description,
+                      color:
+                          format == 'pdf' ? Colors.red[400] : Colors.blue[400],
                       size: 24,
                     ),
                     const SizedBox(width: 12),
@@ -5345,8 +5768,10 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                           height: 20,
                           child: Checkbox(
                             value: includeInvoice,
-                            onChanged: (v) => setDialogState(() => includeInvoice = v ?? false),
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            onChanged: (v) => setDialogState(
+                                () => includeInvoice = v ?? false),
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -5356,20 +5781,24 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                             children: [
                               const Text(
                                 'Incluir factura',
-                                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w500, fontSize: 13),
                               ),
                               Text(
                                 'La factura irá en la primera página',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
                                 ),
                               ),
                             ],
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.green.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(4),
@@ -5395,14 +5824,16 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, size: 16, color: Colors.grey[500]),
+                        Icon(Icons.info_outline,
+                            size: 16, color: Colors.grey[500]),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Esta pega no tiene factura asociada',
                             style: TextStyle(
                               fontSize: 12,
-                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              color:
+                                  isDark ? Colors.grey[400] : Colors.grey[600],
                             ),
                           ),
                         ),
@@ -5431,28 +5862,32 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                       value: exportSolicitud,
                       hasContent: _clientRequest.isNotEmpty,
                       isDark: isDark,
-                      onChanged: (v) => setDialogState(() => exportSolicitud = v ?? false),
+                      onChanged: (v) =>
+                          setDialogState(() => exportSolicitud = v ?? false),
                     ),
                     _buildFieldCheckbox(
                       label: 'Diagnóstico',
                       value: exportDiagnostico,
                       hasContent: _diagnosis.isNotEmpty,
                       isDark: isDark,
-                      onChanged: (v) => setDialogState(() => exportDiagnostico = v ?? false),
+                      onChanged: (v) =>
+                          setDialogState(() => exportDiagnostico = v ?? false),
                     ),
                     _buildFieldCheckbox(
                       label: 'Trabajos',
                       value: exportTrabajos,
                       hasContent: _workPerformed.isNotEmpty,
                       isDark: isDark,
-                      onChanged: (v) => setDialogState(() => exportTrabajos = v ?? false),
+                      onChanged: (v) =>
+                          setDialogState(() => exportTrabajos = v ?? false),
                     ),
                     _buildFieldCheckbox(
                       label: 'Notas',
                       value: exportNotas,
                       hasContent: _notes.isNotEmpty,
                       isDark: isDark,
-                      onChanged: (v) => setDialogState(() => exportNotas = v ?? false),
+                      onChanged: (v) =>
+                          setDialogState(() => exportNotas = v ?? false),
                     ),
                   ],
                 ),
@@ -5463,7 +5898,8 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                 onPressed: () => Navigator.pop(dialogContext),
                 child: Text(
                   'Cancelar',
-                  style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                  style: TextStyle(
+                      color: isDark ? Colors.grey[400] : Colors.grey[600]),
                 ),
               ),
               FilledButton.icon(
@@ -5510,7 +5946,9 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
           color: !hasContent
               ? (isDark ? Colors.grey[800] : Colors.grey[200])
               : value
-                  ? (isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.withOpacity(0.1))
+                  ? (isDark
+                      ? Colors.blue.withOpacity(0.2)
+                      : Colors.blue.withOpacity(0.1))
                   : (isDark ? Colors.grey[700] : Colors.grey[100]),
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
@@ -5552,14 +5990,16 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
     );
   }
 
-  Future<void> _exportToPdf(BuildContext context, bool includeInvoice, Map<String, bool> fieldSelection) async {
+  Future<void> _exportToPdf(BuildContext context, bool includeInvoice,
+      Map<String, bool> fieldSelection) async {
     final job = widget.job;
     if (job == null) return;
 
     try {
       final pdf = pw.Document();
       final dateFormat = DateFormat('dd/MM/yyyy');
-      final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+      final currencyFormat =
+          NumberFormat.currency(symbol: '\$', decimalDigits: 0);
 
       // Try to load company logo
       pw.ImageProvider? logoImage;
@@ -5589,14 +6029,20 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     if (logoImage != null)
-                      pw.Image(logoImage, width: 100, height: 35, fit: pw.BoxFit.contain)
+                      pw.Image(logoImage,
+                          width: 100, height: 35, fit: pw.BoxFit.contain)
                     else
-                      pw.Text('FACTURA', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('FACTURA',
+                          style: pw.TextStyle(
+                              fontSize: 18, fontWeight: pw.FontWeight.bold)),
                     pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
-                        pw.Text(invoice.invoiceNumber, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                        pw.Text('Fecha: ${dateFormat.format(invoice.date)}', style: const pw.TextStyle(fontSize: 10)),
+                        pw.Text(invoice.invoiceNumber,
+                            style: pw.TextStyle(
+                                fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Fecha: ${dateFormat.format(invoice.date)}',
+                            style: const pw.TextStyle(fontSize: 10)),
                       ],
                     ),
                   ],
@@ -5605,7 +6051,8 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                 pw.Divider(),
                 pw.SizedBox(height: 10),
                 // Customer info
-                pw.Text('Cliente: ${invoice.customerName ?? "Sin nombre"}', style: const pw.TextStyle(fontSize: 11)),
+                pw.Text('Cliente: ${invoice.customerName ?? "Sin nombre"}',
+                    style: const pw.TextStyle(fontSize: 11)),
                 pw.SizedBox(height: 20),
                 // Items table
                 pw.Table(
@@ -5618,22 +6065,64 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                   },
                   children: [
                     pw.TableRow(
-                      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                      decoration:
+                          const pw.BoxDecoration(color: PdfColors.grey200),
                       children: [
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Descripción', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Cant.', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10), textAlign: pw.TextAlign.center)),
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Precio', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10), textAlign: pw.TextAlign.right)),
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10), textAlign: pw.TextAlign.right)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Descripción',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold,
+                                    fontSize: 10))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Cant.',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold,
+                                    fontSize: 10),
+                                textAlign: pw.TextAlign.center)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Precio',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold,
+                                    fontSize: 10),
+                                textAlign: pw.TextAlign.right)),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text('Total',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold,
+                                    fontSize: 10),
+                                textAlign: pw.TextAlign.right)),
                       ],
                     ),
                     ...invoice.items.map((item) => pw.TableRow(
-                      children: [
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(item.description ?? item.productName ?? '', style: const pw.TextStyle(fontSize: 10))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${item.quantity.toInt()}', style: const pw.TextStyle(fontSize: 10), textAlign: pw.TextAlign.center)),
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(currencyFormat.format(item.unitPrice), style: const pw.TextStyle(fontSize: 10), textAlign: pw.TextAlign.right)),
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(currencyFormat.format(item.lineTotal), style: const pw.TextStyle(fontSize: 10), textAlign: pw.TextAlign.right)),
-                      ],
-                    )),
+                          children: [
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(6),
+                                child: pw.Text(
+                                    item.description ?? item.productName ?? '',
+                                    style: const pw.TextStyle(fontSize: 10))),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(6),
+                                child: pw.Text('${item.quantity.toInt()}',
+                                    style: const pw.TextStyle(fontSize: 10),
+                                    textAlign: pw.TextAlign.center)),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(6),
+                                child: pw.Text(
+                                    currencyFormat.format(item.unitPrice),
+                                    style: const pw.TextStyle(fontSize: 10),
+                                    textAlign: pw.TextAlign.right)),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(6),
+                                child: pw.Text(
+                                    currencyFormat.format(item.lineTotal),
+                                    style: const pw.TextStyle(fontSize: 10),
+                                    textAlign: pw.TextAlign.right)),
+                          ],
+                        )),
                   ],
                 ),
                 pw.SizedBox(height: 10),
@@ -5644,20 +6133,40 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                     width: 180,
                     child: pw.Column(
                       children: [
-                        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-                          pw.Text('Subtotal:', style: const pw.TextStyle(fontSize: 10)),
-                          pw.Text(currencyFormat.format(invoice.subtotal), style: const pw.TextStyle(fontSize: 10)),
-                        ]),
+                        pw.Row(
+                            mainAxisAlignment:
+                                pw.MainAxisAlignment.spaceBetween,
+                            children: [
+                              pw.Text('Subtotal:',
+                                  style: const pw.TextStyle(fontSize: 10)),
+                              pw.Text(currencyFormat.format(invoice.subtotal),
+                                  style: const pw.TextStyle(fontSize: 10)),
+                            ]),
                         if (invoice.ivaAmount > 0)
-                          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-                            pw.Text('IVA:', style: const pw.TextStyle(fontSize: 10)),
-                            pw.Text(currencyFormat.format(invoice.ivaAmount), style: const pw.TextStyle(fontSize: 10)),
-                          ]),
+                          pw.Row(
+                              mainAxisAlignment:
+                                  pw.MainAxisAlignment.spaceBetween,
+                              children: [
+                                pw.Text('IVA:',
+                                    style: const pw.TextStyle(fontSize: 10)),
+                                pw.Text(
+                                    currencyFormat.format(invoice.ivaAmount),
+                                    style: const pw.TextStyle(fontSize: 10)),
+                              ]),
                         pw.Divider(),
-                        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-                          pw.Text('Total:', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                          pw.Text(currencyFormat.format(invoice.total), style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                        ]),
+                        pw.Row(
+                            mainAxisAlignment:
+                                pw.MainAxisAlignment.spaceBetween,
+                            children: [
+                              pw.Text('Total:',
+                                  style: pw.TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: pw.FontWeight.bold)),
+                              pw.Text(currencyFormat.format(invoice.total),
+                                  style: pw.TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: pw.FontWeight.bold)),
+                            ]),
                       ],
                     ),
                   ),
@@ -5681,14 +6190,20 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   if (logoImage != null)
-                    pw.Image(logoImage, width: 100, height: 35, fit: pw.BoxFit.contain)
+                    pw.Image(logoImage,
+                        width: 100, height: 35, fit: pw.BoxFit.contain)
                   else
-                    pw.Text('ORDEN DE TRABAJO', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('ORDEN DE TRABAJO',
+                        style: pw.TextStyle(
+                            fontSize: 18, fontWeight: pw.FontWeight.bold)),
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      pw.Text('Pega #${job.jobNumber ?? ""}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('Ingreso: ${dateFormat.format(job.arrivalDate)}', style: const pw.TextStyle(fontSize: 10)),
+                      pw.Text('Pega #${job.jobNumber ?? ""}',
+                          style: pw.TextStyle(
+                              fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Ingreso: ${dateFormat.format(job.arrivalDate)}',
+                          style: const pw.TextStyle(fontSize: 10)),
                     ],
                   ),
                 ],
@@ -5703,8 +6218,13 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text('Cliente', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
-                        pw.Text(widget.customerName ?? '—', style: const pw.TextStyle(fontSize: 11)),
+                        pw.Text('Cliente',
+                            style: pw.TextStyle(
+                                fontSize: 10,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.grey700)),
+                        pw.Text(widget.customerName ?? '—',
+                            style: const pw.TextStyle(fontSize: 11)),
                       ],
                     ),
                   ),
@@ -5712,8 +6232,13 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text('Bicicleta', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
-                        pw.Text(widget.bikeName ?? '—', style: const pw.TextStyle(fontSize: 11)),
+                        pw.Text('Bicicleta',
+                            style: pw.TextStyle(
+                                fontSize: 10,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.grey700)),
+                        pw.Text(widget.bikeName ?? '—',
+                            style: const pw.TextStyle(fontSize: 11)),
                       ],
                     ),
                   ),
@@ -5740,8 +6265,12 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                 child: pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('Costo Total', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                    pw.Text(currencyFormat.format(job.totalCost), style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('Costo Total',
+                        style: pw.TextStyle(
+                            fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                    pw.Text(currencyFormat.format(job.totalCost),
+                        style: pw.TextStyle(
+                            fontSize: 14, fontWeight: pw.FontWeight.bold)),
                   ],
                 ),
               ),
@@ -5752,13 +6281,16 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
 
       // Save and share
       final bytes = await pdf.save();
-      final fileName = 'pega_${job.jobNumber ?? job.id}_${includeInvoice ? "con_factura" : "detalles"}.pdf';
-      
+      final fileName =
+          'pega_${job.jobNumber ?? job.id}_${includeInvoice ? "con_factura" : "detalles"}.pdf';
+
       await Printing.sharePdf(bytes: bytes, filename: fileName);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al exportar: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error al exportar: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
@@ -5796,101 +6328,131 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
     );
   }
 
-  Future<void> _exportToWord(BuildContext context, bool includeInvoice, Map<String, bool> fieldSelection) async {
+  Future<void> _exportToWord(BuildContext context, bool includeInvoice,
+      Map<String, bool> fieldSelection) async {
     final job = widget.job;
     if (job == null) return;
 
     try {
       final dateFormat = DateFormat('dd/MM/yyyy');
-      final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
-      
+      final currencyFormat =
+          NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+
       // Generate HTML that Word can open natively
       final html = StringBuffer();
       html.writeln('<!DOCTYPE html>');
-      html.writeln('<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">');
-      html.writeln('<head><meta charset="UTF-8"><title>Pega ${job.jobNumber ?? ""}</title>');
+      html.writeln(
+          '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">');
+      html.writeln(
+          '<head><meta charset="UTF-8"><title>Pega ${job.jobNumber ?? ""}</title>');
       html.writeln('<style>');
-      html.writeln('body { font-family: Arial, sans-serif; font-size: 11pt; margin: 40px; }');
-      html.writeln('h1 { font-size: 16pt; color: #1a237e; border-bottom: 2px solid #1a237e; padding-bottom: 8px; }');
+      html.writeln(
+          'body { font-family: Arial, sans-serif; font-size: 11pt; margin: 40px; }');
+      html.writeln(
+          'h1 { font-size: 16pt; color: #1a237e; border-bottom: 2px solid #1a237e; padding-bottom: 8px; }');
       html.writeln('h2 { font-size: 13pt; color: #1565c0; margin-top: 20px; }');
-      html.writeln('.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }');
+      html.writeln(
+          '.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }');
       html.writeln('.info-row { margin: 4px 0; }');
       html.writeln('.label { font-weight: bold; color: #666; }');
-      html.writeln('.section { background: #f5f5f5; padding: 12px; border-radius: 4px; margin: 10px 0; border-left: 3px solid #1565c0; }');
-      html.writeln('.total-box { background: #e3f2fd; padding: 15px; border-radius: 6px; margin-top: 20px; text-align: right; }');
-      html.writeln('.total-amount { font-size: 14pt; font-weight: bold; color: #1565c0; }');
-      html.writeln('table { width: 100%; border-collapse: collapse; margin: 15px 0; }');
-      html.writeln('th { background: #e0e0e0; padding: 8px; text-align: left; border: 1px solid #ccc; }');
+      html.writeln(
+          '.section { background: #f5f5f5; padding: 12px; border-radius: 4px; margin: 10px 0; border-left: 3px solid #1565c0; }');
+      html.writeln(
+          '.total-box { background: #e3f2fd; padding: 15px; border-radius: 6px; margin-top: 20px; text-align: right; }');
+      html.writeln(
+          '.total-amount { font-size: 14pt; font-weight: bold; color: #1565c0; }');
+      html.writeln(
+          'table { width: 100%; border-collapse: collapse; margin: 15px 0; }');
+      html.writeln(
+          'th { background: #e0e0e0; padding: 8px; text-align: left; border: 1px solid #ccc; }');
       html.writeln('td { padding: 8px; border: 1px solid #ccc; }');
       html.writeln('.text-right { text-align: right; }');
       html.writeln('.divider { border-top: 1px solid #ccc; margin: 25px 0; }');
       html.writeln('</style></head><body>');
-      
+
       // Invoice section (if included)
       if (includeInvoice && widget.invoice != null) {
         final invoice = widget.invoice!;
         html.writeln('<h1>FACTURA ${invoice.invoiceNumber}</h1>');
-        html.writeln('<div class="info-row"><span class="label">Fecha:</span> ${dateFormat.format(invoice.date)}</div>');
-        html.writeln('<div class="info-row"><span class="label">Cliente:</span> ${invoice.customerName ?? "Sin nombre"}</div>');
+        html.writeln(
+            '<div class="info-row"><span class="label">Fecha:</span> ${dateFormat.format(invoice.date)}</div>');
+        html.writeln(
+            '<div class="info-row"><span class="label">Cliente:</span> ${invoice.customerName ?? "Sin nombre"}</div>');
         html.writeln('<table>');
-        html.writeln('<tr><th>Descripción</th><th style="width:60px">Cant.</th><th style="width:100px" class="text-right">Precio</th><th style="width:100px" class="text-right">Total</th></tr>');
+        html.writeln(
+            '<tr><th>Descripción</th><th style="width:60px">Cant.</th><th style="width:100px" class="text-right">Precio</th><th style="width:100px" class="text-right">Total</th></tr>');
         for (final item in invoice.items) {
           html.writeln('<tr>');
-          html.writeln('<td>${_escapeHtml(item.description ?? item.productName ?? "")}</td>');
+          html.writeln(
+              '<td>${_escapeHtml(item.description ?? item.productName ?? "")}</td>');
           html.writeln('<td class="text-right">${item.quantity.toInt()}</td>');
-          html.writeln('<td class="text-right">${currencyFormat.format(item.unitPrice)}</td>');
-          html.writeln('<td class="text-right">${currencyFormat.format(item.lineTotal)}</td>');
+          html.writeln(
+              '<td class="text-right">${currencyFormat.format(item.unitPrice)}</td>');
+          html.writeln(
+              '<td class="text-right">${currencyFormat.format(item.lineTotal)}</td>');
           html.writeln('</tr>');
         }
         html.writeln('</table>');
         html.writeln('<div style="text-align: right; margin-top: 10px;">');
-        html.writeln('<div>Subtotal: ${currencyFormat.format(invoice.subtotal)}</div>');
+        html.writeln(
+            '<div>Subtotal: ${currencyFormat.format(invoice.subtotal)}</div>');
         if (invoice.ivaAmount > 0) {
-          html.writeln('<div>IVA: ${currencyFormat.format(invoice.ivaAmount)}</div>');
+          html.writeln(
+              '<div>IVA: ${currencyFormat.format(invoice.ivaAmount)}</div>');
         }
-        html.writeln('<div style="font-size: 13pt; font-weight: bold; margin-top: 5px;">TOTAL: ${currencyFormat.format(invoice.total)}</div>');
+        html.writeln(
+            '<div style="font-size: 13pt; font-weight: bold; margin-top: 5px;">TOTAL: ${currencyFormat.format(invoice.total)}</div>');
         html.writeln('</div>');
         html.writeln('<div class="divider"></div>');
       }
-      
+
       // Job details section
       html.writeln('<h1>ORDEN DE TRABAJO - Pega #${job.jobNumber ?? ""}</h1>');
-      html.writeln('<div class="info-row"><span class="label">Fecha de ingreso:</span> ${dateFormat.format(job.arrivalDate)}</div>');
-      html.writeln('<div class="info-row"><span class="label">Cliente:</span> ${_escapeHtml(widget.customerName ?? "—")}</div>');
-      html.writeln('<div class="info-row"><span class="label">Bicicleta:</span> ${_escapeHtml(widget.bikeName ?? "—")}</div>');
-      
+      html.writeln(
+          '<div class="info-row"><span class="label">Fecha de ingreso:</span> ${dateFormat.format(job.arrivalDate)}</div>');
+      html.writeln(
+          '<div class="info-row"><span class="label">Cliente:</span> ${_escapeHtml(widget.customerName ?? "—")}</div>');
+      html.writeln(
+          '<div class="info-row"><span class="label">Bicicleta:</span> ${_escapeHtml(widget.bikeName ?? "—")}</div>');
+
       if (fieldSelection['solicitud'] == true && _clientRequest.isNotEmpty) {
         html.writeln('<h2>Solicitud del Cliente</h2>');
-        html.writeln('<div class="section">${_escapeHtml(_clientRequest).replaceAll('\n', '<br>')}</div>');
+        html.writeln(
+            '<div class="section">${_escapeHtml(_clientRequest).replaceAll('\n', '<br>')}</div>');
       }
-      
+
       if (fieldSelection['diagnostico'] == true && _diagnosis.isNotEmpty) {
         html.writeln('<h2>Diagnóstico</h2>');
-        html.writeln('<div class="section">${_escapeHtml(_diagnosis).replaceAll('\n', '<br>')}</div>');
+        html.writeln(
+            '<div class="section">${_escapeHtml(_diagnosis).replaceAll('\n', '<br>')}</div>');
       }
-      
+
       if (fieldSelection['trabajos'] == true && _workPerformed.isNotEmpty) {
         html.writeln('<h2>Trabajos Realizados</h2>');
-        html.writeln('<div class="section">${_escapeHtml(_workPerformed).replaceAll('\n', '<br>')}</div>');
+        html.writeln(
+            '<div class="section">${_escapeHtml(_workPerformed).replaceAll('\n', '<br>')}</div>');
       }
-      
+
       if (fieldSelection['notas'] == true && _notes.isNotEmpty) {
         html.writeln('<h2>Notas</h2>');
-        html.writeln('<div class="section">${_escapeHtml(_notes).replaceAll('\n', '<br>')}</div>');
+        html.writeln(
+            '<div class="section">${_escapeHtml(_notes).replaceAll('\n', '<br>')}</div>');
       }
-      
+
       html.writeln('<div class="total-box">');
       html.writeln('<span class="label">Costo Total: </span>');
-      html.writeln('<span class="total-amount">${currencyFormat.format(job.totalCost)}</span>');
+      html.writeln(
+          '<span class="total-amount">${currencyFormat.format(job.totalCost)}</span>');
       html.writeln('</div>');
       html.writeln('</body></html>');
 
       // Save as .doc file (Word opens HTML files with .doc extension)
       final bytes = utf8.encode(html.toString());
-      final fileName = 'pega_${job.jobNumber ?? job.id}${includeInvoice ? "_con_factura" : ""}.doc';
-      
+      final fileName =
+          'pega_${job.jobNumber ?? job.id}${includeInvoice ? "_con_factura" : ""}.doc';
+
       String? savedPath;
-      
+
       if (kIsWeb) {
         // Web: Use FileSaver to trigger browser download
         await FileSaver.instance.saveFile(
@@ -5905,11 +6467,11 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
         if (downloadsDir == null) {
           throw Exception('No se pudo acceder a la carpeta de Descargas');
         }
-        
+
         final file = File('${downloadsDir.path}/$fileName');
         await file.writeAsBytes(bytes);
         savedPath = file.path;
-        
+
         // Open the file with default application
         final uri = Uri.file(file.path);
         if (await canLaunchUrl(uri)) {
@@ -5929,32 +6491,36 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
             ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 3),
-            action: savedPath != null ? SnackBarAction(
-              label: 'Abrir carpeta',
-              textColor: Colors.white,
-              onPressed: () async {
-                // Open Downloads folder
-                final downloadsDir = await getDownloadsDirectory();
-                if (downloadsDir != null) {
-                  final uri = Uri.file(downloadsDir.path);
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri);
-                  }
-                }
-              },
-            ) : null,
+            action: savedPath != null
+                ? SnackBarAction(
+                    label: 'Abrir carpeta',
+                    textColor: Colors.white,
+                    onPressed: () async {
+                      // Open Downloads folder
+                      final downloadsDir = await getDownloadsDirectory();
+                      if (downloadsDir != null) {
+                        final uri = Uri.file(downloadsDir.path);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri);
+                        }
+                      }
+                    },
+                  )
+                : null,
           ),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al exportar: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error al exportar: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
   }
-  
+
   String _escapeHtml(String text) {
     return text
         .replaceAll('&', '&amp;')
@@ -6731,15 +7297,16 @@ class _HoverScrollbarState extends State<_HoverScrollbar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     // Calculate thumb size and position
     final scrollableWidth = widget.contentWidth - widget.viewportWidth;
     final thumbRatio = widget.viewportWidth / widget.contentWidth;
-    final thumbWidth = (widget.viewportWidth * thumbRatio).clamp(40.0, widget.viewportWidth * 0.5);
+    final thumbWidth = (widget.viewportWidth * thumbRatio)
+        .clamp(40.0, widget.viewportWidth * 0.5);
     final trackWidth = widget.viewportWidth - 32; // 16px padding on each side
     final maxThumbOffset = trackWidth - thumbWidth;
-    final thumbOffset = scrollableWidth > 0 
-        ? (_scrollPosition / scrollableWidth) * maxThumbOffset 
+    final thumbOffset = scrollableWidth > 0
+        ? (_scrollPosition / scrollableWidth) * maxThumbOffset
         : 0.0;
 
     return MouseRegion(
@@ -6775,7 +7342,8 @@ class _HoverScrollbarState extends State<_HoverScrollbar> {
               left: thumbOffset + 16,
               top: _isHovered || _isDragging ? 2 : 1,
               child: GestureDetector(
-                onHorizontalDragStart: (_) => setState(() => _isDragging = true),
+                onHorizontalDragStart: (_) =>
+                    setState(() => _isDragging = true),
                 onHorizontalDragEnd: (_) => setState(() {
                   _isDragging = false;
                   if (!_isHovered) _isHovered = false;
@@ -6783,7 +7351,8 @@ class _HoverScrollbarState extends State<_HoverScrollbar> {
                 onHorizontalDragUpdate: (details) {
                   final newOffset = thumbOffset + details.delta.dx;
                   final scrollRatio = newOffset / maxThumbOffset;
-                  final newScrollPosition = (scrollRatio * scrollableWidth).clamp(0.0, scrollableWidth);
+                  final newScrollPosition = (scrollRatio * scrollableWidth)
+                      .clamp(0.0, scrollableWidth);
                   widget.scrollController.jumpTo(newScrollPosition);
                 },
                 child: AnimatedContainer(
@@ -6809,7 +7378,8 @@ class _HoverScrollbarState extends State<_HoverScrollbar> {
                   onTapDown: (details) {
                     final tapPosition = details.localPosition.dx - 16;
                     final scrollRatio = tapPosition / trackWidth;
-                    final newScrollPosition = (scrollRatio * scrollableWidth).clamp(0.0, scrollableWidth);
+                    final newScrollPosition = (scrollRatio * scrollableWidth)
+                        .clamp(0.0, scrollableWidth);
                     widget.scrollController.animateTo(
                       newScrollPosition,
                       duration: const Duration(milliseconds: 200),

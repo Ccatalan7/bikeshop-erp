@@ -681,7 +681,8 @@ class BikeshopService extends ChangeNotifier {
           .from('mechanic_job_bikes')
           .select('''
             *,
-            bike:bikes(*)
+            bike:bikes(*),
+            status:job_statuses(*)
           ''')
           .eq('job_id', jobId)
           .order('order_index');
@@ -702,7 +703,8 @@ class BikeshopService extends ChangeNotifier {
           .from('mechanic_job_bikes')
           .select('''
             *,
-            bike:bikes(*)
+            bike:bikes(*),
+            status:job_statuses(*)
           ''')
           .order('order_index');
 
