@@ -49,5 +49,9 @@
 	<string>Esta aplicación necesita acceso a Bluetooth para conectarse a lectores de código de barras</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Esta aplicación necesita acceso a Bluetooth para conectarse a lectores de código de barras</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Esta aplicación necesita acceso a la cámara para escanear facturas.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Esta aplicación necesita acceso a la galería para seleccionar imágenes de facturas.</string>
 </dict>
 </plist>

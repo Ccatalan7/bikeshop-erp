@@ -48,7 +48,7 @@ class PurchaseInvoiceFormPage extends StatefulWidget {
 
 class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   static const double _ivaRate = 0.19;
-  
+
   // Table column widths (match sales invoice)
   static const double _colIndexWidth = 40.0;
   static const double _colQuantityWidth = 120.0;
@@ -79,14 +79,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   bool _isSaving = false;
   bool _isUpdatingStatus = false;
   bool _isEditing = false; // Edit mode toggle (like sales invoice)
-  
+
   /// Payment model: true = Prepayment (pay before receive), false = Standard (receive before pay)
   /// Defaults to true (prepayment) for new invoices
   late bool _isPrepaymentModel;
 
   List<shared_supplier.Supplier> _supplierCache = const [];
   List<Product> _productCache = const [];
-  
+
   StreamSubscription? _scanSubscription;
   RemoteScannerService? _remoteScannerService; // Lazy init to avoid blocking
   bool _scannerEnabled = false;
@@ -95,20 +95,21 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   void initState() {
     super.initState();
     _dueDate = _issueDate.add(const Duration(days: 30));
-    
+
     // Initialize payment model:
     // - New invoice: default to prepayment (true) unless widget says otherwise
     // - Existing invoice: will be loaded from database in _initialize()
-    _isPrepaymentModel = widget.isPrepayment || widget.invoiceId == null; // Default to prepayment for new
-    
+    _isPrepaymentModel = widget.isPrepayment ||
+        widget.invoiceId == null; // Default to prepayment for new
+
     // Set initial editing state:
     // - New invoice (invoiceId == null) → editing mode
     // - Existing draft → view mode (user clicks "Editar" to edit)
     // - Other statuses → always view mode
     _isEditing = widget.invoiceId == null;
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
-    
+
     // DON'T subscribe to barcode scanner here - causes freeze!
     // Will be set up after initialization completes
   }
@@ -124,10 +125,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     _scanSubscription?.cancel();
     super.dispose();
   }
-  
+
   // Can edit fields only when status is draft AND in editing mode
-  bool get _canEditFields => _status == PurchaseInvoiceStatus.draft && _isEditing;
-  
+  bool get _canEditFields =>
+      _status == PurchaseInvoiceStatus.draft && _isEditing;
+
   Future<void> _toggleScanner() async {
     if (!_canEditFields) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -138,11 +140,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       );
       return;
     }
-    
+
     try {
       // Lazy init scanner service
       _remoteScannerService ??= RemoteScannerService();
-      
+
       if (_scannerEnabled) {
         await _remoteScannerService!.stopListening();
         setState(() => _scannerEnabled = false);
@@ -170,20 +172,20 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       }
     }
   }
-  
+
   Future<void> _handleBarcodeScan(String barcode) async {
     // Search for product by SKU
     final product = _productCache.cast<Product?>().firstWhere(
-      (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
-      orElse: () => null,
-    );
-    
+          (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
+          orElse: () => null,
+        );
+
     if (product != null) {
       // Check if product is already in the invoice
       final existingLineIndex = _lineEntries.indexWhere(
         (entry) => entry.line.productId == product.id,
       );
-      
+
       if (existingLineIndex != -1) {
         // Increment quantity
         final entry = _lineEntries[existingLineIndex];
@@ -238,7 +240,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       }
     }
   }
-  
+
   /// Open OCR scanner to extract invoice data from image
   Future<void> _openOCRScanner() async {
     if (!_canEditFields) {
@@ -250,136 +252,232 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       );
       return;
     }
-    
+
     // Show OCR upload widget in bottom sheet
-    await showModalBottomSheet(
+    // Show OCR upload widget in centered dialog
+    await showDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 24,
-          right: 24,
-          top: 24,
-        ),
-        child: OCRUploadWidget(
-          documentType: OCRDocumentType.invoice,
-          showPreview: true,
-          onComplete: (parsedInvoice) {
-            // Close bottom sheet
-            Navigator.of(context).pop();
-            
-            // Apply extracted data to form
-            _applyOCRData(parsedInvoice);
-          },
-          onError: (error) {
-            // Error already shown in widget
-            print('OCR Error: $error');
-          },
+      barrierDismissible: false, // Prevent accidental closing
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: OCRUploadWidget(
+              documentType: OCRDocumentType.invoice,
+              showPreview: true,
+              onComplete: (parsedInvoice) {
+                // Close dialog
+                Navigator.of(context).pop();
+
+                // Apply extracted data to form
+                _applyOCRData(parsedInvoice);
+              },
+              onError: (error) {
+                // Error already shown in widget
+                debugPrint('OCR Error: $error');
+              },
+            ),
+          ),
         ),
       ),
     );
   }
-  
+
   /// Apply OCR-extracted data to the form
   void _applyOCRData(ParsedInvoice parsedInvoice) {
     setState(() {
       // 1. Invoice number (if extracted)
-      if (parsedInvoice.invoiceNumber != null && parsedInvoice.invoiceNumber!.isNotEmpty) {
+      if (parsedInvoice.invoiceNumber != null &&
+          parsedInvoice.invoiceNumber!.isNotEmpty) {
         _invoiceNumberController.text = parsedInvoice.invoiceNumber!;
       }
-      
+
       // 2. Date (if extracted)
       if (parsedInvoice.date != null) {
         _issueDate = parsedInvoice.date!;
         _dueDate = _issueDate.add(const Duration(days: 30));
       }
-      
+
       // 3. Supplier (match by RUT or name)
       if (parsedInvoice.rut != null || parsedInvoice.supplierName != null) {
-        final rut = parsedInvoice.rut?.replaceAll(RegExp(r'[.\-]'), ''); // Normalize RUT
+        final rut = parsedInvoice.rut
+            ?.replaceAll(RegExp(r'[.\-]'), ''); // Normalize RUT
         final name = parsedInvoice.supplierName?.toLowerCase();
-        
+
         // Try to match existing supplier
-        final matchedSupplier = _supplierCache.cast<shared_supplier.Supplier?>().firstWhere(
+        final matchedSupplier =
+            _supplierCache.cast<shared_supplier.Supplier?>().firstWhere(
           (supplier) {
             if (supplier == null) return false;
-            
+
             // Match by RUT (if available)
             if (rut != null && supplier.rut != null) {
-              final supplierRut = supplier.rut!.replaceAll(RegExp(r'[.\-]'), '');
+              final supplierRut =
+                  supplier.rut!.replaceAll(RegExp(r'[.\-]'), '');
               if (supplierRut == rut) return true;
             }
-            
+
             // Match by name (fuzzy)
             if (name != null) {
               final supplierName = supplier.name.toLowerCase();
               return supplierName.contains(name) || name.contains(supplierName);
             }
-            
+
             return false;
           },
           orElse: () => null,
         );
-        
+
         if (matchedSupplier != null) {
           _selectedSupplier = matchedSupplier;
         }
       }
-      
+
       // 4. Total amount (show as reference in notes if no line items)
       if (parsedInvoice.total != null && parsedInvoice.lineItems.isEmpty) {
         final totalStr = ChileanUtils.formatCurrency(parsedInvoice.total!);
-        _notesController.text = 'Total detectado: $totalStr\n${_notesController.text}';
+        _notesController.text =
+            'Total detectado: $totalStr\n${_notesController.text}';
       }
-      
       // 5. Line items (if extracted)
       if (parsedInvoice.lineItems.isNotEmpty) {
+        // Clear default empty line if it's the only one and has no product
+        // Check if the list contains only one item and that item is "empty" (no product ID or name)
+        if (_lineEntries.length == 1) {
+          final firstLine = _lineEntries.first.line;
+          if (firstLine.productId.isEmpty &&
+              (firstLine.productName == null ||
+                  firstLine.productName!.isEmpty)) {
+            _lineEntries.clear();
+          }
+        }
+
         for (final item in parsedInvoice.lineItems) {
-          // Try to match product by name
+          // Try to match product by SKU first, then by name
+          // Debug cache content
+          debugPrint(
+              '🔍 Matching item: ${item.description} (SKU: ${item.sku})');
+          debugPrint('📦 Product Cache Size: ${_productCache.length}');
+
+          // Check if SKU exists in cache manually for debugging
+          if (item.sku != null) {
+            final targetSku = item.sku!.trim().toUpperCase();
+            final existingProduct = _productCache.cast<Product?>().firstWhere(
+                  (p) => p?.sku.trim().toUpperCase() == targetSku,
+                  orElse: () => null,
+                );
+
+            if (existingProduct != null) {
+              debugPrint(
+                  '✅ SKU $targetSku FOUND in cache! ID: ${existingProduct.id}, Name: ${existingProduct.name}');
+            } else {
+              debugPrint('❌ SKU $targetSku NOT FOUND in cache.');
+              // Print first 5 SKUs to verify cache content
+              debugPrint(
+                  '📋 First 5 cached SKUs: ${_productCache.take(5).map((p) => p?.sku).toList()}');
+            }
+          }
+
           final matchedProduct = _productCache.cast<Product?>().firstWhere(
             (product) {
               if (product == null) return false;
+
+              // 1. Match by SKU (Exact match)
+              if (item.sku != null && item.sku!.isNotEmpty) {
+                final productSku = product.sku.trim().toUpperCase();
+                final itemSku = item.sku!.trim().toUpperCase();
+
+                if (productSku == itemSku) {
+                  return true;
+                }
+              }
+
+              // 2. Match by Name (Fuzzy)
               final productName = product.name.toLowerCase();
               final itemDesc = item.description.toLowerCase();
-              return productName.contains(itemDesc) || itemDesc.contains(productName);
+              // Only match by name if SKU check didn't pass
+              return productName.contains(itemDesc) ||
+                  itemDesc.contains(productName);
             },
             orElse: () => null,
           );
-          
+
           if (matchedProduct != null) {
-            // Add matched product
+            debugPrint(
+                '  ✨ Selected product: ${matchedProduct.name} (ID: ${matchedProduct.id})');
+
+            // Add matched product - Mirroring manual selection logic
             final newLine = PurchaseInvoiceItem(
               productId: matchedProduct.id,
               productName: matchedProduct.name,
               productSku: matchedProduct.sku,
               quantity: item.quantity ?? 1,
-              unitCost: item.unitPrice ?? matchedProduct.cost,
+              unitCost: item.unitPrice ??
+                  matchedProduct
+                      .cost, // Use OCR price if available, else product cost
               discount: 0,
             );
+
             final newEntry = _PurchaseLineEntry(line: newLine);
+
+            // CRITICAL: Set all controllers and product object to match manual selection behavior
+            newEntry.product = matchedProduct;
+            newEntry.productNameController.text = matchedProduct.name;
+            newEntry.productSkuController.text = matchedProduct.sku;
+            newEntry.descriptionController.text =
+                matchedProduct.description ?? '';
+
+            // Set unit cost controller if we have a price
+            if (newLine.unitCost > 0) {
+              newEntry.unitCostController.text =
+                  newLine.unitCost.toStringAsFixed(0);
+            }
+
+            // Apply discount from OCR if available
+            if (item.discountRate != null && item.discountRate! > 0) {
+              // Percentage discount detected
+              newEntry.discountType = DiscountType.percentage;
+              newEntry.discountController.text =
+                  item.discountRate!.toStringAsFixed(0);
+              // Force recalculation immediately
+              newEntry.recalculateDiscount();
+            } else if (item.discount != null && item.discount! > 0) {
+              // Amount discount detected
+              newEntry.discountType = DiscountType.amount;
+              newEntry.discountController.text =
+                  item.discount!.toStringAsFixed(0);
+              // Force recalculation immediately
+              newEntry.recalculateDiscount();
+            }
+
             newEntry.attachListeners(_recalculateTotals);
             _lineEntries.add(newEntry);
+          } else {
+            debugPrint('  ❌ No match found for item');
           }
         }
       }
-      
+
       // 6. Set tax treatment if total detected
       if (parsedInvoice.total != null && _taxTreatment == TaxTreatment.noTax) {
         // Assume tax included for Chilean invoices
         _taxTreatment = TaxTreatment.taxIncluded;
       }
     });
-    
+
     // Show success message
     if (mounted) {
       final extractedFields = <String>[];
-      if (parsedInvoice.invoiceNumber != null) extractedFields.add('N° Factura');
+      if (parsedInvoice.invoiceNumber != null)
+        extractedFields.add('N° Factura');
       if (parsedInvoice.supplierName != null) extractedFields.add('Proveedor');
       if (parsedInvoice.date != null) extractedFields.add('Fecha');
       if (parsedInvoice.total != null) extractedFields.add('Total');
-      if (parsedInvoice.lineItems.isNotEmpty) extractedFields.add('${parsedInvoice.lineItems.length} productos');
-      
+      if (parsedInvoice.lineItems.isNotEmpty)
+        extractedFields.add('${parsedInvoice.lineItems.length} productos');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -394,12 +492,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   Future<void> _initialize() async {
     debugPrint('🔍 PurchaseForm._initialize() START');
-    
+
     try {
       debugPrint('🔍 Getting PurchaseService from context...');
       _purchaseService = context.read<PurchaseService>();
       debugPrint('✅ Got PurchaseService');
-      
+
       debugPrint('🔍 Getting InventoryService from context...');
       _inventoryService = context.read<InventoryService>();
       debugPrint('✅ Got InventoryService');
@@ -412,27 +510,27 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       debugPrint('⚠️ Widget not mounted after getting services');
       return;
     }
-    
+
     try {
       // Load suppliers first (blocking)
       debugPrint('🔍 Setting loading state...');
       setState(() => _isLoading = true);
       debugPrint('✅ Loading state set');
-      
+
       debugPrint('🔍 Loading suppliers (forceRefresh: false)...');
       _supplierCache = await _purchaseService.getSuppliers(forceRefresh: false);
       debugPrint('✅ Loaded ${_supplierCache.length} suppliers');
-      
+
       if (!mounted) {
         debugPrint('⚠️ Widget not mounted after loading suppliers');
         return;
       }
-      
+
       // Load products second (blocking)
       debugPrint('🔍 Loading products (forceRefresh: false)...');
       _productCache = await _inventoryService.getProducts(forceRefresh: false);
       debugPrint('✅ Loaded ${_productCache.length} products');
-      
+
       if (!mounted) {
         debugPrint('⚠️ Widget not mounted after loading products');
         return;
@@ -448,14 +546,16 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       } else {
         // Use PREVIEW number - doesn't increment counter until save
         _invoiceNumberController.text = await _previewPurchaseInvoiceNumber();
-        
+
         // Check for pending data from smart purchase list (via service)
         final pendingData = _purchaseService.consumePendingSmartPurchaseData();
-        
+
         // Pre-fill from constructor params OR pending data from service
-        final supplierId = widget.initialSupplierId ?? pendingData?['supplierId'] as String?;
-        final lineItems = widget.initialLineItems ?? pendingData?['lineItems'] as List<Map<String, dynamic>>?;
-        
+        final supplierId =
+            widget.initialSupplierId ?? pendingData?['supplierId'] as String?;
+        final lineItems = widget.initialLineItems ??
+            pendingData?['lineItems'] as List<Map<String, dynamic>>?;
+
         if (supplierId != null && _supplierCache.isNotEmpty) {
           try {
             _selectedSupplier = _supplierCache.firstWhere(
@@ -465,20 +565,22 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             // Supplier not found, leave null
           }
         }
-        
+
         if (lineItems != null && lineItems.isNotEmpty) {
           for (final item in lineItems) {
             final productId = item['product_id'] as String?;
             final productName = item['product_name'] as String?;
             final productSku = item['product_sku'] as String?;
             final suggestedQty = (item['suggested_quantity'] as int?) ?? 1;
-            
-            if (productId != null && productId.isNotEmpty && _productCache.isNotEmpty) {
+
+            if (productId != null &&
+                productId.isNotEmpty &&
+                _productCache.isNotEmpty) {
               try {
                 final product = _productCache.firstWhere(
                   (p) => p.id == productId,
                 );
-                
+
                 // Add line with suggested quantity from database product
                 final entry = _PurchaseLineEntry(
                   line: PurchaseInvoiceItem(
@@ -529,7 +631,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               _lineEntries.add(entry);
             }
           }
-          
+
           // Recalculate totals after adding all lines
           if (_lineEntries.isNotEmpty) {
             _recalculateTotals();
@@ -554,7 +656,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
-        
+
         // Set up barcode scanner subscription AFTER initialization completes
         // Lazy init scanner service only when needed
         _remoteScannerService ??= RemoteScannerService();
@@ -578,7 +680,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     _dueDate = invoice.dueDate ?? invoice.date.add(const Duration(days: 30));
     _status = invoice.status;
     _taxTreatment = invoice.taxTreatment;
-    _isPrepaymentModel = invoice.prepaymentModel; // Load payment model from invoice
+    _isPrepaymentModel =
+        invoice.prepaymentModel; // Load payment model from invoice
 
     _selectedSupplier = _supplierCache.firstWhere(
       (supplier) => supplier.id == invoice.supplierId,
@@ -729,12 +832,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     if (selected != null && mounted) {
       setState(() {
         _selectedSupplier = selected;
-        
+
         // 💡 Smart default: Auto-update tax treatment based on supplier
         // Only update if still in initial state (noTax), don't override user's manual selection
         if (_taxTreatment == TaxTreatment.noTax && _lineEntries.isEmpty) {
           _taxTreatment = selected.defaultTaxTreatment;
-          
+
           // Show hint to user
           final taxLabel = _taxTreatment == TaxTreatment.taxIncluded
               ? 'IVA Incluido (19%)'
@@ -838,7 +941,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
     final tenantService = context.read<TenantService>();
     final tenantId = await tenantService.getTenantId();
-    
+
     if (tenantId == null) {
       throw Exception('No tenant found. Please log in again.');
     }
@@ -850,7 +953,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       invoiceNumber = await _generatePurchaseInvoiceNumber();
       _invoiceNumberController.text = invoiceNumber;
     }
-    
+
     final invoice = PurchaseInvoice(
       id: _loadedInvoice?.id,
       tenantId: tenantId,
@@ -984,7 +1087,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         widget.invoiceId!,
         newStatus,
       );
-      
+
       if (!mounted) return;
 
       if (updated != null) {
@@ -1133,9 +1236,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   /// Refresh invoice after payment changes
   Future<void> _refreshInvoiceById(String invoiceId) async {
     try {
-      final invoices = await _purchaseService.getPurchaseInvoices(forceRefresh: true);
+      final invoices =
+          await _purchaseService.getPurchaseInvoices(forceRefresh: true);
       final updated = invoices.firstWhere((inv) => inv.id == invoiceId);
-      
+
       if (mounted) {
         setState(() {
           _status = updated.status;
@@ -1154,7 +1258,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     });
     _recalculateTotals();
   }
-  
+
   void _moveLineUp(_PurchaseLineEntry entry) {
     final index = _lineEntries.indexOf(entry);
     if (index <= 0) return;
@@ -1163,7 +1267,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       _lineEntries.insert(index - 1, entry);
     });
   }
-  
+
   void _moveLineDown(_PurchaseLineEntry entry) {
     final index = _lineEntries.indexOf(entry);
     if (index < 0 || index >= _lineEntries.length - 1) return;
@@ -1172,10 +1276,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       _lineEntries.insert(index + 1, entry);
     });
   }
-  
+
   void _addEmptyLine({bool shouldAutoFocus = false}) {
     if (!_canEditFields) return;
-    
+
     final entry = _PurchaseLineEntry(
       line: PurchaseInvoiceItem(
         productId: '',
@@ -1194,11 +1298,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       _lineEntries.add(entry);
     });
   }
-  
+
   void _autoAddEmptyLineIfNeeded() {
     // Check if the last line has a product selected
     if (_lineEntries.isEmpty) return;
-    
+
     final lastEntry = _lineEntries.last;
     if (lastEntry.line.productName?.isNotEmpty ?? false) {
       // Last line is filled, add a new empty line with auto-focus
@@ -1209,7 +1313,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   @override
   @override
   Widget build(BuildContext context) {
-    debugPrint('🎨 PurchaseInvoiceFormPage.build() called, _isLoading = $_isLoading');
+    debugPrint(
+        '🎨 PurchaseInvoiceFormPage.build() called, _isLoading = $_isLoading');
     return MainLayout(
       child: Form(
         key: _formKey,
@@ -1229,7 +1334,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   Widget _buildHeader() {
     final theme = Theme.of(context);
-    
+
     // Determine title based on context
     String title;
     if (widget.invoiceId == null) {
@@ -1242,14 +1347,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
     // Workflow buttons based on status and prepayment model
     final actionButtons = <Widget>[];
-    
+
     if (!widget.readOnly && widget.invoiceId != null) {
       // Use form's payment model state
       final isPrepayment = _isPrepaymentModel;
-      
+
       if (_status == PurchaseInvoiceStatus.draft) {
         // Draft: Can edit (if not editing), send to supplier, or delete
-        
+
         // Show "Editar" button when viewing draft (not editing)
         if (!_isEditing) {
           actionButtons.add(
@@ -1265,7 +1370,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           );
           actionButtons.add(const SizedBox(width: 8));
         }
-        
+
         actionButtons.add(
           OutlinedButton.icon(
             onPressed: _deleteInvoice,
@@ -1276,7 +1381,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         actionButtons.add(const SizedBox(width: 8));
         actionButtons.add(
           FilledButton.icon(
-            onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.sent),
+            onPressed: _isUpdatingStatus
+                ? null
+                : () => _updateStatus(PurchaseInvoiceStatus.sent),
             icon: _isUpdatingStatus
                 ? const SizedBox(
                     height: 16,
@@ -1291,7 +1398,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         // Sent: Can revert to draft or confirm
         actionButtons.add(
           OutlinedButton.icon(
-            onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.draft),
+            onPressed: _isUpdatingStatus
+                ? null
+                : () => _updateStatus(PurchaseInvoiceStatus.draft),
             icon: const Icon(Icons.undo_outlined),
             label: const Text('Volver a borrador'),
           ),
@@ -1299,7 +1408,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         actionButtons.add(const SizedBox(width: 8));
         actionButtons.add(
           FilledButton.icon(
-            onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
+            onPressed: _isUpdatingStatus
+                ? null
+                : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
             icon: _isUpdatingStatus
                 ? const SizedBox(
                     height: 16,
@@ -1314,13 +1425,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         // Confirmed: Next step depends on prepayment model
         actionButtons.add(
           OutlinedButton.icon(
-            onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.sent),
+            onPressed: _isUpdatingStatus
+                ? null
+                : () => _updateStatus(PurchaseInvoiceStatus.sent),
             icon: const Icon(Icons.undo_outlined),
             label: const Text('Volver a enviado'),
           ),
         );
         actionButtons.add(const SizedBox(width: 8));
-        
+
         if (isPrepayment) {
           // Prepayment: Pay first, then receive
           actionButtons.add(
@@ -1334,7 +1447,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           // Standard: Receive first, then pay
           actionButtons.add(
             FilledButton.icon(
-              onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.received),
+              onPressed: _isUpdatingStatus
+                  ? null
+                  : () => _updateStatus(PurchaseInvoiceStatus.received),
               icon: _isUpdatingStatus
                   ? const SizedBox(
                       height: 16,
@@ -1350,7 +1465,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         // Received (standard workflow): Can register payment
         actionButtons.add(
           OutlinedButton.icon(
-            onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
+            onPressed: _isUpdatingStatus
+                ? null
+                : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
             icon: const Icon(Icons.undo_outlined),
             label: const Text('Volver a confirmado'),
           ),
@@ -1366,21 +1483,24 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       } else if (_status == PurchaseInvoiceStatus.paid) {
         // Paid: Can undo payment or mark as received (prepayment only)
         final isPrepayment = _isPrepaymentModel;
-        
+
         actionButtons.add(
           OutlinedButton.icon(
             onPressed: _undoLastPayment,
             icon: const Icon(Icons.undo_outlined, color: Colors.red),
-            label: const Text('Deshacer pago', style: TextStyle(color: Colors.red)),
+            label: const Text('Deshacer pago',
+                style: TextStyle(color: Colors.red)),
           ),
         );
-        
+
         if (isPrepayment) {
           // Prepayment workflow: After payment, can mark as received
           actionButtons.add(const SizedBox(width: 8));
           actionButtons.add(
             FilledButton.icon(
-              onPressed: _isUpdatingStatus ? null : () => _updateStatus(PurchaseInvoiceStatus.received),
+              onPressed: _isUpdatingStatus
+                  ? null
+                  : () => _updateStatus(PurchaseInvoiceStatus.received),
               icon: _isUpdatingStatus
                   ? const SizedBox(
                       height: 16,
@@ -1397,7 +1517,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
     // Build action widgets with status badge and total
     final actionWidgets = <Widget>[];
-    
+
     if (widget.invoiceId != null) {
       // Total amount badge
       actionWidgets.add(
@@ -1424,11 +1544,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           ),
         ),
       );
-      
+
       // Status chip
       actionWidgets.add(_buildStatusChip(theme));
     }
-    
+
     actionWidgets.addAll(actionButtons);
 
     return Padding(
@@ -1478,14 +1598,16 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             IconButton(
               onPressed: _toggleScanner,
               icon: Icon(
-                _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
+                _scannerEnabled
+                    ? Icons.qr_code_scanner
+                    : Icons.qr_code_scanner_outlined,
                 color: _scannerEnabled ? Colors.green : null,
               ),
-              tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+              tooltip:
+                  _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
               style: IconButton.styleFrom(
-                backgroundColor: _scannerEnabled 
-                    ? Colors.green.withOpacity(0.1) 
-                    : null,
+                backgroundColor:
+                    _scannerEnabled ? Colors.green.withOpacity(0.1) : null,
               ),
             ),
             const SizedBox(width: 8),
@@ -1562,7 +1684,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         children: [
           Row(
             children: [
-              Icon(Icons.swap_horiz, size: 20, color: theme.colorScheme.primary),
+              Icon(Icons.swap_horiz,
+                  size: 20, color: theme.colorScheme.primary),
               const SizedBox(width: 8),
               Text(
                 'Modelo de pago',
@@ -1794,7 +1917,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             onPressed: _canEditFields ? _openSupplierSelector : null,
             icon: Icon(_selectedSupplier == null ? Icons.search : Icons.edit,
                 size: 18),
-            label: Text(_selectedSupplier == null ? 'Buscar proveedor' : 'Cambiar'),
+            label: Text(
+                _selectedSupplier == null ? 'Buscar proveedor' : 'Cambiar'),
           ),
         ),
       ],
@@ -1852,11 +1976,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           ),
           title: const Text('Tratamiento de IVA'),
           subtitle: DropdownButtonFormField<TaxTreatment>(
+            isExpanded: true,
             value: _taxTreatment,
             decoration: InputDecoration(
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 8),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -1911,17 +2036,18 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         // Calculate minimum required width based on columns
         const minTableWidth = 800.0;
         // Use available width if larger, otherwise use minimum (enables scroll)
-        final tableWidth = constraints.maxWidth > minTableWidth 
-            ? constraints.maxWidth 
+        final tableWidth = constraints.maxWidth > minTableWidth
+            ? constraints.maxWidth
             : minTableWidth;
-        
+
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SizedBox(
             width: tableWidth,
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+                border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.2)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -1936,132 +2062,161 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                       ),
                     ),
                     child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // # column
-                  Container(
-                    width: _colIndexWidth,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // # column
+                          Container(
+                            width: _colIndexWidth,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                right: BorderSide(
+                                    color: theme.colorScheme.outline
+                                        .withOpacity(0.2)),
+                              ),
+                            ),
+                            child: Center(
+                              child: Text('#',
+                                  style: theme.textTheme.labelSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+
+                          // Product details column (expandable)
+                          Expanded(
+                            child: Container(
+                              constraints: const BoxConstraints(minWidth: 250),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  right: BorderSide(
+                                      color: theme.colorScheme.outline
+                                          .withOpacity(0.2)),
+                                ),
+                              ),
+                              child: Text('DETALLES DEL ARTÍCULO',
+                                  style: theme.textTheme.labelSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+
+                          // Cantidad column
+                          Container(
+                            width: _colQuantityWidth,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                right: BorderSide(
+                                    color: theme.colorScheme.outline
+                                        .withOpacity(0.2)),
+                              ),
+                            ),
+                            child: Center(
+                              child: Text('CANTIDAD',
+                                  style: theme.textTheme.labelSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+
+                          // Tarifa column
+                          Container(
+                            width: _colPriceWidth,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                right: BorderSide(
+                                    color: theme.colorScheme.outline
+                                        .withOpacity(0.2)),
+                              ),
+                            ),
+                            child: Center(
+                              child: Text('TARIFA',
+                                  style: theme.textTheme.labelSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+
+                          // Descuento column
+                          Container(
+                            width: _colDiscountWidth,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                right: BorderSide(
+                                    color: theme.colorScheme.outline
+                                        .withOpacity(0.2)),
+                              ),
+                            ),
+                            child: Center(
+                              child: Text('DESCUENTO',
+                                  style: theme.textTheme.labelSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+
+                          // Importe column
+                          Container(
+                            width: _colTotalWidth,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            child: Text('IMPORTE',
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                                textAlign: TextAlign.right),
+                          ),
+
+                          // Actions column
+                          SizedBox(width: _colActionsWidth),
+                        ],
                       ),
                     ),
-                    child: Center(
-                      child: Text('#', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
-                    ),
                   ),
-                  
-                  // Product details column (expandable)
-                  Expanded(
-                    child: Container(
-                      constraints: const BoxConstraints(minWidth: 250),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+
+                  // Header/Content divider
+                  Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: theme.colorScheme.outline.withOpacity(0.2)),
+
+                  // Line items
+                  Column(
+                    children: [
+                      // Existing line items - using same pattern as sales invoice
+                      if (_lineEntries.isNotEmpty)
+                        ..._lineEntries.asMap().entries.map((entry) =>
+                            _buildCompactLineRow(
+                                theme, entry.key + 1, entry.value)),
+
+                      // Empty state
+                      if (_lineEntries.isEmpty && !_canEditFields)
+                        Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Text(
+                            'No hay artículos en esta factura de compra',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ),
-                      ),
-                      child: Text('DETALLES DEL ARTÍCULO', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
-                    ),
+                    ],
                   ),
-                  
-                  // Cantidad column
-                  Container(
-                    width: _colQuantityWidth,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text('CANTIDAD', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                  
-                  // Tarifa column
-                  Container(
-                    width: _colPriceWidth,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text('TARIFA', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                  
-                  // Descuento column
-                  Container(
-                    width: _colDiscountWidth,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text('DESCUENTO', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                  
-                  // Importe column
-                  Container(
-                    width: _colTotalWidth,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: Text('IMPORTE', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600), textAlign: TextAlign.right),
-                  ),
-                  
-                  // Actions column
-                  SizedBox(width: _colActionsWidth),
                 ],
               ),
             ),
-          ),
-          
-          // Header/Content divider
-          Divider(height: 1, thickness: 1, color: theme.colorScheme.outline.withOpacity(0.2)),
-        
-          // Line items
-          Column(
-            children: [
-              // Existing line items - using same pattern as sales invoice
-              if (_lineEntries.isNotEmpty)
-                ..._lineEntries.asMap().entries.map((entry) => 
-                  _buildCompactLineRow(theme, entry.key + 1, entry.value)
-                ),
-              
-              // Empty state
-              if (_lineEntries.isEmpty && !_canEditFields)
-                Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Text(
-                    'No hay artículos en esta factura de compra',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    ),
           ),
         );
       },
     );
   }
-  
+
   /// Builds a single line row using the universal LineRowWrapper.
   /// Hover state is managed locally inside the wrapper, preventing SmartProductField rebuilds.
-  Widget _buildCompactLineRow(ThemeData theme, int index, _PurchaseLineEntry entry) {
+  Widget _buildCompactLineRow(
+      ThemeData theme, int index, _PurchaseLineEntry entry) {
     final line = entry.line;
-    
+
     return LineRowWrapper(
       key: ValueKey('line_${entry.hashCode}_$index'),
       index: index,
@@ -2087,7 +2242,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             () => _autoAddEmptyLineIfNeeded(),
           ),
         ),
-        
+
         // Cantidad column
         LineColumn(
           width: _colQuantityWidth,
@@ -2096,10 +2251,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   controller: entry.quantityController,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     isDense: true,
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium,
                 )
@@ -2110,7 +2267,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   ),
                 ),
         ),
-        
+
         // Precio column
         LineColumn(
           width: _colPriceWidth,
@@ -2119,11 +2276,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   controller: entry.unitCostController,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     isDense: true,
                     prefixText: '\$',
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   textAlign: TextAlign.right,
                   style: theme.textTheme.bodyMedium,
                 )
@@ -2135,19 +2294,48 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   ),
                 ),
         ),
-        
+
         // Descuento column
         LineColumn(
           width: _colDiscountWidth,
           child: _canEditFields
               ? TextField(
                   controller: entry.discountController,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     isDense: true,
+                    suffixIcon: InkWell(
+                      onTap: () {
+                        setState(() {
+                          entry.toggleDiscountType();
+                          // Trigger recalculation in UI
+                          _recalculateTotals();
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: Text(
+                          entry.discountType == DiscountType.amount
+                              ? '\$'
+                              : '%',
+                          style: TextStyle(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                    suffixIconConstraints: const BoxConstraints(
+                      minWidth: 24,
+                      minHeight: 24,
+                    ),
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium,
                 )
@@ -2158,7 +2346,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   ),
                 ),
         ),
-        
+
         // Importe/Total column (no right border - last content column)
         LineColumn(
           width: _colTotalWidth,
@@ -2219,8 +2407,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     return Column(
       children: [
         // For purchases: Always show subtotal (net amount)
-        _buildSummaryRow('Subtotal (Neto)', ChileanUtils.formatCurrency(_subtotal),
-            textStyle, theme),
+        _buildSummaryRow('Subtotal (Neto)',
+            ChileanUtils.formatCurrency(_subtotal), textStyle, theme),
         // Show IVA row when tax is included
         if (_taxTreatment == TaxTreatment.taxIncluded) ...[
           const SizedBox(height: 8),
@@ -2256,8 +2444,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 }
 
+enum DiscountType { amount, percentage }
+
 class _PurchaseLineEntry {
-  _PurchaseLineEntry({required PurchaseInvoiceItem line, this.shouldAutoFocus = false})
+  _PurchaseLineEntry(
+      {required PurchaseInvoiceItem line, this.shouldAutoFocus = false})
       : line = line,
         quantityController =
             TextEditingController(text: line.quantity.toStringAsFixed(0)),
@@ -2265,8 +2456,10 @@ class _PurchaseLineEntry {
             TextEditingController(text: line.unitCost.toStringAsFixed(0)),
         discountController =
             TextEditingController(text: line.discount.toStringAsFixed(0)),
-        productNameController = TextEditingController(text: line.productName ?? ''),
-        productSkuController = TextEditingController(text: line.productSku ?? ''),
+        productNameController =
+            TextEditingController(text: line.productName ?? ''),
+        productSkuController =
+            TextEditingController(text: line.productSku ?? ''),
         descriptionController = TextEditingController(),
         productNameFocusNode = FocusNode();
 
@@ -2274,6 +2467,8 @@ class _PurchaseLineEntry {
   Product? product; // Store full product for image access
   /// Whether this line's product field should auto-focus (for newly added lines)
   bool shouldAutoFocus;
+  DiscountType discountType = DiscountType.amount; // Default to amount
+
   final TextEditingController quantityController;
   final TextEditingController unitCostController;
   final TextEditingController discountController;
@@ -2282,12 +2477,43 @@ class _PurchaseLineEntry {
   final TextEditingController descriptionController;
   final FocusNode productNameFocusNode;
 
+  void toggleDiscountType() {
+    discountType = discountType == DiscountType.amount
+        ? DiscountType.percentage
+        : DiscountType.amount;
+
+    // Recalculate discount based on new type and current input
+    recalculateDiscount();
+  }
+
+  void recalculateDiscount() {
+    final inputValue =
+        double.tryParse(discountController.text.replaceAll(',', '.')) ?? 0;
+
+    if (inputValue < 0) return;
+
+    double calculatedDiscount = 0;
+    if (discountType == DiscountType.amount) {
+      calculatedDiscount = inputValue;
+    } else {
+      // Percentage: (qty * unitCost) * (percentage / 100)
+      final totalAmount = line.quantity * line.unitCost;
+      calculatedDiscount = totalAmount * (inputValue / 100);
+    }
+
+    line = line.copyWith(discount: calculatedDiscount);
+  }
+
   void attachListeners(VoidCallback onChanged) {
     quantityController.addListener(() {
       final value =
           double.tryParse(quantityController.text.replaceAll(',', '.'));
       if (value != null && value >= 0) {
         line = line.copyWith(quantity: value);
+        // Recalculate discount if it's percentage based (depends on total)
+        if (discountType == DiscountType.percentage) {
+          recalculateDiscount();
+        }
         onChanged();
       }
     });
@@ -2296,16 +2522,16 @@ class _PurchaseLineEntry {
           double.tryParse(unitCostController.text.replaceAll(',', '.'));
       if (value != null && value >= 0) {
         line = line.copyWith(unitCost: value);
+        // Recalculate discount if it's percentage based (depends on total)
+        if (discountType == DiscountType.percentage) {
+          recalculateDiscount();
+        }
         onChanged();
       }
     });
     discountController.addListener(() {
-      final value =
-          double.tryParse(discountController.text.replaceAll(',', '.'));
-      if (value != null && value >= 0) {
-        line = line.copyWith(discount: value);
-        onChanged();
-      }
+      recalculateDiscount();
+      onChanged();
     });
     // ❌ DON'T listen to productNameController - it causes auto-selection on every keystroke
     // Product name is updated ONLY when onProductSelected is called in ProductAutocompleteField
@@ -2324,12 +2550,12 @@ class _PurchaseLineEntry {
     descriptionController.dispose();
     productNameFocusNode.dispose();
   }
-  
+
   // CRITICAL: Cache the SmartProductField widget to prevent rebuilds on parent hover state changes
   // This is the fix for flickering and disappearing dropdown when mouse moves
   Widget? _cachedSmartProductField;
   bool? _cachedCanEdit;
-  
+
   /// Build the SmartProductField for this line entry
   /// This method lives on the entry (not the row widget state) to prevent
   /// row hover state changes from rebuilding the field
@@ -2345,13 +2571,14 @@ class _PurchaseLineEntry {
     if (_cachedSmartProductField != null && _cachedCanEdit == canEdit) {
       return _cachedSmartProductField!;
     }
-    
+
     _cachedCanEdit = canEdit;
     _cachedSmartProductField = SmartProductField(
       key: ValueKey('product_${hashCode}'),
       initialData: ProductFieldData(
         product: product,
-        productName: line.productName?.isEmpty ?? true ? null : line.productName,
+        productName:
+            line.productName?.isEmpty ?? true ? null : line.productName,
         productSku: line.productSku?.isEmpty ?? true ? null : line.productSku,
         isCatalogProduct: line.productId.isNotEmpty,
         description: descriptionController.text,
@@ -2396,10 +2623,10 @@ class _PurchaseLineEntry {
         }
       },
     );
-    
+
     return _cachedSmartProductField!;
   }
-  
+
   void _showEditProductDialog(BuildContext context, Product product) {
     showDialog(
       context: context,
@@ -2421,8 +2648,9 @@ class _PurchaseLineEntry {
       ),
     );
   }
-  
-  void _showProductDetailsPane(BuildContext context, Product product, ThemeData theme) {
+
+  void _showProductDetailsPane(
+      BuildContext context, Product product, ThemeData theme) {
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -2486,7 +2714,8 @@ class _PurchaseLineEntry {
                           Text('Stock: ${product.stockQuantity}'),
                           if (product.description != null) ...[
                             const SizedBox(height: 16),
-                            Text('Descripción:', style: theme.textTheme.titleSmall),
+                            Text('Descripción:',
+                                style: theme.textTheme.titleSmall),
                             Text(product.description!),
                           ],
                         ],
