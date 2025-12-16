@@ -35,13 +35,29 @@ Based on the task, determine which platforms you need:
 
 **If task involves Zoho:**
 
+⚠️ **CRITICAL: Correct Zoho Credential Flow** (Updated Dec 15, 2025)
+
+You need THREE things from the user:
+1. **Client ID** - OAuth application ID (static)
+2. **Client Secret** - OAuth application secret (static)
+3. **Refresh Token** - Long-lived token for API calls
+
+**How to get Refresh Token:**
+- User must authorize the app in Zoho first (one-time)
+- Zoho gives user a GRANT TOKEN (one-time use, ~10 min expiry)
+- User runs: `python generate_zoho_tokens.py` (in scripts/import_templates/)
+- Script exchanges grant token for refresh token
+- User provides the refresh token to you
+
 First time in conversation:
 ```python
 # Ask once, store for session
 print("\n🔑 I need your Zoho credentials (I'll reuse them for this session):")
-zoho_client_id = input("Client ID: ").strip()
-zoho_client_secret = input("Client Secret: ").strip()
-zoho_refresh_token = input("Refresh Token: ").strip()
+zoho_client_id = input("Zoho Client ID: ").strip()
+zoho_client_secret = input("Zoho Client Secret: ").strip()
+zoho_refresh_token = input("Zoho Refresh Token: ").strip()
+print("   ℹ️  If you don't have a refresh token yet, run:")
+print("      python scripts/import_templates/generate_zoho_tokens.py")
 ```
 
 Later in same conversation:

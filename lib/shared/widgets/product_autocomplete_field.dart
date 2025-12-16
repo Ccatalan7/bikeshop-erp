@@ -38,7 +38,8 @@ class ProductAutocompleteField extends StatefulWidget {
   });
 
   @override
-  State<ProductAutocompleteField> createState() => _ProductAutocompleteFieldState();
+  State<ProductAutocompleteField> createState() =>
+      _ProductAutocompleteFieldState();
 }
 
 class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
@@ -49,8 +50,10 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   List<Product> _allProducts = [];
   Product? _selectedProduct;
   bool _isLoading = false;
-  bool _isTapInProgress = false; // Track tap events to prevent premature overlay removal
-  bool _hasUserInteracted = false; // Track if user has interacted with the field
+  bool _isTapInProgress =
+      false; // Track tap events to prevent premature overlay removal
+  bool _hasUserInteracted =
+      false; // Track if user has interacted with the field
   bool _isMouseOverDropdown = false; // Track if mouse is over the dropdown
   late shared_inventory.InventoryService _inventoryService;
   OverlayEntry? _overlayEntry;
@@ -60,10 +63,11 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     super.initState();
     _controller = widget.controller ?? TextEditingController();
     _focusNode = widget.focusNode ?? FocusNode();
-    _inventoryService = Provider.of<shared_inventory.InventoryService>(context, listen: false);
+    _inventoryService =
+        Provider.of<shared_inventory.InventoryService>(context, listen: false);
     _controller.text = widget.initialValue ?? '';
     _loadProducts();
-    
+
     _focusNode.addListener(() {
       if (_focusNode.hasFocus) {
         // Only show overlay if user has explicitly interacted (tap/click/type)
@@ -75,13 +79,16 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         // Add delay to allow tap events and mouse-over-dropdown to register
         Future.delayed(const Duration(milliseconds: 250), () {
           // Don't remove if: still focused, tap in progress, or mouse is over dropdown
-          if (!_focusNode.hasFocus && mounted && !_isTapInProgress && !_isMouseOverDropdown) {
+          if (!_focusNode.hasFocus &&
+              mounted &&
+              !_isTapInProgress &&
+              !_isMouseOverDropdown) {
             _removeOverlay();
           }
         });
       }
     });
-    
+
     // Auto-focus if requested (for newly added lines after selecting a product)
     if (widget.autoFocus) {
       _hasUserInteracted = true; // Mark as interacted since it's intentional
@@ -112,31 +119,31 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
   void _showOverlay() {
     _removeOverlay();
-    
+
     if (_filteredProducts.isEmpty) return;
-    
+
     final overlay = Overlay.of(context);
     final renderBox = context.findRenderObject() as RenderBox;
     final size = renderBox.size;
     final position = renderBox.localToGlobal(Offset.zero);
-    
+
     // Use wider dropdown (minimum 500px) like Zoho for better product info display
     final dropdownWidth = size.width < 500 ? 500.0 : size.width;
-    
+
     // Calculate available space below and above the field
     final screenHeight = MediaQuery.of(context).size.height;
     final spaceBelow = screenHeight - position.dy - size.height;
     final spaceAbove = position.dy;
-    
+
     // Dropdown max height
     const maxDropdownHeight = 400.0;
-    
+
     // Decide whether to show above or below
     final showAbove = spaceBelow < maxDropdownHeight && spaceAbove > spaceBelow;
-    final offset = showAbove 
+    final offset = showAbove
         ? Offset(0, -(maxDropdownHeight + 4)) // Position above
         : Offset(0, size.height + 4); // Position below
-    
+
     _overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
         width: dropdownWidth,
@@ -152,7 +159,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         ),
       ),
     );
-    
+
     overlay.insert(_overlayEntry!);
   }
 
@@ -166,7 +173,10 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         _isMouseOverDropdown = false;
         // Check if we should close the overlay now
         Future.delayed(const Duration(milliseconds: 150), () {
-          if (mounted && !_focusNode.hasFocus && !_isTapInProgress && !_isMouseOverDropdown) {
+          if (mounted &&
+              !_focusNode.hasFocus &&
+              !_isTapInProgress &&
+              !_isMouseOverDropdown) {
             _removeOverlay();
           }
         });
@@ -192,19 +202,22 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
           child: ListView.builder(
             padding: EdgeInsets.zero,
             shrinkWrap: true,
-            itemCount: _filteredProducts.length + (widget.allowCustomItems ? 1 : 0),
+            itemCount:
+                _filteredProducts.length + (widget.allowCustomItems ? 1 : 0),
             itemBuilder: (context, index) {
-            // Custom item option at the end
-            if (widget.allowCustomItems && index == _filteredProducts.length) {
-              if (_controller.text.trim().isEmpty) return const SizedBox.shrink();
-              
-              return _buildCustomItemTile(theme);
-            }
+              // Custom item option at the end
+              if (widget.allowCustomItems &&
+                  index == _filteredProducts.length) {
+                if (_controller.text.trim().isEmpty)
+                  return const SizedBox.shrink();
 
-            final product = _filteredProducts[index];
-            return _buildProductTile(product, theme);
-          },
-        ),
+                return _buildCustomItemTile(theme);
+              }
+
+              final product = _filteredProducts[index];
+              return _buildProductTile(product, theme);
+            },
+          ),
         ),
       ),
     );
@@ -221,7 +234,8 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
-            Icon(Icons.add_circle, color: theme.colorScheme.secondary, size: 20),
+            Icon(Icons.add_circle,
+                color: theme.colorScheme.secondary, size: 20),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -253,7 +267,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   Widget _buildProductTile(Product product, ThemeData theme) {
     final hasStock = product.stockQuantity > 0;
     bool isHovered = false;
-    
+
     return StatefulBuilder(
       builder: (context, setHoverState) {
         return MouseRegion(
@@ -279,7 +293,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: isHovered 
+                color: isHovered
                     ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
                     : Colors.transparent,
               ),
@@ -344,8 +358,8 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                         Text(
                           'SKU: ${product.sku} • ${hasStock ? '${product.stockQuantity} ${product.unit.name}' : 'Sin stock'}',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: hasStock 
-                                ? theme.colorScheme.onSurfaceVariant 
+                            color: hasStock
+                                ? theme.colorScheme.onSurfaceVariant
                                 : theme.colorScheme.error,
                             fontSize: 12,
                             height: 1.2,
@@ -359,13 +373,14 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                   const SizedBox(width: 12),
                   // Price/Cost - right-aligned like Zoho
                   Text(
-                    widget.showCost 
-                        ? '\$${product.cost.toStringAsFixed(0)}' 
+                    widget.showCost
+                        ? '\$${product.cost.toStringAsFixed(0)}'
                         : '\$${product.price.toStringAsFixed(0)}',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: widget.showCost 
-                          ? theme.colorScheme.tertiary // Different color for cost
+                      color: widget.showCost
+                          ? theme
+                              .colorScheme.tertiary // Different color for cost
                           : theme.colorScheme.onSurface,
                     ),
                   ),
@@ -408,8 +423,10 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       setState(() {
         _filteredProducts = _allProducts.where((product) {
           return product.name.toLowerCase().contains(searchLower) ||
-                 product.sku.toLowerCase().contains(searchLower) ||
-                 (product.brand?.toLowerCase().contains(searchLower) ?? false);
+              product.sku.toLowerCase().contains(searchLower) ||
+              (product.supplierCode?.toLowerCase().contains(searchLower) ??
+                  false) ||
+              (product.brand?.toLowerCase().contains(searchLower) ?? false);
         }).toList();
       });
       _showOverlay();
@@ -445,10 +462,12 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
   void _onSubmitted(String value) {
     final trimmedValue = value.trim();
-    
+
     // If user typed something and presses Enter, ALWAYS create ad-hoc item
     // Don't auto-select from search results - user must click to select a product
-    if (widget.allowCustomItems && _selectedProduct == null && trimmedValue.isNotEmpty) {
+    if (widget.allowCustomItems &&
+        _selectedProduct == null &&
+        trimmedValue.isNotEmpty) {
       _selectCustomItem(trimmedValue);
     }
     // If no text and there are results, do nothing (user should click to select)
@@ -508,8 +527,11 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                           color: theme.colorScheme.primary,
                         ),
               prefixIcon: Icon(
-                _selectedProduct != null ? Icons.inventory_2 : Icons.add_shopping_cart,
-                color: _selectedProduct != null ? theme.colorScheme.primary : null,
+                _selectedProduct != null
+                    ? Icons.inventory_2
+                    : Icons.add_shopping_cart,
+                color:
+                    _selectedProduct != null ? theme.colorScheme.primary : null,
               ),
             ),
             onTap: _onTap,

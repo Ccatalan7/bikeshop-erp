@@ -291,6 +291,7 @@ class _ProductListPageState extends State<ProductListPage> {
     final searchableText = [
       product.name.toLowerCase(),
       product.sku.toLowerCase(),
+      product.supplierCode?.toLowerCase() ?? '', // Código proveedor
       product.brand?.toLowerCase() ?? '',
       product.model?.toLowerCase() ?? '',
       _resolveCategoryName(product)?.toLowerCase() ?? '',
@@ -586,7 +587,7 @@ class _ProductListPageState extends State<ProductListPage> {
                 flex: 2,
                 child: SearchBarWidget(
                   controller: _searchController,
-                  hintText: 'Buscar por nombre, SKU, marca o categoría…',
+                  hintText: 'Buscar por nombre, SKU, código proveedor, marca…',
                   onChanged: _onSearchChanged,
                 ),
               ),
