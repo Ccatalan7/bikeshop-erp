@@ -11,6 +11,7 @@ class Product {
   final String? supplierId;
   final String? supplierName; // For display purposes, populated from JOIN
   final String? supplierReference;
+  final String? supplierCode; // Código Proveedor
   final String? brandId;
   final String? brand;
   final String? model;
@@ -62,6 +63,7 @@ class Product {
     this.supplierId,
     this.supplierName,
     this.supplierReference,
+    this.supplierCode,
     this.brandId,
     this.brand,
     this.model,
@@ -122,6 +124,7 @@ class Product {
       supplierId: json['supplier_id']?.toString(),
       supplierName: json['supplier_name'], // From trigger or JOIN query
       supplierReference: json['supplier_reference'],
+      supplierCode: json['supplier_code'],
       brandId: json['brand_id']?.toString(),
       brand: json['brand'],
       model: json['model'],
@@ -203,6 +206,7 @@ class Product {
       'category_id': categoryId,
       'supplier_id': supplierId,
       'supplier_reference': supplierReference,
+      'supplier_code': supplierCode,
       'brand_id': brandId,
       'brand': brand,
       'model': model,
@@ -270,6 +274,7 @@ class Product {
     String? supplierId,
     String? supplierName,
     String? supplierReference,
+    String? supplierCode,
     String? brandId,
     bool brandIdHasValue = false,
     String? brand,
@@ -323,6 +328,7 @@ class Product {
       supplierId: supplierId ?? this.supplierId,
       supplierName: supplierName ?? this.supplierName,
       supplierReference: supplierReference ?? this.supplierReference,
+      supplierCode: supplierCode ?? this.supplierCode,
       brandId: (brandIdHasValue || brandId != null) ? brandId : this.brandId,
       brand: (brandHasValue || brand != null) ? brand : this.brand,
       model: model ?? this.model,

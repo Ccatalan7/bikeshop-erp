@@ -44,6 +44,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
   final _nameController = TextEditingController();
   final _skuController = TextEditingController();
+  final _supplierCodeController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _brandController = TextEditingController();
   final _modelController = TextEditingController();
@@ -108,6 +109,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   void dispose() {
     _nameController.dispose();
     _skuController.dispose();
+    _supplierCodeController.dispose();
     _descriptionController.dispose();
     _brandController.dispose();
     _modelController.dispose();
@@ -452,6 +454,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         _existingProduct = product;
         _nameController.text = product.name;
         _skuController.text = product.sku;
+        _supplierCodeController.text = product.supplierCode ?? '';
         _descriptionController.text = product.description ?? '';
         _brandController.text = product.brand ?? '';
         _selectedBrandId = product.brandId;
@@ -707,6 +710,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
             categoryName: selectedCategoryName,
             supplierId: _selectedSupplierId,
             supplierName: selectedSupplierName,
+            supplierCode: _supplierCodeController.text.trim().isEmpty 
+                ? null 
+                : _supplierCodeController.text.trim(),
             brandId: normalizedBrandId,
             brand: normalizedBrandName,
             model: rawModel.isEmpty ? null : rawModel,
@@ -731,6 +737,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
         categoryName: selectedCategoryName ?? baseProduct.categoryName,
         supplierId: _selectedSupplierId,
         supplierName: selectedSupplierName ?? baseProduct.supplierName,
+        supplierCode: _supplierCodeController.text.trim().isEmpty 
+            ? null 
+            : _supplierCodeController.text.trim(),
         brandId: normalizedBrandId,
         brandIdHasValue: true,
         brand: normalizedBrandName,
@@ -1136,6 +1145,14 @@ class _ProductFormPageState extends State<ProductFormPage> {
             ),
           ),
         ],
+      ),
+      const SizedBox(height: 16),
+      TextFormField(
+        controller: _supplierCodeController,
+        decoration: const InputDecoration(
+          labelText: 'Código Proveedor',
+          hintText: 'Ej. KMC-2025-001',
+        ),
       ),
       const SizedBox(height: 16),
       // Searchable Category Selector

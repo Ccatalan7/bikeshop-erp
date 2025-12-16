@@ -364,19 +364,32 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           // Check if SKU exists in cache manually for debugging
           if (item.sku != null) {
             final targetSku = item.sku!.trim().toUpperCase();
-            final existingProduct = _productCache.cast<Product?>().firstWhere(
-                  (p) => p?.sku.trim().toUpperCase() == targetSku,
-                  orElse: () => null,
-                );
-
-            if (existingProduct != null) {
+            
+            // Check both SKU and supplier_code in cache
+            final skuMatches = _productCache
+                .where((p) => p.sku.trim().toUpperCase() == targetSku)
+                .toList();
+            final supplierCodeMatches = _productCache
+                .where((p) => p.supplierCode != null && 
+                    p.supplierCode!.trim().toUpperCase() == targetSku)
+                .toList();
+            
+            debugPrint('🔎 Looking for: "$targetSku"');
+            debugPrint('📊 SKU matches: ${skuMatches.length}');
+            debugPrint('📊 Supplier Code matches: ${supplierCodeMatches.length}');
+            
+            if (supplierCodeMatches.isNotEmpty) {
+              debugPrint('✅ Found by SUPPLIER CODE: ${supplierCodeMatches.first.name}');
+            }
+            if (skuMatches.isNotEmpty) {
+              debugPrint('✅ Found by SKU: ${skuMatches.first.name}');
+            }
+            
+            if (skuMatches.isEmpty && supplierCodeMatches.isEmpty) {
+              debugPrint('❌ Not found in either SKU or Supplier Code');
+              // Print sample data for debugging
               debugPrint(
-                  '✅ SKU $targetSku FOUND in cache! ID: ${existingProduct.id}, Name: ${existingProduct.name}');
-            } else {
-              debugPrint('❌ SKU $targetSku NOT FOUND in cache.');
-              // Print first 5 SKUs to verify cache content
-              debugPrint(
-                  '📋 First 5 cached SKUs: ${_productCache.take(5).map((p) => p?.sku).toList()}');
+                  '📋 Sample products with supplier codes: ${_productCache.take(5).map((p) => '${p.sku} / ${p.supplierCode}').toList()}');
             }
           }
 
@@ -384,20 +397,29 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             (product) {
               if (product == null) return false;
 
-              // 1. Match by SKU (Exact match)
+              // 1. Match by SKU or Supplier Code (Exact match)
               if (item.sku != null && item.sku!.isNotEmpty) {
                 final productSku = product.sku.trim().toUpperCase();
                 final itemSku = item.sku!.trim().toUpperCase();
 
+                // Match by SKU
                 if (productSku == itemSku) {
                   return true;
+                }
+
+                // Match by Supplier Code (Código Proveedor)
+                if (product.supplierCode != null && product.supplierCode!.isNotEmpty) {
+                  final productSupplierCode = product.supplierCode!.trim().toUpperCase();
+                  if (productSupplierCode == itemSku) {
+                    return true;
+                  }
                 }
               }
 
               // 2. Match by Name (Fuzzy)
               final productName = product.name.toLowerCase();
               final itemDesc = item.description.toLowerCase();
-              // Only match by name if SKU check didn't pass
+              // Only match by name if SKU/Supplier Code check didn't pass
               return productName.contains(itemDesc) ||
                   itemDesc.contains(productName);
             },

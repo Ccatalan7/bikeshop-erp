@@ -50,7 +50,7 @@ class _ProductListPageState extends State<ProductListPage> {
   List<Product> _filteredProducts = [];
   List<Category> _categories = [];
   List<Supplier> _suppliers = [];
-  
+
   // Detail pane resize
   double _detailPaneWidth = 520.0;
   static const double _minDetailPaneWidth = 300.0;
@@ -64,17 +64,18 @@ class _ProductListPageState extends State<ProductListPage> {
   bool _showInactive = false;
   ProductViewMode _viewMode = ProductViewMode.table;
   Product? _selectedProduct; // For split-pane detail view
-  
+
   // Pagination
   int _currentPage = 1;
   int _itemsPerPage = 200;
   int get _totalPages => (_filteredProducts.length / _itemsPerPage).ceil();
   List<Product> get _paginatedProducts {
     final startIndex = (_currentPage - 1) * _itemsPerPage;
-    final endIndex = (startIndex + _itemsPerPage).clamp(0, _filteredProducts.length);
+    final endIndex =
+        (startIndex + _itemsPerPage).clamp(0, _filteredProducts.length);
     return _filteredProducts.sublist(startIndex, endIndex);
   }
-  
+
   StreamSubscription? _scanSubscription;
   final _remoteScannerService = RemoteScannerService();
   bool _scannerEnabled = false;
@@ -82,7 +83,9 @@ class _ProductListPageState extends State<ProductListPage> {
   @override
   void initState() {
     super.initState();
-    _inventoryService = Provider.of<inventory_services.InventoryService>(context, listen: false);
+    _inventoryService = Provider.of<inventory_services.InventoryService>(
+        context,
+        listen: false);
     _categoryService = Provider.of<CategoryService>(context, listen: false);
     _purchaseService = Provider.of<PurchaseService>(context, listen: false);
 
@@ -111,7 +114,7 @@ class _ProductListPageState extends State<ProductListPage> {
 
     _loadSuppliers();
     _loadProducts();
-    
+
     // Listen for barcode scans
     _scanSubscription = _remoteScannerService.scanStream.listen((scan) {
       if (mounted) {
@@ -124,7 +127,8 @@ class _ProductListPageState extends State<ProductListPage> {
   void didUpdateWidget(ProductListPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Reload products when refresh token changes (from import page)
-    if (widget.refreshToken != null && widget.refreshToken != oldWidget.refreshToken) {
+    if (widget.refreshToken != null &&
+        widget.refreshToken != oldWidget.refreshToken) {
       _loadProducts();
     }
   }
@@ -136,7 +140,7 @@ class _ProductListPageState extends State<ProductListPage> {
     _scanSubscription?.cancel();
     super.dispose();
   }
-  
+
   Future<void> _toggleScanner() async {
     try {
       if (_scannerEnabled) {
@@ -166,14 +170,14 @@ class _ProductListPageState extends State<ProductListPage> {
       }
     }
   }
-  
+
   Future<void> _handleBarcodeScan(String barcode) async {
     // Search for product by SKU
     final product = _products.cast<Product?>().firstWhere(
-      (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
-      orElse: () => null,
-    );
-    
+          (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
+          orElse: () => null,
+        );
+
     if (product != null) {
       // Navigate to product edit page
       if (mounted) {
@@ -227,7 +231,7 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Future<void> _loadProducts() async {
     if (!mounted) return;
-    
+
     // 🚀 INSTANT RENDER: Show cached data immediately if available
     if (_inventoryService.hasProductsCache && _products.isEmpty) {
       setState(() {
@@ -238,7 +242,7 @@ class _ProductListPageState extends State<ProductListPage> {
     } else {
       setState(() => _isLoading = true);
     }
-    
+
     try {
       final products = await _inventoryService.getProducts(
         categoryId: _selectedCategoryId,
@@ -275,6 +279,27 @@ class _ProductListPageState extends State<ProductListPage> {
     }
   }
 
+  /// Token-based search: splits query into words and matches if ALL tokens found
+  /// Example: "cadena 408" matches "Cadena KMC 408" because both words present
+  bool _matchesTokenSearch(String query, Product product) {
+    if (query.isEmpty) return true;
+
+    // Split query into tokens (words)
+    final tokens = query.toLowerCase().split(RegExp(r'\s+'));
+
+    // Get all searchable fields as lowercase
+    final searchableText = [
+      product.name.toLowerCase(),
+      product.sku.toLowerCase(),
+      product.brand?.toLowerCase() ?? '',
+      product.model?.toLowerCase() ?? '',
+      _resolveCategoryName(product)?.toLowerCase() ?? '',
+    ].join(' ');
+
+    // ALL tokens must be found in searchable text
+    return tokens.every((token) => searchableText.contains(token));
+  }
+
   void _applyFilters() {
     List<Product> filtered = List<Product>.from(_products);
 
@@ -292,7 +317,9 @@ class _ProductListPageState extends State<ProductListPage> {
 
     if (_showLowStockOnly) {
       filtered = filtered
-          .where((product) => !product.isService && (product.isLowStock || product.isOutOfStock))
+          .where((product) =>
+              !product.isService &&
+              (product.isLowStock || product.isOutOfStock))
           .toList();
     }
 
@@ -301,27 +328,14 @@ class _ProductListPageState extends State<ProductListPage> {
     }
 
     if (_searchTerm.isNotEmpty) {
-      final query = _searchTerm.toLowerCase();
+      // Use token-based search: all words must be found
       filtered = filtered.where((product) {
-        final matchesName = product.name.toLowerCase().contains(query);
-        final matchesSku = product.sku.toLowerCase().contains(query);
-        final matchesBrand =
-            product.brand?.toLowerCase().contains(query) ?? false;
-        final matchesModel =
-            product.model?.toLowerCase().contains(query) ?? false;
-        final matchesCategory =
-            _resolveCategoryName(product)?.toLowerCase().contains(query) ??
-                false;
-        return matchesName ||
-            matchesSku ||
-            matchesBrand ||
-            matchesModel ||
-            matchesCategory;
+        return _matchesTokenSearch(_searchTerm, product);
       }).toList();
     }
 
     _filteredProducts = filtered;
-    
+
     // Reset to page 1 when filters change
     _currentPage = 1;
   }
@@ -382,11 +396,17 @@ class _ProductListPageState extends State<ProductListPage> {
     if (_filteredProducts.isEmpty) {
       // Maintain same layout structure as non-empty view
       if (_viewMode == ProductViewMode.table) {
-        return Column(
+        return Row(
           children: [
-            _buildCleanHeader(theme),
             Expanded(
-              child: _buildEmptyState(theme),
+              child: Column(
+                children: [
+                  _buildCleanHeader(theme),
+                  Expanded(
+                    child: _buildEmptyState(theme),
+                  ),
+                ],
+              ),
             ),
           ],
         );
@@ -439,7 +459,8 @@ class _ProductListPageState extends State<ProductListPage> {
                   decoration: BoxDecoration(
                     border: Border(
                       right: BorderSide(
-                        color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+                        color:
+                            theme.colorScheme.outlineVariant.withOpacity(0.5),
                       ),
                     ),
                   ),
@@ -460,8 +481,7 @@ class _ProductListPageState extends State<ProductListPage> {
           ),
         ),
         // Split-pane detail view
-        if (_selectedProduct != null)
-          _buildDetailPane(theme),
+        if (_selectedProduct != null) _buildDetailPane(theme),
       ],
     );
   }
@@ -518,15 +538,17 @@ class _ProductListPageState extends State<ProductListPage> {
               IconButton(
                 onPressed: _toggleScanner,
                 icon: Icon(
-                  _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
+                  _scannerEnabled
+                      ? Icons.qr_code_scanner
+                      : Icons.qr_code_scanner_outlined,
                   size: 18,
                 ),
-                tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+                tooltip:
+                    _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
                 visualDensity: VisualDensity.compact,
                 style: IconButton.styleFrom(
-                  backgroundColor: _scannerEnabled 
-                      ? Colors.green.withOpacity(0.1) 
-                      : null,
+                  backgroundColor:
+                      _scannerEnabled ? Colors.green.withOpacity(0.1) : null,
                   foregroundColor: _scannerEnabled ? Colors.green : null,
                 ),
               ),
@@ -819,8 +841,7 @@ class _ProductListPageState extends State<ProductListPage> {
           ),
         ),
         // Split-pane detail view
-        if (_selectedProduct != null)
-          _buildDetailPane(theme),
+        if (_selectedProduct != null) _buildDetailPane(theme),
       ],
     );
   }
@@ -913,7 +934,7 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Widget _buildZohoTableRow(Product product, ThemeData theme, bool isSelected) {
     final priceText = ChileanUtils.formatCurrency(product.price);
-    
+
     return InkWell(
       onTap: () {
         setState(() {
@@ -924,7 +945,7 @@ class _ProductListPageState extends State<ProductListPage> {
         height: 48,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          color: isSelected 
+          color: isSelected
               ? theme.colorScheme.primaryContainer.withOpacity(0.3)
               : null,
           border: Border(
@@ -980,7 +1001,8 @@ class _ProductListPageState extends State<ProductListPage> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (product.categoryName != null && product.categoryName!.isNotEmpty)
+                    if (product.categoryName != null &&
+                        product.categoryName!.isNotEmpty)
                       Text(
                         product.categoryName!,
                         style: theme.textTheme.labelSmall?.copyWith(
@@ -1031,30 +1053,30 @@ class _ProductListPageState extends State<ProductListPage> {
                       ),
                     )
                   : Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(
-                    '${product.inventoryQty}',
-                    textAlign: TextAlign.right,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w500,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${product.inventoryQty}',
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        if (product.isLowStock)
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 16,
+                            color: theme.colorScheme.error,
+                          )
+                        else if (product.isOutOfStock)
+                          Icon(
+                            Icons.block,
+                            size: 16,
+                            color: theme.colorScheme.error,
+                          ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  if (product.isLowStock)
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      size: 16,
-                      color: theme.colorScheme.error,
-                    )
-                  else if (product.isOutOfStock)
-                    Icon(
-                      Icons.block,
-                      size: 16,
-                      color: theme.colorScheme.error,
-                    ),
-                ],
-              ),
             ),
             const SizedBox(width: 16),
           ],
@@ -1066,12 +1088,14 @@ class _ProductListPageState extends State<ProductListPage> {
   Widget _buildDetailPane(ThemeData theme) {
     final product = _selectedProduct!;
     // Format prices with $ at the beginning
-    final priceText = '\$ ${ChileanUtils.formatCurrency(product.price).replaceAll('\$', '').trim()}';
-    final costText = '\$ ${ChileanUtils.formatCurrency(product.cost).replaceAll('\$', '').trim()}';
+    final priceText =
+        '\$ ${ChileanUtils.formatCurrency(product.price).replaceAll('\$', '').trim()}';
+    final costText =
+        '\$ ${ChileanUtils.formatCurrency(product.cost).replaceAll('\$', '').trim()}';
     final marginPercent = product.cost > 0
         ? ((product.price - product.cost) / product.cost) * 100
         : 0;
-    
+
     return Container(
       width: _detailPaneWidth,
       decoration: BoxDecoration(
@@ -1104,236 +1128,256 @@ class _ProductListPageState extends State<ProductListPage> {
                 child: Row(
                   children: [
                     Expanded(
-                  child: Text(
-                    'Detalles del Producto',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () {
-                    setState(() {
-                      _selectedProduct = null;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-          // Content
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Product image
-                  Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: ImageService.buildProductImage(
-                        imageUrl: product.imageUrl,
-                        size: 200,
-                        isListThumbnail: false,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  // Product name
-                  Text(
-                    product.name,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text(
-                        'SKU: ${product.sku}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                      child: Text(
+                        'Detalles del Producto',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      InkWell(
-                        onTap: () {
-                          Clipboard.setData(ClipboardData(text: product.sku));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('SKU copiado'),
-                              duration: Duration(seconds: 1),
-                            ),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(4),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(
-                            Icons.copy,
-                            size: 14,
-                            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (!product.isActive) ...[
-                    const SizedBox(height: 8),
-                    Chip(
-                      label: const Text('Inactivo'),
-                      backgroundColor: theme.colorScheme.errorContainer,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        setState(() {
+                          _selectedProduct = null;
+                        });
+                      },
                     ),
                   ],
-                  const SizedBox(height: 24),
-                  const Divider(),
-                  const SizedBox(height: 16),
-                  // Sections layout - two columns when wide enough
-                  if (_detailPaneWidth > 400)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Left column: Pricing
-                        Expanded(
-                          child: _buildDetailSection(
-                            theme,
-                            title: 'Precios',
-                            children: [
-                              _buildDetailRow(theme, 'Precio de Venta', priceText),
-                              _buildDetailRow(theme, 'Costo', costText),
-                              _buildDetailRow(
-                                theme,
-                                'Margen',
-                                '${marginPercent.toStringAsFixed(1)}%',
-                                valueColor: marginPercent < 0
-                                    ? theme.colorScheme.error
-                                    : theme.colorScheme.tertiary,
-                              ),
-                            ],
+                ),
+              ),
+              // Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Product image
+                      Center(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: ImageService.buildProductImage(
+                            imageUrl: product.imageUrl,
+                            size: 200,
+                            isListThumbnail: false,
                           ),
                         ),
-                        const SizedBox(width: 32),
-                        // Right column: Inventory (hide for services)
-                        if (!product.isService)
-                          Expanded(
-                            child: _buildDetailSection(
-                              theme,
-                              title: 'Inventario',
-                              children: [
-                                _buildDetailRowNumeric(theme, 'Stock Actual', product.inventoryQty),
-                                _buildDetailRowNumeric(theme, 'Stock Mínimo', product.minStockLevel),
-                                _buildDetailRowNumeric(theme, 'Stock Máximo', product.maxStockLevel ?? 0),
-                                if (product.warehouseLocation != null)
-                                  _buildDetailRow(theme, 'Ubicación', product.warehouseLocation!),
-                              ],
-                            ),
-                          )
-                        else
-                          const Expanded(child: SizedBox()), // Empty space for services
-                      ],
-                    )
-                  else ...[
-                    // Single column layout for narrow panes
-                    _buildDetailSection(
-                      theme,
-                      title: 'Precios',
-                      children: [
-                        _buildDetailRow(theme, 'Precio de Venta', priceText),
-                        _buildDetailRow(theme, 'Costo', costText),
-                        _buildDetailRow(
-                          theme,
-                          'Margen',
-                          '${marginPercent.toStringAsFixed(1)}%',
-                          valueColor: marginPercent < 0
-                              ? theme.colorScheme.error
-                              : theme.colorScheme.tertiary,
-                        ),
-                      ],
-                    ),
-                    // Only show inventory section for products, not services
-                    if (!product.isService) ...[
+                      ),
                       const SizedBox(height: 24),
-                      _buildDetailSection(
-                        theme,
-                        title: 'Inventario',
+                      // Product name
+                      Text(
+                        product.name,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
                         children: [
-                          _buildDetailRowNumeric(theme, 'Stock Actual', product.inventoryQty),
-                          _buildDetailRowNumeric(theme, 'Stock Mínimo', product.minStockLevel),
-                          _buildDetailRowNumeric(theme, 'Stock Máximo', product.maxStockLevel ?? 0),
-                          if (product.warehouseLocation != null)
-                            _buildDetailRow(theme, 'Ubicación', product.warehouseLocation!),
+                          Text(
+                            'SKU: ${product.sku}',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          InkWell(
+                            onTap: () {
+                              Clipboard.setData(
+                                  ClipboardData(text: product.sku));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('SKU copiado'),
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(4),
+                            child: Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: Icon(
+                                Icons.copy,
+                                size: 14,
+                                color: theme.colorScheme.onSurfaceVariant
+                                    .withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
-                    ],
-                  ],
-                  const SizedBox(height: 24),
-                  // Product info section
-                  _buildDetailSection(
-                    theme,
-                    title: 'Información',
-                    children: [
-                      if (product.categoryName != null)
-                        _buildDetailRow(theme, 'Categoría', product.categoryName!),
-                      if (product.brand != null && product.brand!.isNotEmpty)
-                        _buildDetailRow(theme, 'Marca', product.brand!),
-                      if (product.model != null && product.model!.isNotEmpty)
-                        _buildDetailRow(theme, 'Modelo', product.model!),
-                      if (product.gtin != null && product.gtin!.isNotEmpty)
-                        _buildDetailRow(theme, 'GTIN', product.gtin!),
-                    ],
-                  ),
-                  if (product.description != null && product.description!.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    _buildDetailSection(
-                      theme,
-                      title: 'Descripción',
-                      children: [
-                        Text(
-                          product.description!,
-                          style: theme.textTheme.bodyMedium,
+                      if (!product.isActive) ...[
+                        const SizedBox(height: 8),
+                        Chip(
+                          label: const Text('Inactivo'),
+                          backgroundColor: theme.colorScheme.errorContainer,
                         ),
                       ],
+                      const SizedBox(height: 24),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      // Sections layout - two columns when wide enough
+                      if (_detailPaneWidth > 400)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Left column: Pricing
+                            Expanded(
+                              child: _buildDetailSection(
+                                theme,
+                                title: 'Precios',
+                                children: [
+                                  _buildDetailRow(
+                                      theme, 'Precio de Venta', priceText),
+                                  _buildDetailRow(theme, 'Costo', costText),
+                                  _buildDetailRow(
+                                    theme,
+                                    'Margen',
+                                    '${marginPercent.toStringAsFixed(1)}%',
+                                    valueColor: marginPercent < 0
+                                        ? theme.colorScheme.error
+                                        : theme.colorScheme.tertiary,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 32),
+                            // Right column: Inventory (hide for services)
+                            if (!product.isService)
+                              Expanded(
+                                child: _buildDetailSection(
+                                  theme,
+                                  title: 'Inventario',
+                                  children: [
+                                    _buildDetailRowNumeric(theme,
+                                        'Stock Actual', product.inventoryQty),
+                                    _buildDetailRowNumeric(theme,
+                                        'Stock Mínimo', product.minStockLevel),
+                                    _buildDetailRowNumeric(
+                                        theme,
+                                        'Stock Máximo',
+                                        product.maxStockLevel ?? 0),
+                                    if (product.warehouseLocation != null)
+                                      _buildDetailRow(theme, 'Ubicación',
+                                          product.warehouseLocation!),
+                                  ],
+                                ),
+                              )
+                            else
+                              const Expanded(
+                                  child:
+                                      SizedBox()), // Empty space for services
+                          ],
+                        )
+                      else ...[
+                        // Single column layout for narrow panes
+                        _buildDetailSection(
+                          theme,
+                          title: 'Precios',
+                          children: [
+                            _buildDetailRow(
+                                theme, 'Precio de Venta', priceText),
+                            _buildDetailRow(theme, 'Costo', costText),
+                            _buildDetailRow(
+                              theme,
+                              'Margen',
+                              '${marginPercent.toStringAsFixed(1)}%',
+                              valueColor: marginPercent < 0
+                                  ? theme.colorScheme.error
+                                  : theme.colorScheme.tertiary,
+                            ),
+                          ],
+                        ),
+                        // Only show inventory section for products, not services
+                        if (!product.isService) ...[
+                          const SizedBox(height: 24),
+                          _buildDetailSection(
+                            theme,
+                            title: 'Inventario',
+                            children: [
+                              _buildDetailRowNumeric(
+                                  theme, 'Stock Actual', product.inventoryQty),
+                              _buildDetailRowNumeric(
+                                  theme, 'Stock Mínimo', product.minStockLevel),
+                              _buildDetailRowNumeric(theme, 'Stock Máximo',
+                                  product.maxStockLevel ?? 0),
+                              if (product.warehouseLocation != null)
+                                _buildDetailRow(theme, 'Ubicación',
+                                    product.warehouseLocation!),
+                            ],
+                          ),
+                        ],
+                      ],
+                      const SizedBox(height: 24),
+                      // Product info section
+                      _buildDetailSection(
+                        theme,
+                        title: 'Información',
+                        children: [
+                          if (product.categoryName != null)
+                            _buildDetailRow(
+                                theme, 'Categoría', product.categoryName!),
+                          if (product.brand != null &&
+                              product.brand!.isNotEmpty)
+                            _buildDetailRow(theme, 'Marca', product.brand!),
+                          if (product.model != null &&
+                              product.model!.isNotEmpty)
+                            _buildDetailRow(theme, 'Modelo', product.model!),
+                          if (product.gtin != null && product.gtin!.isNotEmpty)
+                            _buildDetailRow(theme, 'GTIN', product.gtin!),
+                        ],
+                      ),
+                      if (product.description != null &&
+                          product.description!.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        _buildDetailSection(
+                          theme,
+                          title: 'Descripción',
+                          children: [
+                            Text(
+                              product.description!,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              // Action buttons
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: theme.colorScheme.outlineVariant,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: AppButton(
+                        text: 'Editar',
+                        icon: Icons.edit_outlined,
+                        type: ButtonType.outline,
+                        onPressed: () => _openEditor(product),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: AppButton(
+                        text: 'Ajustar Stock',
+                        icon: Icons.inventory_outlined,
+                        onPressed: () => _openStockAdjustment(product),
+                      ),
                     ),
                   ],
-                ],
-              ),
-            ),
-          ),
-          // Action buttons
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                  color: theme.colorScheme.outlineVariant,
                 ),
               ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: AppButton(
-                    text: 'Editar',
-                    icon: Icons.edit_outlined,
-                    type: ButtonType.outline,
-                    onPressed: () => _openEditor(product),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: AppButton(
-                    text: 'Ajustar Stock',
-                    icon: Icons.inventory_outlined,
-                    onPressed: () => _openStockAdjustment(product),
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
-        ],
-      ),
           // Resize handle on the left edge
           Positioned(
             left: 0,
@@ -1344,7 +1388,8 @@ class _ProductListPageState extends State<ProductListPage> {
               child: GestureDetector(
                 onHorizontalDragUpdate: (details) {
                   setState(() {
-                    _detailPaneWidth = (_detailPaneWidth - details.delta.dx).clamp(
+                    _detailPaneWidth =
+                        (_detailPaneWidth - details.delta.dx).clamp(
                       _minDetailPaneWidth,
                       _maxDetailPaneWidth,
                     );
@@ -1896,7 +1941,8 @@ class _ProductListPageState extends State<ProductListPage> {
               ),
               // Page selector dropdown
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
                   border: Border.all(color: theme.dividerColor),
                   borderRadius: BorderRadius.circular(4),

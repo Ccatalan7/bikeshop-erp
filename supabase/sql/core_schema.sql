@@ -1669,6 +1669,11 @@ begin
     alter table products add column supplier_reference text;
   end if;
 
+  -- Add supplier code (Código Proveedor for this specific supplier)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'supplier_code') then
+    alter table products add column supplier_code text;
+  end if;
+
   -- Add manufacturer metadata
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'manufacturer') then
     alter table products add column manufacturer text;

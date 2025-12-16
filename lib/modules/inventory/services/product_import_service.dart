@@ -77,6 +77,22 @@ class ProductImportService {
         'vendor',
       ],
     ),
+    // 4b. Código Proveedor (Supplier Code for this product)
+    const ProductImportFieldDefinition(
+      key: 'supplier_code',
+      label: 'Código Proveedor',
+      isRecommended: false,
+      sampleValue: 'KMC-2025-001',
+      aliases: [
+        'supplier code',
+        'supplier sku',
+        'código proveedor',
+        'codigo proveedor',
+        'vendor code',
+        'vendor sku',
+        'supplier reference',
+      ],
+    ),
     // 5. Marca (Marca in Odoo)
     const ProductImportFieldDefinition(
       key: 'brand',
@@ -549,6 +565,12 @@ class ProductImportService {
     if (supplierId != null) {
       payload['supplier_id'] = supplierId;
       payload['supplier_name'] = valueFor('supplier_name');
+    }
+
+    // Add supplier code if provided
+    final supplierCode = valueFor('supplier_code');
+    if (supplierCode != null && supplierCode.toString().isNotEmpty) {
+      payload['supplier_code'] = supplierCode;
     }
 
     final publishedRaw = valueFor('is_published') ?? valueFor('published');
@@ -1052,6 +1074,8 @@ class ProductImportService {
             product['supplier'] ??
             product['supplier_display_name'];
         return fallback?.toString() ?? '';
+      case 'supplier_code':
+        return product['supplier_code']?.toString() ?? '';
       case 'image_url':
         return product['image_url']?.toString() ?? '';
       case 'image_urls':
