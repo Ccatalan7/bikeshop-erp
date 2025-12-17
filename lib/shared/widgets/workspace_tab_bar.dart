@@ -11,14 +11,15 @@ class WorkspaceTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final workspaceManager = context.watch<WorkspaceManager>();
     final theme = Theme.of(context);
-    
+
     // Debug: Log workspace state
     if (!workspaceManager.isInitialized) {
       debugPrint('⚠️ [WorkspaceTabBar] WorkspaceManager not yet initialized');
     } else {
-      debugPrint('✅ [WorkspaceTabBar] Rendering ${workspaceManager.workspaces.length} workspace(s)');
+      debugPrint(
+          '✅ [WorkspaceTabBar] Rendering ${workspaceManager.workspaces.length} workspace(s)');
     }
-    
+
     return Container(
       height: 40,
       decoration: BoxDecoration(
@@ -39,7 +40,7 @@ class WorkspaceTabBar extends StatelessWidget {
               itemBuilder: (context, index) {
                 final workspace = workspaceManager.workspaces[index];
                 final isActive = index == workspaceManager.activeIndex;
-                
+
                 return _WorkspaceTab(
                   workspace: workspace,
                   isActive: isActive,
@@ -52,8 +53,9 @@ class WorkspaceTabBar extends StatelessWidget {
             ),
           ),
           // New tab button with dropdown menu
-          if (workspaceManager.workspaces.length < WorkspaceManager.maxWorkspaces)
-            _NewTabDropdown(),
+          if (workspaceManager.workspaces.length <
+              WorkspaceManager.maxWorkspaces)
+            const _NewTabDropdown(),
           // Tab counter
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -97,7 +99,7 @@ class _WorkspaceTabState extends State<_WorkspaceTab> {
     final textColor = widget.isActive
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurface;
-    
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -136,7 +138,8 @@ class _WorkspaceTabState extends State<_WorkspaceTab> {
                   style: TextStyle(
                     fontSize: 13,
                     color: textColor,
-                    fontWeight: widget.isActive ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight:
+                        widget.isActive ? FontWeight.w600 : FontWeight.normal,
                   ),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
@@ -163,12 +166,23 @@ class _WorkspaceTabState extends State<_WorkspaceTab> {
   }
 }
 
-class _NewTabDropdown extends StatelessWidget {
+class _NewTabDropdown extends StatefulWidget {
+  const _NewTabDropdown();
+
+  @override
+  State<_NewTabDropdown> createState() => _NewTabDropdownState();
+}
+
+class _NewTabDropdownState extends State<_NewTabDropdown> {
+  // Use GlobalKey to keep the popup menu button stable across rebuilds
+  final GlobalKey _menuKey = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return PopupMenuButton<Map<String, String>>(
+      key: _menuKey,
       icon: Icon(
         Icons.add,
         size: 18,
@@ -262,6 +276,7 @@ class _NewTabDropdown extends StatelessWidget {
         ),
       ],
       onSelected: (value) {
+        // Use read() instead of requiring a watch dependency
         final workspaceManager = context.read<WorkspaceManager>();
         workspaceManager.addWorkspace(
           title: value['title']!,

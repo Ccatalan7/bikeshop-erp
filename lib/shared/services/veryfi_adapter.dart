@@ -5,6 +5,24 @@ import '../services/invoice_parser_service.dart';
 
 /// Adapter to convert Veryfi response JSON into our internal `Invoice` model.
 class VeryfiAdapter {
+  /// Format a number with Chilean thousand separators (dots)
+  /// e.g., 12690 → "12.690", 1790 → "1.790"
+  static String _formatWithDots(int value) {
+    final str = value.toString();
+    if (str.length <= 3) return str;
+
+    final buffer = StringBuffer();
+    int count = 0;
+    for (int i = str.length - 1; i >= 0; i--) {
+      buffer.write(str[i]);
+      count++;
+      if (count % 3 == 0 && i > 0) {
+        buffer.write('.');
+      }
+    }
+    return buffer.toString().split('').reversed.join();
+  }
+
   /// Parse a Veryfi response map into a `Invoice`.
   ///
   /// `tenantId` is required (multi-tenant). `defaultInvoiceType` can be
@@ -173,18 +191,88 @@ class VeryfiAdapter {
       if (raw is! Map) continue;
       final map = Map<String, dynamic>.from(raw);
 
-      // DEBUG: Print raw map to find discount keys
+      // DEBUG: Print raw map to analyze OCR parsing issues
       debugPrint('🔍 Veryfi Raw Line: $map');
+      debugPrint(
+          '   📊 Raw quantity type: ${map['quantity'].runtimeType}, value: ${map['quantity']}');
+      debugPrint(
+          '   📊 Raw unit_price type: ${map['unit_price'].runtimeType}, value: ${map['unit_price']}');
+      debugPrint(
+          '   📊 Raw total type: ${map['total'].runtimeType}, value: ${map['total']}');
 
       final desc =
           map['description']?.toString() ?? map['name']?.toString() ?? '';
-      final qty = (map['quantity'] as num?)?.toDouble() ??
+      var qty = (map['quantity'] as num?)?.toDouble() ??
           (map['qty'] as num?)?.toDouble();
-      final price = (map['unit_price'] as num?)?.toDouble() ??
+      var price = (map['unit_price'] as num?)?.toDouble() ??
           (map['price'] as num?)?.toDouble();
       final sku = map['sku']?.toString();
-      final lineTotal = (map['total'] as num?)?.toDouble() ??
+      var lineTotal = (map['total'] as num?)?.toDouble() ??
           (map['line_total'] as num?)?.toDouble();
+
+      debugPrint('   ✅ Before fix: qty=$qty, price=$price, total=$lineTotal');
+
+      // CHILEAN NUMBER FORMAT FIX:
+      // Veryfi sometimes treats dots as decimal separators (US format)
+      // In Chile, dots are thousand separators
+      //
+      // We use the raw 'text' field to verify if a fix is needed.
+      // The text field contains the original OCR text like "$1.790\t6\t$10.740"
+      // If the text shows a value like "$1.790" but Veryfi parsed it as 1.79,
+      // we need to multiply by 1000.
+
+      final rawText = map['text']?.toString() ?? '';
+
+      // Helper to check if raw text contains a value that looks like it should be 1000x larger
+      // e.g., "$1.790" in text but parsed as 1.79
+      bool shouldScale(double? parsed, String text) {
+        if (parsed == null || parsed <= 0) return false;
+
+        // Look for the value in text with a dot that would make it 1000x
+        // e.g., parsed=1.79 should match "$1.790" or "1.790" in text
+        final scaledValue = (parsed * 1000).round();
+
+        // Check if the scaled value (with Chilean dot separator) appears in text
+        // Format: "X.XXX" where XXX is three digits
+        final formattedScaled = _formatWithDots(scaledValue);
+
+        if (text.contains(formattedScaled) ||
+            text.contains(scaledValue.toString())) {
+          debugPrint('   🔍 Found scaled value $formattedScaled in raw text');
+          return true;
+        }
+        return false;
+      }
+
+      // Check and fix quantity
+      if (qty != null && qty < 1 && qty > 0) {
+        final correctedQty = (qty * 1000).round();
+        // Verify: does the raw text contain this corrected quantity as a whole number?
+        if (rawText.contains('\t$correctedQty\t') ||
+            rawText.contains('\t$correctedQty\n') ||
+            rawText.endsWith('\t$correctedQty')) {
+          debugPrint('   🔧 Chilean fix (verified): qty $qty → $correctedQty');
+          qty = correctedQty.toDouble();
+        }
+      }
+
+      // Check and fix price
+      if (price != null && shouldScale(price, rawText)) {
+        final correctedPrice = (price * 1000).round();
+        debugPrint(
+            '   🔧 Chilean fix (verified): price $price → $correctedPrice');
+        price = correctedPrice.toDouble();
+      }
+
+      // Check and fix total
+      if (lineTotal != null && shouldScale(lineTotal, rawText)) {
+        final correctedTotal = (lineTotal * 1000).round();
+        debugPrint(
+            '   🔧 Chilean fix (verified): total $lineTotal → $correctedTotal');
+        lineTotal = correctedTotal.toDouble();
+      }
+
+      debugPrint('   ✅ After fix: qty=$qty, price=$price, total=$lineTotal');
 
       // Extract discount fields
       double? discount = (map['discount'] as num?)?.toDouble();
@@ -227,7 +315,20 @@ class VeryfiAdapter {
     buffer.writeln(supplierName ?? '');
     if (invoiceNumber != null) buffer.writeln('N°: $invoiceNumber');
     if (date != null) buffer.writeln('Fecha: ${date.toIso8601String()}');
-    if (total != null) buffer.writeln('Total: $total');
+
+    // Calculate corrected total from line items (more accurate than Veryfi's total)
+    final correctedTotal =
+        parsedItems.fold<double>(0.0, (sum, item) => sum + (item.total ?? 0.0));
+
+    // Use corrected total if it's significantly larger than Veryfi's total
+    // (indicates Veryfi divided by 1000 due to Chilean format)
+    var finalTotal = total;
+    if (total != null && correctedTotal > total * 100) {
+      debugPrint('🔧 Chilean fix: invoice total $total → $correctedTotal');
+      finalTotal = correctedTotal;
+    }
+
+    if (finalTotal != null) buffer.writeln('Total: $finalTotal');
     for (final it in parsedItems) {
       buffer.writeln(
           '${it.description} ${it.quantity ?? ''} x ${it.unitPrice ?? ''} = ${it.total ?? ''}');
@@ -238,7 +339,7 @@ class VeryfiAdapter {
           (veryfiJson['tax_number'] as String?),
       invoiceNumber: invoiceNumber,
       date: date,
-      total: total,
+      total: finalTotal,
       supplierName: supplierName,
       lineItems: parsedItems,
       rawText: buffer.toString(),

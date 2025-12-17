@@ -47,6 +47,9 @@ class VeryfiService {
       request.headers.addAll(config.extraHeaders);
     }
 
+    // Note: Veryfi v8 API doesn't accept country_code as form field
+    // Locale is auto-detected from the document
+
     final multipartFile = http.MultipartFile.fromBytes(
       fieldName,
       bytes,
@@ -63,6 +66,11 @@ class VeryfiService {
       final response = await http.Response.fromStream(streamed);
 
       debugPrint('🚀 Veryfi: Response status: ${response.statusCode}');
+
+      // DEBUG: Log full response body to see what Veryfi returns
+      debugPrint('📄 Veryfi RAW RESPONSE START ===');
+      debugPrint(response.body);
+      debugPrint('📄 Veryfi RAW RESPONSE END ===');
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw Exception(

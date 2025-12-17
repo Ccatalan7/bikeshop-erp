@@ -14,7 +14,7 @@ class AppWorkspaceContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authService = context.read<AuthService>();
-    
+
     // If not authenticated, show login
     if (!authService.isAuthenticated) {
       return MaterialApp.router(
@@ -23,7 +23,7 @@ class AppWorkspaceContainer extends StatelessWidget {
         theme: Theme.of(context),
       );
     }
-    
+
     // Authenticated = workspace system (EXACT same as demo)
     return const _WorkspaceContent();
   }
@@ -35,23 +35,26 @@ class _WorkspaceContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final workspaceManager = context.watch<WorkspaceManager>();
-    
-    return Column(
-      children: [
-        const WorkspaceTabBar(),
-        Expanded(
-          child: IndexedStack(
-            index: workspaceManager.activeIndex,
-            sizing: StackFit.expand,
-            children: workspaceManager.workspaces.map((workspace) {
-              return _WorkspaceInstance(
-                key: ValueKey(workspace.id),
-                workspace: workspace,
-              );
-            }).toList(),
+
+    return SafeArea(
+      bottom: false, // Only add top padding for iOS status bar
+      child: Column(
+        children: [
+          const WorkspaceTabBar(),
+          Expanded(
+            child: IndexedStack(
+              index: workspaceManager.activeIndex,
+              sizing: StackFit.expand,
+              children: workspaceManager.workspaces.map((workspace) {
+                return _WorkspaceInstance(
+                  key: ValueKey(workspace.id),
+                  workspace: workspace,
+                );
+              }).toList(),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -94,7 +97,7 @@ class _WorkspaceInstanceState extends State<_WorkspaceInstance>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    
+
     // EXACT same as demo - MaterialApp.router per workspace
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,

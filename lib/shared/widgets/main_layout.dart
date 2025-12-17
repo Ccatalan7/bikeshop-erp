@@ -372,11 +372,13 @@ const List<MenuSubItem> _toolsMenuItems = [
 const String _toolsSectionKey = 'tools';
 
 /// Shows the sidebar options menu with live-updating zoom controls
-void _showSidebarOptionsMenu(BuildContext context, NavigationService navigationService) {
+void _showSidebarOptionsMenu(
+    BuildContext context, NavigationService navigationService) {
   final RenderBox button = context.findRenderObject() as RenderBox;
-  final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
+  final RenderBox overlay =
+      Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
   final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
-  
+
   showDialog(
     context: context,
     barrierColor: Colors.transparent,
@@ -418,11 +420,11 @@ class _SidebarOptionsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Consumer2<WindowZoomService, AppearanceService>(
       builder: (context, zoomService, appearanceService, _) {
         final zoomPercent = (zoomService.scale * 100).round();
-        
+
         return Material(
           elevation: 8,
           borderRadius: BorderRadius.circular(8),
@@ -448,18 +450,22 @@ class _SidebarOptionsPanel extends StatelessWidget {
                       ? 'Modo claro'
                       : 'Modo oscuro',
                   onTap: () {
-                    final newMode = appearanceService.themeMode == ThemeMode.dark
-                        ? ThemeMode.light
-                        : ThemeMode.dark;
+                    final newMode =
+                        appearanceService.themeMode == ThemeMode.dark
+                            ? ThemeMode.light
+                            : ThemeMode.dark;
                     appearanceService.setThemeMode(newMode);
                   },
                 ),
                 // Zoom controls
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     children: [
-                      Icon(Icons.zoom_in, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                      Icon(Icons.zoom_in,
+                          size: 18,
+                          color: theme.colorScheme.onSurface.withOpacity(0.7)),
                       const SizedBox(width: 12),
                       Text('Zoom', style: theme.textTheme.bodyMedium),
                       const Spacer(),
@@ -467,8 +473,11 @@ class _SidebarOptionsPanel extends StatelessWidget {
                       IconButton(
                         icon: const Icon(Icons.remove, size: 16),
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        onPressed: zoomService.scale > 0.5 ? () => zoomService.zoomOut() : null,
+                        constraints:
+                            const BoxConstraints(minWidth: 28, minHeight: 28),
+                        onPressed: zoomService.scale > 0.5
+                            ? () => zoomService.zoomOut()
+                            : null,
                       ),
                       // Live zoom percentage
                       Container(
@@ -476,24 +485,34 @@ class _SidebarOptionsPanel extends StatelessWidget {
                         alignment: Alignment.center,
                         child: Text(
                           '$zoomPercent%',
-                          style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                       ),
                       // Zoom in button
                       IconButton(
                         icon: const Icon(Icons.add, size: 16),
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        onPressed: zoomService.scale < 3.0 ? () => zoomService.zoomIn() : null,
+                        constraints:
+                            const BoxConstraints(minWidth: 28, minHeight: 28),
+                        onPressed: zoomService.scale < 3.0
+                            ? () => zoomService.zoomIn()
+                            : null,
                       ),
                     ],
                   ),
                 ),
-                Divider(height: 1, color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+                Divider(
+                    height: 1,
+                    color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
                 // Reorder modules
                 _OptionTile(
-                  icon: navigationService.isReorderMode ? Icons.check : Icons.swap_vert,
-                  label: navigationService.isReorderMode ? 'Guardar orden' : 'Reordenar módulos',
+                  icon: navigationService.isReorderMode
+                      ? Icons.check
+                      : Icons.swap_vert,
+                  label: navigationService.isReorderMode
+                      ? 'Guardar orden'
+                      : 'Reordenar módulos',
                   onTap: () {
                     navigationService.toggleReorderMode();
                     onClose();
@@ -538,7 +557,8 @@ class _OptionTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+            Icon(icon,
+                size: 18, color: theme.colorScheme.onSurface.withOpacity(0.7)),
             const SizedBox(width: 12),
             Text(label, style: theme.textTheme.bodyMedium),
           ],
@@ -893,11 +913,11 @@ class _AppSidebarState extends State<AppSidebar> {
         final currentLocation = routerState.uri.path;
         if (currentLocation != _lastLocation) {
           _lastLocation = currentLocation;
-          
+
           // Update workspace tab title based on current route
           final workspaceManager = context.read<WorkspaceManager>();
           workspaceManager.updateActiveWorkspaceRoute(currentLocation);
-          
+
           final matchingSection = _resolveSectionForPath(currentLocation);
           if (matchingSection != _expandedSection && mounted) {
             setState(() {
@@ -1052,17 +1072,19 @@ class _AppSidebarState extends State<AppSidebar> {
               builder: (context, navigationService, _) {
                 final moduleOrder = navigationService.moduleOrder;
                 final isReorderMode = navigationService.isReorderMode;
-                
+
                 if (isReorderMode) {
                   // Reorder mode: Show ReorderableListView
                   return ReorderableListView.builder(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     buildDefaultDragHandles: false,
-                    itemCount: moduleOrder.length + 2, // +2 for dashboard and divider
+                    itemCount:
+                        moduleOrder.length + 2, // +2 for dashboard and divider
                     onReorder: (oldIndex, newIndex) {
                       // Adjust for dashboard item (index 0) and divider (index 1)
                       if (oldIndex < 2 || newIndex < 2) return;
-                      navigationService.reorderModules(oldIndex - 2, newIndex - 2);
+                      navigationService.reorderModules(
+                          oldIndex - 2, newIndex - 2);
                     },
                     itemBuilder: (context, index) {
                       if (index == 0) {
@@ -1106,7 +1128,8 @@ class _AppSidebarState extends State<AppSidebar> {
                             ),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 2),
                           child: Row(
                             children: [
                               Padding(
@@ -1114,11 +1137,13 @@ class _AppSidebarState extends State<AppSidebar> {
                                 child: Icon(
                                   Icons.drag_indicator,
                                   size: 18,
-                                  color: theme.colorScheme.primary.withOpacity(0.6),
+                                  color: theme.colorScheme.primary
+                                      .withOpacity(0.6),
                                 ),
                               ),
                               Expanded(
-                                child: _buildModuleWidget(moduleKey, currentLocation),
+                                child: _buildModuleWidget(
+                                    moduleKey, currentLocation),
                               ),
                             ],
                           ),
@@ -1127,7 +1152,7 @@ class _AppSidebarState extends State<AppSidebar> {
                     },
                   );
                 }
-                
+
                 // Normal mode: Regular ListView
                 return ListView(
                   padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1148,7 +1173,8 @@ class _AppSidebarState extends State<AppSidebar> {
                     _buildSectionDivider(context),
 
                     // Render modules in custom order
-                    ...moduleOrder.map((moduleKey) => _buildModuleWidget(moduleKey, currentLocation)),
+                    ...moduleOrder.map((moduleKey) =>
+                        _buildModuleWidget(moduleKey, currentLocation)),
 
                     const SizedBox(height: 8),
                     _buildSectionDivider(context),
@@ -1257,7 +1283,8 @@ class _AppSidebarState extends State<AppSidebar> {
                 Consumer<NavigationService>(
                   builder: (context, navigationService, _) {
                     return Container(
-                      padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 8),
+                      padding: const EdgeInsets.only(
+                          left: 8, right: 8, top: 8, bottom: 8),
                       child: Row(
                         children: [
                           // 3-dot menu button
@@ -1265,7 +1292,8 @@ class _AppSidebarState extends State<AppSidebar> {
                             icon: Icon(
                               Icons.more_horiz,
                               size: 18,
-                              color: theme.colorScheme.onSurface.withOpacity(0.6),
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.6),
                             ),
                             iconSize: 18,
                             padding: EdgeInsets.zero,
@@ -1275,7 +1303,8 @@ class _AppSidebarState extends State<AppSidebar> {
                             ),
                             tooltip: 'Opciones',
                             onPressed: () {
-                              _showSidebarOptionsMenu(context, navigationService);
+                              _showSidebarOptionsMenu(
+                                  context, navigationService);
                             },
                           ),
                           const Spacer(),
@@ -1294,7 +1323,8 @@ class _AppSidebarState extends State<AppSidebar> {
                             },
                             style: IconButton.styleFrom(
                               backgroundColor: theme.colorScheme.surface,
-                              foregroundColor: theme.colorScheme.onSurface.withOpacity(0.6),
+                              foregroundColor:
+                                  theme.colorScheme.onSurface.withOpacity(0.6),
                             ),
                           ),
                         ],

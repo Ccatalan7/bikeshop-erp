@@ -81,23 +81,24 @@ late final Stopwatch _globalStopwatch;
 void _logTiming(String phase, [String? detail]) {
   final elapsed = _globalStopwatch.elapsedMilliseconds;
   _initTimings[phase] = elapsed;
-  debugPrint('⏱️ [PERF] $phase: ${elapsed}ms${detail != null ? ' ($detail)' : ''}');
+  debugPrint(
+      '⏱️ [PERF] $phase: ${elapsed}ms${detail != null ? ' ($detail)' : ''}');
 }
 
 Future<void> main() async {
   _globalStopwatch = Stopwatch()..start();
-  
+
   // Capture browser URL IMMEDIATELY, before anything else
   if (kIsWeb) {
     _initialBrowserUrl = getInitialBrowserUrl();
     debugPrint('🚀 [Main] Captured initial URL: $_initialBrowserUrl');
   }
   _logTiming('URL_CAPTURED');
-  
+
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     _logTiming('FLUTTER_BINDING');
-    
+
     // Use clean URLs (no hash #) for web
     usePathUrlStrategy();
     _logTiming('URL_STRATEGY');
@@ -127,7 +128,7 @@ Future<void> main() async {
         // Supabase automatically handles OAuth callbacks
         // The auth state listener will trigger navigation
       });
-      
+
       // Handle initial link (app opened from a link)
       appLinks.getInitialLink().then((uri) {
         if (uri != null && kDebugMode) {
@@ -140,13 +141,16 @@ Future<void> main() async {
       // Suppress Flutter Web-specific "disposed EngineFlutterView" errors
       // These occur during hot reload and navigation and don't affect functionality
       final errorString = details.exceptionAsString();
-      if (kIsWeb && errorString.contains('disposed') && errorString.contains('EngineFlutterView')) {
+      if (kIsWeb &&
+          errorString.contains('disposed') &&
+          errorString.contains('EngineFlutterView')) {
         if (kDebugMode) {
-          debugPrint('⚠️ [Flutter Web] Suppressed disposed view error (hot reload artifact)');
+          debugPrint(
+              '⚠️ [Flutter Web] Suppressed disposed view error (hot reload artifact)');
         }
         return; // Don't report or dump these errors
       }
-      
+
       ErrorReportingService.report(details.exception, details.stack);
       FlutterError.dumpErrorToConsole(details);
     };
@@ -156,13 +160,15 @@ Future<void> main() async {
   }, (error, stack) {
     // Suppress Flutter Web-specific errors in zone guard as well
     final errorString = error.toString();
-    if (kIsWeb && errorString.contains('disposed') && errorString.contains('EngineFlutterView')) {
+    if (kIsWeb &&
+        errorString.contains('disposed') &&
+        errorString.contains('EngineFlutterView')) {
       if (kDebugMode) {
         debugPrint('⚠️ [Flutter Web] Suppressed disposed view error (zone)');
       }
       return; // Don't report these errors
     }
-    
+
     // Also suppress LegacyJavaScriptObject errors (http package compatibility issue)
     if (kIsWeb && errorString.contains('LegacyJavaScriptObject')) {
       if (kDebugMode) {
@@ -170,7 +176,7 @@ Future<void> main() async {
       }
       return;
     }
-    
+
     ErrorReportingService.report(error, stack);
     debugPrint('Uncaught error: $error\n$stack');
   });
@@ -237,9 +243,10 @@ class VinabikeApp extends StatelessWidget {
                   Provider.of<DatabaseService>(context, listen: false),
                 )),
         ChangeNotifierProvider(create: (context) => WheelBuildingService()),
-        ChangeNotifierProvider(create: (context) => SmartTaskService(
-              Provider.of<DatabaseService>(context, listen: false),
-            )),
+        ChangeNotifierProvider(
+            create: (context) => SmartTaskService(
+                  Provider.of<DatabaseService>(context, listen: false),
+                )),
         ChangeNotifierProvider(
             create: (context) => AccountingService(
                   Provider.of<DatabaseService>(context, listen: false),
@@ -258,7 +265,9 @@ class VinabikeApp extends StatelessWidget {
                   Provider.of<DatabaseService>(context, listen: false),
                   Provider.of<TenantService>(context, listen: false),
                 )),
-        ChangeNotifierProvider.value(value: SmartPurchaseListService()), // Singleton - persists across app
+        ChangeNotifierProvider.value(
+            value:
+                SmartPurchaseListService()), // Singleton - persists across app
         ChangeNotifierProvider(
             create: (context) => HRService(
                   Provider.of<TenantService>(context, listen: false),
@@ -276,12 +285,12 @@ class VinabikeApp extends StatelessWidget {
         // MercadoPago: Don't auto-initialize - checkout will init with proper tenant_id
         ChangeNotifierProvider(create: (_) => MercadoPagoService()),
         ChangeNotifierProvider(create: (_) => BackupService()),
-        
+
         // Public store services
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => AddressAutocompleteService()),
         ChangeNotifierProvider(create: (_) => CustomerAccountService()),
-        
+
         // Tenant detection for public store (subdomain-based routing)
         Provider(create: (_) => TenantDetectionService()),
         ChangeNotifierProvider(
@@ -289,10 +298,10 @@ class VinabikeApp extends StatelessWidget {
             context.read<TenantDetectionService>(),
           ),
         ),
-        
+
         // Public inventory service (for anonymous users browsing the store)
         ChangeNotifierProvider(create: (_) => PublicInventoryService()),
-        
+
         ChangeNotifierProxyProvider3<DatabaseService, AccountingService,
             TenantService, SalesService>(
           create: (context) => SalesService(
@@ -300,9 +309,10 @@ class VinabikeApp extends StatelessWidget {
             context.read<AccountingService>(),
             context.read<TenantService>(),
           ),
-          update: (context, databaseService, accountingService, tenantService, previous) {
-            final service =
-                previous ?? SalesService(databaseService, accountingService, tenantService);
+          update: (context, databaseService, accountingService, tenantService,
+              previous) {
+            final service = previous ??
+                SalesService(databaseService, accountingService, tenantService);
             service.updateDependencies(databaseService, accountingService);
             return service;
           },
@@ -335,7 +345,7 @@ class VinabikeApp extends StatelessWidget {
             return service;
           },
         ),
-        
+
         // Data preload service - preloads critical data after authentication
         ChangeNotifierProvider(create: (_) => DataPreloadService()),
       ],
@@ -351,34 +361,41 @@ class VinabikeApp extends StatelessWidget {
           // CRITICAL: Use context.watch() to rebuild when auth state changes
           final authService = context.watch<AuthService>();
           final appearanceService = context.watch<AppearanceService>();
-          
+
           // PUBLIC STORE: Wait for tenant detection, then render app
           if (isPublicStoreHost) {
             final tenantProvider = context.watch<PublicStoreTenantProvider>();
-            
+
             // Start tenant detection + data loading
-            if (!tenantProvider.hasTenant && !tenantProvider.isLoading && !tenantProvider.hasError) {
+            if (!tenantProvider.hasTenant &&
+                !tenantProvider.isLoading &&
+                !tenantProvider.hasError) {
               WidgetsBinding.instance.addPostFrameCallback((_) async {
                 _logTiming('TENANT_DETECT_START');
                 await tenantProvider.detectTenant();
                 _logTiming('TENANT_DETECTED', tenantProvider.tenantId);
-                
+
                 // Load data in background
                 if (tenantProvider.tenantId != null) {
                   final tid = tenantProvider.tenantId!;
                   final ws = context.read<WebsiteService>();
-                  
+
                   _logTiming('DATA_LOAD_START');
                   Future.wait([
-                    ws.loadSettingsForTenant(tid).then((_) => _logTiming('SETTINGS_LOADED')),
-                    ws.loadBlocksForTenant(tid).then((_) => _logTiming('BLOCKS_LOADED')),
+                    ws
+                        .loadSettingsForTenant(tid)
+                        .then((_) => _logTiming('SETTINGS_LOADED')),
+                    ws
+                        .loadBlocksForTenant(tid)
+                        .then((_) => _logTiming('BLOCKS_LOADED')),
                   ]).then((_) => _logTiming('ALL_DATA_LOADED'));
                 }
               });
             }
-            
+
             // Show loading while tenant is being detected
-            if (tenantProvider.isLoading || (!tenantProvider.hasTenant && !tenantProvider.hasError)) {
+            if (tenantProvider.isLoading ||
+                (!tenantProvider.hasTenant && !tenantProvider.hasError)) {
               return const MaterialApp(
                 debugShowCheckedModeBanner: false,
                 home: Scaffold(
@@ -387,7 +404,7 @@ class VinabikeApp extends StatelessWidget {
                 ),
               );
             }
-            
+
             // Tenant detection failed
             if (tenantProvider.hasError) {
               return MaterialApp(
@@ -412,19 +429,22 @@ class VinabikeApp extends StatelessWidget {
                 ),
               );
             }
-            
+
             // Tenant is ready - proceed to app (data loads in background)
           }
-          
+
           // Initialize data preload service (preloads critical data after auth)
           // SKIP on public store - visitors don't need ERP data
           final dataPreloadService = context.read<DataPreloadService>();
-          if (!isPublicStoreHost && !dataPreloadService.hasPreloaded && authService.isAuthenticated) {
+          if (!isPublicStoreHost &&
+              !dataPreloadService.hasPreloaded &&
+              authService.isAuthenticated) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               dataPreloadService.initialize(
                 bikeshopService: context.read<BikeshopService>(),
                 customerService: context.read<CustomerService>(),
-                inventoryService: context.read<module_inventory.InventoryService>(),
+                inventoryService:
+                    context.read<module_inventory.InventoryService>(),
                 categoryService: context.read<CategoryService>(),
                 brandService: context.read<BrandService>(),
                 salesService: context.read<SalesService>(),
@@ -434,10 +454,11 @@ class VinabikeApp extends StatelessWidget {
               );
             });
           }
-          
+
           // Reload appearance settings after authentication completes
           // Use hasLoadedWithTenant to ensure we reload if initial load had no tenant
-          if (authService.isAuthenticated && !appearanceService.hasLoadedWithTenant) {
+          if (authService.isAuthenticated &&
+              !appearanceService.hasLoadedWithTenant) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               appearanceService.reloadSettings();
             });
@@ -464,7 +485,8 @@ class VinabikeApp extends StatelessWidget {
             final initialLocationOverride = () {
               if (kIsWeb && _initialBrowserUrl != null) {
                 final uri = Uri.parse(_initialBrowserUrl!);
-                debugPrint('🔍 [Main] Using captured initial URL: $_initialBrowserUrl');
+                debugPrint(
+                    '🔍 [Main] Using captured initial URL: $_initialBrowserUrl');
                 debugPrint('🔍 [Main] parsed path = ${uri.path}');
                 debugPrint('🔍 [Main] parsed query = ${uri.query}');
                 final path = uri.path.isEmpty ? '/' : uri.path;
@@ -476,7 +498,7 @@ class VinabikeApp extends StatelessWidget {
               }
               return '/';
             }();
-            
+
             return MaterialApp.router(
               title: 'Viñabike ERP',
               theme: AppTheme.lightTheme,
@@ -506,7 +528,7 @@ class VinabikeApp extends StatelessWidget {
 
           // Authenticated = workspace system with OUTER Material context
           debugPrint('✅ [Main] User is AUTHENTICATED - using WORKSPACE SYSTEM');
-          
+
           return MaterialApp(
             title: 'Viñabike ERP',
             theme: AppTheme.lightTheme,
@@ -526,35 +548,55 @@ class VinabikeApp extends StatelessWidget {
             locale: const Locale('es', ''),
             builder: (context, child) =>
                 WindowZoomScope(child: child ?? const SizedBox.shrink()),
-            home: Consumer<WorkspaceManager>(
-              builder: (context, workspaceManager, _) {
-                // Ensure workspaces are initialized before rendering
-                if (workspaceManager.workspaces.isEmpty) {
-                  debugPrint('⚠️ [Main] WorkspaceManager has no workspaces yet, showing loading...');
+            home: Selector<WorkspaceManager, bool>(
+              selector: (_, wm) => wm.workspaces.isEmpty,
+              builder: (context, isEmpty, _) {
+                // Check if workspaces are initialized
+                if (isEmpty) {
+                  debugPrint(
+                      '⚠️ [Main] WorkspaceManager has no workspaces yet, showing loading...');
                   return const Scaffold(
-                    body: BrandedLoadingOverlay(message: 'Cargando espacios de trabajo...'),
+                    body: BrandedLoadingOverlay(
+                        message: 'Cargando espacios de trabajo...'),
                   );
                 }
-                
+
+                // Scaffold and tab bar are stable - only IndexedStack rebuilds with workspace changes
                 return Scaffold(
-                  body: Column(
-                    children: [
-                      // Workspace tab bar uses theme
-                      const WorkspaceTabBar(),
-                      Expanded(
-                        child: IndexedStack(
-                          index: workspaceManager.activeIndex,
-                          sizing: StackFit.expand,
-                          children: workspaceManager.workspaces.map((workspace) {
-                            return _WorkspaceRouterView(
-                              key: ValueKey(workspace.id),
-                              workspace: workspace,
-                              authService: authService,
-                            );
-                          }).toList(),
+                  body: SafeArea(
+                    bottom: false, // Only add top padding for iOS status bar
+                    child: Column(
+                      children: [
+                        // Tab bar has its own internal Consumer, stable during rebuilds
+                        const WorkspaceTabBar(),
+                        // Only this part needs to rebuild on workspace changes
+                        Expanded(
+                          child:
+                              Selector<WorkspaceManager, (int, List<String>)>(
+                            selector: (_, wm) => (
+                              wm.activeIndex,
+                              wm.workspaces.map((w) => w.id).toList()
+                            ),
+                            builder: (context, data, _) {
+                              final workspaceManager =
+                                  context.read<WorkspaceManager>();
+                              return IndexedStack(
+                                index: data.$1,
+                                sizing: StackFit.expand,
+                                children: workspaceManager.workspaces
+                                    .map((workspace) {
+                                  return _WorkspaceRouterView(
+                                    key: ValueKey(workspace.id),
+                                    workspace: workspace,
+                                    authService: authService,
+                                  );
+                                }).toList(),
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               },
@@ -590,17 +632,19 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
   @override
   void initState() {
     super.initState();
-    
-    debugPrint('🎯 [WorkspaceRouterView] Creating router for workspace: ${widget.workspace.title} with route: ${widget.workspace.initialRoute}');
-    
+
+    debugPrint(
+        '🎯 [WorkspaceRouterView] Creating router for workspace: ${widget.workspace.title} with route: ${widget.workspace.initialRoute}');
+
     // Create router WITHOUT initialLocation to avoid navigation conflicts
     // The MainLayout will handle navigation to the correct route
     _router = AppRouter.createRouter(widget.authService);
-    
+
     // Navigate to the workspace's initial route after the router is created
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
-        debugPrint('🚀 [WorkspaceRouterView] Navigating to: ${widget.workspace.initialRoute}');
+        debugPrint(
+            '🚀 [WorkspaceRouterView] Navigating to: ${widget.workspace.initialRoute}');
         _router.go(widget.workspace.initialRoute);
       } catch (e) {
         debugPrint('❌ [WorkspaceRouterView] Navigation error: $e');
@@ -617,7 +661,7 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    
+
     try {
       return Router.withConfig(config: _router);
     } catch (e) {
@@ -652,7 +696,8 @@ bool _detectPublicStoreHost() {
   // Development: Check for FORCE_SUBDOMAIN environment variable
   const forceSubdomain = String.fromEnvironment('FORCE_SUBDOMAIN');
   if (forceSubdomain.isNotEmpty) {
-    debugPrint('🧪 [Main] FORCE_SUBDOMAIN=$forceSubdomain → treating as public store host');
+    debugPrint(
+        '🧪 [Main] FORCE_SUBDOMAIN=$forceSubdomain → treating as public store host');
     return true;
   }
 
