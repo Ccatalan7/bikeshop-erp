@@ -7,13 +7,14 @@ import '../../modules/settings/models/barcode_scan_event.dart';
 
 /// Service to receive barcode scans from remote devices (phones) via Supabase Realtime
 class RemoteScannerService {
-  static final RemoteScannerService _instance = RemoteScannerService._internal();
+  static final RemoteScannerService _instance =
+      RemoteScannerService._internal();
   factory RemoteScannerService() => _instance;
   RemoteScannerService._internal();
 
   final SupabaseClient _supabase = Supabase.instance.client;
   final _scanController = StreamController<BarcodeScanEvent>.broadcast();
-  
+
   RealtimeChannel? _channel;
   String? _deviceId;
   bool _isListening = false;
@@ -27,16 +28,31 @@ class RemoteScannerService {
   /// Get or create a unique device ID for this ERP instance
   Future<String> getDeviceId() async {
     if (_deviceId != null) return _deviceId!;
-    
+
     final prefs = await SharedPreferences.getInstance();
     _deviceId = prefs.getString('device_id');
-    
+
     if (_deviceId == null) {
       _deviceId = const Uuid().v4();
       await prefs.setString('device_id', _deviceId!);
     }
-    
+
     return _deviceId!;
+  }
+
+  /// Reset the device ID to force disconnection of all paired devices
+  Future<void> resetDeviceId() async {
+    await stopListening();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('device_id');
+    _deviceId = null;
+
+    // Generate new ID immediately
+    await getDeviceId();
+
+    // Restart listening with new ID
+    await startListening();
   }
 
   /// Start listening for remote scanner broadcasts
@@ -50,15 +66,24 @@ class RemoteScannerService {
       final deviceId = await getDeviceId();
       final channelName = 'barcode_scans:$deviceId';
 
-      debugPrint('📱 RemoteScannerService: Subscribing to channel: $channelName');
+      debugPrint(
+          '📱 RemoteScannerService: Subscribing to channel: $channelName');
 
       _channel = _supabase.channel(channelName);
-      
+
       _channel!.onBroadcast(
         event: 'scan',
         callback: (payload) {
           debugPrint('📱 RemoteScannerService: Received scan: $payload');
           try {
+            // Filter out Config QR payloads accidentally scanned as products
+            final rawPayload = payload.toString();
+            if (rawPayload.contains('supabase.co') &&
+                rawPayload.contains('deviceId')) {
+              debugPrint('⚠️ RemoteScannerService: Ignored Config QR scan');
+              return;
+            }
+
             final scanEvent = BarcodeScanEvent.fromJson(payload);
             _scanController.add(scanEvent);
           } catch (e) {
@@ -98,7 +123,7 @@ class RemoteScannerService {
 
       final channel = _supabase.channel(channelName);
       await channel.subscribe();
-      
+
       await channel.sendBroadcastMessage(
         event: 'scan',
         payload: event.toJson(),

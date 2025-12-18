@@ -14,7 +14,7 @@ import '../../inventory/models/category_models.dart' as inventory_models;
 import '../../inventory/services/category_service.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/payment_method_service.dart';
-import '../../../shared/services/remote_scanner_service.dart';
+import '../../../shared/services/barcode_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../../sales/models/sales_models.dart';
@@ -40,8 +40,6 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   bool _isLoadingCategories = false;
   ProductType? _selectedProductType;
   StreamSubscription? _scanSubscription;
-  final _remoteScannerService = RemoteScannerService();
-  bool _scannerEnabled = false;
 
   @override
   void initState() {
@@ -59,11 +57,12 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
       paymentMethodService.loadPaymentMethods();
       _loadCategories(categoryService);
     });
-    
-    // Listen for barcode scans
-    _scanSubscription = _remoteScannerService.scanStream.listen((scan) {
+
+    // Listen for unified barcode scans
+    _scanSubscription =
+        context.read<BarcodeScannerService>().barcodeStream.listen((barcode) {
       if (mounted) {
-        _handleBarcodeScan(scan.barcode);
+        _handleBarcodeScan(barcode);
       }
     });
   }
@@ -74,47 +73,19 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     _scanSubscription?.cancel();
     super.dispose();
   }
-  
-  Future<void> _toggleScanner() async {
-    try {
-      if (_scannerEnabled) {
-        await _remoteScannerService.stopListening();
-        setState(() => _scannerEnabled = false);
-      } else {
-        await _remoteScannerService.startListening();
-        setState(() => _scannerEnabled = true);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('📱 Escáner remoto activado - Listo para escanear'),
-              duration: Duration(seconds: 2),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error con escáner: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-  
+
   Future<void> _handleBarcodeScan(String barcode) async {
-    final inventoryService = Provider.of<InventoryService>(context, listen: false);
-    
+    final inventoryService =
+        Provider.of<InventoryService>(context, listen: false);
+
     // Search for product by SKU or barcode
     final product = inventoryService.products.cast<Product?>().firstWhere(
-      (p) => p!.sku.toLowerCase() == barcode.toLowerCase() ||
-             p.barcode?.toLowerCase() == barcode.toLowerCase(),
-      orElse: () => null,
-    );
-    
+          (p) =>
+              p!.sku.toLowerCase() == barcode.toLowerCase() ||
+              p.barcode?.toLowerCase() == barcode.toLowerCase(),
+          orElse: () => null,
+        );
+
     if (product != null) {
       _addToCart(product);
     } else {
@@ -379,19 +350,14 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                   ),
                 ),
                 // Scanner toggle button
+                // Scanner is globally active, no toggle needed
+                /*
                 IconButton(
-                  onPressed: _toggleScanner,
-                  icon: Icon(
-                    _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
-                    color: _scannerEnabled ? Colors.green : null,
-                  ),
-                  tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
-                  style: IconButton.styleFrom(
-                    backgroundColor: _scannerEnabled 
-                        ? Colors.green.withOpacity(0.1) 
-                        : null,
-                  ),
+                  onPressed: () {},
+                  icon: const Icon(Icons.qr_code_scanner, color: Colors.green),
+                  tooltip: 'Escáner Activo',
                 ),
+                */
                 const SizedBox(width: 8),
                 Consumer<POSService>(
                   builder: (context, posService, child) {
@@ -444,219 +410,230 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                   // Search bar
                                   SearchBarWidget(
                                     controller: _searchController,
-                                hintText: 'Buscar productos...',
-                                onChanged: (value) {
-                                  setState(() {
-                                    _searchQuery = value;
-                                  });
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                              // Filters
-                              Consumer<InventoryService>(
-                                builder: (context, inventoryService, child) {
-                                  final categoryOptions = _getCategoryOptions(
-                                      inventoryService.products);
-                                  final optionsByKey = {
-                                    for (final option in categoryOptions)
-                                      option.key: option,
-                                  };
-                                  return Row(
-                                    children: [
-                                      FilterChip(
-                                        label: const Text('Todos'),
-                                        selected:
-                                            _selectedCategoryKey == null &&
+                                    hintText: 'Buscar productos...',
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _searchQuery = value;
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  // Filters
+                                  Consumer<InventoryService>(
+                                    builder:
+                                        (context, inventoryService, child) {
+                                      final categoryOptions =
+                                          _getCategoryOptions(
+                                              inventoryService.products);
+                                      final optionsByKey = {
+                                        for (final option in categoryOptions)
+                                          option.key: option,
+                                      };
+                                      return Row(
+                                        children: [
+                                          FilterChip(
+                                            label: const Text('Todos'),
+                                            selected: _selectedCategoryKey ==
+                                                    null &&
                                                 _selectedProductType == null,
-                                        onSelected: (_) {
-                                          setState(() {
-                                            _selectedCategoryKey = null;
-                                            _selectedCategoryMatchers =
-                                                const <String>{};
-                                            _selectedProductType = null;
-                                          });
-                                        },
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: DropdownButtonFormField<
-                                            ProductType?>(
-                                          value: _selectedProductType,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Tipo',
-                                            border: OutlineInputBorder(),
+                                            onSelected: (_) {
+                                              setState(() {
+                                                _selectedCategoryKey = null;
+                                                _selectedCategoryMatchers =
+                                                    const <String>{};
+                                                _selectedProductType = null;
+                                              });
+                                            },
                                           ),
-                                          items: const [
-                                            DropdownMenuItem<ProductType?>(
-                                              value: null,
-                                              child: Text('Todos los tipos'),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: DropdownButtonFormField<
+                                                ProductType?>(
+                                              value: _selectedProductType,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Tipo',
+                                                border: OutlineInputBorder(),
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem<ProductType?>(
+                                                  value: null,
+                                                  child:
+                                                      Text('Todos los tipos'),
+                                                ),
+                                                DropdownMenuItem<ProductType?>(
+                                                  value: ProductType.product,
+                                                  child: Text('Productos'),
+                                                ),
+                                                DropdownMenuItem<ProductType?>(
+                                                  value: ProductType.service,
+                                                  child: Text('Servicios'),
+                                                ),
+                                              ],
+                                              onChanged: (value) {
+                                                setState(() {
+                                                  _selectedProductType = value;
+                                                });
+                                              },
                                             ),
-                                            DropdownMenuItem<ProductType?>(
-                                              value: ProductType.product,
-                                              child: Text('Productos'),
-                                            ),
-                                            DropdownMenuItem<ProductType?>(
-                                              value: ProductType.service,
-                                              child: Text('Servicios'),
-                                            ),
-                                          ],
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _selectedProductType = value;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: DropdownButtonFormField<String?>(
-                                          value: _selectedCategoryKey,
-                                          decoration: InputDecoration(
-                                            labelText: 'Categorías',
-                                            border: const OutlineInputBorder(),
-                                            suffixIcon: _isLoadingCategories
-                                                ? const Padding(
-                                                    padding: EdgeInsets.all(12),
-                                                    child: SizedBox(
-                                                      width: 16,
-                                                      height: 16,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                      ),
-                                                    ),
-                                                  )
-                                                : null,
                                           ),
-                                          isExpanded: true,
-                                          items: [
-                                            const DropdownMenuItem<String?>(
-                                              value: null,
-                                              child:
-                                                  Text('Todas las categorías'),
-                                            ),
-                                            ...categoryOptions.map(
-                                              (option) =>
-                                                  DropdownMenuItem<String?>(
-                                                value: option.key,
-                                                child: Text(option.label),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: DropdownButtonFormField<
+                                                String?>(
+                                              value: _selectedCategoryKey,
+                                              decoration: InputDecoration(
+                                                labelText: 'Categorías',
+                                                border:
+                                                    const OutlineInputBorder(),
+                                                suffixIcon: _isLoadingCategories
+                                                    ? const Padding(
+                                                        padding:
+                                                            EdgeInsets.all(12),
+                                                        child: SizedBox(
+                                                          width: 16,
+                                                          height: 16,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                          ),
+                                                        ),
+                                                      )
+                                                    : null,
                                               ),
+                                              isExpanded: true,
+                                              items: [
+                                                const DropdownMenuItem<String?>(
+                                                  value: null,
+                                                  child: Text(
+                                                      'Todas las categorías'),
+                                                ),
+                                                ...categoryOptions.map(
+                                                  (option) =>
+                                                      DropdownMenuItem<String?>(
+                                                    value: option.key,
+                                                    child: Text(option.label),
+                                                  ),
+                                                ),
+                                              ],
+                                              onChanged: (value) {
+                                                setState(() {
+                                                  _selectedCategoryKey = value;
+                                                  _selectedCategoryMatchers =
+                                                      value != null
+                                                          ? (optionsByKey[value]
+                                                                  ?.matchers ??
+                                                              const <String>{})
+                                                          : const <String>{};
+                                                });
+                                              },
                                             ),
-                                          ],
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _selectedCategoryKey = value;
-                                              _selectedCategoryMatchers =
-                                                  value != null
-                                                      ? (optionsByKey[value]
-                                                              ?.matchers ??
-                                                          const <String>{})
-                                                      : const <String>{};
-                                            });
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  // Products grid
+                                  Expanded(
+                                    child: Consumer<InventoryService>(
+                                      builder:
+                                          (context, inventoryService, child) {
+                                        final products =
+                                            inventoryService.products;
+                                        final filteredProducts =
+                                            _getFilteredProducts(
+                                          products,
+                                          categoryMatchers:
+                                              _selectedCategoryMatchers,
+                                        );
+                                        if (products.isEmpty) {
+                                          return const Center(
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  Icons.inventory_2_outlined,
+                                                  size: 100,
+                                                  color: Colors.grey,
+                                                ),
+                                                SizedBox(height: 16),
+                                                Text(
+                                                  'No hay productos disponibles',
+                                                  style: TextStyle(
+                                                      fontSize: 18,
+                                                      color: Colors.grey),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }
+                                        if (filteredProducts.isEmpty) {
+                                          return Center(
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  Icons.search_off,
+                                                  size: 100,
+                                                  color:
+                                                      theme.colorScheme.outline,
+                                                ),
+                                                const SizedBox(height: 16),
+                                                Text(
+                                                  'No se encontraron productos',
+                                                  style: theme
+                                                      .textTheme.headlineSmall
+                                                      ?.copyWith(
+                                                    color: theme.colorScheme
+                                                        .onSurfaceVariant,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  'Intenta cambiar los filtros de búsqueda',
+                                                  style: theme
+                                                      .textTheme.bodyLarge
+                                                      ?.copyWith(
+                                                    color: theme.colorScheme
+                                                        .onSurfaceVariant,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }
+                                        return GridView.builder(
+                                          padding: const EdgeInsets.all(8),
+                                          gridDelegate:
+                                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: 4,
+                                            childAspectRatio: 0.75,
+                                            crossAxisSpacing: 8,
+                                            mainAxisSpacing: 8,
+                                          ),
+                                          itemCount: filteredProducts.length,
+                                          itemBuilder: (context, index) {
+                                            final product =
+                                                filteredProducts[index];
+                                            return ProductTile(
+                                              product: product,
+                                              onTap: () => _addToCart(product),
+                                            );
                                           },
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                              // Products grid
-                              Expanded(
-                                child: Consumer<InventoryService>(
-                                  builder: (context, inventoryService, child) {
-                                    final products = inventoryService.products;
-                                    final filteredProducts =
-                                        _getFilteredProducts(
-                                      products,
-                                      categoryMatchers:
-                                          _selectedCategoryMatchers,
-                                    );
-                                    if (products.isEmpty) {
-                                      return const Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.inventory_2_outlined,
-                                              size: 100,
-                                              color: Colors.grey,
-                                            ),
-                                            SizedBox(height: 16),
-                                            Text(
-                                              'No hay productos disponibles',
-                                              style: TextStyle(
-                                                  fontSize: 18,
-                                                  color: Colors.grey),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }
-                                    if (filteredProducts.isEmpty) {
-                                      return Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.search_off,
-                                              size: 100,
-                                              color: theme.colorScheme.outline,
-                                            ),
-                                            const SizedBox(height: 16),
-                                            Text(
-                                              'No se encontraron productos',
-                                              style: theme
-                                                  .textTheme.headlineSmall
-                                                  ?.copyWith(
-                                                color: theme.colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              'Intenta cambiar los filtros de búsqueda',
-                                              style: theme.textTheme.bodyLarge
-                                                  ?.copyWith(
-                                                color: theme.colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }
-                                    return GridView.builder(
-                                      padding: const EdgeInsets.all(8),
-                                      gridDelegate:
-                                          const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 4,
-                                        childAspectRatio: 0.75,
-                                        crossAxisSpacing: 8,
-                                        mainAxisSpacing: 8,
-                                      ),
-                                      itemCount: filteredProducts.length,
-                                      itemBuilder: (context, index) {
-                                        final product = filteredProducts[index];
-                                        return ProductTile(
-                                          product: product,
-                                          onTap: () => _addToCart(product),
                                         );
                                       },
-                                    );
-                                  },
-                                ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  // Right: Cashier/cart summary
-                  Container(
+                            );
+                          },
+                        ),
+                      ),
+                      // Right: Cashier/cart summary
+                      Container(
                         width: 380,
                         decoration: BoxDecoration(
                           color: theme.colorScheme.surfaceVariant,
@@ -903,9 +880,10 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
 
   // Invoice details view - shown in LEFT panel when paying invoice
   Widget _buildInvoiceDetailsView(ThemeData theme, Invoice invoice) {
-    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final currencyFormat =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
     final dateFormat = DateFormat('dd/MM/yyyy');
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -918,8 +896,9 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () {
                   context.read<POSService>().exitInvoicePaymentMode();
-                  // Return to pending invoices list  
-                  final cashierPanel = context.findAncestorStateOfType<_CashierPanelState>();
+                  // Return to pending invoices list
+                  final cashierPanel =
+                      context.findAncestorStateOfType<_CashierPanelState>();
                   cashierPanel?.setState(() {
                     cashierPanel._showPendingInvoices = true;
                   });
@@ -967,7 +946,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
             ],
           ),
           const Divider(height: 32),
-          
+
           // Invoice info
           Row(
             children: [
@@ -1001,7 +980,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
             ],
           ),
           const SizedBox(height: 24),
-          
+
           // Line items
           Text(
             'Artículos',
@@ -1126,7 +1105,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // Financial summary
           Container(
             padding: const EdgeInsets.all(16),
@@ -1136,23 +1115,23 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
             ),
             child: Column(
               children: [
-                _buildSummaryRow(theme, 'Subtotal',
-                    currencyFormat.format(invoice.subtotal)),
-                const SizedBox(height: 8),
                 _buildSummaryRow(
-                    theme, 'IVA (19%)', currencyFormat.format(invoice.ivaAmount)),
+                    theme, 'Subtotal', currencyFormat.format(invoice.subtotal)),
+                const SizedBox(height: 8),
+                _buildSummaryRow(theme, 'IVA (19%)',
+                    currencyFormat.format(invoice.ivaAmount)),
                 const Divider(height: 24),
-                _buildSummaryRow(theme, 'Total',
-                    currencyFormat.format(invoice.total),
+                _buildSummaryRow(
+                    theme, 'Total', currencyFormat.format(invoice.total),
                     isTotal: true),
                 if (invoice.paidAmount > 0) ...[
                   const SizedBox(height: 8),
-                  _buildSummaryRow(
-                      theme, 'Pagado', currencyFormat.format(invoice.paidAmount),
+                  _buildSummaryRow(theme, 'Pagado',
+                      currencyFormat.format(invoice.paidAmount),
                       valueColor: Colors.green),
                   const Divider(height: 24),
-                  _buildSummaryRow(theme, 'Saldo',
-                      currencyFormat.format(invoice.balance),
+                  _buildSummaryRow(
+                      theme, 'Saldo', currencyFormat.format(invoice.balance),
                       isTotal: true, valueColor: Colors.red),
                 ],
               ],
@@ -1171,7 +1150,8 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
         Text(
           label,
           style: isTotal
-              ? theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)
+              ? theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold)
               : theme.textTheme.titleMedium,
         ),
         Text(
@@ -1232,8 +1212,10 @@ class _CashierPanelState extends State<_CashierPanel> {
 
   // Invoice payment form state
   String? _selectedPaymentMethodId;
-  final TextEditingController _paymentAmountController = TextEditingController();
-  final TextEditingController _paymentReferenceController = TextEditingController();
+  final TextEditingController _paymentAmountController =
+      TextEditingController();
+  final TextEditingController _paymentReferenceController =
+      TextEditingController();
 
   // Payment flow state
   bool _showPaymentView = false;
@@ -1247,9 +1229,11 @@ class _CashierPanelState extends State<_CashierPanel> {
 
   // Ad-hoc item inline form state
   bool _showAdHocForm = false;
-  final TextEditingController _adHocDescriptionController = TextEditingController();
+  final TextEditingController _adHocDescriptionController =
+      TextEditingController();
   final TextEditingController _adHocPriceController = TextEditingController();
-  final TextEditingController _adHocQuantityController = TextEditingController(text: '1');
+  final TextEditingController _adHocQuantityController =
+      TextEditingController(text: '1');
 
   @override
   void initState() {
@@ -1408,7 +1392,8 @@ class _CashierPanelState extends State<_CashierPanel> {
       _showPaymentView = false;
       _showReceiptView = false;
       _completedTransaction = null;
-      _selectedPaymentMethod = null; // ✅ Reset to null instead of hardcoded enum
+      _selectedPaymentMethod =
+          null; // ✅ Reset to null instead of hardcoded enum
       _amountReceived = 0.0;
       _amountController.clear();
     });
@@ -1417,22 +1402,22 @@ class _CashierPanelState extends State<_CashierPanel> {
   /// Check if customer has pending invoices and show them in right panel
   Future<void> _checkPendingInvoices(Customer customer) async {
     if (!mounted) return;
-    
+
     setState(() {
       _isLoadingInvoices = true;
       _showPendingInvoices = false;
     });
-    
+
     try {
       final salesService = Provider.of<SalesService>(context, listen: false);
-      
+
       // Query pending invoices for this customer
       final pendingInvoices = await salesService.getPendingInvoices(
         customerId: customer.id,
       );
-      
+
       if (!mounted) return;
-      
+
       setState(() {
         _pendingInvoices = pendingInvoices;
         _showPendingInvoices = pendingInvoices.isNotEmpty;
@@ -1456,7 +1441,8 @@ class _CashierPanelState extends State<_CashierPanel> {
     });
   }
 
-  Future<void> _processInvoicePayment(POSService posService, Invoice invoice) async {
+  Future<void> _processInvoicePayment(
+      POSService posService, Invoice invoice) async {
     // Validate payment method selected
     if (_selectedPaymentMethodId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1467,20 +1453,20 @@ class _CashierPanelState extends State<_CashierPanel> {
       );
       return;
     }
-    
+
     // Parse payment amount
     final amountText = _paymentAmountController.text.trim();
-    
+
     // Simple cleaning: just remove $ symbol and spaces, keep the number
     final cleanedText = amountText
         .replaceAll('\$', '')
         .replaceAll(' ', '')
         .replaceAll(',', '') // Remove thousands separator if user typed it
         .trim();
-    
+
     // Parse as double (handles both integers and decimals)
     final amount = double.tryParse(cleanedText);
-    
+
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1490,7 +1476,7 @@ class _CashierPanelState extends State<_CashierPanel> {
       );
       return;
     }
-    
+
     if (amount > invoice.balance) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1500,53 +1486,57 @@ class _CashierPanelState extends State<_CashierPanel> {
       );
       return;
     }
-    
+
     setState(() {
       _isProcessing = true;
     });
-    
+
     try {
       final salesService = Provider.of<SalesService>(context, listen: false);
       final tenantService = TenantService();
       final tenantId = await tenantService.getTenantId();
-      
+
       if (tenantId == null) {
         throw Exception('No se pudo obtener el tenant ID');
       }
-      
+
       // CRITICAL: Check if invoice needs to be posted first
       bool wasPosted = false;
       List<String> processedActions = [];
-      
-      if (invoice.status == InvoiceStatus.sent || invoice.status == InvoiceStatus.draft) {
+
+      if (invoice.status == InvoiceStatus.sent ||
+          invoice.status == InvoiceStatus.draft) {
         // Invoice hasn't been confirmed/posted yet - need to do it now
-        debugPrint('🔄 POS Payment: Invoice ${invoice.invoiceNumber} is in ${invoice.status.name} status');
-        debugPrint('📋 POS Payment: Posting invoice first to trigger accounting & inventory...');
-        
-        await salesService.updateInvoiceStatus(invoice.id!, InvoiceStatus.confirmed);
+        debugPrint(
+            '🔄 POS Payment: Invoice ${invoice.invoiceNumber} is in ${invoice.status.name} status');
+        debugPrint(
+            '📋 POS Payment: Posting invoice first to trigger accounting & inventory...');
+
+        await salesService.updateInvoiceStatus(
+            invoice.id!, InvoiceStatus.confirmed);
         wasPosted = true;
-        
+
         processedActions.add('Factura confirmada');
         processedActions.add('Asiento contable creado');
         processedActions.add('Inventario actualizado');
-        
+
         debugPrint('✅ POS Payment: Invoice posted successfully');
-        
+
         // Refresh invoice to get updated data
-        final refreshedInvoice = await salesService.fetchInvoice(invoice.id!, refresh: true);
+        final refreshedInvoice =
+            await salesService.fetchInvoice(invoice.id!, refresh: true);
         if (refreshedInvoice != null) {
           // Update POSService with refreshed invoice
           posService.enterInvoicePaymentMode(refreshedInvoice);
         }
       }
-      
+
       // Create payment object
       final payment = Payment(
         tenantId: tenantId,
         invoiceId: invoice.id!,
-        invoiceReference: invoice.invoiceNumber.isNotEmpty
-            ? invoice.invoiceNumber
-            : null,
+        invoiceReference:
+            invoice.invoiceNumber.isNotEmpty ? invoice.invoiceNumber : null,
         paymentMethodId: _selectedPaymentMethodId!,
         amount: amount,
         date: DateTime.now(),
@@ -1554,16 +1544,18 @@ class _CashierPanelState extends State<_CashierPanel> {
             ? null
             : _paymentReferenceController.text.trim(),
       );
-      
+
       // Register payment
-      debugPrint('💰 POS Payment: Recording payment of \$${amount.toStringAsFixed(0)}');
+      debugPrint(
+          '💰 POS Payment: Recording payment of \$${amount.toStringAsFixed(0)}');
       await salesService.registerPayment(payment);
       processedActions.add('Pago registrado');
-      
+
       if (!mounted) return;
-      
+
       // Show detailed success message
-      String successMessage = 'Pago de \$${amount.toStringAsFixed(0)} registrado exitosamente';
+      String successMessage =
+          'Pago de \$${amount.toStringAsFixed(0)} registrado exitosamente';
       if (wasPosted) {
         successMessage += '\n✓ ${processedActions.join('\n✓ ')}';
         debugPrint('📊 POS Payment: All processes completed:');
@@ -1571,7 +1563,7 @@ class _CashierPanelState extends State<_CashierPanel> {
           debugPrint('   ✓ $action');
         }
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(successMessage),
@@ -1579,25 +1571,24 @@ class _CashierPanelState extends State<_CashierPanel> {
           duration: const Duration(seconds: 4),
         ),
       );
-      
+
       // Clear form
       _paymentAmountController.clear();
       _paymentReferenceController.clear();
       setState(() {
         _selectedPaymentMethodId = null;
       });
-      
+
       // Exit payment mode and return to pending invoices
       posService.exitInvoicePaymentMode();
-      
+
       // Reload pending invoices for customer
       if (_selectedCustomer != null) {
         await _checkPendingInvoices(_selectedCustomer!);
       }
-      
     } catch (e) {
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error al procesar el pago: $e'),
@@ -1643,7 +1634,7 @@ class _CashierPanelState extends State<_CashierPanel> {
     }
 
     // ⚠️ WARN when paying with card but no tax included
-    if (_selectedPaymentMethod?.code == 'card' && 
+    if (_selectedPaymentMethod?.code == 'card' &&
         posService.taxTreatment == TaxTreatment.noTax) {
       final result = await showDialog<String>(
         context: context,
@@ -1679,9 +1670,9 @@ class _CashierPanelState extends State<_CashierPanel> {
           ],
         ),
       );
-      
+
       if (result == 'cancel' || result == null) return; // User cancelled
-      
+
       if (result == 'add_tax') {
         // User chose to add tax - update and continue
         posService.setTaxTreatment(TaxTreatment.taxIncluded);
@@ -1775,8 +1766,9 @@ class _CashierPanelState extends State<_CashierPanel> {
 
   Widget _buildInvoicePaymentForm(ThemeData theme, POSService posService) {
     final invoice = posService.linkedInvoice!;
-    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
-    
+    final currencyFormat =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1809,7 +1801,7 @@ class _CashierPanelState extends State<_CashierPanel> {
             ],
           ),
           const Divider(height: 32),
-          
+
           // Customer info
           Text('Cliente', style: theme.textTheme.bodySmall),
           const SizedBox(height: 4),
@@ -1820,7 +1812,7 @@ class _CashierPanelState extends State<_CashierPanel> {
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // Financial summary
           Container(
             padding: const EdgeInsets.all(16),
@@ -1856,7 +1848,7 @@ class _CashierPanelState extends State<_CashierPanel> {
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // Payment method selector
           Text(
             'Método de Pago',
@@ -1871,7 +1863,7 @@ class _CashierPanelState extends State<_CashierPanel> {
               if (paymentMethods.isEmpty) {
                 return const Text('No hay métodos de pago disponibles');
               }
-              
+
               return Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -1893,7 +1885,7 @@ class _CashierPanelState extends State<_CashierPanel> {
             },
           ),
           const SizedBox(height: 24),
-          
+
           // Amount input
           Row(
             children: [
@@ -1908,7 +1900,8 @@ class _CashierPanelState extends State<_CashierPanel> {
               TextButton(
                 onPressed: () {
                   setState(() {
-                    _paymentAmountController.text = invoice.balance.toStringAsFixed(0);
+                    _paymentAmountController.text =
+                        invoice.balance.toStringAsFixed(0);
                   });
                 },
                 child: const Text('Pagar Total'),
@@ -1922,7 +1915,8 @@ class _CashierPanelState extends State<_CashierPanel> {
               border: const OutlineInputBorder(),
               labelText: 'Monto en pesos',
               prefix: const Text('\$ '),
-              helperText: 'Ingrese solo números. Ej: ${invoice.balance.toStringAsFixed(0)}',
+              helperText:
+                  'Ingrese solo números. Ej: ${invoice.balance.toStringAsFixed(0)}',
               suffixIcon: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1948,7 +1942,7 @@ class _CashierPanelState extends State<_CashierPanel> {
             },
           ),
           const SizedBox(height: 24),
-          
+
           // Payment reference (optional)
           TextField(
             controller: _paymentReferenceController,
@@ -1959,7 +1953,7 @@ class _CashierPanelState extends State<_CashierPanel> {
             ),
           ),
           const SizedBox(height: 32),
-          
+
           // Action buttons
           Row(
             children: [
@@ -1996,7 +1990,8 @@ class _CashierPanelState extends State<_CashierPanel> {
   Widget _buildSummaryRow(ThemeData theme, String label, String value,
       {bool isTotal = false, Color? valueColor}) {
     // Access parent's method
-    final parentState = context.findAncestorStateOfType<_POSDashboardPageState>();
+    final parentState =
+        context.findAncestorStateOfType<_POSDashboardPageState>();
     if (parentState != null) {
       return parentState._buildSummaryRow(theme, label, value,
           isTotal: isTotal, valueColor: valueColor);
@@ -2006,18 +2001,20 @@ class _CashierPanelState extends State<_CashierPanel> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: theme.textTheme.titleMedium),
-        Text(value, style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-          color: valueColor,
-        )),
+        Text(value,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: valueColor,
+            )),
       ],
     );
   }
 
   Widget _buildPendingInvoicesView(ThemeData theme, POSService posService) {
-    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final currencyFormat =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
     final dateFormat = DateFormat('dd/MM/yyyy');
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -2026,7 +2023,8 @@ class _CashierPanelState extends State<_CashierPanel> {
           // Header
           Row(
             children: [
-              Icon(Icons.receipt_long, color: theme.colorScheme.primary, size: 28),
+              Icon(Icons.receipt_long,
+                  color: theme.colorScheme.primary, size: 28),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -2050,7 +2048,7 @@ class _CashierPanelState extends State<_CashierPanel> {
             ],
           ),
           const SizedBox(height: 20),
-          
+
           // List of pending invoices
           ..._pendingInvoices.map((invoice) {
             return Card(
@@ -2063,7 +2061,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                     _showPendingInvoices = false;
                     // Pre-fill the payment amount with the invoice balance (only if empty)
                     if (_paymentAmountController.text.isEmpty) {
-                      _paymentAmountController.text = invoice.balance.toStringAsFixed(0);
+                      _paymentAmountController.text =
+                          invoice.balance.toStringAsFixed(0);
                     }
                   });
                 },
@@ -2107,7 +2106,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                         'Fecha: ${dateFormat.format(invoice.date)}',
                         style: theme.textTheme.bodyMedium,
                       ),
-                      if (invoice.reference != null && invoice.reference!.isNotEmpty)
+                      if (invoice.reference != null &&
+                          invoice.reference!.isNotEmpty)
                         Text(
                           'Ref: ${invoice.reference}',
                           style: theme.textTheme.bodyMedium,
@@ -2151,9 +2151,9 @@ class _CashierPanelState extends State<_CashierPanel> {
               ),
             );
           }).toList(),
-          
+
           const SizedBox(height: 20),
-          
+
           // Continue with normal sale button
           SizedBox(
             width: double.infinity,
@@ -2173,17 +2173,16 @@ class _CashierPanelState extends State<_CashierPanel> {
 
   Widget _buildCartView(
       ThemeData theme, POSService posService, String currentQuery) {
-    
     // Show pending invoices list if customer has pending invoices
     if (_showPendingInvoices) {
       return _buildPendingInvoicesView(theme, posService);
     }
-    
+
     // Show invoice payment form if in payment mode
     if (posService.isInvoicePaymentMode && posService.linkedInvoice != null) {
       return _buildInvoicePaymentForm(theme, posService);
     }
-    
+
     // Show normal cart view
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -2196,7 +2195,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          
+
           // Inline ad-hoc item form (shows always)
           if (_showAdHocForm) ...[
             Card(
@@ -2214,8 +2213,9 @@ class _CashierPanelState extends State<_CashierPanel> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.edit_note, 
-                          size: 20, 
+                        Icon(
+                          Icons.edit_note,
+                          size: 20,
                           color: theme.colorScheme.primary,
                         ),
                         const SizedBox(width: 8),
@@ -2291,7 +2291,7 @@ class _CashierPanelState extends State<_CashierPanel> {
             ),
             const SizedBox(height: 16),
           ],
-          
+
           if (posService.cartItems.isNotEmpty)
             Card(
               child: Padding(
@@ -2309,10 +2309,14 @@ class _CashierPanelState extends State<_CashierPanel> {
                         ),
                         IconButton(
                           icon: Icon(
-                            _showAdHocForm ? Icons.remove_circle_outline : Icons.add_circle_outline,
+                            _showAdHocForm
+                                ? Icons.remove_circle_outline
+                                : Icons.add_circle_outline,
                             size: 20,
                           ),
-                          tooltip: _showAdHocForm ? 'Cancelar' : 'Agregar item personalizado',
+                          tooltip: _showAdHocForm
+                              ? 'Cancelar'
+                              : 'Agregar item personalizado',
                           onPressed: () => _toggleAdHocForm(),
                           style: IconButton.styleFrom(
                             padding: EdgeInsets.zero,
@@ -2323,7 +2327,6 @@ class _CashierPanelState extends State<_CashierPanel> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    
                     ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -2413,8 +2416,10 @@ class _CashierPanelState extends State<_CashierPanel> {
                                           padding: EdgeInsets.zero,
                                           constraints: const BoxConstraints(),
                                           onPressed: () {
-                                            final stockQuantity = item.product?.stockQuantity;
-                                            if (stockQuantity != null && item.quantity < stockQuantity) {
+                                            final stockQuantity =
+                                                item.product?.stockQuantity;
+                                            if (stockQuantity != null &&
+                                                item.quantity < stockQuantity) {
                                               posService.updateCartItemQuantity(
                                                   item.id, item.quantity + 1);
                                             } else if (stockQuantity != null) {
@@ -2488,10 +2493,14 @@ class _CashierPanelState extends State<_CashierPanel> {
                         OutlinedButton.icon(
                           onPressed: () => _toggleAdHocForm(),
                           icon: Icon(
-                            _showAdHocForm ? Icons.remove_circle_outline : Icons.add_circle_outline,
+                            _showAdHocForm
+                                ? Icons.remove_circle_outline
+                                : Icons.add_circle_outline,
                             size: 18,
                           ),
-                          label: Text(_showAdHocForm ? 'Cancelar' : 'Agregar Item Personalizado'),
+                          label: Text(_showAdHocForm
+                              ? 'Cancelar'
+                              : 'Agregar Item Personalizado'),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -2506,7 +2515,7 @@ class _CashierPanelState extends State<_CashierPanel> {
               ),
             ),
           if (posService.cartItems.isNotEmpty) const SizedBox(height: 16),
-          
+
           // Payment method selector (auto-sets tax treatment)
           if (posService.cartItems.isNotEmpty) ...[
             Text(
@@ -2521,13 +2530,14 @@ class _CashierPanelState extends State<_CashierPanel> {
                 final methods = paymentMethodService.paymentMethods
                     .where((m) => m.isActive)
                     .toList();
-                
+
                 return DropdownButtonFormField<String>(
                   value: posService.selectedPaymentMethod?.id,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.payment),
-                    helperText: 'El IVA se aplica automáticamente según el método',
+                    helperText:
+                        'El IVA se aplica automáticamente según el método',
                   ),
                   hint: const Text('Seleccionar método'),
                   items: methods.map((method) {
@@ -2555,7 +2565,7 @@ class _CashierPanelState extends State<_CashierPanel> {
             ),
             const SizedBox(height: 16),
           ],
-          
+
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -2583,7 +2593,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                       ],
                     ),
                   ],
-                  
+
                   // Show tax breakdown if tax is included
                   if (posService.taxTreatment == TaxTreatment.taxIncluded) ...[
                     const SizedBox(height: 8),
@@ -2593,7 +2603,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Neto:', style: theme.textTheme.bodyLarge),
-                        Text('\$${(posService.cartTotal / 1.19).toStringAsFixed(0)}'),
+                        Text(
+                            '\$${(posService.cartTotal / 1.19).toStringAsFixed(0)}'),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -2601,11 +2612,12 @@ class _CashierPanelState extends State<_CashierPanel> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('IVA (19%):', style: theme.textTheme.bodyLarge),
-                        Text('\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
+                        Text(
+                            '\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
                       ],
                     ),
                   ],
-                  
+
                   const Divider(),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2692,7 +2704,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                   _selectedCustomer = customer;
                 });
                 context.read<POSService>().setCustomer(customer);
-                
+
                 // Check for pending invoices when customer is selected
                 if (customer != null) {
                   await _checkPendingInvoices(customer);
@@ -2801,7 +2813,7 @@ class _CashierPanelState extends State<_CashierPanel> {
               final methods = paymentMethodService.paymentMethods
                   .where((m) => m.isActive)
                   .toList();
-              
+
               return Wrap(
                 spacing: 8,
                 runSpacing: 8,

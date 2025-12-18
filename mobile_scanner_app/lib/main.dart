@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'screens/pairing_screen.dart';
 import 'screens/scanner_screen.dart';
 import 'services/scanner_service.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // TODO: Replace with your Supabase credentials from the main ERP project
-  await Supabase.initialize(
-    url: 'YOUR_SUPABASE_URL_HERE',
-    anonKey: 'YOUR_SUPABASE_ANON_KEY_HERE',
-  );
-
+  // No hardcoded Supabase.initialize here!
+  // Config acts dynamically via ScannerService.
   runApp(const VinabikeScannerApp());
 }
 
@@ -55,12 +49,13 @@ class _AppRouterState extends State<AppRouter> {
   @override
   void initState() {
     super.initState();
-    _checkPairing();
+    _initService();
   }
 
-  Future<void> _checkPairing() async {
+  Future<void> _initService() async {
+    // Initialize service (load config & pairing)
     final scannerService = context.read<ScannerService>();
-    await scannerService.loadPairedDevice();
+    await scannerService.initialize();
   }
 
   @override
@@ -73,7 +68,8 @@ class _AppRouterState extends State<AppRouter> {
           );
         }
 
-        if (service.pairedDeviceId == null) {
+        // If not configured OR not paired -> Show Pairing/Config Screen
+        if (!service.isConfigured || !service.isPaired) {
           return const PairingScreen();
         }
 

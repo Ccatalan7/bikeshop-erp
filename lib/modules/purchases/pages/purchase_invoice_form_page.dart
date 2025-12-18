@@ -364,27 +364,30 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           // Check if SKU exists in cache manually for debugging
           if (item.sku != null) {
             final targetSku = item.sku!.trim().toUpperCase();
-            
+
             // Check both SKU and supplier_code in cache
             final skuMatches = _productCache
                 .where((p) => p.sku.trim().toUpperCase() == targetSku)
                 .toList();
             final supplierCodeMatches = _productCache
-                .where((p) => p.supplierCode != null && 
+                .where((p) =>
+                    p.supplierCode != null &&
                     p.supplierCode!.trim().toUpperCase() == targetSku)
                 .toList();
-            
+
             debugPrint('🔎 Looking for: "$targetSku"');
             debugPrint('📊 SKU matches: ${skuMatches.length}');
-            debugPrint('📊 Supplier Code matches: ${supplierCodeMatches.length}');
-            
+            debugPrint(
+                '📊 Supplier Code matches: ${supplierCodeMatches.length}');
+
             if (supplierCodeMatches.isNotEmpty) {
-              debugPrint('✅ Found by SUPPLIER CODE: ${supplierCodeMatches.first.name}');
+              debugPrint(
+                  '✅ Found by SUPPLIER CODE: ${supplierCodeMatches.first.name}');
             }
             if (skuMatches.isNotEmpty) {
               debugPrint('✅ Found by SKU: ${skuMatches.first.name}');
             }
-            
+
             if (skuMatches.isEmpty && supplierCodeMatches.isEmpty) {
               debugPrint('❌ Not found in either SKU or Supplier Code');
               // Print sample data for debugging
@@ -408,8 +411,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                 }
 
                 // Match by Supplier Code (Código Proveedor)
-                if (product.supplierCode != null && product.supplierCode!.isNotEmpty) {
-                  final productSupplierCode = product.supplierCode!.trim().toUpperCase();
+                if (product.supplierCode != null &&
+                    product.supplierCode!.isNotEmpty) {
+                  final productSupplierCode =
+                      product.supplierCode!.trim().toUpperCase();
                   if (productSupplierCode == itemSku) {
                     return true;
                   }
@@ -550,8 +555,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
       // Load products second (blocking)
       debugPrint('🔍 Loading products (forceRefresh: false)...');
-      _productCache = await _inventoryService.getProducts(forceRefresh: false);
-      debugPrint('✅ Loaded ${_productCache.length} products');
+      final allProducts =
+          await _inventoryService.getProducts(forceRefresh: false);
+      // Filter out child products (components) as they should not be purchased directly
+      _productCache = allProducts.where((p) => p.parentSetId == null).toList();
+      debugPrint(
+          '✅ Loaded ${_productCache.length} products (filtered from ${allProducts.length})');
 
       if (!mounted) {
         debugPrint('⚠️ Widget not mounted after loading products');
@@ -1277,6 +1286,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     setState(() {
       _lineEntries.remove(entry);
       entry.dispose();
+
+      // Prevent empty state: If list becomes empty, auto-add a new line
+      if (_lineEntries.isEmpty) {
+        _addEmptyLine(shouldAutoFocus: true);
+      }
     });
     _recalculateTotals();
   }
@@ -2210,6 +2224,40 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                         ..._lineEntries.asMap().entries.map((entry) =>
                             _buildCompactLineRow(
                                 theme, entry.key + 1, entry.value)),
+
+                      // Manual Add Line Button
+                      if (_canEditFields)
+                        InkWell(
+                          onTap: () => _addEmptyLine(shouldAutoFocus: true),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme
+                                  .surface, // Background for contrast
+                              border: Border(
+                                top: BorderSide(
+                                    color: theme.colorScheme.outline
+                                        .withOpacity(0.2)),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_circle_outline,
+                                    size: 18, color: theme.colorScheme.primary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Agregar línea',
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
 
                       // Empty state
                       if (_lineEntries.isEmpty && !_canEditFields)

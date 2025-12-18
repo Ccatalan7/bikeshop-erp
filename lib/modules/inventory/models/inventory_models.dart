@@ -49,6 +49,12 @@ class Product {
   final bool isPublished;
   final bool isGoogleMerchant;
   final ProductType productType;
+  // Set-related fields
+  final bool isSet;
+  final String? setType;
+  final String? parentSetId;
+  final String? componentLabel;
+  final int? componentPosition;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -101,6 +107,11 @@ class Product {
     this.isPublished = true,
     this.isGoogleMerchant = false,
     this.productType = ProductType.product,
+    this.isSet = false,
+    this.setType,
+    this.parentSetId,
+    this.componentLabel,
+    this.componentPosition,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -108,7 +119,7 @@ class Product {
 
   /// Returns true if this product is a service (doesn't track inventory)
   bool get isService => productType == ProductType.service;
-  
+
   /// Returns true if this product tracks inventory
   bool get tracksInventory => !isService;
 
@@ -173,6 +184,11 @@ class Product {
           true,
       isGoogleMerchant: json['is_google_merchant'] ?? false,
       productType: _parseProductType(json['product_type']),
+      isSet: json['is_set'] ?? false,
+      setType: json['set_type'],
+      parentSetId: json['parent_set_id']?.toString(),
+      componentLabel: json['component_label'],
+      componentPosition: json['component_position'],
       createdAt: json['created_at'] == null
           ? DateTime.now()
           : (json['created_at'] is String
@@ -249,6 +265,12 @@ class Product {
       'product_type': productType.name,
       'is_service': isService, // Computed from product_type for DB triggers
       'track_stock': tracksInventory, // Services don't track stock
+      // Set-related fields
+      'is_set': isSet,
+      'set_type': setType,
+      'parent_set_id': parentSetId,
+      'component_label': componentLabel,
+      'component_position': componentPosition,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -314,6 +336,11 @@ class Product {
     bool? isPublished,
     bool? isGoogleMerchant,
     ProductType? productType,
+    bool? isSet,
+    String? setType,
+    String? parentSetId,
+    String? componentLabel,
+    int? componentPosition,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -366,6 +393,11 @@ class Product {
       isPublished: isPublished ?? this.isPublished,
       isGoogleMerchant: isGoogleMerchant ?? this.isGoogleMerchant,
       productType: productType ?? this.productType,
+      isSet: isSet ?? this.isSet,
+      setType: setType ?? this.setType,
+      parentSetId: parentSetId ?? this.parentSetId,
+      componentLabel: componentLabel ?? this.componentLabel,
+      componentPosition: componentPosition ?? this.componentPosition,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -373,6 +405,9 @@ class Product {
 
   bool get isLowStock => inventoryQty <= minStockLevel;
   bool get isOutOfStock => inventoryQty <= 0;
+
+  /// Returns true if this product is a component of a set (has a parent set)
+  bool get isSetComponent => parentSetId != null && parentSetId!.isNotEmpty;
 
   double get marginAmount => price - cost;
   double get marginPercentage => cost > 0 ? (marginAmount / cost) * 100 : 0;

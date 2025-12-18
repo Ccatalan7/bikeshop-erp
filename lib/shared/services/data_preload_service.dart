@@ -12,15 +12,15 @@ import '../../modules/purchases/services/purchase_service.dart';
 import '../../modules/hr/services/hr_service.dart';
 
 /// DataPreloadService - Loads critical data immediately after authentication
-/// 
+///
 /// This service dramatically improves perceived performance by:
 /// 1. Preloading data in parallel right after login
 /// 2. Populating service caches before user navigates
 /// 3. Making subsequent page navigation feel instant
-/// 
+///
 /// IMPORTANT: This service should ONLY run on ERP/admin contexts,
 /// NOT on the public store (vinabike.cl, vinabike-store.web.app)
-/// 
+///
 /// Usage: Called automatically when user authenticates on ERP
 class DataPreloadService extends ChangeNotifier {
   bool _isPreloading = false;
@@ -28,13 +28,13 @@ class DataPreloadService extends ChangeNotifier {
   bool _isEnabled = true; // Can be disabled for public store
   String? _preloadError;
   DateTime? _lastPreloadTime;
-  
+
   // Preload status
   bool get isPreloading => _isPreloading;
   bool get hasPreloaded => _hasPreloaded;
   bool get isEnabled => _isEnabled;
   String? get preloadError => _preloadError;
-  
+
   // Service references (set via initialize)
   BikeshopService? _bikeshopService;
   CustomerService? _customerService;
@@ -44,15 +44,17 @@ class DataPreloadService extends ChangeNotifier {
   SalesService? _salesService;
   PurchaseService? _purchaseService;
   HRService? _hrService;
-  
+
   StreamSubscription<AuthState>? _authSubscription;
-  
+
   /// Disable preloading (call this on public store hosts)
   void disable() {
     _isEnabled = false;
     _authSubscription?.cancel();
     _authSubscription = null;
   }
+
+  bool _isInitialized = false;
 
   /// Initialize with service references and start listening to auth
   /// Set isPublicStore=true to skip preloading (for customer-facing pages)
@@ -69,13 +71,21 @@ class DataPreloadService extends ChangeNotifier {
   }) {
     // Skip everything if this is a public store context
     if (isPublicStore) {
-      if (!kReleaseMode) {
-        debugPrint('🏪 [DataPreloadService] Public store detected - skipping preload');
+      if (!kReleaseMode && !_isInitialized) {
+        debugPrint(
+            '🏪 [DataPreloadService] Public store detected - skipping preload');
       }
       _isEnabled = false;
+      _isInitialized = true;
       return;
     }
-    
+
+    // Prevent duplicate initialization
+    if (_isInitialized) return;
+
+    // Cleanup any existing subscription (safety check)
+    _authSubscription?.cancel();
+
     _bikeshopService = bikeshopService;
     _customerService = customerService;
     _inventoryService = inventoryService;
@@ -84,14 +94,16 @@ class DataPreloadService extends ChangeNotifier {
     _salesService = salesService;
     _purchaseService = purchaseService;
     _hrService = hrService;
-    
+
     // Listen to auth state changes
-    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    _authSubscription =
+        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       if (!_isEnabled) return;
-      
+
       if (data.event == AuthChangeEvent.signedIn && !_hasPreloaded) {
         if (!kReleaseMode) {
-          debugPrint('🚀 [DataPreloadService] User signed in - starting preload...');
+          debugPrint(
+              '🚀 [DataPreloadService] User signed in - starting preload...');
         }
         preloadAllData();
       } else if (data.event == AuthChangeEvent.signedOut) {
@@ -101,38 +113,41 @@ class DataPreloadService extends ChangeNotifier {
         _lastPreloadTime = null;
       }
     });
-    
+
     // If user is already logged in, preload immediately
     if (Supabase.instance.client.auth.currentUser != null && !_hasPreloaded) {
       if (!kReleaseMode) {
-        debugPrint('🚀 [DataPreloadService] User already logged in - starting preload...');
+        debugPrint(
+            '🚀 [DataPreloadService] User already logged in - starting preload...');
       }
       preloadAllData();
     }
+
+    _isInitialized = true;
   }
-  
+
   /// Preload all critical data in parallel
   Future<void> preloadAllData() async {
     if (!_isEnabled) return;
-    
+
     if (_isPreloading) {
       if (!kReleaseMode) {
         debugPrint('⏳ [DataPreloadService] Already preloading, skipping...');
       }
       return;
     }
-    
+
     _isPreloading = true;
     _preloadError = null;
     notifyListeners();
-    
+
     final stopwatch = Stopwatch()..start();
-    
+
     try {
       if (!kReleaseMode) {
         debugPrint('🚀 [DataPreloadService] Starting parallel preload...');
       }
-      
+
       // Load all data in parallel for maximum speed
       await Future.wait([
         // Taller module
@@ -152,36 +167,37 @@ class DataPreloadService extends ChangeNotifier {
         // HR
         _preloadEmployees(),
       ], eagerError: false); // Continue even if one fails
-      
+
       stopwatch.stop();
       _hasPreloaded = true;
       _lastPreloadTime = DateTime.now();
-      
+
       if (!kReleaseMode) {
-        debugPrint('✅ [DataPreloadService] Preload complete in ${stopwatch.elapsedMilliseconds}ms');
+        debugPrint(
+            '✅ [DataPreloadService] Preload complete in ${stopwatch.elapsedMilliseconds}ms');
       }
-      
     } catch (e) {
       stopwatch.stop();
       _preloadError = e.toString();
       if (!kReleaseMode) {
-        debugPrint('❌ [DataPreloadService] Preload failed after ${stopwatch.elapsedMilliseconds}ms: $e');
+        debugPrint(
+            '❌ [DataPreloadService] Preload failed after ${stopwatch.elapsedMilliseconds}ms: $e');
       }
     } finally {
       _isPreloading = false;
       notifyListeners();
     }
   }
-  
+
   /// Force refresh all cached data
   Future<void> refreshAllData() async {
     if (!_isEnabled) return;
     _hasPreloaded = false;
     await preloadAllData();
   }
-  
+
   // Individual preload methods with error handling
-  
+
   Future<void> _preloadJobs() async {
     try {
       final jobs = await _bikeshopService?.getJobs(includeCompleted: true);
@@ -194,7 +210,7 @@ class DataPreloadService extends ChangeNotifier {
       }
     }
   }
-  
+
   Future<void> _preloadBikes() async {
     try {
       final bikes = await _bikeshopService?.getBikes();
@@ -207,7 +223,7 @@ class DataPreloadService extends ChangeNotifier {
       }
     }
   }
-  
+
   Future<void> _preloadCustomers() async {
     try {
       final customers = await _customerService?.getCustomers();
@@ -220,7 +236,7 @@ class DataPreloadService extends ChangeNotifier {
       }
     }
   }
-  
+
   Future<void> _preloadProducts() async {
     try {
       final products = await _inventoryService?.getProducts();
@@ -233,7 +249,7 @@ class DataPreloadService extends ChangeNotifier {
       }
     }
   }
-  
+
   Future<void> _preloadCategories() async {
     try {
       final categories = await _categoryService?.getCategories();
@@ -246,7 +262,7 @@ class DataPreloadService extends ChangeNotifier {
       }
     }
   }
-  
+
   Future<void> _preloadBrands() async {
     try {
       final brands = await _brandService?.getBrands();
@@ -259,12 +275,13 @@ class DataPreloadService extends ChangeNotifier {
       }
     }
   }
-  
+
   Future<void> _preloadSalesInvoices() async {
     try {
       await _salesService?.loadInvoices();
       if (!kReleaseMode) {
-        debugPrint('📦 [Preload] Sales Invoices: ${_salesService?.invoices.length ?? 0} items');
+        debugPrint(
+            '📦 [Preload] Sales Invoices: ${_salesService?.invoices.length ?? 0} items');
       }
     } catch (e) {
       if (!kReleaseMode) {
@@ -272,12 +289,13 @@ class DataPreloadService extends ChangeNotifier {
       }
     }
   }
-  
+
   Future<void> _preloadPurchaseInvoices() async {
     try {
       final invoices = await _purchaseService?.getPurchaseInvoices();
       if (!kReleaseMode) {
-        debugPrint('📦 [Preload] Purchase Invoices: ${invoices?.length ?? 0} items');
+        debugPrint(
+            '📦 [Preload] Purchase Invoices: ${invoices?.length ?? 0} items');
       }
     } catch (e) {
       if (!kReleaseMode) {
@@ -285,7 +303,7 @@ class DataPreloadService extends ChangeNotifier {
       }
     }
   }
-  
+
   Future<void> _preloadSuppliers() async {
     try {
       final suppliers = await _purchaseService?.getSuppliers();
@@ -298,7 +316,7 @@ class DataPreloadService extends ChangeNotifier {
       }
     }
   }
-  
+
   Future<void> _preloadEmployees() async {
     try {
       final employees = await _hrService?.getEmployees();
@@ -311,7 +329,7 @@ class DataPreloadService extends ChangeNotifier {
       }
     }
   }
-  
+
   @override
   void dispose() {
     _authSubscription?.cancel();

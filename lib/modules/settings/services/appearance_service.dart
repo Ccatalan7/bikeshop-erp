@@ -16,7 +16,9 @@ class AppearanceService extends ChangeNotifier {
   IconData _homeIcon = Icons.pedal_bike;
   String? _companyLogoUrl;
   bool _isInitialized = false;
-  bool _hasLoadedWithTenant = false; // True only if settings were loaded with valid tenant
+  bool _isLoading = false;
+  bool _hasLoadedWithTenant =
+      false; // True only if settings were loaded with valid tenant
   int _cacheBuster = DateTime.now().millisecondsSinceEpoch;
   ThemeMode _themeMode = ThemeMode.light;
   StreamSubscription<AuthState>? _authSubscription;
@@ -27,7 +29,7 @@ class AppearanceService extends ChangeNotifier {
     _loadSettings();
     _listenToAuthChanges();
   }
-  
+
   /// Listen to auth state changes and reload settings when user logs in
   void _listenToAuthChanges() {
     _authSubscription = _supabase.auth.onAuthStateChange.listen((data) {
@@ -42,7 +44,7 @@ class AppearanceService extends ChangeNotifier {
       }
     });
   }
-  
+
   @override
   void dispose() {
     _authSubscription?.cancel();
@@ -103,6 +105,10 @@ class AppearanceService extends ChangeNotifier {
   ];
 
   Future<void> _loadSettings() async {
+    // Prevent concurrent loading
+    if (_isLoading) return;
+    _isLoading = true;
+
     try {
       // Load theme mode from SharedPreferences (local, per-device)
       final prefs = await SharedPreferences.getInstance();
@@ -149,7 +155,8 @@ class AppearanceService extends ChangeNotifier {
       _isInitialized = true;
       _hasLoadedWithTenant = true; // Successfully loaded with tenant
       if (!kReleaseMode) {
-        debugPrint('[AppearanceService] Settings loaded. hasCustomLogo=$hasCustomLogo, logoUrl=$_companyLogoUrl');
+        debugPrint(
+            '[AppearanceService] Settings loaded. hasCustomLogo=$hasCustomLogo, logoUrl=$_companyLogoUrl');
       }
       notifyListeners();
     } catch (e) {
@@ -159,6 +166,8 @@ class AppearanceService extends ChangeNotifier {
       _isInitialized = true;
       _hasLoadedWithTenant = false;
       notifyListeners();
+    } finally {
+      _isLoading = false;
     }
   }
 
@@ -191,10 +200,14 @@ class AppearanceService extends ChangeNotifier {
 
       if (existing != null) {
         // Update existing record
-        await _supabase.from('company_settings').update({
-          'value': iconCode,
-          'updated_at': DateTime.now().toIso8601String()
-        }).eq('tenant_id', tenantId).eq('key', _homeIconKey);
+        await _supabase
+            .from('company_settings')
+            .update({
+              'value': iconCode,
+              'updated_at': DateTime.now().toIso8601String()
+            })
+            .eq('tenant_id', tenantId)
+            .eq('key', _homeIconKey);
       } else {
         // Insert new record
         await _supabase.from('company_settings').insert({
@@ -224,13 +237,13 @@ class AppearanceService extends ChangeNotifier {
   Future<void> uploadCompanyLogo(Uint8List imageBytes, String fileName) async {
     try {
       debugPrint('[AppearanceService] uploadCompanyLogo started: $fileName');
-      
+
       // Get tenant_id
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
         throw Exception('No tenant found');
       }
-      
+
       debugPrint('[AppearanceService] Tenant ID: $tenantId');
 
       // Upload to Supabase storage
@@ -254,15 +267,20 @@ class AppearanceService extends ChangeNotifier {
             .eq('key', _companyLogoKey)
             .maybeSingle();
 
-        debugPrint('[AppearanceService] Existing record: ${existing != null ? "found" : "not found"}');
+        debugPrint(
+            '[AppearanceService] Existing record: ${existing != null ? "found" : "not found"}');
 
         if (existing != null) {
           // Update existing record
           debugPrint('[AppearanceService] Updating existing record...');
-          await _supabase.from('company_settings').update({
-            'value': imageUrl,
-            'updated_at': DateTime.now().toIso8601String()
-          }).eq('tenant_id', tenantId).eq('key', _companyLogoKey);
+          await _supabase
+              .from('company_settings')
+              .update({
+                'value': imageUrl,
+                'updated_at': DateTime.now().toIso8601String()
+              })
+              .eq('tenant_id', tenantId)
+              .eq('key', _companyLogoKey);
         } else {
           // Insert new record
           debugPrint('[AppearanceService] Inserting new record...');
@@ -279,13 +297,13 @@ class AppearanceService extends ChangeNotifier {
         _companyLogoUrl = imageUrl;
         // Update cache-buster to force reload on all devices
         _cacheBuster = DateTime.now().millisecondsSinceEpoch;
-        
+
         debugPrint('[AppearanceService] Logo URL set to: $_companyLogoUrl');
         debugPrint('[AppearanceService] Cache buster: $_cacheBuster');
         debugPrint('[AppearanceService] Notifying listeners...');
-        
+
         notifyListeners();
-        
+
         debugPrint('[AppearanceService] Upload complete!');
       } else {
         throw Exception('Failed to upload image');
@@ -305,10 +323,12 @@ class AppearanceService extends ChangeNotifier {
       }
 
       // Remove from Supabase database (synced across devices)
-      await _supabase.from('company_settings').update({
-        'value': null,
-        'updated_at': DateTime.now().toIso8601String()
-      }).eq('tenant_id', tenantId).eq('key', _companyLogoKey);
+      await _supabase
+          .from('company_settings')
+          .update(
+              {'value': null, 'updated_at': DateTime.now().toIso8601String()})
+          .eq('tenant_id', tenantId)
+          .eq('key', _companyLogoKey);
 
       _companyLogoUrl = null;
       notifyListeners();

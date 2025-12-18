@@ -749,11 +749,12 @@ class AppSidebar extends StatefulWidget {
 }
 
 class _AppSidebarState extends State<AppSidebar> {
-  String? _expandedSection;
+  // Local state for last location to detect changes
   String? _lastLocation;
 
   // Module configuration for reordering
-  Widget _buildModuleWidget(String moduleKey, String currentLocation) {
+  Widget _buildModuleWidget(String moduleKey, String currentLocation,
+      String? expandedSection, NavigationService navService) {
     switch (moduleKey) {
       case 'accounting':
         return ExpandableMenuItem(
@@ -763,9 +764,9 @@ class _AppSidebarState extends State<AppSidebar> {
           title: 'Contabilidad',
           currentLocation: currentLocation,
           subItems: _accountingMenuItems,
-          isExpanded: _expandedSection == _accountingSectionKey,
+          isExpanded: expandedSection == _accountingSectionKey,
           onExpansionChanged: (expand) =>
-              _handleExpansionChange(_accountingSectionKey, expand),
+              _handleExpansionChange(_accountingSectionKey, expand, navService),
         );
       case 'tax_reports':
         return ExpandableMenuItem(
@@ -775,9 +776,9 @@ class _AppSidebarState extends State<AppSidebar> {
           title: 'Impuestos',
           currentLocation: currentLocation,
           subItems: _taxReportsMenuItems,
-          isExpanded: _expandedSection == _taxReportsSectionKey,
+          isExpanded: expandedSection == _taxReportsSectionKey,
           onExpansionChanged: (expand) =>
-              _handleExpansionChange(_taxReportsSectionKey, expand),
+              _handleExpansionChange(_taxReportsSectionKey, expand, navService),
         );
       case 'customers':
         return ExpandableMenuItem(
@@ -787,9 +788,9 @@ class _AppSidebarState extends State<AppSidebar> {
           title: 'Clientes',
           currentLocation: currentLocation,
           subItems: _customersMenuItems,
-          isExpanded: _expandedSection == _customersSectionKey,
+          isExpanded: expandedSection == _customersSectionKey,
           onExpansionChanged: (expand) =>
-              _handleExpansionChange(_customersSectionKey, expand),
+              _handleExpansionChange(_customersSectionKey, expand, navService),
         );
       case 'workshop':
         return ExpandableMenuItem(
@@ -799,9 +800,9 @@ class _AppSidebarState extends State<AppSidebar> {
           title: 'Taller',
           currentLocation: currentLocation,
           subItems: _workshopMenuItems,
-          isExpanded: _expandedSection == _workshopSectionKey,
+          isExpanded: expandedSection == _workshopSectionKey,
           onExpansionChanged: (expand) =>
-              _handleExpansionChange(_workshopSectionKey, expand),
+              _handleExpansionChange(_workshopSectionKey, expand, navService),
         );
       case 'smart_features':
         return ExpandableMenuItem(
@@ -811,9 +812,9 @@ class _AppSidebarState extends State<AppSidebar> {
           title: 'Smart Features',
           currentLocation: currentLocation,
           subItems: _smartFeaturesMenuItems,
-          isExpanded: _expandedSection == _smartFeaturesSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_smartFeaturesSectionKey, expand),
+          isExpanded: expandedSection == _smartFeaturesSectionKey,
+          onExpansionChanged: (expand) => _handleExpansionChange(
+              _smartFeaturesSectionKey, expand, navService),
         );
       case 'inventory':
         return ExpandableMenuItem(
@@ -823,9 +824,9 @@ class _AppSidebarState extends State<AppSidebar> {
           title: 'Inventario',
           currentLocation: currentLocation,
           subItems: _inventoryMenuItems,
-          isExpanded: _expandedSection == _inventorySectionKey,
+          isExpanded: expandedSection == _inventorySectionKey,
           onExpansionChanged: (expand) =>
-              _handleExpansionChange(_inventorySectionKey, expand),
+              _handleExpansionChange(_inventorySectionKey, expand, navService),
         );
       case 'sales':
         return ExpandableMenuItem(
@@ -835,9 +836,9 @@ class _AppSidebarState extends State<AppSidebar> {
           title: 'Ventas',
           currentLocation: currentLocation,
           subItems: _salesMenuItems,
-          isExpanded: _expandedSection == _salesSectionKey,
+          isExpanded: expandedSection == _salesSectionKey,
           onExpansionChanged: (expand) =>
-              _handleExpansionChange(_salesSectionKey, expand),
+              _handleExpansionChange(_salesSectionKey, expand, navService),
         );
       case 'purchases':
         return ExpandableMenuItem(
@@ -847,9 +848,9 @@ class _AppSidebarState extends State<AppSidebar> {
           title: 'Compras',
           currentLocation: currentLocation,
           subItems: _purchasesMenuItems,
-          isExpanded: _expandedSection == _purchasesSectionKey,
+          isExpanded: expandedSection == _purchasesSectionKey,
           onExpansionChanged: (expand) =>
-              _handleExpansionChange(_purchasesSectionKey, expand),
+              _handleExpansionChange(_purchasesSectionKey, expand, navService),
         );
       case 'pos':
         return ExpandableMenuItem(
@@ -859,9 +860,9 @@ class _AppSidebarState extends State<AppSidebar> {
           title: 'POS',
           currentLocation: currentLocation,
           subItems: _posMenuItems,
-          isExpanded: _expandedSection == _posSectionKey,
+          isExpanded: expandedSection == _posSectionKey,
           onExpansionChanged: (expand) =>
-              _handleExpansionChange(_posSectionKey, expand),
+              _handleExpansionChange(_posSectionKey, expand, navService),
         );
       case 'hr':
         return ExpandableMenuItem(
@@ -871,9 +872,9 @@ class _AppSidebarState extends State<AppSidebar> {
           title: 'RR.HH.',
           currentLocation: currentLocation,
           subItems: _hrMenuItems,
-          isExpanded: _expandedSection == _hrSectionKey,
+          isExpanded: expandedSection == _hrSectionKey,
           onExpansionChanged: (expand) =>
-              _handleExpansionChange(_hrSectionKey, expand),
+              _handleExpansionChange(_hrSectionKey, expand, navService),
         );
       case 'tools':
         return ExpandableMenuItem(
@@ -883,9 +884,9 @@ class _AppSidebarState extends State<AppSidebar> {
           title: 'Herramientas',
           currentLocation: currentLocation,
           subItems: _toolsMenuItems,
-          isExpanded: _expandedSection == _toolsSectionKey,
+          isExpanded: expandedSection == _toolsSectionKey,
           onExpansionChanged: (expand) =>
-              _handleExpansionChange(_toolsSectionKey, expand),
+              _handleExpansionChange(_toolsSectionKey, expand, navService),
         );
       default:
         return const SizedBox.shrink();
@@ -919,10 +920,10 @@ class _AppSidebarState extends State<AppSidebar> {
           workspaceManager.updateActiveWorkspaceRoute(currentLocation);
 
           final matchingSection = _resolveSectionForPath(currentLocation);
-          if (matchingSection != _expandedSection && mounted) {
-            setState(() {
-              _expandedSection = matchingSection;
-            });
+          final navService = context.read<NavigationService>();
+
+          if (matchingSection != navService.expandedSection && mounted) {
+            navService.setExpandedSection(matchingSection);
           }
         }
       } catch (e) {
@@ -932,18 +933,12 @@ class _AppSidebarState extends State<AppSidebar> {
     });
   }
 
-  void _handleExpansionChange(String sectionKey, bool expand) {
+  void _handleExpansionChange(
+      String sectionKey, bool expand, NavigationService navService) {
     if (expand) {
-      if (_expandedSection == sectionKey) {
-        return;
-      }
-      setState(() {
-        _expandedSection = sectionKey;
-      });
-    } else if (_expandedSection == sectionKey) {
-      setState(() {
-        _expandedSection = null;
-      });
+      navService.setExpandedSection(sectionKey);
+    } else if (navService.expandedSection == sectionKey) {
+      navService.setExpandedSection(null);
     }
   }
 
@@ -1143,7 +1138,10 @@ class _AppSidebarState extends State<AppSidebar> {
                               ),
                               Expanded(
                                 child: _buildModuleWidget(
-                                    moduleKey, currentLocation),
+                                    moduleKey,
+                                    currentLocation,
+                                    navigationService.expandedSection,
+                                    navigationService),
                               ),
                             ],
                           ),
@@ -1173,8 +1171,11 @@ class _AppSidebarState extends State<AppSidebar> {
                     _buildSectionDivider(context),
 
                     // Render modules in custom order
-                    ...moduleOrder.map((moduleKey) =>
-                        _buildModuleWidget(moduleKey, currentLocation)),
+                    ...moduleOrder.map((moduleKey) => _buildModuleWidget(
+                        moduleKey,
+                        currentLocation,
+                        navigationService.expandedSection,
+                        navigationService)),
 
                     const SizedBox(height: 8),
                     _buildSectionDivider(context),

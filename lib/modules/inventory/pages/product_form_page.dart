@@ -20,9 +20,12 @@ import '../../purchases/services/purchase_service.dart';
 import '../models/category_models.dart' as category_models;
 import '../models/brand_models.dart';
 import '../models/inventory_models.dart';
+import '../../../shared/models/product.dart' show SetType;
 import '../services/category_service.dart';
 import '../services/brand_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
+import '../widgets/set_configuration_widget.dart';
+import '../../../shared/services/barcode_scanner_service.dart';
 
 class ProductFormPage extends StatefulWidget {
   final String? productId;
@@ -66,6 +69,11 @@ class _ProductFormPageState extends State<ProductFormPage> {
   bool _isGoogleMerchant = false;
   ProductType _selectedProductType = ProductType.product;
 
+  // SET CONFIGURATION STATE
+  bool _isSet = false;
+  SetType? _setType;
+  List<SetComponentDraft> _setComponents = [];
+
   String? _imageUrl;
   // --- ARCHITECTURAL FIX ---
   // Do not store XFile in state. Store only pure, platform-agnostic data.
@@ -82,10 +90,14 @@ class _ProductFormPageState extends State<ProductFormPage> {
   String? _lastError;
   String? _lastStackTrace;
 
+  StreamSubscription? _scanSubscription;
+
   @override
   void initState() {
     super.initState();
-    _inventoryService = Provider.of<inventory_services.InventoryService>(context, listen: false);
+    _inventoryService = Provider.of<inventory_services.InventoryService>(
+        context,
+        listen: false);
     _categoryService = Provider.of<CategoryService>(context, listen: false);
     _purchaseService = Provider.of<PurchaseService>(context, listen: false);
     _brandService = Provider.of<BrandService>(context, listen: false);
@@ -103,10 +115,19 @@ class _ProductFormPageState extends State<ProductFormPage> {
     if (widget.productId != null) {
       _loadProduct();
     }
+
+    // Listen for unified barcode scans
+    _scanSubscription =
+        context.read<BarcodeScannerService>().barcodeStream.listen((barcode) {
+      if (mounted && ModalRoute.of(context)!.isCurrent) {
+        _handleBarcodeScan(barcode);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _scanSubscription?.cancel();
     _nameController.dispose();
     _skuController.dispose();
     _supplierCodeController.dispose();
@@ -124,6 +145,19 @@ class _ProductFormPageState extends State<ProductFormPage> {
     super.dispose();
   }
 
+  void _handleBarcodeScan(String barcode) {
+    setState(() {
+      _skuController.text = barcode;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✅ SKU escaneado: $barcode'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
   void _onPricingChanged() {
     if (mounted) setState(() {});
   }
@@ -134,15 +168,18 @@ class _ProductFormPageState extends State<ProductFormPage> {
       if (mounted) {
         setState(() {
           _categories = categories;
-          
+
           // Validate that selected category exists in loaded categories
           if (_selectedCategoryId != null) {
-            final categoryExists = _categories.any((c) => c.id == _selectedCategoryId);
+            final categoryExists =
+                _categories.any((c) => c.id == _selectedCategoryId);
             if (!categoryExists) {
               // Category doesn't exist, reset to first available or null
-              _selectedCategoryId = _categories.isNotEmpty ? _categories.first.id : null;
+              _selectedCategoryId =
+                  _categories.isNotEmpty ? _categories.first.id : null;
               if (kDebugMode) {
-                print('Warning: Product category not found, reset to: ${_categories.firstOrNull?.fullPath}');
+                print(
+                    'Warning: Product category not found, reset to: ${_categories.firstOrNull?.fullPath}');
               }
             }
           }
@@ -164,7 +201,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       context: context,
       builder: (context) => _CategorySearchDialog(categories: _categories),
     );
-    
+
     if (result != null) {
       setState(() => _selectedCategoryId = result.id);
     }
@@ -474,6 +511,15 @@ class _ProductFormPageState extends State<ProductFormPage> {
           ..clear()
           ..addAll(product.additionalImages);
         _syncBrandSelection();
+
+        // Load set configuration
+        _isSet = product.isSet;
+        _setType = _parseSetType(product.setType);
+
+        // Load existing components if this is a set
+        if (_isSet && product.id != null) {
+          await _loadSetComponents(product.id!);
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -485,6 +531,56 @@ class _ProductFormPageState extends State<ProductFormPage> {
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Parse set type from string stored in database
+  SetType? _parseSetType(String? value) {
+    if (value == null || value.isEmpty) return null;
+    return SetType.values.firstWhere(
+      (t) => t.name == value,
+      orElse: () => SetType.custom,
+    );
+  }
+
+  /// Load existing component products for a set
+  Future<void> _loadSetComponents(String parentSetId) async {
+    try {
+      // Get all products from cache/service
+      final allProducts = await _inventoryService.getProducts();
+
+      // Filter to get components of this set
+      final components = allProducts
+          .where((p) => p.parentSetId == parentSetId)
+          .toList()
+        ..sort((a, b) =>
+            (a.componentPosition ?? 0).compareTo(b.componentPosition ?? 0));
+
+      if (components.isNotEmpty) {
+        // Convert Product objects to SetComponentDraft for the widget
+        _setComponents = components.map((comp) {
+          // Calculate ratio if we have parent price/cost
+          final parentPrice =
+              double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0;
+          final parentCost =
+              double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0;
+
+          return SetComponentDraft(
+            label: comp.componentLabel ?? comp.name,
+            name: comp.name,
+            skuSuffix: comp.sku.split('-').last, // Extract suffix from SKU
+            position: comp.componentPosition ?? 1,
+            costRatio: parentCost > 0 ? comp.cost / parentCost : null,
+            priceRatio: parentPrice > 0 ? comp.price / parentPrice : null,
+            cost: comp.cost,
+            price: comp.price,
+          );
+        }).toList();
+
+        debugPrint('[SET] Loaded ${_setComponents.length} existing components');
+      }
+    } catch (e) {
+      debugPrint('[SET] Error loading components: $e');
     }
   }
 
@@ -586,7 +682,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
       (c) => c.id == _selectedCategoryId,
       orElse: () => _categories.isNotEmpty
           ? _categories.first
-          : category_models.Category(id: null, tenantId: '', name: 'PRD', fullPath: 'PRD'),
+          : category_models.Category(
+              id: null, tenantId: '', name: 'PRD', fullPath: 'PRD'),
     );
 
     final categorySegment = category.name
@@ -620,6 +717,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
     return ((price - cost) / cost) * 100;
   }
 
+  bool get _isChildProduct => _existingProduct?.parentSetId != null;
+
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -632,7 +731,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       if (tenantId == null) {
         throw Exception('User does not have a tenant_id. Cannot proceed.');
       }
-      
+
       String? finalImageUrl = _imageUrl;
 
       // --- ARCHITECTURAL FIX ---
@@ -710,8 +809,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
             categoryName: selectedCategoryName,
             supplierId: _selectedSupplierId,
             supplierName: selectedSupplierName,
-            supplierCode: _supplierCodeController.text.trim().isEmpty 
-                ? null 
+            supplierCode: _supplierCodeController.text.trim().isEmpty
+                ? null
                 : _supplierCodeController.text.trim(),
             brandId: normalizedBrandId,
             brand: normalizedBrandName,
@@ -737,8 +836,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
         categoryName: selectedCategoryName ?? baseProduct.categoryName,
         supplierId: _selectedSupplierId,
         supplierName: selectedSupplierName ?? baseProduct.supplierName,
-        supplierCode: _supplierCodeController.text.trim().isEmpty 
-            ? null 
+        supplierCode: _supplierCodeController.text.trim().isEmpty
+            ? null
             : _supplierCodeController.text.trim(),
         brandId: normalizedBrandId,
         brandIdHasValue: true,
@@ -756,13 +855,22 @@ class _ProductFormPageState extends State<ProductFormPage> {
         isPublished: _isPublished,
         isGoogleMerchant: _isGoogleMerchant,
         productType: _selectedProductType,
+        // Set configuration
+        isSet: _isSet,
+        setType: _setType?.name,
         updatedAt: DateTime.now(),
       );
 
+      Product savedProduct;
       if (_existingProduct != null) {
-        await _inventoryService.updateProduct(product);
+        savedProduct = await _inventoryService.updateProduct(product);
       } else {
-        await _inventoryService.createProduct(product);
+        savedProduct = await _inventoryService.createProduct(product);
+      }
+
+      // Create component products if this is a set
+      if (_isSet && _setComponents.isNotEmpty && savedProduct.id != null) {
+        await _createSetComponentProducts(savedProduct);
       }
 
       _notifySharedInventory();
@@ -780,7 +888,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       );
 
       // Use Navigator.pop() instead of context.pop() to work in dialogs
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (e, stackTrace) {
       // Log to console immediately
       print('🔴🔴🔴 PRODUCT SAVE ERROR 🔴🔴🔴');
@@ -809,12 +917,207 @@ class _ProductFormPageState extends State<ProductFormPage> {
     }
   }
 
+  /// Create component products for a set
+  Future<void> _createSetComponentProducts(Product parentProduct) async {
+    final parentId = parentProduct.id;
+    if (parentId == null) return;
+
+    debugPrint(
+        '[SET] Creating ${_setComponents.length} component products for set ${parentProduct.sku}');
+
+    // 1. Identify and delete orphaned components
+    // (Components that exist in DB for this set but are NOT in the current list)
+    try {
+      final allProducts = await _inventoryService.getProducts();
+      final existingSetComponents =
+          allProducts.where((p) => p.parentSetId == parentId).toList();
+
+      final currentSkus =
+          _setComponents.map((c) => c.generateSku(parentProduct.sku)).toSet();
+
+      for (final existing in existingSetComponents) {
+        if (!currentSkus.contains(existing.sku)) {
+          if (existing.id != null) {
+            debugPrint('[SET] Deleting orphaned component: ${existing.sku}');
+            await _inventoryService.deleteProduct(existing.id!);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[SET] Error cleaning up orphans: $e');
+    }
+
+    // 2. Create or update current components
+    for (final component in _setComponents) {
+      try {
+        // Generate component SKU
+        final componentSku = component.generateSku(parentProduct.sku);
+
+        // Check if component already exists (for updates)
+        final existingComponent =
+            await _inventoryService.getProductBySku(componentSku);
+
+        if (existingComponent != null) {
+          // Update existing component
+          debugPrint('[SET] Updating existing component: $componentSku');
+          await _inventoryService.updateProduct(existingComponent.copyWith(
+            name: component.name.isNotEmpty
+                ? component.name
+                : '${parentProduct.name} - ${component.label}',
+            price: component.price,
+            cost: component.cost,
+            componentLabel: component.label,
+            componentPosition: component.position,
+          ));
+        } else {
+          // Create new component product
+          debugPrint('[SET] Creating new component: $componentSku');
+          final componentProduct = Product(
+            tenantId: parentProduct.tenantId,
+            name: component.name.isNotEmpty
+                ? component.name
+                : '${parentProduct.name} - ${component.label}',
+            sku: componentSku,
+            description: '${component.label} del set ${parentProduct.name}',
+            categoryId: parentProduct.categoryId,
+            supplierId: parentProduct.supplierId,
+            brand: parentProduct.brand,
+            price: component.price,
+            cost: component.cost,
+            inventoryQty: 0, // Components start with 0 stock
+            minStockLevel: parentProduct.minStockLevel,
+            imageUrl: parentProduct.imageUrl,
+            isActive: parentProduct.isActive,
+            isPublished: false, // Components are not published directly
+            productType: ProductType.product,
+            // Link to parent set
+            parentSetId: parentId,
+            componentLabel: component.label,
+            componentPosition: component.position,
+          );
+
+          debugPrint('[SET] Component data: ${componentProduct.toJson()}');
+          final created =
+              await _inventoryService.createProduct(componentProduct);
+          debugPrint(
+              '[SET] ✅ Created component ${component.label} with ID: ${created.id}');
+        }
+      } catch (e, stackTrace) {
+        debugPrint('[SET] ❌ Error creating component ${component.label}: $e');
+        debugPrint('[SET] Stack: $stackTrace');
+        // Continue with other components even if one fails
+      }
+    }
+
+    debugPrint('[SET] Finished creating component products');
+  }
+
   void _notifySharedInventory() {
     try {
       final shared = context.read<shared_inventory.InventoryService>();
       unawaited(shared.refresh());
     } catch (_) {
       // Ignored: shared inventory not available in certain contexts.
+    }
+  }
+
+  /// Show confirmation dialog and delete product
+  Future<void> _confirmDeleteProduct() async {
+    final product = _existingProduct;
+    if (product == null || product.id == null) return;
+
+    // Check if this is a set with components
+    final allProducts = await _inventoryService.getProducts();
+    final components =
+        allProducts.where((p) => p.parentSetId == product.id).toList();
+
+    final hasComponents = components.isNotEmpty;
+    final componentText = hasComponents
+        ? '\n\n⚠️ Este set tiene ${components.length} componentes que quedarán huérfanos.'
+        : '';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Eliminar producto?'),
+        content: Text(
+          'Esta acción eliminará permanentemente "${product.name}".$componentText\n\n'
+          '¿Estás seguro?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                // Delete components first
+                debugPrint(
+                    '[DELETE] Deleting ${components.length} components...');
+                for (final comp in components) {
+                  if (comp.id != null) {
+                    debugPrint(
+                        '[DELETE] Deleting component ${comp.sku} (${comp.id})');
+                    await _inventoryService.deleteProduct(comp.id!);
+                  }
+                }
+                debugPrint('[DELETE] All components deleted successfully');
+                if (context.mounted) Navigator.of(context).pop(true);
+              } catch (e) {
+                debugPrint('[DELETE] Error deleting components: $e');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error eliminando componentes: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  // Close dialog anyway to allow retry of main product or manual fix
+                  Navigator.of(context).pop(true);
+                }
+              }
+            },
+            child: Text(
+              'Eliminar set y componentes',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: Text(hasComponents ? 'Solo eliminar set' : 'Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        await _inventoryService.deleteProduct(product.id!);
+        _notifySharedInventory();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Producto eliminado'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.of(context).pop(true);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error eliminando producto: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -861,12 +1164,12 @@ class _ProductFormPageState extends State<ProductFormPage> {
               ),
             ],
           );
-    
+
     // Skip MainLayout when shown in dialog
     if (widget.showInDialog) {
       return content;
     }
-    
+
     return MainLayout(child: content);
   }
 
@@ -926,6 +1229,16 @@ class _ProductFormPageState extends State<ProductFormPage> {
             ),
           ),
           const SizedBox(width: 16),
+          // Delete button - only for existing products
+          if (_existingProduct != null) ...[
+            IconButton(
+              onPressed: _isSaving ? null : _confirmDeleteProduct,
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Eliminar producto',
+              color: theme.colorScheme.error,
+            ),
+            const SizedBox(width: 8),
+          ],
           AppButton(
             text: 'Guardar',
             icon: Icons.save_outlined,
@@ -951,6 +1264,49 @@ class _ProductFormPageState extends State<ProductFormPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Child Product Banner (Wide)
+                      if (_isChildProduct)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.tertiaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                            border:
+                                Border.all(color: theme.colorScheme.tertiary),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.extension,
+                                  color: theme.colorScheme.onTertiaryContainer),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Componente de Set',
+                                      style:
+                                          theme.textTheme.titleSmall?.copyWith(
+                                        color: theme
+                                            .colorScheme.onTertiaryContainer,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Este producto es parte de un set (${_existingProduct?.componentLabel ?? "Componente"}).',
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color: theme
+                                            .colorScheme.onTertiaryContainer,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       _buildSectionCard(
                         theme,
                         icon: Icons.description_outlined,
@@ -971,6 +1327,17 @@ class _ProductFormPageState extends State<ProductFormPage> {
                         title: 'Descripción del producto',
                         children: _buildDescriptionFields(theme),
                       ),
+                      // Only show set configuration for products, not services AND not child products
+                      if (_selectedProductType != ProductType.service &&
+                          !_isChildProduct) ...[
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.inventory_2_outlined,
+                          title: 'Configuración de Juego/Set',
+                          children: _buildSetConfigurationFields(theme),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1012,6 +1379,44 @@ class _ProductFormPageState extends State<ProductFormPage> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Child Product Banner (Narrow)
+              if (_isChildProduct)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: theme.colorScheme.tertiary),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.extension,
+                          color: theme.colorScheme.onTertiaryContainer),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Componente de Set',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: theme.colorScheme.onTertiaryContainer,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Este producto es parte de un set (${_existingProduct?.componentLabel ?? "Componente"}).',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onTertiaryContainer,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               _buildSectionCard(
                 theme,
                 icon: Icons.description_outlined,
@@ -1056,6 +1461,17 @@ class _ProductFormPageState extends State<ProductFormPage> {
                 title: 'Descripción del producto',
                 children: _buildDescriptionFields(theme),
               ),
+              // Only show set configuration for products, not services AND not child products
+              if (_selectedProductType != ProductType.service &&
+                  !_isChildProduct) ...[
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.inventory_2_outlined,
+                  title: 'Configuración de Juego/Set',
+                  children: _buildSetConfigurationFields(theme),
+                ),
+              ],
             ],
           );
         },
@@ -1163,11 +1579,13 @@ class _ProductFormPageState extends State<ProductFormPage> {
             labelText: 'Categoría',
             helperText: 'Determina reportes y navegación en el POS',
             suffixIcon: const Icon(Icons.arrow_drop_down),
-            errorText: _selectedCategoryId == null ? 'Seleccione una categoría' : null,
+            errorText:
+                _selectedCategoryId == null ? 'Seleccione una categoría' : null,
           ),
           child: Text(
             _selectedCategoryId != null
-                ? (_categories.firstWhere(
+                ? (_categories
+                    .firstWhere(
                       (c) => c.id == _selectedCategoryId,
                       orElse: () => category_models.Category(
                         id: '',
@@ -1177,7 +1595,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
                         createdAt: DateTime.now(),
                         updatedAt: DateTime.now(),
                       ),
-                    ).fullPath)
+                    )
+                    .fullPath)
                 : 'Seleccione una categoría...',
             style: TextStyle(
               color: _selectedCategoryId != null ? null : Colors.grey,
@@ -1464,7 +1883,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         },
       ),
       const SizedBox(height: 8),
-      
+
       // Toggle 2: Published on Website (requires is_active)
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
@@ -1475,28 +1894,28 @@ class _ProductFormPageState extends State<ProductFormPage> {
           ),
         ),
         subtitle: Text(
-          _isActive 
-            ? 'Controla si este producto se muestra en la web y en el catálogo público.'
-            : 'Requiere que el producto esté activo.',
+          _isActive
+              ? 'Controla si este producto se muestra en la web y en el catálogo público.'
+              : 'Requiere que el producto esté activo.',
           style: TextStyle(
             color: _isActive ? null : theme.disabledColor,
           ),
         ),
         value: _isActive && _isPublished,
-        onChanged: _isActive 
-          ? (value) {
-              setState(() {
-                _isPublished = value;
-                // CASCADE: If unpublishing, turn off Google Merchant
-                if (!_isPublished) {
-                  _isGoogleMerchant = false;
-                }
-              });
-            } 
-          : null,
+        onChanged: _isActive
+            ? (value) {
+                setState(() {
+                  _isPublished = value;
+                  // CASCADE: If unpublishing, turn off Google Merchant
+                  if (!_isPublished) {
+                    _isGoogleMerchant = false;
+                  }
+                });
+              }
+            : null,
       ),
       const SizedBox(height: 8),
-      
+
       // Toggle 3: Google Merchant Center (requires is_published)
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
@@ -1527,19 +1946,41 @@ class _ProductFormPageState extends State<ProductFormPage> {
           ],
         ),
         subtitle: Text(
-          !_isActive 
-            ? 'Requiere que el producto esté activo.'
-            : !_isPublished
-              ? 'Requiere que el producto esté publicado en la tienda.'
-              : 'Incluye este producto en el feed de Google Shopping para aparecer en búsquedas de Google.',
+          !_isActive
+              ? 'Requiere que el producto esté activo.'
+              : !_isPublished
+                  ? 'Requiere que el producto esté publicado en la tienda.'
+                  : 'Incluye este producto en el feed de Google Shopping para aparecer en búsquedas de Google.',
           style: TextStyle(
             color: (_isActive && _isPublished) ? null : theme.disabledColor,
           ),
         ),
         value: _isActive && _isPublished && _isGoogleMerchant,
-        onChanged: (_isActive && _isPublished) 
-          ? (value) => setState(() => _isGoogleMerchant = value)
-          : null,
+        onChanged: (_isActive && _isPublished)
+            ? (value) => setState(() => _isGoogleMerchant = value)
+            : null,
+      ),
+    ];
+  }
+
+  List<Widget> _buildSetConfigurationFields(ThemeData theme) {
+    final price =
+        double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0;
+    final cost =
+        double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0;
+
+    return [
+      SetConfigurationWidget(
+        isSet: _isSet,
+        setType: _setType,
+        components: _setComponents,
+        onIsSetChanged: (value) => setState(() => _isSet = value),
+        onSetTypeChanged: (value) => setState(() => _setType = value),
+        onComponentsChanged: (value) => setState(() => _setComponents = value),
+        parentProductName: _nameController.text.trim(),
+        parentProductSku: _skuController.text.trim(),
+        parentPrice: price,
+        parentCost: cost,
       ),
     ];
   }
@@ -1806,7 +2247,7 @@ class _CategorySearchDialogState extends State<_CategorySearchDialog> {
                       itemBuilder: (context, index) {
                         final category = _filteredCategories[index];
                         final indent = category.level * 16.0;
-                        
+
                         return ListTile(
                           contentPadding: EdgeInsets.only(
                             left: 16 + indent,

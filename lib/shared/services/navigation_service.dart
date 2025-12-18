@@ -42,6 +42,10 @@ class NavigationService extends ChangeNotifier {
   List<String> get moduleOrder => List.unmodifiable(_moduleOrder);
   bool get isReorderMode => _isReorderMode;
 
+  // Expanded section state
+  String? _expandedSection;
+  String? get expandedSection => _expandedSection;
+
   /// Initialize the service and load saved state
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -50,7 +54,7 @@ class NavigationService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       _isDrawerVisible = prefs.getBool(_drawerVisibleKey) ?? true;
       _drawerWidth = prefs.getDouble(_drawerWidthKey) ?? _defaultDrawerWidth;
-      
+
       // Load module order
       final orderJson = prefs.getString(_moduleOrderKey);
       if (orderJson != null) {
@@ -58,7 +62,7 @@ class NavigationService extends ChangeNotifier {
         // Validate and merge with defaults (in case new modules were added)
         _moduleOrder = _mergeModuleOrder(savedOrder.cast<String>());
       }
-      
+
       _isInitialized = true;
       notifyListeners();
     } catch (e) {
@@ -67,7 +71,7 @@ class NavigationService extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+
   /// Merge saved order with defaults to handle new modules
   List<String> _mergeModuleOrder(List<String> savedOrder) {
     final result = <String>[];
@@ -91,14 +95,14 @@ class NavigationService extends ChangeNotifier {
     _isReorderMode = !_isReorderMode;
     notifyListeners();
   }
-  
+
   /// Exit reorder mode
   void exitReorderMode() {
     if (!_isReorderMode) return;
     _isReorderMode = false;
     notifyListeners();
   }
-  
+
   /// Reorder modules
   Future<void> reorderModules(int oldIndex, int newIndex) async {
     if (oldIndex < newIndex) {
@@ -107,7 +111,7 @@ class NavigationService extends ChangeNotifier {
     final item = _moduleOrder.removeAt(oldIndex);
     _moduleOrder.insert(newIndex, item);
     notifyListeners();
-    
+
     // Save to preferences
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -116,12 +120,12 @@ class NavigationService extends ChangeNotifier {
       debugPrint('Error saving module order: $e');
     }
   }
-  
+
   /// Reset module order to default
   Future<void> resetModuleOrder() async {
     _moduleOrder = List.from(defaultModuleOrder);
     notifyListeners();
-    
+
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_moduleOrderKey);
@@ -214,5 +218,12 @@ class NavigationService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error saving navigation state: $e');
     }
+  }
+
+  /// Set the currently expanded menu section
+  void setExpandedSection(String? section) {
+    if (_expandedSection == section) return;
+    _expandedSection = section;
+    notifyListeners();
   }
 }

@@ -8,7 +8,7 @@ import 'package:provider/provider.dart';
 import '../../../shared/models/supplier.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
-import '../../../shared/services/remote_scanner_service.dart';
+import '../../../shared/services/barcode_scanner_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
@@ -64,6 +64,8 @@ class _ProductListPageState extends State<ProductListPage> {
   bool _showInactive = false;
   ProductViewMode _viewMode = ProductViewMode.table;
   Product? _selectedProduct; // For split-pane detail view
+  final Set<String> _expandedSets = {}; // Track which sets are expanded
+  final Set<String> _bulkSelectedIds = {}; // For checkbox selection
 
   // Pagination
   int _currentPage = 1;
@@ -77,8 +79,6 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   StreamSubscription? _scanSubscription;
-  final _remoteScannerService = RemoteScannerService();
-  bool _scannerEnabled = false;
 
   @override
   void initState() {
@@ -115,10 +115,11 @@ class _ProductListPageState extends State<ProductListPage> {
     _loadSuppliers();
     _loadProducts();
 
-    // Listen for barcode scans
-    _scanSubscription = _remoteScannerService.scanStream.listen((scan) {
+    // Listen for unified barcode scans (Physical + Mobile via Bridge)
+    _scanSubscription =
+        context.read<BarcodeScannerService>().barcodeStream.listen((barcode) {
       if (mounted) {
-        _handleBarcodeScan(scan.barcode);
+        _handleBarcodeScan(barcode);
       }
     });
   }
@@ -141,37 +142,10 @@ class _ProductListPageState extends State<ProductListPage> {
     super.dispose();
   }
 
-  Future<void> _toggleScanner() async {
-    try {
-      if (_scannerEnabled) {
-        await _remoteScannerService.stopListening();
-        setState(() => _scannerEnabled = false);
-      } else {
-        await _remoteScannerService.startListening();
-        setState(() => _scannerEnabled = true);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('📱 Escáner remoto activado'),
-              duration: Duration(seconds: 2),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error con escáner: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   Future<void> _handleBarcodeScan(String barcode) async {
+    // Only handle scans if this page is currently visible top-most
+    if (!mounted || !ModalRoute.of(context)!.isCurrent) return;
+
     // Search for product by SKU
     final product = _products.cast<Product?>().firstWhere(
           (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
@@ -181,14 +155,21 @@ class _ProductListPageState extends State<ProductListPage> {
     if (product != null) {
       // Navigate to product edit page
       if (mounted) {
-        context.push('/inventory/products/${product.id}/edit');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Producto encontrado: ${product.name}'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        final result =
+            await context.push('/inventory/products/${product.id}/edit');
+        if (result == true) {
+          _loadProducts(forceRefresh: true);
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Producto encontrado: ${product.name}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } else {
       if (mounted) {
@@ -229,17 +210,20 @@ class _ProductListPageState extends State<ProductListPage> {
     }
   }
 
-  Future<void> _loadProducts() async {
+  Future<void> _loadProducts({bool forceRefresh = false}) async {
     if (!mounted) return;
 
     // 🚀 INSTANT RENDER: Show cached data immediately if available
-    if (_inventoryService.hasProductsCache && _products.isEmpty) {
+    if (_inventoryService.hasProductsCache &&
+        _products.isEmpty &&
+        !forceRefresh) {
       setState(() {
         _products = _inventoryService.cachedProducts;
         _applyFilters();
         _isLoading = false;
       });
-    } else {
+    } else if (_products.isEmpty) {
+      // Only show loading spinner if we have no products
       setState(() => _isLoading = true);
     }
 
@@ -247,9 +231,12 @@ class _ProductListPageState extends State<ProductListPage> {
       final products = await _inventoryService.getProducts(
         categoryId: _selectedCategoryId,
         lowStockOnly: _showLowStockOnly,
+        forceRefresh: forceRefresh,
       );
 
       if (!mounted) return;
+
+      // Update data without resetting scroll position (unless it was initial load)
       setState(() {
         _products = products;
         _applyFilters();
@@ -303,6 +290,9 @@ class _ProductListPageState extends State<ProductListPage> {
 
   void _applyFilters() {
     List<Product> filtered = List<Product>.from(_products);
+
+    // Hide set components from main list - they only appear in parent's dropdown
+    filtered = filtered.where((product) => !product.isSetComponent).toList();
 
     if (_selectedCategoryId != null && _selectedCategoryId!.isNotEmpty) {
       filtered = filtered
@@ -470,8 +460,7 @@ class _ProductListPageState extends State<ProductListPage> {
                     itemCount: _paginatedProducts.length,
                     itemBuilder: (context, index) {
                       final product = _paginatedProducts[index];
-                      final isSelected = _selectedProduct?.id == product.id;
-                      return _buildZohoTableRow(product, theme, isSelected);
+                      return _buildZohoTableRow(product, theme);
                     },
                   ),
                 ),
@@ -536,33 +525,28 @@ class _ProductListPageState extends State<ProductListPage> {
               ),
               const SizedBox(width: 8),
               // Scanner button
+              // Scanner button - Removed (Global scanner is always active)
+              /*
               IconButton(
-                onPressed: _toggleScanner,
-                icon: Icon(
-                  _scannerEnabled
-                      ? Icons.qr_code_scanner
-                      : Icons.qr_code_scanner_outlined,
-                  size: 18,
-                ),
-                tooltip:
-                    _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+                onPressed: () {},
+                icon: const Icon(Icons.qr_code_scanner, size: 18),
+                tooltip: 'Escáner activo',
                 visualDensity: VisualDensity.compact,
-                style: IconButton.styleFrom(
-                  backgroundColor:
-                      _scannerEnabled ? Colors.green.withOpacity(0.1) : null,
-                  foregroundColor: _scannerEnabled ? Colors.green : null,
-                ),
               ),
+              const SizedBox(width: 8),
+              */
               const SizedBox(width: 8),
               // Import button
               AppButton(
                 text: 'Importar',
                 icon: Icons.file_upload_outlined,
                 type: ButtonType.outline,
-                onPressed: () {
-                  context.push('/inventory/products/import').then((_) {
-                    _loadProducts();
-                  });
+                onPressed: () async {
+                  final result =
+                      await context.push('/inventory/products/import');
+                  if (result == true) {
+                    _loadProducts(forceRefresh: true);
+                  }
                 },
               ),
               const SizedBox(width: 8),
@@ -570,10 +554,11 @@ class _ProductListPageState extends State<ProductListPage> {
               AppButton(
                 text: 'Nuevo producto',
                 icon: Icons.add,
-                onPressed: () {
-                  context.push('/inventory/products/new').then((_) {
-                    _loadProducts();
-                  });
+                onPressed: () async {
+                  final result = await context.push('/inventory/products/new');
+                  if (result == true) {
+                    _loadProducts(forceRefresh: true);
+                  }
                 },
               ),
             ],
@@ -831,8 +816,7 @@ class _ProductListPageState extends State<ProductListPage> {
                       itemCount: _filteredProducts.length,
                       itemBuilder: (context, index) {
                         final product = _filteredProducts[index];
-                        final isSelected = _selectedProduct?.id == product.id;
-                        return _buildZohoTableRow(product, theme, isSelected);
+                        return _buildZohoTableRow(product, theme);
                       },
                     ),
                   ),
@@ -933,153 +917,452 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  Widget _buildZohoTableRow(Product product, ThemeData theme, bool isSelected) {
+  Widget _buildZohoTableRow(Product product, ThemeData theme) {
     final priceText = ChileanUtils.formatCurrency(product.price);
+    // Check if this product is a set (uses shared model's isSet field via extension)
+    final isProductSet = _isProductSet(product);
+    final isExpanded = _expandedSets.contains(product.id);
+    final isDetailActive = _selectedProduct?.id == product.id;
+    final isBulkSelected = _bulkSelectedIds.contains(product.id);
 
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedProduct = isSelected ? null : product;
-        });
-      },
-      child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? theme.colorScheme.primaryContainer.withOpacity(0.3)
-              : null,
-          border: Border(
-            bottom: BorderSide(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.5),
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            // Checkbox
-            SizedBox(
-              width: 48,
-              child: Checkbox(
-                value: isSelected,
-                onChanged: (value) {
-                  setState(() {
-                    _selectedProduct = value! ? product : null;
-                  });
-                },
-                visualDensity: VisualDensity.compact,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Main row
+        InkWell(
+          onTap: () {
+            if (isProductSet) {
+              // For sets: toggle expansion
+              setState(() {
+                final productId = product.id;
+                if (productId == null) return;
+                if (isExpanded) {
+                  _expandedSets.remove(productId);
+                } else {
+                  _expandedSets.add(productId);
+                }
+              });
+            } else {
+              // For regular products: select for detail pane
+              setState(() {
+                _selectedProduct = isDetailActive ? null : product;
+              });
+            }
+          },
+          onDoubleTap: () {
+            // Double-tap always opens edit page
+            _openEditor(product);
+          },
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: isDetailActive
+                  ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+                  : isBulkSelected
+                      ? theme.colorScheme.secondaryContainer
+                          .withValues(alpha: 0.2)
+                      : isExpanded
+                          ? theme.colorScheme.tertiaryContainer
+                              .withValues(alpha: 0.2)
+                          : null,
+              border: Border(
+                bottom: isExpanded
+                    ? BorderSide.none
+                    : BorderSide(
+                        color: theme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.5),
+                      ),
               ),
             ),
-            // Thumbnail
-            SizedBox(
-              width: 60,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: ImageService.buildProductImage(
-                    imageUrl: product.imageUrl,
-                    size: 36,
-                    isListThumbnail: true,
+            child: Row(
+              children: [
+                // Checkbox or expand icon for sets
+                SizedBox(
+                  width: 48,
+                  child: isProductSet
+                      ? Icon(
+                          isExpanded
+                              ? Icons.keyboard_arrow_down
+                              : Icons.keyboard_arrow_right,
+                          size: 20,
+                          color: theme.colorScheme.primary,
+                        )
+                      : Checkbox(
+                          value: isBulkSelected,
+                          onChanged: (value) {
+                            setState(() {
+                              final productId = product.id;
+                              if (productId == null) return;
+                              if (value == true) {
+                                _bulkSelectedIds.add(productId);
+                              } else {
+                                _bulkSelectedIds.remove(productId);
+                              }
+                            });
+                          },
+                          visualDensity: VisualDensity.compact,
+                        ),
+                ),
+                // Thumbnail
+                SizedBox(
+                  width: 60,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: ImageService.buildProductImage(
+                        imageUrl: product.imageUrl,
+                        size: 36,
+                        isListThumbnail: true,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            // Name
-            Expanded(
-              flex: 3,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      product.name,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (product.categoryName != null &&
-                        product.categoryName!.isNotEmpty)
-                      Text(
-                        product.categoryName!,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 11,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            // SKU
-            SizedBox(
-              width: 140,
-              child: Text(
-                product.sku,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontFamily: 'monospace',
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            // Price
-            SizedBox(
-              width: 140,
-              child: Text(
-                priceText,
-                textAlign: TextAlign.right,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ),
-            // Stock (show dash for services)
-            SizedBox(
-              width: 120,
-              child: product.isService
-                  ? Text(
-                      '-',
-                      textAlign: TextAlign.right,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                // Name with set indicator
+                Expanded(
+                  flex: 3,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          '${product.inventoryQty}',
-                          textAlign: TextAlign.right,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
+                        Row(
+                          children: [
+                            if (isProductSet) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 1),
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.tertiaryContainer,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text(
+                                  '📦',
+                                  style: TextStyle(fontSize: 10),
+                                ),
+                              ),
+                            ],
+                            Expanded(
+                              child: Text(
+                                product.name,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 6),
-                        if (product.isLowStock)
-                          Icon(
-                            Icons.warning_amber_rounded,
-                            size: 16,
-                            color: theme.colorScheme.error,
-                          )
-                        else if (product.isOutOfStock)
-                          Icon(
-                            Icons.block,
-                            size: 16,
-                            color: theme.colorScheme.error,
+                        if (product.categoryName != null &&
+                            product.categoryName!.isNotEmpty)
+                          Text(
+                            product.categoryName!,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontSize: 11,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                       ],
                     ),
+                  ),
+                ),
+                // SKU
+                SizedBox(
+                  width: 140,
+                  child: Text(
+                    product.sku,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // Price
+                SizedBox(
+                  width: 140,
+                  child: Text(
+                    priceText,
+                    textAlign: TextAlign.right,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+                // Stock (show set status for sets)
+                SizedBox(
+                  width: 120,
+                  child: product.isService
+                      ? Text(
+                          '-',
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${_getEffectiveStock(product)}',
+                              textAlign: TextAlign.right,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            if (product.isLowStock)
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                size: 16,
+                                color: theme.colorScheme.error,
+                              )
+                            else if (product.isOutOfStock)
+                              Icon(
+                                Icons.block,
+                                size: 16,
+                                color: theme.colorScheme.error,
+                              ),
+                          ],
+                        ),
+                ),
+                const SizedBox(width: 16),
+              ],
             ),
-            const SizedBox(width: 16),
+          ),
+        ),
+        // Expanded component rows for sets
+        if (isProductSet && isExpanded)
+          _buildSetComponentsPanel(product, theme),
+      ],
+    );
+  }
+
+  /// Check if a product is a set
+  bool _isProductSet(Product product) {
+    // Use actual isSet field if set, otherwise fallback to name heuristic
+    if (product.isSet) return true;
+
+    // Fallback heuristic for transition period (until data is migrated)
+    final name = product.name.toLowerCase();
+    return name.contains('juego') ||
+        name.contains(' set ') ||
+        name.startsWith('set ') ||
+        name.contains('par de');
+  }
+
+  /// Get effective stock for a product
+  /// For sets: returns min stock across all components (full sets available)
+  /// For regular products: returns inventory_qty
+  int _getEffectiveStock(Product product) {
+    if (!_isProductSet(product)) {
+      return product.inventoryQty;
+    }
+
+    // For sets, calculate from components
+    final components =
+        _products.where((p) => p.parentSetId == product.id).toList();
+
+    if (components.isEmpty) {
+      // No components yet, show parent stock (will be 0 for new sets)
+      return product.inventoryQty;
+    }
+
+    // Return minimum stock across all components
+    return components
+        .map((c) => c.inventoryQty)
+        .reduce((a, b) => a < b ? a : b);
+  }
+
+  /// Build the expandable panel showing set components
+  Widget _buildSetComponentsPanel(Product product, ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(108, 8, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Componentes del Set',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Fetch and display actual components
+            _buildComponentsList(product, theme),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComponentsList(Product product, ThemeData theme) {
+    // Get components from cached products list (they have parent_set_id = this product's id)
+    final components = _products
+        .where((p) => p.parentSetId == product.id)
+        .toList()
+      ..sort((a, b) =>
+          (a.componentPosition ?? 0).compareTo(b.componentPosition ?? 0));
+
+    if (components.isEmpty) {
+      return Text(
+        '💡 No hay componentes creados aún. Guarda el set para crearlos.',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    }
+
+    return Column(
+      children: components.map((comp) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _buildComponentRow(comp, theme),
+        );
+      }).toList(),
+    );
+  }
+
+  /// Build a single component row in the expanded set panel
+  Widget _buildComponentRow(Product component, ThemeData theme) {
+    final hasStock = component.inventoryQty > 0;
+
+    return InkWell(
+      onTap: () => _openEditor(component),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Thumbnail
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: ImageService.buildProductImage(
+                imageUrl: component.imageUrl,
+                size: 36,
+                isListThumbnail: true,
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Name and Label
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (component.componentLabel != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.tertiaryContainer,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            component.componentLabel!,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onTertiaryContainer,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Text(
+                          component.name,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    component.sku,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontFamily: 'monospace',
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Stock
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: hasStock
+                    ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+                    : theme.colorScheme.errorContainer.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    hasStock ? Icons.check_circle : Icons.warning_amber,
+                    size: 14,
+                    color: hasStock
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.error,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Stock: ${component.inventoryQty}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: hasStock
+                          ? theme.colorScheme.onSurface
+                          : theme.colorScheme.error,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.edit_outlined,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+            ),
           ],
         ),
       ),
@@ -1862,12 +2145,14 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  void _openEditor(Product product) {
+  Future<void> _openEditor(Product product) async {
     final productId = product.id;
     if (productId == null) return;
-    context.push('/inventory/products/$productId/edit').then((_) {
-      _loadProducts();
-    });
+
+    final result = await context.push('/inventory/products/$productId/edit');
+    if (result == true) {
+      _loadProducts(forceRefresh: true);
+    }
   }
 
   String? _resolveCategoryName(Product product) {

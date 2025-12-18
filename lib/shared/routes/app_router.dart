@@ -122,11 +122,10 @@ Page<dynamic> _buildPageWithNoTransition(
   GoRouterState state,
   Widget child,
 ) {
-  // Use full URI + extra hashCode to create unique keys per router instance
-  // This prevents key conflicts when multiple workspaces navigate to the same path
-  final uniqueKey = 'page_${state.uri}_${identityHashCode(child)}';
+  // Use state.pageKey to allow Flutter to preserve state when the route stack is updated
+  // This ensures that back navigation restores the previous widget state instead of rebuilding it
   return NoTransitionPage<void>(
-    key: ValueKey(uniqueKey),
+    key: state.pageKey,
     child: child,
   );
 }
@@ -391,21 +390,22 @@ class AppRouter {
           pageBuilder: (context, state) {
             final slug = state.pathParameters['slug'] ?? '';
             debugPrint('🔗 [Router] Legacy /shop/ URL detected: $slug');
-            
+
             // Extract the SKU (first part, format: s56467 or S56467 or just 56467)
             // Example: s56467-aceite-mineral... -> S56467
             String productId = slug;
-            
+
             final skuMatch = RegExp(r'^[sS]?(\d+)').firstMatch(slug);
             if (skuMatch != null) {
               // Get the full match (e.g., "s56467") and uppercase it
               final sku = skuMatch.group(0)!.toUpperCase();
               productId = 'sku:$sku';
-              debugPrint('🔗 [Router] Extracted SKU: $sku -> productId: $productId');
+              debugPrint(
+                  '🔗 [Router] Extracted SKU: $sku -> productId: $productId');
             } else {
               debugPrint('🔗 [Router] Could not extract SKU from slug: $slug');
             }
-            
+
             return _buildPageWithNoTransition(
               context,
               state,

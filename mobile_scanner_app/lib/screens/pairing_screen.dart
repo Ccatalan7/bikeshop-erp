@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
@@ -33,8 +34,20 @@ class _PairingScreenState extends State<PairingScreen> {
     setState(() => _isProcessing = true);
 
     try {
-      final deviceId = barcode!.rawValue!;
-      await _pairDevice(deviceId);
+      final rawValue = barcode!.rawValue!;
+
+      // Try to parse as JSON (New unified config + pairing flow)
+      try {
+        if (rawValue.trim().startsWith('{')) {
+          await _configureAndPair(rawValue);
+          return;
+        }
+      } catch (_) {
+        // Not JSON, fall back to simple Device ID pairing
+      }
+
+      // Legacy/Manual pairing (simple ID)
+      await _pairDevice(rawValue);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -48,8 +61,51 @@ class _PairingScreenState extends State<PairingScreen> {
     }
   }
 
+  /// Parse JSON config and Pair
+  Future<void> _configureAndPair(String jsonString) async {
+    final Map<String, dynamic> data = jsonDecode(jsonString);
+
+    final url = data['url'];
+    final key = data['key'];
+    final deviceId = data['deviceId'];
+
+    if (url == null || key == null || deviceId == null) {
+      throw Exception('Invalid QR format. Missing config fields.');
+    }
+
+    final scannerService = context.read<ScannerService>();
+
+    // 1. Stop camera to release resources before navigation
+    await _controller.stop();
+
+    // 2. Configure Supabase
+    await scannerService.configure(url, key);
+
+    // 2. Pair Device
+    await scannerService.pairDevice(deviceId);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ ¡Configurado y Conectado!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   Future<void> _pairDevice(String deviceId) async {
     final scannerService = context.read<ScannerService>();
+
+    // Ensure service is configured first
+    if (!scannerService.isConfigured) {
+      throw Exception(
+          'App no configurada. Escanea el QR de configuración primero.');
+    }
+
+    // Stop camera if manual pairing triggers navigation
+    await _controller.stop();
     await scannerService.pairDevice(deviceId);
 
     if (mounted) {

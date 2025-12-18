@@ -58,6 +58,9 @@ import 'shared/services/window_zoom_service.dart';
 import 'shared/widgets/window_zoom_scope.dart';
 import 'shared/widgets/branded_loading.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'shared/services/remote_scanner_service.dart';
+import 'shared/services/barcode_scanner_service.dart';
+import 'shared/widgets/scanner_bridge_scope.dart';
 
 // Custom scroll behavior to prevent browser navigation gestures on trackpad
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -348,6 +351,10 @@ class VinabikeApp extends StatelessWidget {
 
         // Data preload service - preloads critical data after authentication
         ChangeNotifierProvider(create: (_) => DataPreloadService()),
+
+        // Scanner Services
+        ChangeNotifierProvider(create: (_) => BarcodeScannerService()),
+        Provider(create: (_) => RemoteScannerService()),
       ],
       child: Builder(
         builder: (context) {
@@ -521,8 +528,11 @@ class VinabikeApp extends StatelessWidget {
                 Locale('en', ''),
               ],
               locale: const Locale('es', ''),
-              builder: (context, child) =>
-                  WindowZoomScope(child: child ?? const SizedBox.shrink()),
+              builder: (context, child) => WindowZoomScope(
+                child: ScannerBridgeScope(
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              ),
             );
           }
 
@@ -546,8 +556,11 @@ class VinabikeApp extends StatelessWidget {
               Locale('en', ''),
             ],
             locale: const Locale('es', ''),
-            builder: (context, child) =>
-                WindowZoomScope(child: child ?? const SizedBox.shrink()),
+            builder: (context, child) => WindowZoomScope(
+              child: ScannerBridgeScope(
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
             home: Selector<WorkspaceManager, bool>(
               selector: (_, wm) => wm.workspaces.isEmpty,
               builder: (context, isEmpty, _) {

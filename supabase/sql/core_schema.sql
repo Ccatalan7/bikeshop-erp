@@ -1860,6 +1860,241 @@ create index if not exists idx_products_gtin on products(gtin);
 create index if not exists idx_products_hs_code on products(hs_code);
 
 -- ============================================================================
+-- PRODUCT SETS SYSTEM - Juegos/Sets de Productos
+-- ============================================================================
+-- Allows products to be defined as "sets" containing multiple components.
+-- Example: "Juego Mazas Shimano Deore" = Front Hub + Rear Hub
+-- Stock is tracked at component level, not at set level.
+-- ============================================================================
+
+-- Add set-related columns to products table
+do $$
+begin
+  -- is_set: True if this product is a parent set product
+  if not exists (select 1 from information_schema.columns 
+    where table_name = 'products' and column_name = 'is_set') then
+    alter table products add column is_set boolean not null default false;
+  end if;
+
+  -- set_type: Type of set for UI hints ('pair', 'front_rear', 'left_right', 'custom')
+  if not exists (select 1 from information_schema.columns 
+    where table_name = 'products' and column_name = 'set_type') then
+    alter table products add column set_type text;
+  end if;
+
+  -- parent_set_id: If this is a component, references the parent set
+  if not exists (select 1 from information_schema.columns 
+    where table_name = 'products' and column_name = 'parent_set_id') then
+    alter table products add column parent_set_id uuid references products(id) on delete set null;
+  end if;
+
+  -- component_label: For components, stores the label like "Delantero", "Trasero"
+  if not exists (select 1 from information_schema.columns 
+    where table_name = 'products' and column_name = 'component_label') then
+    alter table products add column component_label text;
+  end if;
+
+  -- component_position: For ordering components in the set (1, 2, 3...)
+  if not exists (select 1 from information_schema.columns 
+    where table_name = 'products' and column_name = 'component_position') then
+    alter table products add column component_position integer;
+  end if;
+end $$;
+
+-- Indexes for fast lookups
+create index if not exists idx_products_parent_set 
+  on products(parent_set_id) where parent_set_id is not null;
+create index if not exists idx_products_is_set 
+  on products(is_set) where is_set = true;
+
+-- Product Set Components Table: Links parent sets to their child products
+create table if not exists product_set_components (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  
+  -- Parent set product
+  set_product_id uuid references products(id) on delete cascade not null,
+  
+  -- Child component product
+  component_product_id uuid references products(id) on delete cascade not null,
+  
+  -- Component metadata
+  component_label text not null,        -- "Delantero", "Trasero", "Izquierdo", "Derecho"
+  component_position integer not null,  -- Order: 1, 2, 3...
+  quantity_in_set integer not null default 1,  -- Usually 1, could be 2 for "par de pedales"
+  
+  -- Pricing ratios (for calculating component prices from set price)
+  cost_ratio numeric(5,4),   -- 0.4 = 40% of set cost goes to this component
+  price_ratio numeric(5,4),  -- 0.6 = 60% of set price goes to this component
+  
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  
+  -- Constraints
+  unique(set_product_id, component_product_id),
+  unique(set_product_id, component_position)
+);
+
+-- Indexes for product_set_components
+create index if not exists idx_product_set_components_tenant 
+  on product_set_components(tenant_id);
+create index if not exists idx_product_set_components_set 
+  on product_set_components(set_product_id);
+create index if not exists idx_product_set_components_component 
+  on product_set_components(component_product_id);
+
+-- Enable RLS on product_set_components
+alter table product_set_components enable row level security;
+
+-- RLS Policies for product_set_components
+drop policy if exists "product_set_components_select" on product_set_components;
+drop policy if exists "product_set_components_insert" on product_set_components;
+drop policy if exists "product_set_components_update" on product_set_components;
+drop policy if exists "product_set_components_delete" on product_set_components;
+
+create policy "product_set_components_select" on product_set_components
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "product_set_components_insert" on product_set_components
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "product_set_components_update" on product_set_components
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "product_set_components_delete" on product_set_components
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- Trigger for updated_at on product_set_components
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'trg_product_set_components_updated_at') then
+    create trigger trg_product_set_components_updated_at 
+      before update on product_set_components
+      for each row execute function public.set_updated_at();
+  end if;
+end $$;
+
+-- Function: Get component availability for a set
+-- Returns the minimum stock across all components (= max full sets available)
+create or replace function public.get_set_availability(p_set_product_id uuid)
+returns table (
+  component_id uuid,
+  component_name text,
+  component_label text,
+  component_position integer,
+  stock_quantity integer,
+  quantity_needed integer
+)
+language plpgsql
+as $$
+begin
+  return query
+  select 
+    psc.component_product_id as component_id,
+    p.name as component_name,
+    psc.component_label,
+    psc.component_position,
+    coalesce(p.stock_quantity, p.inventory_qty, 0)::integer as stock_quantity,
+    psc.quantity_in_set as quantity_needed
+  from product_set_components psc
+  join products p on p.id = psc.component_product_id
+  where psc.set_product_id = p_set_product_id
+  order by psc.component_position;
+end;
+$$;
+
+-- Function: Get full sets available (min stock across all components)
+create or replace function public.get_full_sets_count(p_set_product_id uuid)
+returns integer
+language plpgsql
+as $$
+declare
+  v_min_sets integer;
+begin
+  select min(
+    floor(coalesce(p.stock_quantity, p.inventory_qty, 0)::numeric / psc.quantity_in_set)
+  )::integer
+  into v_min_sets
+  from product_set_components psc
+  join products p on p.id = psc.component_product_id
+  where psc.set_product_id = p_set_product_id;
+  
+  return coalesce(v_min_sets, 0);
+end;
+$$;
+
+-- Function: Check if set has partial availability
+create or replace function public.is_set_partial(p_set_product_id uuid)
+returns boolean
+language plpgsql
+as $$
+declare
+  v_has_stock boolean;
+  v_missing_stock boolean;
+begin
+  -- Check if at least one component has stock
+  select exists (
+    select 1 from product_set_components psc
+    join products p on p.id = psc.component_product_id
+    where psc.set_product_id = p_set_product_id
+      and coalesce(p.stock_quantity, p.inventory_qty, 0) >= psc.quantity_in_set
+  ) into v_has_stock;
+  
+  -- Check if at least one component is missing stock
+  select exists (
+    select 1 from product_set_components psc
+    join products p on p.id = psc.component_product_id
+    where psc.set_product_id = p_set_product_id
+      and coalesce(p.stock_quantity, p.inventory_qty, 0) < psc.quantity_in_set
+  ) into v_missing_stock;
+  
+  -- Partial = some have stock AND some don't
+  return v_has_stock and v_missing_stock;
+end;
+$$;
+
+-- View: Products with set information (enriches products with component data)
+create or replace view public.products_with_sets as
+select 
+  p.*,
+  -- For sets: aggregate component info
+  case when p.is_set then
+    (select json_agg(
+      json_build_object(
+        'id', psc.id,
+        'component_product_id', psc.component_product_id,
+        'component_label', psc.component_label,
+        'component_position', psc.component_position,
+        'component_name', cp.name,
+        'component_sku', cp.sku,
+        'stock_quantity', coalesce(cp.stock_quantity, cp.inventory_qty, 0),
+        'quantity_in_set', psc.quantity_in_set,
+        'cost_ratio', psc.cost_ratio,
+        'price_ratio', psc.price_ratio
+      ) order by psc.component_position
+    )
+    from product_set_components psc
+    join products cp on cp.id = psc.component_product_id
+    where psc.set_product_id = p.id)
+  end as set_components,
+  -- For sets: calculate availability
+  case when p.is_set then public.get_full_sets_count(p.id) end as full_sets_available,
+  case when p.is_set then public.is_set_partial(p.id) end as is_partial,
+  -- For components: get parent set info
+  case when p.parent_set_id is not null then
+    (select json_build_object(
+      'id', ps.id,
+      'name', ps.name,
+      'sku', ps.sku
+    ) from products ps where ps.id = p.parent_set_id)
+  end as parent_set_info
+from products p;
+
+-- ============================================================================
 -- STOCK ADJUSTMENTS TABLE - Track manual stock changes
 -- ============================================================================
 create table if not exists stock_adjustments (
@@ -8082,6 +8317,11 @@ declare
   v_resolved_product_id uuid;
   v_quantity_numeric numeric;
   v_quantity_int integer;
+  
+  -- Set handling variables
+  v_is_set boolean;
+  v_child record;
+  v_child_qty integer;
 begin
   -- CRITICAL: Set flag to skip stock_adjustment trigger for automatic changes
   perform set_config('app.skip_stock_adjustment_trigger', 'true', true);
@@ -8120,36 +8360,85 @@ begin
       continue;
     end if;
 
-    -- INCREASE inventory (purchase = IN movement)
-    -- Update BOTH inventory_qty (legacy) AND stock_quantity (current)
-    update public.products
-    set 
-      inventory_qty = inventory_qty + v_quantity_int,
-      stock_quantity = stock_quantity + v_quantity_int
-    where id = v_resolved_product_id;
+    -- CHECK IF PRODUCT IS A SET
+    select is_set into v_is_set from products where id = v_resolved_product_id;
+    
+    if v_is_set then
+        -- LOGIC FOR SETS: Explode into components
+        raise notice 'consume_purchase_invoice_inventory: exploding set % into components', v_resolved_product_id;
+        
+        for v_child in
+            select 
+                component_product_id, 
+                quantity_in_set
+            from product_set_components
+            where set_product_id = v_resolved_product_id
+        loop
+            v_child_qty := v_quantity_int * v_child.quantity_in_set;
+            
+            -- Update Component Inventory
+            update public.products
+            set 
+              inventory_qty = inventory_qty + v_child_qty,
+              stock_quantity = stock_quantity + v_child_qty
+            where id = v_child.component_product_id;
+            
+            -- Record Stock Movement for Component
+            insert into public.stock_movements (
+              product_id,
+              quantity,
+              movement_type,
+              type,
+              reference,
+              notes,
+              date,
+              created_at,
+              updated_at
+            ) values (
+              v_child.component_product_id,
+              v_child_qty,
+              'purchase_invoice',
+              'IN',
+              v_reference,
+              format('Entrada por compra de set %s (Factura %s)', v_item.product_name, p_invoice.invoice_number),
+              p_invoice.date,
+              now(),
+              now()
+            );
+        end loop;
+        
+    else
+        -- STANDARD LOGIC: Update product inventory directly
+        update public.products
+        set 
+          inventory_qty = inventory_qty + v_quantity_int,
+          stock_quantity = stock_quantity + v_quantity_int
+        where id = v_resolved_product_id;
 
-    -- Record stock movement
-    insert into public.stock_movements (
-      product_id,
-      quantity,
-      movement_type,
-      type,
-      reference,
-      notes,
-      date,
-      created_at,
-      updated_at
-    ) values (
-      v_resolved_product_id,
-      v_quantity_int,
-      'purchase_invoice',
-      'IN',
-      v_reference,
-      format('Entrada según factura compra %s', p_invoice.invoice_number),
-      p_invoice.date,
-      now(),
-      now()
-    );
+        -- Record stock movement
+        insert into public.stock_movements (
+          product_id,
+          quantity,
+          movement_type,
+          type,
+          reference,
+          notes,
+          date,
+          created_at,
+          updated_at
+        ) values (
+          v_resolved_product_id,
+          v_quantity_int,
+          'purchase_invoice',
+          'IN',
+          v_reference,
+          format('Entrada según factura compra %s', p_invoice.invoice_number),
+          p_invoice.date,
+          now(),
+          now()
+        );
+    end if;
+
   end loop;
 
   raise notice 'consume_purchase_invoice_inventory: completed for invoice %', p_invoice.id;
@@ -8169,6 +8458,11 @@ declare
   v_resolved_product_id uuid;
   v_quantity_numeric numeric;
   v_quantity_int integer;
+  
+  -- Set variables
+  v_is_set boolean;
+  v_child record;
+  v_child_qty integer;
 begin
   if p_invoice.id is null then
     raise notice 'restore_purchase_invoice_inventory: invoice ID is null, returning';
@@ -8183,7 +8477,7 @@ begin
 
   v_reference := format('purchase_invoice:%s', p_invoice.id);
 
-  -- Delete stock movements (same pattern as sales)
+  -- Delete ALL stock movements for this reference (cleans up both sets and normal products)
   delete from public.stock_movements
   where reference = v_reference;
 
@@ -8206,15 +8500,38 @@ begin
       continue;
     end if;
 
-    -- DECREASE inventory (restore = undo IN movement)
-    -- Update BOTH inventory_qty (legacy) AND stock_quantity (current)
-    update public.products
-    set 
-      inventory_qty = greatest(inventory_qty - v_quantity_int, 0),
-      stock_quantity = greatest(stock_quantity - v_quantity_int, 0)
-    where id = v_resolved_product_id;
-  end loop;
+    -- CHECK IF PRODUCT IS A SET
+    select is_set into v_is_set from products where id = v_resolved_product_id;
 
+    if v_is_set then
+        -- SET LOGIC: Restore components
+        for v_child in
+            select 
+                component_product_id, 
+                quantity_in_set
+            from product_set_components
+            where set_product_id = v_resolved_product_id
+        loop
+            v_child_qty := v_quantity_int * v_child.quantity_in_set;
+            
+            update public.products
+            set 
+              inventory_qty = greatest(inventory_qty - v_child_qty, 0),
+              stock_quantity = greatest(stock_quantity - v_child_qty, 0)
+            where id = v_child.component_product_id;
+        end loop;
+        
+    else
+        -- STANDARD LOGIC
+        update public.products
+        set 
+          inventory_qty = greatest(inventory_qty - v_quantity_int, 0),
+          stock_quantity = greatest(stock_quantity - v_quantity_int, 0)
+        where id = v_resolved_product_id;
+    end if;
+
+  end loop;
+  
   raise notice 'restore_purchase_invoice_inventory: completed for invoice %', p_invoice.id;
 end;
 $$;

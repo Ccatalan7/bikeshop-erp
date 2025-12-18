@@ -52,6 +52,17 @@ class Product {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  // SET FIELDS - For product sets (juegos) like front/rear hub pairs
+  final bool isSet; // True if this is a parent set product
+  final SetType? setType; // Type hint: pair, front_rear, left_right, custom
+  final String? parentSetId; // If component, references parent set
+  final String? componentLabel; // For components: "Delantero", "Trasero"
+  final int? componentPosition; // For ordering components
+  final List<SetComponent>?
+      setComponents; // For sets: linked components with stock
+  final int? fullSetsAvailable; // For sets: max complete sets from stock
+  final bool? isPartial; // For sets: true if some components missing
+
   const Product({
     required this.id,
     required this.name,
@@ -105,6 +116,15 @@ class Product {
     this.productType = ProductType.product,
     required this.createdAt,
     required this.updatedAt,
+    // Set fields
+    this.isSet = false,
+    this.setType,
+    this.parentSetId,
+    this.componentLabel,
+    this.componentPosition,
+    this.setComponents,
+    this.fullSetsAvailable,
+    this.isPartial,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -116,7 +136,8 @@ class Product {
       price: (json['price'] as num).toDouble(),
       cost: (json['cost'] as num).toDouble(),
       // Use inventory_qty as primary (legacy), fallback to stock_quantity
-      stockQuantity: json['inventory_qty'] as int? ?? json['stock_quantity'] as int? ?? 0,
+      stockQuantity:
+          json['inventory_qty'] as int? ?? json['stock_quantity'] as int? ?? 0,
       minStockLevel: json['min_stock_level'] as int? ?? 5,
       maxStockLevel: json['max_stock_level'] as int? ?? 100,
       imageUrl: json['image_url'] as String?,
@@ -178,7 +199,33 @@ class Product {
       ),
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
+      // Set fields
+      isSet: json['is_set'] as bool? ?? false,
+      setType: _parseSetType(json['set_type']),
+      parentSetId: json['parent_set_id'] as String?,
+      componentLabel: json['component_label'] as String?,
+      componentPosition: json['component_position'] as int?,
+      setComponents: _parseSetComponents(json['set_components']),
+      fullSetsAvailable: json['full_sets_available'] as int?,
+      isPartial: json['is_partial'] as bool?,
     );
+  }
+
+  static SetType? _parseSetType(dynamic value) {
+    if (value == null) return null;
+    final str = value.toString();
+    return SetType.values.firstWhere(
+      (t) => t.name == str,
+      orElse: () => SetType.custom,
+    );
+  }
+
+  static List<SetComponent>? _parseSetComponents(dynamic value) {
+    if (value == null) return null;
+    if (value is! List) return null;
+    return value
+        .map((e) => SetComponent.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Map<String, dynamic> toJson() {
@@ -236,6 +283,12 @@ class Product {
       'product_type': productType.name,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      // Set fields
+      'is_set': isSet,
+      'set_type': setType?.name,
+      'parent_set_id': parentSetId,
+      'component_label': componentLabel,
+      'component_position': componentPosition,
     };
 
     json.removeWhere((_, value) => value == null);
@@ -298,6 +351,15 @@ class Product {
     ProductType? productType,
     DateTime? createdAt,
     DateTime? updatedAt,
+    // Set fields
+    bool? isSet,
+    SetType? setType,
+    String? parentSetId,
+    String? componentLabel,
+    int? componentPosition,
+    List<SetComponent>? setComponents,
+    int? fullSetsAvailable,
+    bool? isPartial,
   }) {
     return Product(
       id: id ?? this.id,
@@ -352,6 +414,15 @@ class Product {
       productType: productType ?? this.productType,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      // Set fields
+      isSet: isSet ?? this.isSet,
+      setType: setType ?? this.setType,
+      parentSetId: parentSetId ?? this.parentSetId,
+      componentLabel: componentLabel ?? this.componentLabel,
+      componentPosition: componentPosition ?? this.componentPosition,
+      setComponents: setComponents ?? this.setComponents,
+      fullSetsAvailable: fullSetsAvailable ?? this.fullSetsAvailable,
+      isPartial: isPartial ?? this.isPartial,
     );
   }
 
@@ -364,7 +435,7 @@ class Product {
 
   /// Returns true if this product is a service (doesn't track inventory)
   bool get isService => productType == ProductType.service;
-  
+
   /// Returns true if this product tracks inventory
   bool get tracksInventory => !isService && trackStock;
 
@@ -386,6 +457,36 @@ class Product {
 
   String get fullName =>
       '$name${brand != null ? ' $brand' : ''}${model != null ? ' $model' : ''}';
+
+  // SET-SPECIFIC COMPUTED PROPERTIES
+
+  /// Returns true if this product is a component of a set
+  bool get isComponent => parentSetId != null;
+
+  /// Returns true if this set has some but not all components in stock
+  bool get hasPartialStock => isSet && (isPartial ?? false);
+
+  /// Returns true if all components have stock for at least one full set
+  bool get hasFullSetStock => isSet && (fullSetsAvailable ?? 0) > 0;
+
+  /// Display string for set stock status
+  String get setStockStatusDisplay {
+    if (!isSet) return '';
+    if (hasPartialStock) return '🟡 Parcial';
+    if (hasFullSetStock) return '🟢 Completo';
+    return '🔴 Sin Stock';
+  }
+
+  /// Returns the number of components in this set
+  int get componentCount => setComponents?.length ?? 0;
+
+  /// Returns stock status for a set: e.g., "(2/2)" or "(1/2)"
+  String get setComponentsStockDisplay {
+    if (!isSet || setComponents == null) return '';
+    final available = setComponents!.where((c) => c.hasStock).length;
+    final total = setComponents!.length;
+    return '($available/$total)';
+  }
 
   @override
   String toString() {
@@ -449,6 +550,127 @@ enum ProductType {
 
   const ProductType(this.displayName);
   final String displayName;
+}
+
+/// Type of product set for UI hints and auto-generation
+enum SetType {
+  pair('Par'), // Left + Right (pedals, grips)
+  frontRear('Delantero/Trasero'), // Front + Rear (hubs, brakes, wheels)
+  leftRight('Izquierdo/Derecho'), // Left + Right with different labels
+  custom('Personalizado'); // User-defined components
+
+  const SetType(this.displayName);
+  final String displayName;
+
+  /// Returns default component labels for this set type
+  List<String> get defaultLabels {
+    switch (this) {
+      case SetType.pair:
+        return ['Izquierdo', 'Derecho'];
+      case SetType.frontRear:
+        return ['Delantero', 'Trasero'];
+      case SetType.leftRight:
+        return ['Izquierdo', 'Derecho'];
+      case SetType.custom:
+        return ['Componente 1', 'Componente 2'];
+    }
+  }
+}
+
+/// Represents a component within a product set
+class SetComponent {
+  final String id;
+  final String productId;
+  final String productName;
+  final String productSku;
+  final String componentLabel; // "Delantero", "Trasero"
+  final int position;
+  final int quantityInSet;
+  final int stockQuantity; // Current stock of this component
+  final double? costRatio; // Ratio of set cost (e.g., 0.4 = 40%)
+  final double? priceRatio; // Ratio of set price (e.g., 0.6 = 60%)
+
+  const SetComponent({
+    required this.id,
+    required this.productId,
+    required this.productName,
+    required this.productSku,
+    required this.componentLabel,
+    required this.position,
+    this.quantityInSet = 1,
+    required this.stockQuantity,
+    this.costRatio,
+    this.priceRatio,
+  });
+
+  factory SetComponent.fromJson(Map<String, dynamic> json) {
+    return SetComponent(
+      id: json['id'] as String? ?? '',
+      productId: json['component_product_id'] as String? ??
+          json['product_id'] as String? ??
+          '',
+      productName: json['component_name'] as String? ??
+          json['product_name'] as String? ??
+          '',
+      productSku: json['component_sku'] as String? ??
+          json['product_sku'] as String? ??
+          '',
+      componentLabel: json['component_label'] as String? ?? '',
+      position:
+          json['component_position'] as int? ?? json['position'] as int? ?? 0,
+      quantityInSet: json['quantity_in_set'] as int? ?? 1,
+      stockQuantity: json['stock_quantity'] as int? ?? 0,
+      costRatio: (json['cost_ratio'] as num?)?.toDouble(),
+      priceRatio: (json['price_ratio'] as num?)?.toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'component_product_id': productId,
+      'component_name': productName,
+      'component_sku': productSku,
+      'component_label': componentLabel,
+      'component_position': position,
+      'quantity_in_set': quantityInSet,
+      'stock_quantity': stockQuantity,
+      'cost_ratio': costRatio,
+      'price_ratio': priceRatio,
+    };
+  }
+
+  /// Whether this component has sufficient stock for at least one set
+  bool get hasStock => stockQuantity >= quantityInSet;
+
+  /// Display string for stock status
+  String get stockDisplay => '$stockQuantity ${hasStock ? '✓' : '✗'}';
+
+  SetComponent copyWith({
+    String? id,
+    String? productId,
+    String? productName,
+    String? productSku,
+    String? componentLabel,
+    int? position,
+    int? quantityInSet,
+    int? stockQuantity,
+    double? costRatio,
+    double? priceRatio,
+  }) {
+    return SetComponent(
+      id: id ?? this.id,
+      productId: productId ?? this.productId,
+      productName: productName ?? this.productName,
+      productSku: productSku ?? this.productSku,
+      componentLabel: componentLabel ?? this.componentLabel,
+      position: position ?? this.position,
+      quantityInSet: quantityInSet ?? this.quantityInSet,
+      stockQuantity: stockQuantity ?? this.stockQuantity,
+      costRatio: costRatio ?? this.costRatio,
+      priceRatio: priceRatio ?? this.priceRatio,
+    );
+  }
 }
 
 class ProductDimensions {
