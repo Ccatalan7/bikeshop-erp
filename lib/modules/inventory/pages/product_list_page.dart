@@ -13,7 +13,7 @@ import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
-import '../../../shared/widgets/search_bar_widget.dart';
+
 import '../../purchases/services/purchase_service.dart';
 import '../models/category_models.dart';
 import '../models/inventory_models.dart';
@@ -21,6 +21,8 @@ import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
 
 enum ProductViewMode { table, cards }
+
+enum StockFilter { all, inStock, lowStock, outOfStock }
 
 class ProductListPage extends StatefulWidget {
   final String? initialCategoryId;
@@ -53,23 +55,31 @@ class _ProductListPageState extends State<ProductListPage> {
 
   // Detail pane resize
   double _detailPaneWidth = 520.0;
-  static const double _minDetailPaneWidth = 300.0;
-  static const double _maxDetailPaneWidth = 600.0;
 
   bool _isLoading = true;
   String _searchTerm = '';
+
+  // 🔍 Smart Filters State
   String? _selectedCategoryId;
   String? _selectedSupplierId;
-  bool _showLowStockOnly = false;
+  StockFilter _stockFilter = StockFilter.all;
+  bool _filterWebPublished = false; // is_published = true
+  bool _filterGoogleMerchant = false; // is_google_merchant = true
   bool _showInactive = false;
+
+  // 🔽 Sorting State
+  ProductSortOption _sortOption = ProductSortOption.nameAsc;
+
+  // 📷 Scanner State
+  bool _isScannerEnabled = true;
+
   ProductViewMode _viewMode = ProductViewMode.table;
   Product? _selectedProduct; // For split-pane detail view
   final Set<String> _expandedSets = {}; // Track which sets are expanded
-  final Set<String> _bulkSelectedIds = {}; // For checkbox selection
 
   // Pagination
   int _currentPage = 1;
-  int _itemsPerPage = 200;
+  int _itemsPerPage = 100; // Reduced for better performance
   int get _totalPages => (_filteredProducts.length / _itemsPerPage).ceil();
   List<Product> get _paginatedProducts {
     final startIndex = (_currentPage - 1) * _itemsPerPage;
@@ -77,6 +87,15 @@ class _ProductListPageState extends State<ProductListPage> {
         (startIndex + _itemsPerPage).clamp(0, _filteredProducts.length);
     return _filteredProducts.sublist(startIndex, endIndex);
   }
+
+  bool get _hasActiveFilters =>
+      _selectedCategoryId != null ||
+      _selectedSupplierId != null ||
+      _stockFilter != StockFilter.all ||
+      _filterWebPublished ||
+      _filterGoogleMerchant ||
+      _showInactive ||
+      _searchTerm.isNotEmpty;
 
   StreamSubscription? _scanSubscription;
 
@@ -89,39 +108,32 @@ class _ProductListPageState extends State<ProductListPage> {
     _categoryService = Provider.of<CategoryService>(context, listen: false);
     _purchaseService = Provider.of<PurchaseService>(context, listen: false);
 
-    // Don't set initial category/supplier until categories are loaded
-    _loadCategories().then((_) {
-      // After categories load, validate and set the initial category filter
-      if (widget.initialCategoryId != null && mounted) {
-        final categoryExists =
-            _categories.any((c) => c.id == widget.initialCategoryId);
-        if (categoryExists) {
-          setState(() {
-            _selectedCategoryId = widget.initialCategoryId;
-          });
-          _applyFilters();
-        }
-      }
-
-      // Set initial supplier filter if provided
-      if (widget.initialSupplierId != null && mounted) {
-        setState(() {
-          _selectedSupplierId = widget.initialSupplierId;
-        });
-        _applyFilters();
-      }
-    });
-
-    _loadSuppliers();
-    _loadProducts();
+    // Initial load sequence
+    _loadData();
 
     // Listen for unified barcode scans (Physical + Mobile via Bridge)
     _scanSubscription =
         context.read<BarcodeScannerService>().barcodeStream.listen((barcode) {
-      if (mounted) {
+      if (mounted && _isScannerEnabled) {
         _handleBarcodeScan(barcode);
       }
     });
+
+    // Check for initial filters from widget arguments
+    if (widget.initialCategoryId != null) {
+      _selectedCategoryId = widget.initialCategoryId;
+    }
+    if (widget.initialSupplierId != null) {
+      _selectedSupplierId = widget.initialSupplierId;
+    }
+  }
+
+  Future<void> _loadData() async {
+    await Future.wait([
+      _loadCategories(),
+      _loadSuppliers(),
+      _loadProducts(),
+    ]);
   }
 
   @override
@@ -143,8 +155,9 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Future<void> _handleBarcodeScan(String barcode) async {
-    // Only handle scans if this page is currently visible top-most
-    if (!mounted || !ModalRoute.of(context)!.isCurrent) return;
+    // Only handle scans if scanner is enabled and page is visible
+    if (!_isScannerEnabled || !mounted || !ModalRoute.of(context)!.isCurrent)
+      return;
 
     // Search for product by SKU
     final product = _products.cast<Product?>().firstWhere(
@@ -230,13 +243,14 @@ class _ProductListPageState extends State<ProductListPage> {
     try {
       final products = await _inventoryService.getProducts(
         categoryId: _selectedCategoryId,
-        lowStockOnly: _showLowStockOnly,
+        // We now filter low stock client-side to allow complex combinations
+        // lowStockOnly: _filterLowStock,
         forceRefresh: forceRefresh,
       );
 
       if (!mounted) return;
 
-      // Update data without resetting scroll position (unless it was initial load)
+      // Update data
       setState(() {
         _products = products;
         _applyFilters();
@@ -267,23 +281,17 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   /// Token-based search: splits query into words and matches if ALL tokens found
-  /// Example: "cadena 408" matches "Cadena KMC 408" because both words present
   bool _matchesTokenSearch(String query, Product product) {
     if (query.isEmpty) return true;
-
-    // Split query into tokens (words)
     final tokens = query.toLowerCase().split(RegExp(r'\s+'));
-
-    // Get all searchable fields as lowercase
     final searchableText = [
       product.name.toLowerCase(),
       product.sku.toLowerCase(),
-      product.supplierCode?.toLowerCase() ?? '', // Código proveedor
+      product.supplierCode?.toLowerCase() ?? '',
       product.brand?.toLowerCase() ?? '',
       product.model?.toLowerCase() ?? '',
       _resolveCategoryName(product)?.toLowerCase() ?? '',
     ].join(' ');
-
     // ALL tokens must be found in searchable text
     return tokens.every((token) => searchableText.contains(token));
   }
@@ -291,43 +299,103 @@ class _ProductListPageState extends State<ProductListPage> {
   void _applyFilters() {
     List<Product> filtered = List<Product>.from(_products);
 
-    // Hide set components from main list - they only appear in parent's dropdown
+    // 1. Hide set components from main list
     filtered = filtered.where((product) => !product.isSetComponent).toList();
 
+    // 2. Category Filter
     if (_selectedCategoryId != null && _selectedCategoryId!.isNotEmpty) {
       filtered = filtered
           .where((product) => product.categoryId == _selectedCategoryId)
           .toList();
     }
 
+    // 3. Supplier Filter
     if (_selectedSupplierId != null && _selectedSupplierId!.isNotEmpty) {
       filtered = filtered
           .where((product) => product.supplierId == _selectedSupplierId)
           .toList();
     }
 
-    if (_showLowStockOnly) {
-      filtered = filtered
-          .where((product) =>
-              !product.isService &&
-              (product.isLowStock || product.isOutOfStock))
-          .toList();
+    // 4. Stock Filters
+    switch (_stockFilter) {
+      case StockFilter.all:
+        // No filtration
+        break;
+      case StockFilter.inStock:
+        // Show only products with positive stock
+        filtered = filtered
+            .where((product) => !product.isService && product.inventoryQty > 0)
+            .toList();
+        break;
+      case StockFilter.lowStock:
+        // Show low stock (includes out of stock usually, or strictly low?)
+        // User said "Bajo stock", "Sin stock", "Con stock".
+        // Low stock usually implies it needs attention.
+        filtered = filtered
+            .where((product) => !product.isService && product.isLowStock)
+            .toList();
+        break;
+      case StockFilter.outOfStock:
+        filtered = filtered
+            .where((product) => !product.isService && product.isOutOfStock)
+            .toList();
+        break;
+    }
+
+    if (_filterWebPublished) {
+      filtered = filtered.where((product) => product.isPublished).toList();
+    }
+
+    if (_filterGoogleMerchant) {
+      filtered = filtered.where((product) => product.isGoogleMerchant).toList();
     }
 
     if (!_showInactive) {
       filtered = filtered.where((product) => product.isActive).toList();
     }
 
+    // 5. Search
     if (_searchTerm.isNotEmpty) {
-      // Use token-based search: all words must be found
       filtered = filtered.where((product) {
         return _matchesTokenSearch(_searchTerm, product);
       }).toList();
     }
 
-    _filteredProducts = filtered;
+    // 6. Sorting
+    switch (_sortOption) {
+      case ProductSortOption.createdAtDesc:
+        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+      case ProductSortOption.createdAtAsc:
+        filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        break;
+      case ProductSortOption.nameAsc:
+        filtered.sort((a, b) => a.name.compareTo(b.name));
+        break;
+      case ProductSortOption.nameDesc:
+        filtered.sort((a, b) => b.name.compareTo(a.name));
+        break;
+      case ProductSortOption.skuAsc:
+        filtered.sort((a, b) => a.sku.compareTo(b.sku));
+        break;
+      case ProductSortOption.skuDesc:
+        filtered.sort((a, b) => b.sku.compareTo(a.sku));
+        break;
+      case ProductSortOption.priceDesc:
+        filtered.sort((a, b) => b.price.compareTo(a.price));
+        break;
+      case ProductSortOption.priceAsc:
+        filtered.sort((a, b) => a.price.compareTo(b.price));
+        break;
+      case ProductSortOption.stockDesc:
+        filtered.sort((a, b) => b.inventoryQty.compareTo(a.inventoryQty));
+        break;
+      case ProductSortOption.stockAsc:
+        filtered.sort((a, b) => a.inventoryQty.compareTo(b.inventoryQty));
+        break;
+    }
 
-    // Reset to page 1 when filters change
+    _filteredProducts = filtered;
     _currentPage = 1;
   }
 
@@ -338,38 +406,9 @@ class _ProductListPageState extends State<ProductListPage> {
     });
   }
 
-  void _onCategoryChanged(String? categoryId) {
-    setState(() {
-      _selectedCategoryId = categoryId;
-      _applyFilters();
-    });
-  }
-
-  void _onSupplierChanged(String? supplierId) {
-    setState(() {
-      _selectedSupplierId = supplierId;
-      _applyFilters();
-    });
-  }
-
-  void _onLowStockToggle(bool value) {
-    setState(() {
-      _showLowStockOnly = value;
-      _applyFilters();
-    });
-  }
-
-  void _onInactiveToggle(bool value) {
-    setState(() {
-      _showInactive = value;
-      _applyFilters();
-    });
-  }
-
-  void _onViewModeChanged(ProductViewMode mode) {
-    if (_viewMode == mode) return;
-    setState(() => _viewMode = mode);
-  }
+  // ---------------------------------------------------------------------------
+  // UI BUILDERS (Minimalistic Redesign)
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -384,51 +423,703 @@ class _ProductListPageState extends State<ProductListPage> {
       return const Center(child: BrandedLoading());
     }
 
-    if (_filteredProducts.isEmpty) {
-      // Maintain same layout structure as non-empty view
-      if (_viewMode == ProductViewMode.table) {
-        return Row(
-          children: [
-            Expanded(
-              child: Column(
-                children: [
-                  _buildCleanHeader(theme),
-                  Expanded(
-                    child: _buildEmptyState(theme),
-                  ),
-                ],
+    return Column(
+      children: [
+        // 1. Sleek Header Area (Title + Primary Actions)
+        _buildHeaderArea(theme),
+
+        // 2. Smart Filter Bar (Separated, minimal)
+        _buildSmartFilterBar(theme),
+
+        // 3. Main Content
+        Expanded(
+          child: _filteredProducts.isEmpty
+              ? _buildEmptyState(theme)
+              : _viewMode == ProductViewMode.table
+                  ? _buildTableViewWithScrollableHeader(theme)
+                  : _buildCardGridView(theme),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeaderArea(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Title
+          Text(
+            'Productos',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Product Count Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '${_filteredProducts.length}',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ],
-        );
-      } else {
-        // Card view with scrollable layout
-        return SingleChildScrollView(
-          child: Column(
+          ),
+
+          const Spacer(),
+
+          // Scanner Toggle (Minimal Switch)
+          Row(
             children: [
-              _buildCleanHeader(theme),
-              _buildEmptyState(theme),
+              Icon(
+                _isScannerEnabled
+                    ? Icons.qr_code_scanner
+                    : Icons.qr_code_2_outlined,
+                size: 18,
+                color: _isScannerEnabled
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Switch(
+                value: _isScannerEnabled,
+                onChanged: (val) {
+                  setState(() => _isScannerEnabled = val);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                          val ? 'Escáner habilitado' : 'Escáner deshabilitado'),
+                      duration: const Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                      width: 200,
+                    ),
+                  );
+                },
+              ),
             ],
           ),
-        );
-      }
-    }
+          const SizedBox(width: 16),
 
-    // For table view, use custom scrolling structure
-    if (_viewMode == ProductViewMode.table) {
-      return _buildTableViewWithScrollableHeader(theme);
-    }
+          // Vertical Divider
+          Container(
+            height: 24,
+            width: 1,
+            color: theme.colorScheme.outlineVariant,
+          ),
+          const SizedBox(width: 16),
 
-    // For card view, wrap header + content in scrollable
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildCleanHeader(theme),
-          SizedBox(
-            height: MediaQuery.of(context).size.height - 300,
-            child: _buildCardGridScrollable(theme),
+          // Import Button
+          AppButton(
+            text: 'Importar',
+            icon: Icons.upload_file_outlined,
+            type: ButtonType.outline,
+            onPressed: () async {
+              final result = await context.push('/inventory/products/import');
+              if (result == true) _loadProducts(forceRefresh: true);
+            },
+          ),
+          const SizedBox(width: 8),
+
+          // New Product Button
+          AppButton(
+            text: 'Nuevo',
+            icon: Icons.add,
+            onPressed: () async {
+              final result = await context.push('/inventory/products/new');
+              if (result == true) _loadProducts(forceRefresh: true);
+            },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSmartFilterBar(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              // Search Input (Expanded)
+              Expanded(
+                flex: 3,
+                child: SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _onSearchChanged,
+                    decoration: InputDecoration(
+                      hintText: 'Buscar por nombre, SKU...',
+                      prefixIcon: const Icon(Icons.search, size: 18),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 0, horizontal: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide:
+                            BorderSide(color: theme.colorScheme.outlineVariant),
+                      ),
+                      filled: true,
+                      fillColor:
+                          theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+
+              // Sort Dropdown (Compact) - Kept for Date sorting
+              _buildCompactSortDropdown(theme),
+              const SizedBox(width: 8),
+
+              // View Toggle
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: theme.colorScheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ToggleButtons(
+                  isSelected: [
+                    _viewMode == ProductViewMode.table,
+                    _viewMode == ProductViewMode.cards
+                  ],
+                  onPressed: (index) {
+                    setState(() => _viewMode = index == 0
+                        ? ProductViewMode.table
+                        : ProductViewMode.cards);
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  constraints:
+                      const BoxConstraints(minHeight: 38, minWidth: 38),
+                  color: theme.colorScheme.onSurfaceVariant,
+                  selectedColor: theme.colorScheme.primary,
+                  fillColor:
+                      theme.colorScheme.primaryContainer.withOpacity(0.2),
+                  children: const [
+                    Icon(Icons.table_rows_outlined, size: 18),
+                    Icon(Icons.grid_view_outlined, size: 18),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Secondary Filter Row (Dropdowns)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                // Category Filter
+                _buildSearchableMenu<Category>(
+                  theme: theme,
+                  hint: 'Categoría',
+                  value: _categories.cast<Category?>().firstWhere(
+                        (c) => c!.id == _selectedCategoryId,
+                        orElse: () => null,
+                      ),
+                  items: _categories,
+                  labelBuilder: (c) => c.name,
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedCategoryId = val?.id;
+                      _applyFilters();
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+
+                // Supplier Filter
+                _buildSearchableMenu<Supplier>(
+                  theme: theme,
+                  hint: 'Proveedor',
+                  value: _suppliers.cast<Supplier?>().firstWhere(
+                        (s) => s!.id == _selectedSupplierId,
+                        orElse: () => null,
+                      ),
+                  items: _suppliers,
+                  labelBuilder: (s) => s.name,
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedSupplierId = val?.id;
+                      _applyFilters();
+                    });
+                  },
+                ),
+
+                const SizedBox(width: 8),
+
+                // Stock Filter Dropdown
+                _buildStockFilterDropdown(theme),
+
+                const SizedBox(width: 8),
+
+                // Channels (Internet) Dropdown
+                _buildChannelsFilterDropdown(theme),
+
+                const SizedBox(width: 8),
+
+                // Status Filter Dropdown
+                _buildStatusFilterDropdown(theme),
+
+                if (_hasActiveFilters) ...[
+                  const VerticalDivider(width: 24),
+                  _clearFilters(theme),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactSortDropdown(ThemeData theme) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<ProductSortOption>(
+          value: _sortOption,
+          isDense: true,
+          icon: const Icon(Icons.sort, size: 18),
+          selectedItemBuilder: (context) {
+            return ProductSortOption.values.map((e) {
+              return Center(
+                  child: Text(e.label, style: theme.textTheme.bodySmall));
+            }).toList();
+          },
+          items: ProductSortOption.values
+              .map((e) => DropdownMenuItem(
+                    value: e,
+                    child: Text(e.label, style: theme.textTheme.bodyMedium),
+                  ))
+              .toList(),
+          onChanged: (val) {
+            if (val != null)
+              setState(() {
+                _sortOption = val;
+                _applyFilters();
+              });
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStockFilterDropdown(ThemeData theme) {
+    String label = 'Inventario';
+    IconData icon = Icons.inventory_2_outlined;
+    Color? color;
+
+    switch (_stockFilter) {
+      case StockFilter.all:
+        label = 'Inventario';
+        break;
+      case StockFilter.inStock:
+        label = 'Con Stock';
+        icon = Icons.check_circle_outline;
+        color = Colors.green;
+        break;
+      case StockFilter.lowStock:
+        label = 'Bajo Stock';
+        icon = Icons.warning_amber_rounded;
+        color = Colors.orange;
+        break;
+      case StockFilter.outOfStock:
+        label = 'Sin Stock';
+        icon = Icons.cancel_outlined;
+        color = Colors.red;
+        break;
+    }
+
+    final isSelected = _stockFilter != StockFilter.all;
+
+    return PopupMenuButton<StockFilter>(
+      tooltip: 'Filtrar por inventario',
+      initialValue: _stockFilter,
+      onSelected: (StockFilter item) {
+        setState(() {
+          _stockFilter = item;
+          _applyFilters();
+        });
+      },
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<StockFilter>>[
+        const PopupMenuItem<StockFilter>(
+          value: StockFilter.all,
+          child: Text('Todos'),
+        ),
+        const PopupMenuItem<StockFilter>(
+          value: StockFilter.inStock,
+          child: Row(
+            children: [
+              Icon(Icons.check_circle_outline, color: Colors.green, size: 18),
+              SizedBox(width: 8),
+              Text('Con Stock (>0)'),
+            ],
+          ),
+        ),
+        const PopupMenuItem<StockFilter>(
+          value: StockFilter.lowStock,
+          child: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
+              SizedBox(width: 8),
+              Text('Bajo Stock'),
+            ],
+          ),
+        ),
+        const PopupMenuItem<StockFilter>(
+          value: StockFilter.outOfStock,
+          child: Row(
+            children: [
+              Icon(Icons.cancel_outlined, color: Colors.red, size: 18),
+              SizedBox(width: 8),
+              Text('Sin Stock (0)'),
+            ],
+          ),
+        ),
+      ],
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (color ?? theme.colorScheme.primary).withOpacity(0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected
+                ? (color ?? theme.colorScheme.primary)
+                : theme.colorScheme.outline,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 16,
+                color: isSelected
+                    ? (color ?? theme.colorScheme.primary)
+                    : theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: isSelected
+                    ? (color ?? theme.colorScheme.primary)
+                    : theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down,
+                size: 18, color: theme.colorScheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChannelsFilterDropdown(ThemeData theme) {
+    final isSelected = _filterWebPublished || _filterGoogleMerchant;
+
+    return PopupMenuButton<String>(
+      tooltip: 'Canales de venta',
+      onSelected: (String value) {
+        setState(() {
+          if (value == 'web') _filterWebPublished = !_filterWebPublished;
+          if (value == 'google') _filterGoogleMerchant = !_filterGoogleMerchant;
+          _applyFilters();
+        });
+      },
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+        CheckedPopupMenuItem<String>(
+          value: 'web',
+          checked: _filterWebPublished,
+          child: const Text('Publicado en Web'),
+        ),
+        CheckedPopupMenuItem<String>(
+          value: 'google',
+          checked: _filterGoogleMerchant,
+          child: const Text('Google Merchant'),
+        ),
+      ],
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? theme.colorScheme.primary.withOpacity(0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.public,
+                size: 16,
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Text(
+              'Canales',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down,
+                size: 18, color: theme.colorScheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusFilterDropdown(ThemeData theme) {
+    final isInactiveSelected = _showInactive;
+
+    return PopupMenuButton<bool>(
+      tooltip: 'Estado del producto',
+      initialValue: _showInactive,
+      onSelected: (bool value) {
+        setState(() {
+          _showInactive = value;
+          _applyFilters();
+        });
+      },
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<bool>>[
+        const PopupMenuItem<bool>(
+          value: false,
+          child: Text('Solo Activos'),
+        ),
+        const PopupMenuItem<bool>(
+          value: true,
+          child: Text('Mostrar Inactivos'),
+        ),
+      ],
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: isInactiveSelected
+              ? theme.colorScheme.error.withOpacity(0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isInactiveSelected
+                ? theme.colorScheme.error
+                : theme.colorScheme.outline,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+                isInactiveSelected
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                size: 16,
+                color: isInactiveSelected
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Text(
+              isInactiveSelected ? 'Inactivos' : 'Activos',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: isInactiveSelected
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down,
+                size: 18, color: theme.colorScheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactDropdown<T>({
+    required ThemeData theme,
+    required String hint,
+    required T? value,
+    required List<T> items,
+    required String Function(T) labelBuilder,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outline),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          hint: Text(hint, style: theme.textTheme.bodySmall),
+          icon: Icon(Icons.arrow_drop_down,
+              size: 18, color: theme.colorScheme.onSurfaceVariant),
+          style: theme.textTheme.bodySmall,
+          selectedItemBuilder: (context) {
+            return [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(hint,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+              ),
+              ...items.map((item) => Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(labelBuilder(item),
+                        style: theme.textTheme.bodySmall,
+                        overflow: TextOverflow.ellipsis),
+                  )),
+            ];
+          },
+          items: [
+            DropdownMenuItem<T>(
+              value: null,
+              child: Text('Todos',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.primary)),
+            ),
+            ...items.map((item) => DropdownMenuItem<T>(
+                  value: item,
+                  child: Text(labelBuilder(item),
+                      style: theme.textTheme.bodySmall),
+                )),
+          ],
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchableMenu<T>({
+    required ThemeData theme,
+    required String hint,
+    required T? value,
+    required List<T> items,
+    required String Function(T) labelBuilder,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Container(
+      height: 36,
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outline),
+      ),
+      child: DropdownMenu<T?>(
+        width: 200,
+        initialSelection: value,
+        hintText: hint,
+        textStyle: theme.textTheme.bodySmall,
+        menuHeight: 300,
+        enableFilter: true,
+        requestFocusOnTap: true,
+        inputDecorationTheme: InputDecorationTheme(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          border: InputBorder.none,
+          constraints: const BoxConstraints(maxHeight: 36),
+          hintStyle: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        trailingIcon: Icon(Icons.arrow_drop_down,
+            size: 18, color: theme.colorScheme.onSurfaceVariant),
+        selectedTrailingIcon: Icon(Icons.arrow_drop_up,
+            size: 18, color: theme.colorScheme.onSurfaceVariant),
+        dropdownMenuEntries: [
+          DropdownMenuEntry<T?>(
+            value: null,
+            label: 'Todos',
+            style: ButtonStyle(
+              textStyle: MaterialStateProperty.all(theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.primary)),
+            ),
+          ),
+          ...items.map((item) => DropdownMenuEntry<T?>(
+                value: item,
+                label: labelBuilder(item),
+                style: ButtonStyle(
+                  textStyle:
+                      MaterialStateProperty.all(theme.textTheme.bodySmall),
+                ),
+              )),
+        ],
+        onSelected: onChanged,
+      ),
+    );
+  }
+
+  void _resetFilters() {
+    setState(() {
+      _selectedCategoryId = null;
+      _selectedSupplierId = null;
+      _stockFilter = StockFilter.all;
+      _filterWebPublished = false;
+      _filterGoogleMerchant = false;
+      _showInactive = false;
+      _searchTerm = '';
+      _searchController.clear();
+      _applyFilters();
+    });
+  }
+
+  Widget _clearFilters(ThemeData theme) {
+    return TextButton.icon(
+      onPressed: _resetFilters,
+      icon: const Icon(Icons.close, size: 14),
+      label: const Text('Limpiar'),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: const Size(0, 32),
+        foregroundColor: theme.colorScheme.error,
+        textStyle: theme.textTheme.labelSmall,
       ),
     );
   }
@@ -440,29 +1131,26 @@ class _ProductListPageState extends State<ProductListPage> {
         Expanded(
           child: Column(
             children: [
-              // Fixed top bar
-              _buildCleanHeader(theme),
               // Fixed table header
-              _buildTableHeader(theme),
-              // Scrollable table rows only
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                      bottom:
+                          BorderSide(color: theme.colorScheme.outlineVariant)),
+                  color: theme.colorScheme.surface,
+                ),
+                child: _buildTableHeader(theme),
+              ),
+
+              // Scrollable table rows
               Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      right: BorderSide(
-                        color:
-                            theme.colorScheme.outlineVariant.withOpacity(0.5),
-                      ),
-                    ),
-                  ),
-                  child: ListView.builder(
-                    controller: _tableScrollController,
-                    itemCount: _paginatedProducts.length,
-                    itemBuilder: (context, index) {
-                      final product = _paginatedProducts[index];
-                      return _buildZohoTableRow(product, theme);
-                    },
-                  ),
+                child: ListView.builder(
+                  controller: _tableScrollController,
+                  itemCount: _paginatedProducts.length,
+                  itemBuilder: (context, index) {
+                    final product = _paginatedProducts[index];
+                    return _buildZohoTableRow(product, theme);
+                  },
                 ),
               ),
               // Pagination controls
@@ -476,665 +1164,315 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  Widget _buildCleanHeader(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.5),
-          ),
-        ),
+  Widget _buildCardGridView(ThemeData theme) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 300,
+        childAspectRatio: 0.75,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Title and primary actions
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Productos',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              // View mode toggle
-              SegmentedButton<ProductViewMode>(
-                segments: const [
-                  ButtonSegment<ProductViewMode>(
-                    value: ProductViewMode.table,
-                    icon: Icon(Icons.table_rows_outlined, size: 16),
-                  ),
-                  ButtonSegment<ProductViewMode>(
-                    value: ProductViewMode.cards,
-                    icon: Icon(Icons.dashboard_outlined, size: 16),
-                  ),
-                ],
-                selected: <ProductViewMode>{_viewMode},
-                onSelectionChanged: (selection) =>
-                    _onViewModeChanged(selection.first),
-                style: ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  padding: MaterialStateProperty.all(
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Scanner button
-              // Scanner button - Removed (Global scanner is always active)
-              /*
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.qr_code_scanner, size: 18),
-                tooltip: 'Escáner activo',
-                visualDensity: VisualDensity.compact,
-              ),
-              const SizedBox(width: 8),
-              */
-              const SizedBox(width: 8),
-              // Import button
-              AppButton(
-                text: 'Importar',
-                icon: Icons.file_upload_outlined,
-                type: ButtonType.outline,
-                onPressed: () async {
-                  final result =
-                      await context.push('/inventory/products/import');
-                  if (result == true) {
-                    _loadProducts(forceRefresh: true);
-                  }
-                },
-              ),
-              const SizedBox(width: 8),
-              // New product button
-              AppButton(
-                text: 'Nuevo producto',
-                icon: Icons.add,
-                onPressed: () async {
-                  final result = await context.push('/inventory/products/new');
-                  if (result == true) {
-                    _loadProducts(forceRefresh: true);
-                  }
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Search and filters row
-          Row(
-            children: [
-              // Search bar
-              Expanded(
-                flex: 2,
-                child: SearchBarWidget(
-                  controller: _searchController,
-                  hintText: 'Buscar por nombre, SKU, código proveedor, marca…',
-                  onChanged: _onSearchChanged,
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Category filter
-              SizedBox(
-                width: 180,
-                child: DropdownButtonFormField<String>(
-                  value: _selectedCategoryId,
-                  decoration: InputDecoration(
-                    labelText: 'Categoría',
-                    border: const OutlineInputBorder(),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    isDense: true,
-                  ),
-                  style: theme.textTheme.bodySmall,
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('Todas'),
-                    ),
-                    ..._categories.map((category) {
-                      return DropdownMenuItem<String>(
-                        value: category.id,
-                        child: Text(category.name),
-                      );
-                    }),
-                  ],
-                  onChanged: _onCategoryChanged,
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Supplier filter
-              SizedBox(
-                width: 180,
-                child: DropdownButtonFormField<String>(
-                  value: _selectedSupplierId,
-                  decoration: InputDecoration(
-                    labelText: 'Proveedor',
-                    border: const OutlineInputBorder(),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    isDense: true,
-                  ),
-                  style: theme.textTheme.bodySmall,
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('Todos'),
-                    ),
-                    ..._suppliers.map((supplier) {
-                      return DropdownMenuItem<String>(
-                        value: supplier.id,
-                        child: Text(supplier.name),
-                      );
-                    }),
-                  ],
-                  onChanged: _onSupplierChanged,
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Filter chips
-              FilterChip(
-                avatar: Icon(
-                  Icons.warning_amber_outlined,
-                  size: 16,
-                  color: _showLowStockOnly
-                      ? theme.colorScheme.error
-                      : theme.colorScheme.onSurfaceVariant,
-                ),
-                label: const Text('Stock crítico'),
-                labelStyle: theme.textTheme.labelSmall,
-                selected: _showLowStockOnly,
-                onSelected: _onLowStockToggle,
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-              ),
-              const SizedBox(width: 6),
-              FilterChip(
-                avatar: Icon(
-                  Icons.visibility_off_outlined,
-                  size: 16,
-                  color: _showInactive
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurfaceVariant,
-                ),
-                label: const Text('Inactivos'),
-                labelStyle: theme.textTheme.labelSmall,
-                selected: _showInactive,
-                onSelected: _onInactiveToggle,
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-              ),
-              const SizedBox(width: 6),
-              // Refresh button
-              IconButton(
-                tooltip: 'Actualizar',
-                icon: const Icon(Icons.refresh_outlined, size: 18),
-                onPressed: _loadProducts,
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ),
-          // Summary stats (compact)
-          if (!_isLoading && _products.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _buildCompactSummary(theme),
-          ],
-        ],
-      ),
+      itemCount: _filteredProducts.length,
+      itemBuilder: (context, index) {
+        return _buildProductCard(_filteredProducts[index], theme);
+      },
     );
   }
 
-  Widget _buildCompactSummary(ThemeData theme) {
-    // Exclude services from stock counts
-    final productsOnly = _products.where((p) => !p.isService);
-    final lowStock = productsOnly.where((p) => p.isLowStock).length;
-    final outOfStock = productsOnly.where((p) => p.isOutOfStock).length;
-    final inventoryValue = productsOnly.fold<double>(
-      0.0,
-      (total, product) => total + product.inventoryValue,
-    );
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        children: [
-          _buildCompactStat(
-            theme,
-            icon: Icons.inventory_2_outlined,
-            label: 'Total',
-            value: _products.length.toString(),
-          ),
-          const SizedBox(width: 20),
-          _buildCompactStat(
-            theme,
-            icon: Icons.warning_amber_outlined,
-            label: 'Crítico',
-            value: lowStock.toString(),
-            color: lowStock > 0 ? theme.colorScheme.error : null,
-          ),
-          const SizedBox(width: 20),
-          _buildCompactStat(
-            theme,
-            icon: Icons.block_outlined,
-            label: 'Sin stock',
-            value: outOfStock.toString(),
-            color: outOfStock > 0 ? theme.colorScheme.error : null,
-          ),
-          const Spacer(),
-          _buildCompactStat(
-            theme,
-            icon: Icons.attach_money,
-            label: 'Valor',
-            value: ChileanUtils.formatCurrency(inventoryValue),
-            color: theme.colorScheme.primary,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompactStat(
-    ThemeData theme, {
-    required IconData icon,
-    required String label,
-    required String value,
-    Color? color,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          size: 14,
-          color: color ?? theme.colorScheme.onSurfaceVariant,
-        ),
-        const SizedBox(width: 4),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontSize: 10,
-              ),
-            ),
-            Text(
-              value,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: color,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContentArea(ThemeData theme) {
-    return _viewMode == ProductViewMode.table
-        ? _buildZohoTableView(theme)
-        : _buildCardGridScrollable(theme);
-  }
-
-  Widget _buildZohoTableView(ThemeData theme) {
-    return Row(
-      children: [
-        // Main table view
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border(
-                right: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withOpacity(0.5),
-                ),
-              ),
-            ),
-            child: Column(
-              children: [
-                _buildTableHeader(theme),
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: _loadProducts,
-                    child: ListView.builder(
-                      controller: _tableScrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      itemCount: _filteredProducts.length,
-                      itemBuilder: (context, index) {
-                        final product = _filteredProducts[index];
-                        return _buildZohoTableRow(product, theme);
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // Split-pane detail view
-        if (_selectedProduct != null) _buildDetailPane(theme),
-      ],
-    );
-  }
-
-  Widget _buildCardGridScrollable(ThemeData theme) {
-    return RefreshIndicator(
-      onRefresh: _loadProducts,
-      child: _buildCardGrid(theme),
-    );
-  }
+  // ---------------------------------------------------------------------------
+  // TABLE ROW & HEADER (Keep existing logic, updated style)
+  // ---------------------------------------------------------------------------
 
   Widget _buildTableHeader(ThemeData theme) {
     return Container(
-      height: 40,
+      height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-        border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.8),
-          ),
-        ),
-      ),
       child: Row(
         children: [
-          // Checkbox column
-          SizedBox(
-            width: 48,
-            child: Checkbox(
-              value: false,
-              onChanged: (value) {
-                // TODO: Select all
-              },
-              visualDensity: VisualDensity.compact,
-            ),
+          _buildHeaderCell(
+            theme,
+            'Producto',
+            flex: 4,
+            sortOptionAsc: ProductSortOption.nameAsc,
+            sortOptionDesc: ProductSortOption.nameDesc,
           ),
-          // Thumbnail column
-          const SizedBox(width: 60),
-          // Name column
-          Expanded(
-            flex: 3,
-            child: Text(
-              'Nombre',
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
+          _buildHeaderCell(
+            theme,
+            'SKU',
+            flex: 2,
+            sortOptionAsc: ProductSortOption.skuAsc,
+            sortOptionDesc: ProductSortOption.skuDesc,
           ),
-          // SKU column
-          SizedBox(
-            width: 140,
-            child: Text(
-              'SKU',
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
+          _buildHeaderCell(theme, 'Categoría',
+              flex: 2), // Category sort not yet explicitly defined in Enum
+          _buildHeaderCell(
+            theme,
+            'Stock',
+            flex: 1,
+            align: TextAlign.center,
+            sortOptionAsc: ProductSortOption.stockAsc,
+            sortOptionDesc: ProductSortOption.stockDesc,
           ),
-          // Price column
-          SizedBox(
-            width: 140,
-            child: Text(
-              'Precio',
-              textAlign: TextAlign.right,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
+          _buildHeaderCell(
+            theme,
+            'Precio',
+            flex: 1,
+            align: TextAlign.right,
+            sortOptionAsc: ProductSortOption.priceAsc,
+            sortOptionDesc: ProductSortOption.priceDesc,
           ),
-          // Stock column
-          SizedBox(
-            width: 120,
-            child: Text(
-              'Stock',
-              textAlign: TextAlign.right,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 48), // Actions column space
         ],
       ),
     );
   }
 
+  Widget _buildHeaderCell(ThemeData theme, String text,
+      {int flex = 1,
+      TextAlign align = TextAlign.left,
+      ProductSortOption? sortOptionAsc,
+      ProductSortOption? sortOptionDesc}) {
+    final isSorted = (sortOptionAsc != null && _sortOption == sortOptionAsc) ||
+        (sortOptionDesc != null && _sortOption == sortOptionDesc);
+    final isAsc = sortOptionAsc != null && _sortOption == sortOptionAsc;
+
+    return Expanded(
+      flex: flex,
+      child: InkWell(
+        onTap: (sortOptionAsc == null || sortOptionDesc == null)
+            ? null
+            : () {
+                setState(() {
+                  if (_sortOption == sortOptionAsc) {
+                    _sortOption = sortOptionDesc;
+                  } else {
+                    _sortOption = sortOptionAsc;
+                  }
+                  _applyFilters();
+                });
+              },
+        child: Container(
+          alignment: align == TextAlign.right
+              ? Alignment.centerRight
+              : align == TextAlign.center
+                  ? Alignment.center
+                  : Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                text,
+                textAlign: align,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: isSorted
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (isSorted) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  isAsc ? Icons.arrow_upward : Icons.arrow_downward,
+                  size: 14,
+                  color: theme.colorScheme.primary,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Re-implementing _buildZohoTableRow as it was likely cut off or needed updates
   Widget _buildZohoTableRow(Product product, ThemeData theme) {
-    final priceText = ChileanUtils.formatCurrency(product.price);
-    // Check if this product is a set (uses shared model's isSet field via extension)
-    final isProductSet = _isProductSet(product);
-    final isExpanded = _expandedSets.contains(product.id);
-    final isDetailActive = _selectedProduct?.id == product.id;
-    final isBulkSelected = _bulkSelectedIds.contains(product.id);
+    final isSelected = _selectedProduct?.id == product.id;
+    final rowColor =
+        isSelected ? theme.colorScheme.primaryContainer.withOpacity(0.1) : null;
+
+    final isProductSet = product.isSet; // Using direct property
+    final isExpanded =
+        product.id != null && _expandedSets.contains(product.id!);
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        // Main row
         InkWell(
           onTap: () {
-            if (isProductSet) {
-              // For sets: toggle expansion
-              setState(() {
-                final productId = product.id;
-                if (productId == null) return;
-                if (isExpanded) {
-                  _expandedSets.remove(productId);
+            setState(() {
+              _selectedProduct = isSelected ? null : product;
+              if (isProductSet && product.id != null) {
+                if (_expandedSets.contains(product.id!)) {
+                  _expandedSets.remove(product.id!);
                 } else {
-                  _expandedSets.add(productId);
+                  _expandedSets.add(product.id!);
                 }
-              });
-            } else {
-              // For regular products: select for detail pane
-              setState(() {
-                _selectedProduct = isDetailActive ? null : product;
-              });
-            }
-          },
-          onDoubleTap: () {
-            // Double-tap always opens edit page
-            _openEditor(product);
+              }
+            });
           },
           child: Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: isDetailActive
-                  ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
-                  : isBulkSelected
-                      ? theme.colorScheme.secondaryContainer
-                          .withValues(alpha: 0.2)
-                      : isExpanded
-                          ? theme.colorScheme.tertiaryContainer
-                              .withValues(alpha: 0.2)
-                          : null,
+              color: rowColor,
               border: Border(
-                bottom: isExpanded
-                    ? BorderSide.none
-                    : BorderSide(
-                        color: theme.colorScheme.outlineVariant
-                            .withValues(alpha: 0.5),
-                      ),
+                bottom: BorderSide(
+                  color: theme.colorScheme.outlineVariant.withOpacity(0.2),
+                ),
               ),
             ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                // Checkbox or expand icon for sets
-                SizedBox(
-                  width: 48,
-                  child: isProductSet
-                      ? Icon(
-                          isExpanded
-                              ? Icons.keyboard_arrow_down
-                              : Icons.keyboard_arrow_right,
-                          size: 20,
-                          color: theme.colorScheme.primary,
-                        )
-                      : Checkbox(
-                          value: isBulkSelected,
-                          onChanged: (value) {
-                            setState(() {
-                              final productId = product.id;
-                              if (productId == null) return;
-                              if (value == true) {
-                                _bulkSelectedIds.add(productId);
-                              } else {
-                                _bulkSelectedIds.remove(productId);
-                              }
-                            });
-                          },
-                          visualDensity: VisualDensity.compact,
-                        ),
-                ),
-                // Thumbnail
-                SizedBox(
-                  width: 60,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: ImageService.buildProductImage(
-                        imageUrl: product.imageUrl,
-                        size: 36,
-                        isListThumbnail: true,
-                      ),
-                    ),
-                  ),
-                ),
-                // Name with set indicator
+                // Product Name & Image
                 Expanded(
-                  flex: 3,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Row(
+                  flex: 4,
+                  child: Row(
+                    children: [
+                      if (isProductSet)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: Icon(
+                              isExpanded
+                                  ? Icons.keyboard_arrow_down
+                                  : Icons.keyboard_arrow_right,
+                              size: 20,
+                              color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceVariant,
+                          borderRadius: BorderRadius.circular(4),
+                          image: product.imageUrl != null
+                              ? DecorationImage(
+                                  image: NetworkImage(product.imageUrl!),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: product.imageUrl == null
+                            ? Icon(Icons.image_not_supported_outlined,
+                                size: 20,
+                                color: theme.colorScheme.onSurfaceVariant)
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (isProductSet) ...[
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 4, vertical: 1),
-                                margin: const EdgeInsets.only(right: 6),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.tertiaryContainer,
-                                  borderRadius: BorderRadius.circular(3),
+                            Row(
+                              children: [
+                                if (isProductSet)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4, vertical: 1),
+                                    margin: const EdgeInsets.only(right: 6),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          theme.colorScheme.tertiaryContainer,
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                    child: const Text('SET',
+                                        style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold)),
+                                  ),
+                                Expanded(
+                                  child: Text(
+                                    product.name,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                                child: Text(
-                                  '📦',
-                                  style: TextStyle(fontSize: 10),
-                                ),
-                              ),
-                            ],
-                            Expanded(
-                              child: Text(
-                                product.name,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              ],
                             ),
+                            if (product.brand != null)
+                              Text(
+                                product.brand!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                           ],
                         ),
-                        if (product.categoryName != null &&
-                            product.categoryName!.isNotEmpty)
-                          Text(
-                            product.categoryName!,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontSize: 11,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
                 // SKU
-                SizedBox(
-                  width: 140,
-                  child: Text(
+                Expanded(
+                  flex: 2,
+                  child: SelectableText(
+                    // Make SKU copyable
                     product.sku,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontFamily: 'monospace',
-                    ),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                // Category
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    _resolveCategoryName(product) ?? '-',
+                    style: theme.textTheme.bodySmall,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                // Stock
+                Expanded(
+                  flex: 1,
+                  child: _buildStockBadge(theme, product),
+                ),
                 // Price
-                SizedBox(
-                  width: 140,
+                Expanded(
+                  flex: 1,
                   child: Text(
-                    priceText,
+                    ChileanUtils.formatCurrency(product.price),
                     textAlign: TextAlign.right,
-                    style: theme.textTheme.bodySmall?.copyWith(
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.primary,
                     ),
                   ),
                 ),
-                // Stock (show set status for sets)
+                // Actions
                 SizedBox(
-                  width: 120,
-                  child: product.isService
-                      ? Text(
-                          '-',
-                          textAlign: TextAlign.right,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        )
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
+                  width: 48,
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, size: 18),
+                    padding: EdgeInsets.zero,
+                    onSelected: (value) => _handleProductAction(value, product),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
                           children: [
-                            Text(
-                              '${_getEffectiveStock(product)}',
-                              textAlign: TextAlign.right,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            if (product.isLowStock)
-                              Icon(
-                                Icons.warning_amber_rounded,
-                                size: 16,
-                                color: theme.colorScheme.error,
-                              )
-                            else if (product.isOutOfStock)
-                              Icon(
-                                Icons.block,
-                                size: 16,
-                                color: theme.colorScheme.error,
-                              ),
+                            Icon(Icons.edit_outlined, size: 18),
+                            SizedBox(width: 8),
+                            Text('Editar'),
                           ],
                         ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline,
+                                size: 18, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Eliminar',
+                                style: TextStyle(color: Colors.red)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 16),
               ],
             ),
           ),
@@ -1146,50 +1484,18 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  /// Check if a product is a set
-  bool _isProductSet(Product product) {
-    // Use actual isSet field if set, otherwise fallback to name heuristic
-    if (product.isSet) return true;
-
-    // Fallback heuristic for transition period (until data is migrated)
-    final name = product.name.toLowerCase();
-    return name.contains('juego') ||
-        name.contains(' set ') ||
-        name.startsWith('set ') ||
-        name.contains('par de');
-  }
-
-  /// Get effective stock for a product
-  /// For sets: returns min stock across all components (full sets available)
-  /// For regular products: returns inventory_qty
-  int _getEffectiveStock(Product product) {
-    if (!_isProductSet(product)) {
-      return product.inventoryQty;
-    }
-
-    // For sets, calculate from components
-    final components =
-        _products.where((p) => p.parentSetId == product.id).toList();
-
-    if (components.isEmpty) {
-      // No components yet, show parent stock (will be 0 for new sets)
-      return product.inventoryQty;
-    }
-
-    // Return minimum stock across all components
-    return components
-        .map((c) => c.inventoryQty)
-        .reduce((a, b) => a < b ? a : b);
-  }
+  // ---------------------------------------------------------------------------
+  // HELPERS & COMPONENTS
+  // ---------------------------------------------------------------------------
 
   /// Build the expandable panel showing set components
   Widget _buildSetComponentsPanel(Product product, ThemeData theme) {
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
         border: Border(
           bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+            color: theme.colorScheme.outlineVariant.withOpacity(0.5),
           ),
         ),
       ),
@@ -1206,7 +1512,6 @@ class _ProductListPageState extends State<ProductListPage> {
               ),
             ),
             const SizedBox(height: 8),
-            // Fetch and display actual components
             _buildComponentsList(product, theme),
           ],
         ),
@@ -1215,7 +1520,6 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildComponentsList(Product product, ThemeData theme) {
-    // Get components from cached products list (they have parent_set_id = this product's id)
     final components = _products
         .where((p) => p.parentSetId == product.id)
         .toList()
@@ -1242,7 +1546,6 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  /// Build a single component row in the expanded set panel
   Widget _buildComponentRow(Product component, ThemeData theme) {
     final hasStock = component.inventoryQty > 0;
 
@@ -1255,19 +1558,11 @@ class _ProductListPageState extends State<ProductListPage> {
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+            color: theme.colorScheme.outlineVariant.withOpacity(0.3),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 2,
-              offset: const Offset(0, 1),
-            ),
-          ],
         ),
         child: Row(
           children: [
-            // Thumbnail
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: ImageService.buildProductImage(
@@ -1277,43 +1572,17 @@ class _ProductListPageState extends State<ProductListPage> {
               ),
             ),
             const SizedBox(width: 12),
-            // Name and Label
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      if (component.componentLabel != null) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.tertiaryContainer,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            component.componentLabel!,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onTertiaryContainer,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: Text(
-                          component.name,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    component.name,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   Text(
                     component.sku,
@@ -1325,7 +1594,6 @@ class _ProductListPageState extends State<ProductListPage> {
                 ],
               ),
             ),
-            // Stock
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
@@ -1334,34 +1602,230 @@ class _ProductListPageState extends State<ProductListPage> {
                     : theme.colorScheme.errorContainer.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+              child: Text(
+                'Stock: ${component.inventoryQty}',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: hasStock
+                      ? theme.colorScheme.onSurface
+                      : theme.colorScheme.error,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _resolveCategoryName(Product product) {
+    if (product.categoryName != null && product.categoryName!.isNotEmpty) {
+      return product.categoryName;
+    }
+    if (product.categoryId != null) {
+      final cat = _categories
+          .cast<Category?>()
+          .firstWhere((c) => c!.id == product.categoryId, orElse: () => null);
+      if (cat != null) return cat.name;
+    }
+    return null;
+  }
+
+  Widget _buildStockBadge(ThemeData theme, Product product) {
+    if (product.isService) {
+      return Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.secondaryContainer.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            'SERV',
+            style: theme.textTheme.labelSmall?.copyWith(fontSize: 10),
+          ),
+        ),
+      );
+    }
+
+    Color color = theme.colorScheme.primary;
+    if (product.isOutOfStock)
+      color = theme.colorScheme.error;
+    else if (product.isLowStock) color = Colors.orange;
+
+    return Center(
+      child: Text(
+        '${product.inventoryQty}',
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: color,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleProductAction(String action, Product product) async {
+    if (action == 'edit') {
+      _openEditor(product);
+    } else if (action == 'delete') {
+      _confirmDelete(product);
+    }
+  }
+
+  Future<void> _openEditor(Product product) async {
+    final result = await context.push('/inventory/products/${product.id}/edit');
+    if (result == true) _loadProducts(forceRefresh: true);
+  }
+
+  Future<void> _confirmDelete(Product product) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmar eliminación'),
+        content: Text('¿Estás seguro de eliminar "${product.name}"?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      setState(() => _isLoading = true);
+      try {
+        await _inventoryService.deleteProduct(product.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Producto eliminado')),
+          );
+          _loadProducts(forceRefresh: true);
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  Widget _buildEmptyState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inventory_2_outlined,
+              size: 64, color: theme.colorScheme.outline),
+          const SizedBox(height: 16),
+          Text(
+            _searchTerm.isNotEmpty || _hasActiveFilters
+                ? 'No se encontraron productos'
+                : 'No hay productos registrados',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (_searchTerm.isNotEmpty || _hasActiveFilters)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TextButton.icon(
+                onPressed: _resetFilters,
+                icon: const Icon(Icons.clear_all),
+                label: const Text('Limpiar filtros'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaginationControls(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        border:
+            Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '${_paginatedProducts.length} de ${_filteredProducts.length} resultados',
+            style: theme.textTheme.bodySmall,
+          ),
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: _currentPage > 1
+                    ? () => setState(() => _currentPage--)
+                    : null,
+              ),
+              Text(
+                '$_currentPage / ${_totalPages == 0 ? 1 : _totalPages}',
+                style: theme.textTheme.bodyMedium,
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: _currentPage < _totalPages
+                    ? () => setState(() => _currentPage++)
+                    : null,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductCard(Product product, ThemeData theme) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _handleProductAction('edit', product),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                color: theme.colorScheme.surfaceVariant,
+                width: double.infinity,
+                child: product.imageUrl != null
+                    ? Image.network(product.imageUrl!, fit: BoxFit.cover)
+                    : Icon(Icons.image_not_supported,
+                        size: 48, color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    hasStock ? Icons.check_circle : Icons.warning_amber,
-                    size: 14,
-                    color: hasStock
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.error,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Stock: ${component.inventoryQty}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: hasStock
-                          ? theme.colorScheme.onSurface
-                          : theme.colorScheme.error,
-                    ),
+                  Text(product.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(ChileanUtils.formatCurrency(product.price),
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600)),
+                      _buildStockBadge(theme, product),
+                    ],
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.edit_outlined,
-              size: 16,
-              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
             ),
           ],
         ),
@@ -1370,925 +1834,118 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildDetailPane(ThemeData theme) {
-    final product = _selectedProduct!;
-    // Format prices with $ at the beginning
-    final priceText =
-        '\$ ${ChileanUtils.formatCurrency(product.price).replaceAll('\$', '').trim()}';
-    final costText =
-        '\$ ${ChileanUtils.formatCurrency(product.cost).replaceAll('\$', '').trim()}';
-    final marginPercent = product.cost > 0
-        ? ((product.price - product.cost) / product.cost) * 100
-        : 0;
+    if (_selectedProduct == null) return const SizedBox.shrink();
 
     return Container(
       width: _detailPaneWidth,
       decoration: BoxDecoration(
+        border:
+            Border(left: BorderSide(color: theme.colorScheme.outlineVariant)),
         color: theme.colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(-2, 0),
-          ),
-        ],
       ),
-      child: Stack(
-        children: [
-          // Main content
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with close button
-              Container(
-                height: 56,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: theme.colorScheme.outlineVariant,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Detalles del Producto',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        setState(() {
-                          _selectedProduct = null;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              // Content
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Product image
-                      Center(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: ImageService.buildProductImage(
-                            imageUrl: product.imageUrl,
-                            size: 200,
-                            isListThumbnail: false,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      // Product name
-                      Text(
-                        product.name,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Text(
-                            'SKU: ${product.sku}',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          InkWell(
-                            onTap: () {
-                              Clipboard.setData(
-                                  ClipboardData(text: product.sku));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('SKU copiado'),
-                                  duration: Duration(seconds: 1),
-                                ),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(4),
-                            child: Padding(
-                              padding: const EdgeInsets.all(4),
-                              child: Icon(
-                                Icons.copy,
-                                size: 14,
-                                color: theme.colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (!product.isActive) ...[
-                        const SizedBox(height: 8),
-                        Chip(
-                          label: const Text('Inactivo'),
-                          backgroundColor: theme.colorScheme.errorContainer,
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      const Divider(),
-                      const SizedBox(height: 16),
-                      // Sections layout - two columns when wide enough
-                      if (_detailPaneWidth > 400)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Left column: Pricing
-                            Expanded(
-                              child: _buildDetailSection(
-                                theme,
-                                title: 'Precios',
-                                children: [
-                                  _buildDetailRow(
-                                      theme, 'Precio de Venta', priceText),
-                                  _buildDetailRow(theme, 'Costo', costText),
-                                  _buildDetailRow(
-                                    theme,
-                                    'Margen',
-                                    '${marginPercent.toStringAsFixed(1)}%',
-                                    valueColor: marginPercent < 0
-                                        ? theme.colorScheme.error
-                                        : theme.colorScheme.tertiary,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 32),
-                            // Right column: Inventory (hide for services)
-                            if (!product.isService)
-                              Expanded(
-                                child: _buildDetailSection(
-                                  theme,
-                                  title: 'Inventario',
-                                  children: [
-                                    _buildDetailRowNumeric(theme,
-                                        'Stock Actual', product.inventoryQty),
-                                    _buildDetailRowNumeric(theme,
-                                        'Stock Mínimo', product.minStockLevel),
-                                    _buildDetailRowNumeric(
-                                        theme,
-                                        'Stock Máximo',
-                                        product.maxStockLevel ?? 0),
-                                    if (product.warehouseLocation != null)
-                                      _buildDetailRow(theme, 'Ubicación',
-                                          product.warehouseLocation!),
-                                  ],
-                                ),
-                              )
-                            else
-                              const Expanded(
-                                  child:
-                                      SizedBox()), // Empty space for services
-                          ],
-                        )
-                      else ...[
-                        // Single column layout for narrow panes
-                        _buildDetailSection(
-                          theme,
-                          title: 'Precios',
-                          children: [
-                            _buildDetailRow(
-                                theme, 'Precio de Venta', priceText),
-                            _buildDetailRow(theme, 'Costo', costText),
-                            _buildDetailRow(
-                              theme,
-                              'Margen',
-                              '${marginPercent.toStringAsFixed(1)}%',
-                              valueColor: marginPercent < 0
-                                  ? theme.colorScheme.error
-                                  : theme.colorScheme.tertiary,
-                            ),
-                          ],
-                        ),
-                        // Only show inventory section for products, not services
-                        if (!product.isService) ...[
-                          const SizedBox(height: 24),
-                          _buildDetailSection(
-                            theme,
-                            title: 'Inventario',
-                            children: [
-                              _buildDetailRowNumeric(
-                                  theme, 'Stock Actual', product.inventoryQty),
-                              _buildDetailRowNumeric(
-                                  theme, 'Stock Mínimo', product.minStockLevel),
-                              _buildDetailRowNumeric(theme, 'Stock Máximo',
-                                  product.maxStockLevel ?? 0),
-                              if (product.warehouseLocation != null)
-                                _buildDetailRow(theme, 'Ubicación',
-                                    product.warehouseLocation!),
-                            ],
-                          ),
-                        ],
-                      ],
-                      const SizedBox(height: 24),
-                      // Product info section
-                      _buildDetailSection(
-                        theme,
-                        title: 'Información',
-                        children: [
-                          if (product.categoryName != null)
-                            _buildDetailRow(
-                                theme, 'Categoría', product.categoryName!),
-                          if (product.brand != null &&
-                              product.brand!.isNotEmpty)
-                            _buildDetailRow(theme, 'Marca', product.brand!),
-                          if (product.model != null &&
-                              product.model!.isNotEmpty)
-                            _buildDetailRow(theme, 'Modelo', product.model!),
-                          if (product.gtin != null && product.gtin!.isNotEmpty)
-                            _buildDetailRow(theme, 'GTIN', product.gtin!),
-                        ],
-                      ),
-                      if (product.description != null &&
-                          product.description!.isNotEmpty) ...[
-                        const SizedBox(height: 24),
-                        _buildDetailSection(
-                          theme,
-                          title: 'Descripción',
-                          children: [
-                            Text(
-                              product.description!,
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              // Action buttons
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                      color: theme.colorScheme.outlineVariant,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: AppButton(
-                        text: 'Editar',
-                        icon: Icons.edit_outlined,
-                        type: ButtonType.outline,
-                        onPressed: () => _openEditor(product),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: AppButton(
-                        text: 'Ajustar Stock',
-                        icon: Icons.inventory_outlined,
-                        onPressed: () => _openStockAdjustment(product),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          // Resize handle on the left edge
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeColumn,
-              child: GestureDetector(
-                onHorizontalDragUpdate: (details) {
-                  setState(() {
-                    _detailPaneWidth =
-                        (_detailPaneWidth - details.delta.dx).clamp(
-                      _minDetailPaneWidth,
-                      _maxDetailPaneWidth,
-                    );
-                  });
-                },
-                child: Container(
-                  width: 8,
-                  color: Colors.transparent,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailSection(
-    ThemeData theme, {
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.primary,
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...children,
-      ],
-    );
-  }
-
-  Widget _buildDetailRow(
-    ThemeData theme,
-    String label,
-    String value, {
-    Color? valueColor,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Detalles', style: theme.textTheme.titleMedium),
+                IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => setState(() => _selectedProduct = null)),
+              ],
+            ),
+          ),
           Expanded(
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 100,
-            child: Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-                color: valueColor,
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailRowNumeric(
-    ThemeData theme,
-    String label,
-    int value, {
-    Color? valueColor,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 100,
-            child: Text(
-              value.toString(),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-                color: valueColor,
-                fontFamily: 'monospace',
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openStockAdjustment(Product product) {
-    // Navigate to stock adjustment page (you can implement a dedicated page)
-    // For now, just open the editor
-    _openEditor(product);
-  }
-
-  Widget _buildCardGrid(ThemeData theme) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        int crossAxisCount = 2;
-        if (width < 640) {
-          crossAxisCount = 1;
-        } else if (width < 1024) {
-          crossAxisCount = 2;
-        } else if (width < 1400) {
-          crossAxisCount = 3;
-        } else {
-          crossAxisCount = 4;
-        }
-
-        return GridView.builder(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 18,
-            mainAxisSpacing: 18,
-            childAspectRatio: 0.86,
-          ),
-          itemCount: _filteredProducts.length,
-          itemBuilder: (context, index) {
-            final product = _filteredProducts[index];
-            return _buildProductCard(product, theme);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildProductCard(Product product, ThemeData theme) {
-    final categoryName = _resolveCategoryName(product);
-    final priceText = ChileanUtils.formatCurrency(product.price);
-    final marginPercent = product.cost > 0
-        ? ((product.price - product.cost) / product.cost) * 100
-        : 0;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => _openEditor(product),
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
-              child: AspectRatio(
-                aspectRatio: 4 / 3,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Positioned.fill(
-                      child: ImageService.buildProductImage(
-                        imageUrl: product.imageUrl,
-                        size: double.infinity,
-                        isListThumbnail: false,
-                      ),
-                    ),
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: _buildStockChip(product, theme),
-                    ),
-                    if (!product.isActive)
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: Chip(
-                          label: const Text('Inactivo'),
-                          backgroundColor:
-                              theme.colorScheme.surfaceVariant.withOpacity(0.9),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    product.name,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'SKU ${product.sku}',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  if (categoryName != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      categoryName,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                  if (_selectedProduct!.imageUrl != null)
+                    AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(_selectedProduct!.imageUrl!,
+                            fit: BoxFit.cover),
                       ),
                     ),
-                  ],
-                  if (product.supplierName != null &&
-                      product.supplierName!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.business_outlined,
-                          size: 14,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            product.supplierName!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            priceText,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'Margen ${marginPercent.toStringAsFixed(1)}%',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: marginPercent < 0
-                                  ? theme.colorScheme.error
-                                  : theme.colorScheme.tertiary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          // Hide stock for services
-                          if (!product.isService) ...[
-                            Text(
-                              'Stock ${product.inventoryQty}',
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                            Text(
-                              _stockStatusLabel(product),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ] else
-                            Text(
-                              'Servicio',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () => _openEditor(product),
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Editar'),
+                  const SizedBox(height: 16),
+                  Text(_selectedProduct!.name,
+                      style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  SelectableText('SKU: ${_selectedProduct!.sku}',
+                      style: theme.textTheme.bodyMedium, onTap: () {
+                    Clipboard.setData(
+                        ClipboardData(text: _selectedProduct!.sku));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('SKU copiado')));
+                  }),
+                  const SizedBox(height: 24),
+                  _buildDetailSection(theme, title: 'Precios', children: [
+                    _buildDetailRow(theme, 'Precio',
+                        ChileanUtils.formatCurrency(_selectedProduct!.price)),
+                    _buildDetailRow(theme, 'Costo',
+                        ChileanUtils.formatCurrency(_selectedProduct!.cost)),
+                  ]),
+                  const SizedBox(height: 16),
+                  if (!_selectedProduct!.isService)
+                    _buildDetailSection(theme, title: 'Inventario', children: [
+                      _buildDetailRow(
+                          theme, 'Stock', '${_selectedProduct!.inventoryQty}'),
+                      if (_selectedProduct!.warehouseLocation != null)
+                        _buildDetailRow(theme, 'Ubicación',
+                            _selectedProduct!.warehouseLocation!),
+                    ]),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: AppButton(
+                      text: 'Editar Producto',
+                      icon: Icons.edit,
+                      onPressed: () => _openEditor(_selectedProduct!),
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildEmptyState(ThemeData theme) {
-    final hasFilters = _searchTerm.isNotEmpty ||
-        _showLowStockOnly ||
-        _selectedCategoryId != null;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              hasFilters
-                  ? Icons.search_off_outlined
-                  : Icons.inventory_2_outlined,
-              size: 92,
-              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.25),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              hasFilters
-                  ? 'No encontramos productos con esos filtros'
-                  : 'Aún no tienes productos registrados',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              hasFilters
-                  ? 'Prueba ajustar la búsqueda o restablecer los filtros.'
-                  : 'Crea tu primer producto para comenzar a gestionar el inventario.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            AppButton(
-              text: 'Nuevo producto',
-              icon: Icons.add,
-              onPressed: () {
-                context.push('/inventory/products/new').then((_) {
-                  _loadProducts();
-                });
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatTile(
-    ThemeData theme, {
-    required IconData icon,
-    required Color color,
-    required String label,
-    required String value,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+  Widget _buildDetailSection(ThemeData theme,
+      {required String title, required List<Widget> children}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: color.withOpacity(0.15),
-          child: Icon(icon, size: 18, color: color),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-            ),
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
+        Text(title,
+            style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+        const SizedBox(height: 8),
+        ...children,
       ],
     );
   }
 
-  Widget _buildStockChip(Product product, ThemeData theme) {
-    final color = _stockStatusColor(product, theme);
-    final icon = _stockStatusIcon(product);
-    final label = _stockStatusLabel(product);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoPill(ThemeData theme,
-      {required IconData icon, required String label}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _openEditor(Product product) async {
-    final productId = product.id;
-    if (productId == null) return;
-
-    final result = await context.push('/inventory/products/$productId/edit');
-    if (result == true) {
-      _loadProducts(forceRefresh: true);
-    }
-  }
-
-  String? _resolveCategoryName(Product product) {
-    if (product.categoryName != null && product.categoryName!.isNotEmpty) {
-      return product.categoryName;
-    }
-    if (product.categoryId == null) return null;
-    final category = _categories.firstWhere(
-      (c) => c.id == product.categoryId,
-      orElse: () => Category(
-        id: product.categoryId!,
-        tenantId: '', // Display-only fallback
-        name: 'Categoría sin nombre',
-        fullPath: 'Categoría sin nombre',
-      ),
-    );
-    return category.name;
-  }
-
-  String _stockStatusLabel(Product product) {
-    if (product.isOutOfStock) return 'Sin stock';
-    if (product.isLowStock) return 'Stock crítico';
-    return 'Stock saludable';
-  }
-
-  Color _stockStatusColor(Product product, ThemeData theme) {
-    if (product.isOutOfStock) return theme.colorScheme.error;
-    if (product.isLowStock) return theme.colorScheme.tertiary;
-    return theme.colorScheme.primary;
-  }
-
-  IconData _stockStatusIcon(Product product) {
-    if (product.isOutOfStock) return Icons.block;
-    if (product.isLowStock) return Icons.warning_amber_outlined;
-    return Icons.check_circle_outline;
-  }
-
-  // Pagination controls
-  Widget _buildPaginationControls(ThemeData theme) {
-    if (_totalPages <= 1) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: theme.dividerColor),
-        ),
-      ),
+  Widget _buildDetailRow(ThemeData theme, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Page info
-          Text(
-            'Página $_currentPage de $_totalPages (${_filteredProducts.length} productos)',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          // Navigation controls
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.first_page),
-                onPressed: _currentPage > 1 ? _goToFirstPage : null,
-                tooltip: 'Primera página',
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_left),
-                onPressed: _currentPage > 1 ? _previousPage : null,
-                tooltip: 'Página anterior',
-              ),
-              // Page selector dropdown
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: theme.dividerColor),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<int>(
-                    value: _currentPage,
-                    items: List.generate(_totalPages, (index) {
-                      final pageNum = index + 1;
-                      return DropdownMenuItem(
-                        value: pageNum,
-                        child: Text('$pageNum'),
-                      );
-                    }),
-                    onChanged: (page) {
-                      if (page != null) _goToPage(page);
-                    },
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right),
-                onPressed: _currentPage < _totalPages ? _nextPage : null,
-                tooltip: 'Página siguiente',
-              ),
-              IconButton(
-                icon: const Icon(Icons.last_page),
-                onPressed: _currentPage < _totalPages ? _goToLastPage : null,
-                tooltip: 'Última página',
-              ),
-            ],
-          ),
+          Text(label,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          Text(value,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w500)),
         ],
       ),
     );
-  }
-
-  void _goToFirstPage() {
-    setState(() => _currentPage = 1);
-  }
-
-  void _previousPage() {
-    if (_currentPage > 1) {
-      setState(() => _currentPage--);
-    }
-  }
-
-  void _nextPage() {
-    if (_currentPage < _totalPages) {
-      setState(() => _currentPage++);
-    }
-  }
-
-  void _goToLastPage() {
-    setState(() => _currentPage = _totalPages);
-  }
-
-  void _goToPage(int page) {
-    if (page >= 1 && page <= _totalPages) {
-      setState(() => _currentPage = page);
-    }
   }
 }

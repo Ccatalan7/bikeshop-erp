@@ -592,3 +592,19 @@ enum ProductType {
   const ProductType(this.displayName);
   final String displayName;
 }
+
+enum ProductSortOption {
+  createdAtDesc('Más recientes'),
+  createdAtAsc('Más antiguos'),
+  nameAsc('Nombre A-Z'),
+  nameDesc('Nombre Z-A'),
+  skuAsc('SKU A-Z'),
+  skuDesc('SKU Z-A'),
+  priceDesc('Precio: Mayor a menor'),
+  priceAsc('Precio: Menor a mayor'),
+  stockDesc('Stock: Mayor a menor'),
+  stockAsc('Stock: Menor a mayor');
+
+  final String label;
+  const ProductSortOption(this.label);
+}
