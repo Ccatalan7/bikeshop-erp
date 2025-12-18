@@ -67,7 +67,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   bool _isSaving = false;
   bool _isEditing = false;
   bool _isUpdatingStatus = false;
-  
+
   // Key to reset autocomplete field after adding product
   int _autocompleteKey = 0;
 
@@ -76,7 +76,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   DateTime _issueDate = DateTime.now();
   DateTime? _dueDate;
   InvoiceStatus _status = InvoiceStatus.draft;
-  TaxTreatment _taxTreatment = TaxTreatment.noTax; // Default: no tax (cash/transfer common)
+  TaxTreatment _taxTreatment =
+      TaxTreatment.noTax; // Default: no tax (cash/transfer common)
   String? _paymentMethodHint; // 'card' or 'other' - for smart tax validation
 
   String? get _currentInvoiceId => _loadedInvoice?.id ?? widget.invoiceId;
@@ -101,7 +102,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       _outstandingAmount > 0.01;
   bool get _shouldShowReadOnlyNotice =>
       !_canEditFields && _status == InvoiceStatus.draft;
-  
+
   StreamSubscription? _scanSubscription;
   final _remoteScannerService = RemoteScannerService();
   bool _scannerEnabled = false;
@@ -112,7 +113,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     _isEditing = widget.invoiceId == null;
     _dueDate = _issueDate.add(const Duration(days: 30));
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
-    
+
     // Listen for barcode scans
     _scanSubscription = _remoteScannerService.scanStream.listen((scan) {
       if (mounted && _canEditFields) {
@@ -131,7 +132,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     _scanSubscription?.cancel();
     super.dispose();
   }
-  
+
   Future<void> _toggleScanner() async {
     if (!_canEditFields) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -142,7 +143,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       );
       return;
     }
-    
+
     try {
       if (_scannerEnabled) {
         await _remoteScannerService.stopListening();
@@ -171,20 +172,20 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       }
     }
   }
-  
+
   Future<void> _handleBarcodeScan(String barcode) async {
     // Search for product by SKU
     final product = _cachedProducts.cast<Product?>().firstWhere(
-      (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
-      orElse: () => null,
-    );
-    
+          (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
+          orElse: () => null,
+        );
+
     if (product != null) {
       // Check if product is already in the invoice
       final existingLineIndex = _lineEntries.indexWhere(
         (entry) => entry.line.product?.id == product.id,
       );
-      
+
       if (existingLineIndex != -1) {
         // Increment quantity
         final entry = _lineEntries[existingLineIndex];
@@ -249,9 +250,18 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
     try {
       // Don't force refresh - use cached data if available for faster loading
-      final customersFuture = _customerService.getCustomers();
-      final productsFuture = _inventoryService.getProducts(forceRefresh: false);
-      final results = await Future.wait([customersFuture, productsFuture]);
+      // Don't force refresh - use cached data if available for faster loading
+      final futures = <Future<dynamic>>[
+        _customerService.getCustomers(),
+        _inventoryService.getProducts(forceRefresh: false),
+      ];
+
+      // Also fetch preview number in parallel if this is a new invoice
+      if (widget.invoiceId == null) {
+        futures.add(_previewInvoiceNumber());
+      }
+
+      final results = await Future.wait(futures);
 
       _cachedCustomers
         ..clear()
@@ -259,6 +269,11 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       _cachedProducts
         ..clear()
         ..addAll(results[1] as List<Product>);
+
+      // Handle preview number if loaded
+      if (widget.invoiceId == null && results.length > 2) {
+        _invoiceNumberController.text = results[2] as String;
+      }
 
       if (widget.invoiceId != null) {
         final invoice =
@@ -268,8 +283,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           _applyInvoice(invoice);
         }
       } else {
-        // Use PREVIEW number - doesn't increment counter until save
-        _invoiceNumberController.text = await _previewInvoiceNumber();
+        // Fallback if preview number wasn't loaded (shouldn't happen with above logic)
+        if (_invoiceNumberController.text.isEmpty) {
+          _invoiceNumberController.text = await _previewInvoiceNumber();
+        }
 
         // Preselect customer if coming from a job
         if (widget.preselectedJobId != null) {
@@ -467,7 +484,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Guarda la factura como borrador antes de cambiar el estado.'),
+            content: Text(
+                'Guarda la factura como borrador antes de cambiar el estado.'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -476,8 +494,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
 
     // ⚠️ Smart validation: If paying with card but no tax → auto-fix
-    if (newStatus == InvoiceStatus.confirmed && 
-        _paymentMethodHint == 'card' && 
+    if (newStatus == InvoiceStatus.confirmed &&
+        _paymentMethodHint == 'card' &&
         _taxTreatment == TaxTreatment.noTax) {
       // Auto-add tax for card payments
       setState(() => _taxTreatment = TaxTreatment.taxIncluded);
@@ -488,8 +506,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
     setState(() => _isUpdatingStatus = true);
     try {
-      final updated = await _salesService.updateInvoiceStatus(
-          invoiceId, newStatus);
+      final updated =
+          await _salesService.updateInvoiceStatus(invoiceId, newStatus);
       if (updated != null && mounted) {
         _applyInvoice(updated);
         await _refreshInvoiceById(invoiceId);
@@ -784,9 +802,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   void _autoAddEmptyLineIfNeeded() {
     // Check if the last line has a product selected
     if (_lineEntries.isEmpty) return;
-    
+
     final lastEntry = _lineEntries.last;
-    if (lastEntry.product != null || lastEntry.productNameController.text.isNotEmpty) {
+    if (lastEntry.product != null ||
+        lastEntry.productNameController.text.isNotEmpty) {
       // Last line is filled, add a new empty line
       final line = _InvoiceLine(
         productId: null,
@@ -915,7 +934,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       );
       return;
     }
-    
+
     final tenantId = await TenantService().getTenantId();
     if (tenantId == null) {
       throw Exception('User does not have a tenant_id. Cannot proceed.');
@@ -988,10 +1007,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     // Check if we should return to a specific page (e.g., from pegas table)
     final returnTo = GoRouterState.of(context).uri.queryParameters['returnTo'];
-    
+
     return MainLayout(
       onBackPressed: returnTo != null && returnTo.isNotEmpty
           ? () => context.go(returnTo)
@@ -1027,19 +1046,20 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         IconButton(
           onPressed: _toggleScanner,
           icon: Icon(
-            _scannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_scanner_outlined,
+            _scannerEnabled
+                ? Icons.qr_code_scanner
+                : Icons.qr_code_scanner_outlined,
             color: _scannerEnabled ? Colors.green : null,
           ),
           tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
           style: IconButton.styleFrom(
-            backgroundColor: _scannerEnabled 
-                ? Colors.green.withOpacity(0.1) 
-                : null,
+            backgroundColor:
+                _scannerEnabled ? Colors.green.withOpacity(0.1) : null,
           ),
         ),
       );
       actionButtons.add(const SizedBox(width: 8));
-      
+
       if (_loadedInvoice != null) {
         actionButtons.add(
           OutlinedButton.icon(
@@ -1071,7 +1091,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         if (_canMarkAsSent) {
           actionButtons.add(
             FilledButton.icon(
-              onPressed: _isUpdatingStatus ? null : () => _updateStatus(InvoiceStatus.sent),
+              onPressed: _isUpdatingStatus
+                  ? null
+                  : () => _updateStatus(InvoiceStatus.sent),
               icon: _isUpdatingStatus
                   ? const SizedBox(
                       height: 16,
@@ -1086,7 +1108,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       } else if (_status == InvoiceStatus.sent) {
         actionButtons.add(
           OutlinedButton.icon(
-            onPressed: _isUpdatingStatus ? null : () => _updateStatus(InvoiceStatus.draft),
+            onPressed: _isUpdatingStatus
+                ? null
+                : () => _updateStatus(InvoiceStatus.draft),
             icon: const Icon(Icons.undo_outlined),
             label: const Text('Volver a borrador'),
           ),
@@ -1094,7 +1118,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         actionButtons.add(const SizedBox(width: 8));
         actionButtons.add(
           FilledButton.icon(
-            onPressed: _isUpdatingStatus ? null : () => _updateStatus(InvoiceStatus.confirmed),
+            onPressed: _isUpdatingStatus
+                ? null
+                : () => _updateStatus(InvoiceStatus.confirmed),
             icon: _isUpdatingStatus
                 ? const SizedBox(
                     height: 16,
@@ -1108,7 +1134,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       } else if (_status == InvoiceStatus.confirmed) {
         actionButtons.add(
           OutlinedButton.icon(
-            onPressed: _isUpdatingStatus ? null : () => _updateStatus(InvoiceStatus.sent),
+            onPressed: _isUpdatingStatus
+                ? null
+                : () => _updateStatus(InvoiceStatus.sent),
             icon: const Icon(Icons.undo_outlined),
             label: const Text('Volver a enviado'),
           ),
@@ -1130,7 +1158,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           OutlinedButton.icon(
             onPressed: _undoLastPayment,
             icon: const Icon(Icons.undo_outlined, color: Colors.red),
-            label: const Text('Deshacer pago', style: TextStyle(color: Colors.red)),
+            label: const Text('Deshacer pago',
+                style: TextStyle(color: Colors.red)),
           ),
         );
       }
@@ -1170,7 +1199,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           IconButton(
             onPressed: () {
               // Check if we should return to a specific page (e.g., from pegas table)
-              final returnTo = GoRouterState.of(context).uri.queryParameters['returnTo'];
+              final returnTo =
+                  GoRouterState.of(context).uri.queryParameters['returnTo'];
               if (returnTo != null && returnTo.isNotEmpty) {
                 context.go(returnTo);
               } else {
@@ -1234,57 +1264,58 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                       children: [
                         if (_shouldShowReadOnlyNotice)
                           _buildReadOnlyNotice(theme),
-                        if (_shouldShowReadOnlyNotice) const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.person_outline,
-                        title: 'Cliente',
-                        children: [_buildCustomerSection(theme)],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.shopping_basket_outlined,
-                        title: 'Productos y servicios',
-                        children: [_buildLineItemsSection(theme)],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.notes_outlined,
-                        title: 'Referencia',
-                        children: [_buildReferenceField(theme)],
-                      ),
-                    ],
+                        if (_shouldShowReadOnlyNotice)
+                          const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.person_outline,
+                          title: 'Cliente',
+                          children: [_buildCustomerSection(theme)],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.shopping_basket_outlined,
+                          title: 'Productos y servicios',
+                          children: [_buildLineItemsSection(theme)],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.notes_outlined,
+                          title: 'Referencia',
+                          children: [_buildReferenceField(theme)],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 24),
-              SizedBox(
-                width: 360,
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.event_available_outlined,
-                        title: 'Fechas y estado',
-                        children: [_buildDatesAndStatus(theme)],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.calculate_outlined,
-                        title: 'Resumen',
-                        children: [_buildSummary(theme)],
-                      ),
-                    ],
+                const SizedBox(width: 24),
+                SizedBox(
+                  width: 360,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.event_available_outlined,
+                          title: 'Fechas y estado',
+                          children: [_buildDatesAndStatus(theme)],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.calculate_outlined,
+                          title: 'Resumen',
+                          children: [_buildSummary(theme)],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-            );
+              ],
+            ),
+          );
         }
 
         return SingleChildScrollView(
@@ -1292,8 +1323,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                if (_shouldShowReadOnlyNotice)
-                  _buildReadOnlyNotice(theme),
+                if (_shouldShowReadOnlyNotice) _buildReadOnlyNotice(theme),
                 if (_shouldShowReadOnlyNotice) const SizedBox(height: 16),
                 _buildSectionCard(
                   theme,
@@ -1450,17 +1480,18 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         // Calculate minimum required width based on columns
         const minTableWidth = 800.0; // Reduced from 900
         // Use available width if larger, otherwise use minimum (enables scroll)
-        final tableWidth = constraints.maxWidth > minTableWidth 
-            ? constraints.maxWidth 
+        final tableWidth = constraints.maxWidth > minTableWidth
+            ? constraints.maxWidth
             : minTableWidth;
-        
+
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SizedBox(
             width: tableWidth,
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+                border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.2)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -1470,204 +1501,253 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   Container(
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                ),
-                child: Row(
-                  children: [
-                    // # column
-                    Container(
-                      width: _colIndexWidth,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        border: Border(
-                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(8)),
                     ),
-                  ),
-                  child: Center(
-                    child: Text('#', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                
-                // Artículo column (flex to fill remaining space)
-                Expanded(
-                  child: Container(
-                    constraints: const BoxConstraints(minWidth: 250), // Reduced from 300 for better shrinking
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                      ),
-                    ),
-                    child: Text(
-                      'DETALLES DEL ARTÍCULO',
-                      style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.visible,
-                    ),
-                  ),
-                ),
-                
-                // Cantidad column
-                Container(
-                  width: _colQuantityWidth,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                    ),
-                  ),
-                  child: Center(
-                    child: Text('CANTIDAD', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                
-                // Tarifa column
-                Container(
-                  width: _colPriceWidth,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                    ),
-                  ),
-                  child: Center(
-                    child: Text('TARIFA', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                
-                // Descuento column
-                Container(
-                  width: _colDiscountWidth,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                    ),
-                  ),
-                  child: Center(
-                    child: Text('DESCUENTO', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                
-                // Importe column
-                Container(
-                  width: _colTotalWidth,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Text('IMPORTE', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600), textAlign: TextAlign.right),
-                ),
-                
-                // Actions column
-                SizedBox(width: _colActionsWidth),
-              ],
-            ),
-          ),
-          
-          // Header/Content divider
-          Divider(height: 1, thickness: 1, color: theme.colorScheme.outline.withOpacity(0.2)),
-        
-          // Line items
-          Column(
-            children: [
-            // Line items (all states)
-            if (_lineEntries.isNotEmpty)
-              ..._lineEntries.asMap().entries.map((entry) => 
-                _buildCompactLineRow(theme, entry.key + 1, entry.value)
-              ),
-              
-              // Add new line button (only when editing)
-              if (_canEditFields)
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-                    ),
-                  ),
-                  child: IntrinsicHeight(
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Empty space for # column
+                        // # column
                         Container(
                           width: _colIndexWidth,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
                             border: Border(
-                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                              right: BorderSide(
+                                  color: theme.colorScheme.outline
+                                      .withOpacity(0.2)),
                             ),
                           ),
+                          child: Center(
+                            child: Text('#',
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600)),
+                          ),
                         ),
-                        
-                        // Search field spanning the product details column
+
+                        // Artículo column (flex to fill remaining space)
                         Expanded(
                           child: Container(
-                            constraints: const BoxConstraints(minWidth: 250), // Match header column
-                            padding: const EdgeInsets.all(12),
+                            constraints: const BoxConstraints(
+                                minWidth:
+                                    250), // Reduced from 300 for better shrinking
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
                             decoration: BoxDecoration(
                               border: Border(
-                                right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                                right: BorderSide(
+                                    color: theme.colorScheme.outline
+                                        .withOpacity(0.2)),
                               ),
                             ),
-                            child: SmartProductField(
-                              key: ValueKey(_autocompleteKey), // Reset field when key changes
-                              onProductChanged: (selection) {
-                                if (selection == null) return;
-                                if (selection.isCatalogProduct && selection.product != null) {
-                                  _addProductLine(selection.product!);
-                                } else if (!selection.isCatalogProduct && selection.productName != null) {
-                                  _addCustomItemLine(selection.productName!);
-                                }
-                              },
-                              allowCustomItems: true,
-                              showCost: false,
-                              hintText: 'Buscar por nombre o SKU, o escribir artículo personalizado...',
+                            child: Text(
+                              'DETALLES DEL ARTÍCULO',
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.visible,
                             ),
                           ),
                         ),
-                        
-                        // Empty spaces for other columns to maintain alignment
+
+                        // Cantidad column
                         Container(
                           width: _colQuantityWidth,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
                             border: Border(
-                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                              right: BorderSide(
+                                  color: theme.colorScheme.outline
+                                      .withOpacity(0.2)),
                             ),
                           ),
+                          child: Center(
+                            child: Text('CANTIDAD',
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600)),
+                          ),
                         ),
+
+                        // Tarifa column
                         Container(
                           width: _colPriceWidth,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
                             border: Border(
-                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                              right: BorderSide(
+                                  color: theme.colorScheme.outline
+                                      .withOpacity(0.2)),
                             ),
                           ),
+                          child: Center(
+                            child: Text('TARIFA',
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600)),
+                          ),
                         ),
+
+                        // Descuento column
                         Container(
                           width: _colDiscountWidth,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
                             border: Border(
-                              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+                              right: BorderSide(
+                                  color: theme.colorScheme.outline
+                                      .withOpacity(0.2)),
                             ),
                           ),
+                          child: Center(
+                            child: Text('DESCUENTO',
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600)),
+                          ),
                         ),
-                        SizedBox(width: _colTotalWidth),
+
+                        // Importe column
+                        Container(
+                          width: _colTotalWidth,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          child: Text('IMPORTE',
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                              textAlign: TextAlign.right),
+                        ),
+
+                        // Actions column
                         SizedBox(width: _colActionsWidth),
                       ],
                     ),
                   ),
-                ),
-              
-              // Empty state
-              if (_lineEntries.isEmpty && !_canEditFields)
-                Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Text(
-                    'No hay artículos en esta factura',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+
+                  // Header/Content divider
+                  Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: theme.colorScheme.outline.withOpacity(0.2)),
+
+                  // Line items
+                  Column(
+                    children: [
+                      // Line items (all states)
+                      if (_lineEntries.isNotEmpty)
+                        ..._lineEntries.asMap().entries.map((entry) =>
+                            _buildCompactLineRow(
+                                theme, entry.key + 1, entry.value)),
+
+                      // Add new line button (only when editing)
+                      if (_canEditFields)
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                              top: BorderSide(
+                                  color: theme.colorScheme.outline
+                                      .withOpacity(0.2)),
+                            ),
+                          ),
+                          child: IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Empty space for # column
+                                Container(
+                                  width: _colIndexWidth,
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(
+                                          color: theme.colorScheme.outline
+                                              .withOpacity(0.2)),
+                                    ),
+                                  ),
+                                ),
+
+                                // Search field spanning the product details column
+                                Expanded(
+                                  child: Container(
+                                    constraints: const BoxConstraints(
+                                        minWidth: 250), // Match header column
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        right: BorderSide(
+                                            color: theme.colorScheme.outline
+                                                .withOpacity(0.2)),
+                                      ),
+                                    ),
+                                    child: SmartProductField(
+                                      key: ValueKey(
+                                          _autocompleteKey), // Reset field when key changes
+                                      onProductChanged: (selection) {
+                                        if (selection == null) return;
+                                        if (selection.isCatalogProduct &&
+                                            selection.product != null) {
+                                          _addProductLine(selection.product!);
+                                        } else if (!selection
+                                                .isCatalogProduct &&
+                                            selection.productName != null) {
+                                          _addCustomItemLine(
+                                              selection.productName!);
+                                        }
+                                      },
+                                      allowCustomItems: true,
+                                      showCost: false,
+                                      hintText:
+                                          'Buscar por nombre o SKU, o escribir artículo personalizado...',
+                                    ),
+                                  ),
+                                ),
+
+                                // Empty spaces for other columns to maintain alignment
+                                Container(
+                                  width: _colQuantityWidth,
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(
+                                          color: theme.colorScheme.outline
+                                              .withOpacity(0.2)),
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  width: _colPriceWidth,
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(
+                                          color: theme.colorScheme.outline
+                                              .withOpacity(0.2)),
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  width: _colDiscountWidth,
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(
+                                          color: theme.colorScheme.outline
+                                              .withOpacity(0.2)),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: _colTotalWidth),
+                                SizedBox(width: _colActionsWidth),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                      // Empty state
+                      if (_lineEntries.isEmpty && !_canEditFields)
+                        Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Text(
+                            'No hay artículos en esta factura',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-            ],
-          ),
-        ],
+                ],
               ),
             ),
           ),
@@ -1678,9 +1758,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   /// Builds a single line row using the universal LineRowWrapper.
   /// Hover state is managed locally inside the wrapper, preventing SmartProductField rebuilds.
-  Widget _buildCompactLineRow(ThemeData theme, int index, _InvoiceLineEntry entry) {
+  Widget _buildCompactLineRow(
+      ThemeData theme, int index, _InvoiceLineEntry entry) {
     final line = entry.line;
-    
+
     return LineRowWrapper(
       key: ValueKey('line_${entry.hashCode}_$index'),
       index: index,
@@ -1706,7 +1787,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             () => _autoAddEmptyLineIfNeeded(),
           ),
         ),
-        
+
         // Cantidad column with stock warning
         LineColumn(
           width: _colQuantityWidth,
@@ -1721,17 +1802,23 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 style: theme.textTheme.bodyMedium,
                 decoration: InputDecoration(
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  border: _canEditFields ? const OutlineInputBorder() : InputBorder.none,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  border: _canEditFields
+                      ? const OutlineInputBorder()
+                      : InputBorder.none,
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
                 ],
               ),
-              
+
               // Stock warning (hide for services)
-              if (line.product != null && !line.product!.isService && line.product!.stockQuantity < line.quantity)
+              if (line.product != null &&
+                  !line.product!.isService &&
+                  line.product!.stockQuantity < line.quantity)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Row(
@@ -1756,7 +1843,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             ],
           ),
         ),
-        
+
         // Tarifa/Price column
         LineColumn(
           width: _colPriceWidth,
@@ -1769,18 +1856,22 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               style: theme.textTheme.bodyMedium,
               decoration: InputDecoration(
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                border: _canEditFields ? const OutlineInputBorder() : InputBorder.none,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                border: _canEditFields
+                    ? const OutlineInputBorder()
+                    : InputBorder.none,
                 prefixText: '\$ ',
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
               ],
             ),
           ),
         ),
-        
+
         // Descuento column with % symbol
         LineColumn(
           width: _colDiscountWidth,
@@ -1798,10 +1889,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                     style: theme.textTheme.bodyMedium,
                     decoration: InputDecoration(
                       isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      border: _canEditFields ? const OutlineInputBorder() : InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 8),
+                      border: _canEditFields
+                          ? const OutlineInputBorder()
+                          : InputBorder.none,
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
                     ],
@@ -1810,9 +1905,11 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 const SizedBox(width: 4),
                 // Dropdown for % or fixed amount (placeholder)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                   decoration: BoxDecoration(
-                    border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+                    border: Border.all(
+                        color: theme.colorScheme.outline.withOpacity(0.3)),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text('%', style: TextStyle(fontSize: 12)),
@@ -1821,7 +1918,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             ),
           ),
         ),
-        
+
         // Importe/Total column (no right border - last content column)
         LineColumn(
           width: _colTotalWidth,
@@ -1957,8 +2054,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             textStyle, theme),
         if (_taxTreatment == TaxTreatment.taxIncluded) ...[
           const SizedBox(height: 8),
-          _buildSummaryRow(
-              'Neto', ChileanUtils.formatCurrency(_netAmount), textStyle, theme),
+          _buildSummaryRow('Neto', ChileanUtils.formatCurrency(_netAmount),
+              textStyle, theme),
           const SizedBox(height: 8),
           _buildSummaryRow(
               'IVA (19%)', ChileanUtils.formatCurrency(_iva), textStyle, theme),
@@ -2096,7 +2193,8 @@ class _InvoiceLineEntry {
             TextEditingController(text: line.discount.toStringAsFixed(0)),
         productNameController = TextEditingController(text: line.name),
         productSkuController = TextEditingController(text: line.sku),
-        descriptionController = TextEditingController(text: line.description ?? ''),
+        descriptionController =
+            TextEditingController(text: line.description ?? ''),
         productNameFocusNode = FocusNode();
 
   final _InvoiceLine line;
@@ -2125,8 +2223,8 @@ class _InvoiceLineEntry {
       productId: line.productId, // Nullable - null for ad-hoc items
       productName: line.name,
       productSku: line.sku,
-      description: descriptionController.text.trim().isEmpty 
-          ? null 
+      description: descriptionController.text.trim().isEmpty
+          ? null
           : descriptionController.text.trim(),
       isCatalogProduct: line.isCatalogProduct,
       quantity: line.quantity,
@@ -2180,19 +2278,20 @@ class _InvoiceLineEntry {
     descriptionController.dispose();
     productNameFocusNode.dispose();
   }
-  
+
   // CRITICAL: Cache the SmartProductField widget to prevent rebuilds on parent hover state changes
   // This is the fix for flickering and disappearing dropdown when mouse moves
   Widget? _cachedSmartProductField;
   bool? _cachedCanEdit;
-  
-  Widget buildSmartProductField(BuildContext context, ThemeData theme, bool canEdit, VoidCallback onUpdate, VoidCallback onAutoAdd) {
+
+  Widget buildSmartProductField(BuildContext context, ThemeData theme,
+      bool canEdit, VoidCallback onUpdate, VoidCallback onAutoAdd) {
     // Return cached widget if nothing meaningful changed
     // Only rebuild if canEdit changes (not on hover which doesn't change canEdit)
     if (_cachedSmartProductField != null && _cachedCanEdit == canEdit) {
       return _cachedSmartProductField!;
     }
-    
+
     _cachedCanEdit = canEdit;
     _cachedSmartProductField = SmartProductField(
       key: ValueKey('product_${hashCode}'),
@@ -2232,10 +2331,10 @@ class _InvoiceLineEntry {
         }
       },
     );
-    
+
     return _cachedSmartProductField!;
   }
-  
+
   void _showEditProductDialog(BuildContext context, Product product) {
     showDialog(
       context: context,
@@ -2257,8 +2356,9 @@ class _InvoiceLineEntry {
       ),
     );
   }
-  
-  void _showProductDetailsPane(BuildContext context, Product product, ThemeData theme) {
+
+  void _showProductDetailsPane(
+      BuildContext context, Product product, ThemeData theme) {
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -2279,16 +2379,21 @@ class _InvoiceLineEntry {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      border: Border(bottom: BorderSide(color: theme.dividerColor)),
+                      border:
+                          Border(bottom: BorderSide(color: theme.dividerColor)),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.inventory_2_outlined, color: theme.colorScheme.primary),
+                        Icon(Icons.inventory_2_outlined,
+                            color: theme.colorScheme.primary),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Text('Detalles del artículo', style: theme.textTheme.titleLarge),
+                          child: Text('Detalles del artículo',
+                              style: theme.textTheme.titleLarge),
                         ),
-                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(context).pop()),
+                        IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.of(context).pop()),
                       ],
                     ),
                   ),
@@ -2298,7 +2403,8 @@ class _InvoiceLineEntry {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (product.imageUrl != null && product.imageUrl!.isNotEmpty)
+                          if (product.imageUrl != null &&
+                              product.imageUrl!.isNotEmpty)
                             Center(
                               child: Container(
                                 width: 200,
@@ -2309,27 +2415,39 @@ class _InvoiceLineEntry {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(product.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.inventory_2_outlined, size: 80)),
+                                  child: Image.network(product.imageUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => const Icon(
+                                          Icons.inventory_2_outlined,
+                                          size: 80)),
                                 ),
                               ),
                             ),
                           const SizedBox(height: 24),
-                          Text(product.name, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                          Text(product.name,
+                              style: theme.textTheme.headlineSmall
+                                  ?.copyWith(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 16),
                           _detailRow('SKU', product.sku),
-                          if (product.description != null && product.description!.isNotEmpty) ...[
+                          if (product.description != null &&
+                              product.description!.isNotEmpty) ...[
                             const SizedBox(height: 16),
-                            Text('Descripción', style: theme.textTheme.labelLarge),
+                            Text('Descripción',
+                                style: theme.textTheme.labelLarge),
                             const SizedBox(height: 4),
                             Text(product.description!),
                           ],
                           const SizedBox(height: 16),
-                          _detailRow('Precio', '\$${product.price.toStringAsFixed(0)}'),
-                          _detailRow('Costo', '\$${product.cost.toStringAsFixed(0)}'),
+                          _detailRow('Precio',
+                              '\$${product.price.toStringAsFixed(0)}'),
+                          _detailRow(
+                              'Costo', '\$${product.cost.toStringAsFixed(0)}'),
                           _detailRow('Stock', '${product.stockQuantity}'),
-                          if (product.brand != null && product.brand!.isNotEmpty)
+                          if (product.brand != null &&
+                              product.brand!.isNotEmpty)
                             _detailRow('Marca', product.brand!),
-                          if (product.model != null && product.model!.isNotEmpty)
+                          if (product.model != null &&
+                              product.model!.isNotEmpty)
                             _detailRow('Modelo', product.model!),
                         ],
                       ),
@@ -2343,20 +2461,24 @@ class _InvoiceLineEntry {
       },
       transitionBuilder: (context, anim1, anim2, child) {
         return SlideTransition(
-          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOut)),
+          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+              .animate(CurvedAnimation(parent: anim1, curve: Curves.easeOut)),
           child: child,
         );
       },
     );
   }
-  
+
   Widget _detailRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 100, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
+          SizedBox(
+              width: 100,
+              child: Text(label,
+                  style: const TextStyle(fontWeight: FontWeight.w600))),
           Expanded(child: Text(value)),
         ],
       ),
@@ -2529,4 +2651,3 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
     );
   }
 }
-

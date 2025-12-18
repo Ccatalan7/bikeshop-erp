@@ -42,6 +42,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   bool _loadingBrands = false;
   bool _loadingModels = false;
 
+  // Keys for resetting fields programmatically
+  Key _brandFieldKey = UniqueKey(); // Used if we need to reset brand field
+  Key _modelFieldKey =
+      UniqueKey(); // Used to reset model field when brand changes
+
   BikeType _selectedType = BikeType.mountain;
   DateTime? _purchaseDate;
   DateTime? _warrantyUntil;
@@ -73,19 +78,21 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       _warrantyUntil = widget.bike!.warrantyUntil;
       _imageUrls = List.from(widget.bike!.imageUrls);
     }
-    
+
     // Load brands and initialize selection
     _loadBrands();
   }
-  
+
   Future<void> _loadBrands() async {
     setState(() => _loadingBrands = true);
     try {
       final service = context.read<BikeshopService>();
       _brands = await service.getBikeBrands(activeOnly: true);
-      
+
       // If editing, find and set the selected brand by name
-      if (widget.bike != null && widget.bike!.brand != null && widget.bike!.brand!.isNotEmpty) {
+      if (widget.bike != null &&
+          widget.bike!.brand != null &&
+          widget.bike!.brand!.isNotEmpty) {
         try {
           _selectedBrand = _brands.firstWhere(
             (b) => b.name.toLowerCase() == widget.bike!.brand!.toLowerCase(),
@@ -96,7 +103,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             if (widget.bike!.model != null && widget.bike!.model!.isNotEmpty) {
               try {
                 _selectedModel = _models.firstWhere(
-                  (m) => m.name.toLowerCase() == widget.bike!.model!.toLowerCase(),
+                  (m) =>
+                      m.name.toLowerCase() == widget.bike!.model!.toLowerCase(),
                 );
               } catch (e) {
                 // Model not found, leave null
@@ -113,7 +121,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       setState(() => _loadingBrands = false);
     }
   }
-  
+
   Future<void> _loadModels(String brandId) async {
     setState(() => _loadingModels = true);
     try {
@@ -125,7 +133,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       setState(() => _loadingModels = false);
     }
   }
-  
+
   // Quick-add brand dialog
   Future<void> _showQuickAddBrandDialog() async {
     final nameController = TextEditingController();
@@ -156,20 +164,21 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         ],
       ),
     );
-    
+
     if (result == true && nameController.text.trim().isNotEmpty) {
       try {
         final service = context.read<BikeshopService>();
         final tenantService = context.read<TenantService>();
         final tenantId = await tenantService.getTenantId();
-        
+
         // Check if brand already exists
         final brandName = nameController.text.trim();
         final existingBrand = _brands.firstWhere(
           (b) => b.name.toLowerCase() == brandName.toLowerCase(),
-          orElse: () => BikeBrand(tenantId: tenantId!, name: '', isActive: true),
+          orElse: () =>
+              BikeBrand(tenantId: tenantId!, name: '', isActive: true),
         );
-        
+
         if (existingBrand.id != null) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -181,32 +190,32 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           }
           return;
         }
-        
+
         final newBrand = BikeBrand(
           tenantId: tenantId!,
           name: brandName,
           isActive: true,
         );
-        
+
         final created = await service.createBikeBrand(newBrand);
-        
+
         // Reload brands and find the created one
         await _loadBrands();
         final createdBrand = _brands.firstWhere(
           (b) => b.id == created.id,
           orElse: () => created,
         );
-        
+
         setState(() {
           _selectedBrand = createdBrand;
           _selectedModel = null;
           _models = [];
         });
-        
+
         if (createdBrand.id != null) {
           await _loadModels(createdBrand.id!);
         }
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Marca "${created.name}" creada')),
@@ -216,7 +225,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error: ${e.toString().contains('duplicate') ? 'La marca ya existe' : e.toString()}'),
+              content: Text(
+                  'Error: ${e.toString().contains('duplicate') ? 'La marca ya existe' : e.toString()}'),
               backgroundColor: Colors.red,
             ),
           );
@@ -224,11 +234,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       }
     }
   }
-  
+
   // Quick-add model dialog
   Future<void> _showQuickAddModelDialog() async {
     if (_selectedBrand == null) return;
-    
+
     final nameController = TextEditingController();
     final result = await showDialog<bool>(
       context: context,
@@ -257,20 +267,21 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         ],
       ),
     );
-    
+
     if (result == true && nameController.text.trim().isNotEmpty) {
       try {
         final service = context.read<BikeshopService>();
         final tenantService = context.read<TenantService>();
         final tenantId = await tenantService.getTenantId();
-        
+
         // Check if model already exists
         final modelName = nameController.text.trim();
         final existingModel = _models.firstWhere(
           (m) => m.name.toLowerCase() == modelName.toLowerCase(),
-          orElse: () => BikeModel(tenantId: tenantId!, brandId: '', name: '', isActive: true),
+          orElse: () => BikeModel(
+              tenantId: tenantId!, brandId: '', name: '', isActive: true),
         );
-        
+
         if (existingModel.id != null) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -282,27 +293,27 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           }
           return;
         }
-        
+
         final newModel = BikeModel(
           tenantId: tenantId!,
           brandId: _selectedBrand!.id!,
           name: modelName,
           isActive: true,
         );
-        
+
         final created = await service.createBikeModel(newModel);
-        
+
         // Reload models and find the created one
         await _loadModels(_selectedBrand!.id!);
         final createdModel = _models.firstWhere(
           (m) => m.id == created.id,
           orElse: () => created,
         );
-        
+
         setState(() {
           _selectedModel = createdModel;
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Modelo "${created.name}" creado')),
@@ -312,7 +323,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error: ${e.toString().contains('duplicate') ? 'El modelo ya existe' : e.toString()}'),
+              content: Text(
+                  'Error: ${e.toString().contains('duplicate') ? 'El modelo ya existe' : e.toString()}'),
               backgroundColor: Colors.red,
             ),
           );
@@ -448,7 +460,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       // Get tenant ID from auth context
       final tenantService = Provider.of<TenantService>(context, listen: false);
       final tenantId = await tenantService.getTenantId();
-      
+
       if (tenantId == null || tenantId.isEmpty) {
         throw Exception('User does not have a tenant_id. Cannot create bike.');
       }
@@ -631,44 +643,92 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                           Expanded(
                             child: _loadingBrands
                                 ? const Center(child: BrandedLoading())
-                                : DropdownButtonFormField<BikeBrand>(
-                                    value: _selectedBrand,
-                                    decoration: InputDecoration(
-                                      labelText: 'Marca *',
-                                      border: const OutlineInputBorder(),
-                                      suffixIcon: IconButton(
-                                        icon: const Icon(Icons.add_circle_outline),
-                                        tooltip: 'Agregar nueva marca',
-                                        onPressed: () => _showQuickAddBrandDialog(),
-                                      ),
+                                : Autocomplete<BikeBrand>(
+                                    key: _brandFieldKey,
+                                    initialValue: TextEditingValue(
+                                      text: _selectedBrand?.name ?? '',
                                     ),
-                                    items: _brands.map((brand) {
-                                      return DropdownMenuItem(
-                                        value: brand,
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.branding_watermark, size: 20),
-                                            const SizedBox(width: 8),
-                                            Text(brand.name),
-                                          ],
-                                        ),
-                                      );
-                                    }).toList(),
-                                    onChanged: (brand) async {
-                                      setState(() {
-                                        _selectedBrand = brand;
-                                        _selectedModel = null; // Reset model when brand changes
-                                        _models = [];
+                                    optionsBuilder:
+                                        (TextEditingValue textEditingValue) {
+                                      if (textEditingValue.text == '') {
+                                        return const Iterable<
+                                            BikeBrand>.empty();
+                                      }
+                                      return _brands.where((BikeBrand option) {
+                                        return option.name
+                                            .toLowerCase()
+                                            .contains(textEditingValue.text
+                                                .toLowerCase());
                                       });
-                                      if (brand != null) {
-                                        await _loadModels(brand.id!);
+                                    },
+                                    displayStringForOption:
+                                        (BikeBrand option) => option.name,
+                                    onSelected: (BikeBrand selection) async {
+                                      setState(() {
+                                        _selectedBrand = selection;
+                                        _selectedModel =
+                                            null; // Reset model when brand changes
+                                        _models = [];
+                                        _modelFieldKey =
+                                            UniqueKey(); // Force rebuild/clear of model field
+                                      });
+                                      if (selection.id != null) {
+                                        await _loadModels(selection.id!);
                                       }
                                     },
-                                    validator: (value) {
-                                      if (value == null) {
-                                        return 'La marca es requerida';
+                                    fieldViewBuilder: (BuildContext context,
+                                        TextEditingController
+                                            fieldTextEditingController,
+                                        FocusNode fieldFocusNode,
+                                        VoidCallback onFieldSubmitted) {
+                                      // IMPORTANT: Keep controller in sync if state changes externally (e.g. creating new brand)
+                                      if (_selectedBrand != null &&
+                                          fieldTextEditingController.text !=
+                                              _selectedBrand!.name) {
+                                        fieldTextEditingController.text =
+                                            _selectedBrand!.name;
                                       }
-                                      return null;
+
+                                      return TextFormField(
+                                        controller: fieldTextEditingController,
+                                        focusNode: fieldFocusNode,
+                                        decoration: InputDecoration(
+                                          labelText: 'Marca *',
+                                          border: const OutlineInputBorder(),
+                                          suffixIcon: IconButton(
+                                            icon: const Icon(
+                                                Icons.add_circle_outline),
+                                            tooltip: 'Agregar nueva marca',
+                                            onPressed: () =>
+                                                _showQuickAddBrandDialog(),
+                                          ),
+                                        ),
+                                        validator: (value) {
+                                          if (_selectedBrand == null) {
+                                            return 'Seleccione una marca de la lista';
+                                          }
+                                          if (value == null || value.isEmpty) {
+                                            return 'La marca es requerida';
+                                          }
+                                          // Ensure typed text matches selected brand (prevent "ghost" text)
+                                          if (value != _selectedBrand!.name) {
+                                            return 'Seleccione una marca válida';
+                                          }
+                                          return null;
+                                        },
+                                        onChanged: (text) {
+                                          // Clear selection if user clears text or modifies it to something invalid
+                                          if (_selectedBrand != null &&
+                                              text != _selectedBrand!.name) {
+                                            setState(() {
+                                              _selectedBrand = null;
+                                              _selectedModel = null;
+                                              _models = [];
+                                              _modelFieldKey = UniqueKey();
+                                            });
+                                          }
+                                        },
+                                      );
                                     },
                                   ),
                           ),
@@ -677,38 +737,90 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                           Expanded(
                             child: _loadingModels
                                 ? const Center(child: BrandedLoading())
-                                : DropdownButtonFormField<BikeModel>(
-                                    value: _selectedModel,
-                                    decoration: InputDecoration(
-                                      labelText: 'Modelo *',
-                                      border: const OutlineInputBorder(),
-                                      prefixIcon: const Icon(Icons.directions_bike),
-                                      suffixIcon: _selectedBrand != null
-                                          ? IconButton(
-                                              icon: const Icon(Icons.add_circle_outline),
-                                              tooltip: 'Agregar nuevo modelo',
-                                              onPressed: () => _showQuickAddModelDialog(),
-                                            )
-                                          : null,
+                                : Autocomplete<BikeModel>(
+                                    key:
+                                        _modelFieldKey, // Key used to reset field
+                                    initialValue: TextEditingValue(
+                                      text: _selectedModel?.name ?? '',
                                     ),
-                                    items: _models.map((model) {
-                                      return DropdownMenuItem(
-                                        value: model,
-                                        child: Text(model.name),
-                                      );
-                                    }).toList(),
-                                    onChanged: _selectedBrand == null
-                                        ? null // Disable if no brand selected
-                                        : (model) {
-                                            setState(() {
-                                              _selectedModel = model;
-                                            });
-                                          },
-                                    validator: (value) {
-                                      if (value == null) {
-                                        return 'El modelo es requerido';
+                                    optionsBuilder:
+                                        (TextEditingValue textEditingValue) {
+                                      if (textEditingValue.text == '') {
+                                        return const Iterable<
+                                            BikeModel>.empty();
                                       }
-                                      return null;
+                                      return _models.where((BikeModel option) {
+                                        return option.name
+                                            .toLowerCase()
+                                            .contains(textEditingValue.text
+                                                .toLowerCase());
+                                      });
+                                    },
+                                    displayStringForOption:
+                                        (BikeModel option) => option.name,
+                                    onSelected: (BikeModel selection) {
+                                      setState(() {
+                                        _selectedModel = selection;
+                                      });
+                                    },
+                                    fieldViewBuilder: (BuildContext context,
+                                        TextEditingController
+                                            fieldTextEditingController,
+                                        FocusNode fieldFocusNode,
+                                        VoidCallback onFieldSubmitted) {
+                                      // IMPORTANT: Keep controller in sync if state changes
+                                      if (_selectedModel != null &&
+                                          fieldTextEditingController.text !=
+                                              _selectedModel!.name) {
+                                        fieldTextEditingController.text =
+                                            _selectedModel!.name;
+                                      }
+
+                                      return TextFormField(
+                                        controller: fieldTextEditingController,
+                                        focusNode: fieldFocusNode,
+                                        enabled: _selectedBrand !=
+                                            null, // Prepare only if brand selected
+                                        decoration: InputDecoration(
+                                          labelText: 'Modelo *',
+                                          border: const OutlineInputBorder(),
+                                          prefixIcon:
+                                              const Icon(Icons.directions_bike),
+                                          suffixIcon: _selectedBrand != null
+                                              ? IconButton(
+                                                  icon: const Icon(
+                                                      Icons.add_circle_outline),
+                                                  tooltip:
+                                                      'Agregar nuevo modelo',
+                                                  onPressed: () =>
+                                                      _showQuickAddModelDialog(),
+                                                )
+                                              : null,
+                                        ),
+                                        validator: (value) {
+                                          if (_selectedBrand == null) {
+                                            return null; // Don't validate if parent is missing (parent will error first)
+                                          }
+                                          if (_selectedModel == null) {
+                                            return 'Seleccione un modelo';
+                                          }
+                                          if (value == null || value.isEmpty) {
+                                            return 'El modelo es requerido';
+                                          }
+                                          if (value != _selectedModel!.name) {
+                                            return 'Seleccione un modelo válido';
+                                          }
+                                          return null;
+                                        },
+                                        onChanged: (text) {
+                                          if (_selectedModel != null &&
+                                              text != _selectedModel!.name) {
+                                            setState(() {
+                                              _selectedModel = null;
+                                            });
+                                          }
+                                        },
+                                      );
                                     },
                                   ),
                           ),

@@ -66,7 +66,12 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     _inventoryService =
         Provider.of<shared_inventory.InventoryService>(context, listen: false);
     _controller.text = widget.initialValue ?? '';
-    _loadProducts();
+    _controller.text = widget.initialValue ?? '';
+
+    // Defer loading to avoid "setState() called during build" if service notifies synchronously
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadProducts();
+    });
 
     _focusNode.addListener(() {
       if (_focusNode.hasFocus) {

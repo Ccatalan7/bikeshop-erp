@@ -539,32 +539,38 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
 
     try {
-      // Load suppliers first (blocking)
-      debugPrint('🔍 Setting loading state...');
-      setState(() => _isLoading = true);
-      debugPrint('✅ Loading state set');
+      // Load suppliers and products in parallel
+      debugPrint('🔍 Loading data in parallel (suppliers + products)...');
 
-      debugPrint('🔍 Loading suppliers (forceRefresh: false)...');
-      _supplierCache = await _purchaseService.getSuppliers(forceRefresh: false);
-      debugPrint('✅ Loaded ${_supplierCache.length} suppliers');
+      final futures = <Future<dynamic>>[
+        _purchaseService.getSuppliers(forceRefresh: false),
+        _inventoryService.getProducts(forceRefresh: false),
+      ];
 
-      if (!mounted) {
-        debugPrint('⚠️ Widget not mounted after loading suppliers');
-        return;
+      // Also fetch preview number in parallel if this is a new invoice
+      if (widget.invoiceId == null) {
+        futures.add(_previewPurchaseInvoiceNumber());
       }
 
-      // Load products second (blocking)
-      debugPrint('🔍 Loading products (forceRefresh: false)...');
-      final allProducts =
-          await _inventoryService.getProducts(forceRefresh: false);
+      final results = await Future.wait(futures);
+
+      _supplierCache = results[0] as List<shared_supplier.Supplier>;
+      debugPrint('✅ Loaded ${_supplierCache.length} suppliers');
+
+      final allProducts = results[1] as List<Product>;
       // Filter out child products (components) as they should not be purchased directly
       _productCache = allProducts.where((p) => p.parentSetId == null).toList();
       debugPrint(
           '✅ Loaded ${_productCache.length} products (filtered from ${allProducts.length})');
 
       if (!mounted) {
-        debugPrint('⚠️ Widget not mounted after loading products');
+        debugPrint('⚠️ Widget not mounted after loading data');
         return;
+      }
+
+      // Handle preview number if loaded
+      if (widget.invoiceId == null && results.length > 2) {
+        _invoiceNumberController.text = results[2] as String;
       }
 
       if (widget.invoiceId != null) {
@@ -575,8 +581,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           _applyInvoice(invoice);
         }
       } else {
-        // Use PREVIEW number - doesn't increment counter until save
-        _invoiceNumberController.text = await _previewPurchaseInvoiceNumber();
+        // If preview number failed or wasn't loaded in parallel (shouldn't happen with above logic), fallback
+        if (_invoiceNumberController.text.isEmpty) {
+          _invoiceNumberController.text = await _previewPurchaseInvoiceNumber();
+        }
+
+        // Check for pending data from smart purchase list (via service)
 
         // Check for pending data from smart purchase list (via service)
         final pendingData = _purchaseService.consumePendingSmartPurchaseData();

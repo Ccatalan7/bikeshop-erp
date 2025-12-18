@@ -12,7 +12,7 @@ class InventoryService extends ChangeNotifier {
 
   bool _isLoading = false;
   bool _hasLoaded = false;
-  
+
   RealtimeChannel? _stockMovementsChannel;
 
   InventoryService({DatabaseService? db}) : _db = db {
@@ -311,7 +311,7 @@ class InventoryService extends ChangeNotifier {
       ),
       categoryId: json['category_id']?.toString(),
       categoryName: json['category_name'] as String?,
-  brandId: json['brand_id']?.toString(),
+      brandId: json['brand_id']?.toString(),
       brand: json['brand'] as String?,
       model: json['model'] as String?,
       specifications:
@@ -327,7 +327,8 @@ class InventoryService extends ChangeNotifier {
       color: json['color'] as String?,
       size: json['size'] as String?,
       material: json['material'] as String?,
-      dimensions: null, // Could add ProductDimensions.fromJsonNullable(json['dimensions']) if needed
+      dimensions:
+          null, // Could add ProductDimensions.fromJsonNullable(json['dimensions']) if needed
       warrantyMonths: json['warranty_months'] as int? ?? 0,
       lifecycleStatus: json['lifecycle_status'] as String? ?? 'active',
       serialized: json['serialized'] as bool? ?? false,
@@ -460,7 +461,8 @@ extension _InventoryServiceRealtime on InventoryService {
               value: tenantId,
             ),
             callback: (payload) {
-              debugPrint('🔔 [InventoryService] Stock movement changed: ${payload.eventType}');
+              debugPrint(
+                  '🔔 [InventoryService] Stock movement changed: ${payload.eventType}');
               refresh(); // Reload products to reflect stock changes
             },
           )

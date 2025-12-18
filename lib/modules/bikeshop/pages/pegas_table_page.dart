@@ -31,6 +31,7 @@ import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
 import '../widgets/pega_detail_view.dart';
 import '../widgets/pegas_calendar_widget.dart';
+import 'bike_form_dialog.dart';
 
 /// Modern, professional Pegas management with advanced data table
 class PegasTablePage extends StatefulWidget {
@@ -1717,8 +1718,10 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _buildDataCell(ColumnConfig col, MechanicJob job, Customer? customer,
-      Bike? bike, List<MechanicJobBike>? jobBikes, {MechanicJobBike? jobBike}) {
-    final content = _getCellContent(col.id, job, customer, bike, jobBikes, jobBike: jobBike);
+      Bike? bike, List<MechanicJobBike>? jobBikes,
+      {MechanicJobBike? jobBike}) {
+    final content = _getCellContent(col.id, job, customer, bike, jobBikes,
+        jobBike: jobBike);
 
     if (col.maxWidth != null && col.maxWidth == col.width) {
       // Fixed width column
@@ -1741,12 +1744,14 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _getCellContent(String columnId, MechanicJob job, Customer? customer,
-      Bike? bike, List<MechanicJobBike>? jobBikes, {MechanicJobBike? jobBike}) {
+      Bike? bike, List<MechanicJobBike>? jobBikes,
+      {MechanicJobBike? jobBike}) {
     // Determine if this is a multi-bike summary row (main row for multi-bike job)
-    final isMultiBikeSummary = jobBikes != null && jobBikes.length > 1 && jobBike == null;
+    final isMultiBikeSummary =
+        jobBikes != null && jobBikes.length > 1 && jobBike == null;
     // Determine if this is showing per-bike detail (expanded row)
     final isPerBikeDetail = jobBike != null;
-    
+
     switch (columnId) {
       case 'checkbox':
         // Per-bike detail: hide checkbox (selection is at job level)
@@ -1905,15 +1910,15 @@ class _PegasTablePageState extends State<PegasTablePage>
         // 1. isMultiBikeSummary: Main row shows "X Bicicletas" with expand button
         // 2. isPerBikeDetail: Expanded row shows specific bike name
         // 3. Single bike: Normal display
-        
+
         final jobId = job.id;
         final isExpanded = jobId != null && _expandedJobIds.contains(jobId);
-        
+
         // Per-bike detail row - show just the specific bike name
         if (isPerBikeDetail) {
           final bikeName = bike?.displayName ?? 'Sin nombre';
           final bikeImageUrl = bike?.imageUrl;
-          
+
           return Row(
             children: [
               Image.asset(
@@ -1958,11 +1963,11 @@ class _PegasTablePageState extends State<PegasTablePage>
             ],
           );
         }
-        
+
         // Multi-bike summary row - show count and expand button
         if (isMultiBikeSummary) {
           final bikeCount = jobBikes.length;
-          
+
           return InkWell(
             onTap: () {
               setState(() {
@@ -1982,7 +1987,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   errorBuilder: (context, error, stackTrace) => Icon(
                     Icons.pedal_bike,
                     size: 35,
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                    color:
+                        Theme.of(context).colorScheme.primary.withOpacity(0.7),
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -2018,7 +2024,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
           );
         }
-        
+
         // Single bike - normal display
         final bikeName = bike?.displayName ?? 'N/A';
         final bikeImageUrl = bike?.imageUrl;
@@ -2144,8 +2150,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         if (isPerBikeDetail) {
           // Use per-bike status if set, otherwise fall back to job status
           final bikeStatus = jobBike.customStatus;
-          final statusColor = bikeStatus != null 
-              ? bikeStatus.colorValue 
+          final statusColor = bikeStatus != null
+              ? bikeStatus.colorValue
               : _getJobStatusColor(job);
           final statusName = bikeStatus?.name ?? job.statusDisplayName;
           return InkWell(
@@ -2186,7 +2192,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
           );
         }
-        
+
         // Single bike job: show job-level status
         final statusColor = _getJobStatusColor(job);
         final statusName = job.statusDisplayName;
@@ -2268,7 +2274,8 @@ class _PegasTablePageState extends State<PegasTablePage>
       case 'diagnosis':
         // Per-bike detail: show per-bike data from MechanicJobBike
         if (isPerBikeDetail) {
-          final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
+          final invoice =
+              job.invoiceId != null ? _invoices[job.invoiceId] : null;
           return _JobDetailsCell(
             customerName: customer?.name,
             bikeName: bike?.displayName,
@@ -2302,9 +2309,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                 jobId: jobBike.jobId,
                 bikeId: jobBike.bikeId,
                 orderIndex: jobBike.orderIndex,
-                workRequested: resolveField(clientRequest, jobBike.workRequested),
+                workRequested:
+                    resolveField(clientRequest, jobBike.workRequested),
                 diagnosis: resolveField(diagnosis, jobBike.diagnosis),
-                workPerformed: resolveField(workPerformed, jobBike.workPerformed),
+                workPerformed:
+                    resolveField(workPerformed, jobBike.workPerformed),
                 technicianNotes: resolveField(notes, jobBike.technicianNotes),
                 partsCost: jobBike.partsCost,
                 laborCost: jobBike.laborCost,
@@ -2351,7 +2360,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             },
           );
         }
-        
+
         // Single bike: show job-level data (existing behavior)
         final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
         return _JobDetailsCell(
@@ -2463,7 +2472,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
           );
         }
-        
+
         // Show invoice total if exists, otherwise job total cost (for summary and single bike)
         final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
         final displayTotal = invoice?.total ?? job.totalCost;
@@ -3435,8 +3444,8 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   /// Update the status of a specific bike in a multi-bike job
-  Future<void> _updateJobBikeToCustomStatus(
-      MechanicJob job, MechanicJobBike jobBike, JobStatusCustom newStatus) async {
+  Future<void> _updateJobBikeToCustomStatus(MechanicJob job,
+      MechanicJobBike jobBike, JobStatusCustom newStatus) async {
     // Start local operation to suppress reload from realtime notifications
     _startLocalOperation();
 
@@ -3464,11 +3473,12 @@ class _PegasTablePageState extends State<PegasTablePage>
     // Save in background
     try {
       await _bikeshopService.updateJobBike(updatedJobBike);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Estado de bicicleta actualizado a ${newStatus.name}'),
+            content:
+                Text('Estado de bicicleta actualizado a ${newStatus.name}'),
             duration: const Duration(seconds: 1),
           ),
         );
@@ -3566,168 +3576,271 @@ class _PegasTablePageState extends State<PegasTablePage>
       return;
     }
 
-    // Load customer's bikes
-    final bikes =
-        _bikes.values.where((b) => b.customerId == customer.id).toList();
-
     if (!mounted) return;
 
-    showDialog(
+    await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Seleccionar Bicicleta'),
-        content: SizedBox(
-          width: 400,
-          child: bikes.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.pedal_bike_outlined,
-                          size: 48, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text(
-                        'Este cliente no tiene bicicletas registradas',
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: bikes.map((bike) {
-                    final isSelected = bike.id == job.bikeId;
-                    final bikeName =
-                        '${bike.brand ?? ''} ${bike.model ?? ''}'.trim();
-                    return ListTile(
-                      leading: bike.imageUrl != null
-                          ? Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(4),
-                                image: DecorationImage(
-                                  image: NetworkImage(bike.imageUrl!),
-                                  fit: BoxFit.cover,
-                                ),
-                                border: Border.all(
-                                  color: Theme.of(context).dividerColor,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            // Re-fetch bikes to ensure we have latest data after edits
+            final bikes = _bikes.values
+                .where((b) => b.customerId == customer.id)
+                .toList();
+
+            return AlertDialog(
+              title: const Text('Seleccionar Bicicleta'),
+              content: SizedBox(
+                width: 400,
+                child: bikes.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.pedal_bike_outlined,
+                                size: 48, color: Colors.grey),
+                            SizedBox(height: 16),
+                            Text(
+                              'Este cliente no tiene bicicletas registradas',
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: bikes.map((bike) {
+                            final isSelected = bike.id == job.bikeId;
+                            final bikeName =
+                                '${bike.brand ?? ''} ${bike.model ?? ''}'
+                                    .trim();
+                            return ListTile(
+                              leading: bike.imageUrl != null
+                                  ? Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(4),
+                                        image: DecorationImage(
+                                          image: NetworkImage(bike.imageUrl!),
+                                          fit: BoxFit.cover,
+                                        ),
+                                        border: Border.all(
+                                          color: Theme.of(context).dividerColor,
+                                        ),
+                                      ),
+                                    )
+                                  : const Icon(Icons.pedal_bike, size: 40),
+                              title: Text(
+                                bikeName.isNotEmpty ? bikeName : 'Sin nombre',
+                                style: TextStyle(
+                                  fontWeight:
+                                      isSelected ? FontWeight.bold : null,
                                 ),
                               ),
-                            )
-                          : const Icon(Icons.pedal_bike, size: 40),
-                      title: Text(
-                        bikeName.isNotEmpty ? bikeName : 'Sin nombre',
-                        style: TextStyle(
-                          fontWeight: isSelected ? FontWeight.bold : null,
+                              subtitle: bike.serialNumber != null
+                                  ? Text('N° Serie: ${bike.serialNumber}')
+                                  : null,
+                              trailing: isSelected
+                                  ? Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.edit,
+                                              size: 20, color: Colors.blue),
+                                          tooltip: 'Editar detalles',
+                                          onPressed: () async {
+                                            // Edit bike
+                                            final updatedBike =
+                                                await showDialog<Bike>(
+                                              context: context,
+                                              builder: (context) =>
+                                                  BikeFormDialog(
+                                                customerId: customer.id!,
+                                                bike: bike,
+                                              ),
+                                            );
+
+                                            if (updatedBike != null &&
+                                                mounted) {
+                                              // Update local state
+                                              setState(() {
+                                                if (updatedBike.id != null) {
+                                                  _bikes[updatedBike.id!] =
+                                                      updatedBike;
+                                                }
+                                                // If this was the selected bike, force table refresh
+                                                if (isSelected) {
+                                                  _applyFiltersAndSort();
+                                                }
+                                              });
+                                              // Refresh dialog state
+                                              setDialogState(() {});
+                                            }
+                                          },
+                                        ),
+                                        Icon(Icons.check_circle,
+                                            color: Colors.green.shade700),
+                                      ],
+                                    )
+                                  : null,
+                              selected: isSelected,
+                              onTap: isSelected
+                                  ? () async {
+                                      // Allow editing by tapping the row too (UX convenience)
+                                      final updatedBike =
+                                          await showDialog<Bike>(
+                                        context: context,
+                                        builder: (context) => BikeFormDialog(
+                                          customerId: customer.id!,
+                                          bike: bike,
+                                        ),
+                                      );
+
+                                      if (updatedBike != null && mounted) {
+                                        setState(() {
+                                          if (updatedBike.id != null) {
+                                            _bikes[updatedBike.id!] =
+                                                updatedBike;
+                                          }
+                                          _applyFiltersAndSort();
+                                        });
+                                        setDialogState(() {});
+                                      }
+                                    }
+                                  : () async {
+                                      Navigator.pop(context);
+                                      try {
+                                        final updatedJob = MechanicJob(
+                                          id: job.id,
+                                          tenantId: job.tenantId,
+                                          jobNumber: job.jobNumber,
+                                          customerId: job.customerId,
+                                          bikeId: bike.id!,
+                                          arrivalDate: job.arrivalDate,
+                                          deadline: job.deadline,
+                                          status: job.status,
+                                          priority: job.priority,
+                                          clientRequest: job.clientRequest,
+                                          diagnosis: job.diagnosis,
+                                          workPerformed: job.workPerformed,
+                                          notes: job.notes,
+                                          estimatedCost: job.estimatedCost,
+                                          finalCost: job.finalCost,
+                                          partsCost: job.partsCost,
+                                          laborCost: job.laborCost,
+                                          totalCost: job.totalCost,
+                                          invoiceId: job.invoiceId,
+                                          createdAt: job.createdAt,
+                                          updatedAt: DateTime.now(),
+                                          // Keep other fields
+                                          assignedTo: job.assignedTo,
+                                          assignedTechnicianName:
+                                              job.assignedTechnicianName,
+                                          servicePackageId:
+                                              job.servicePackageId,
+                                          taxAmount: job.taxAmount,
+                                          discountAmount: job.discountAmount,
+                                          taxTreatment: job.taxTreatment,
+                                          isInvoiced: job.isInvoiced,
+                                          isPaid: job.isPaid,
+                                          isWarrantyJob: job.isWarrantyJob,
+                                          warrantyNotes: job.warrantyNotes,
+                                          requiresApproval:
+                                              job.requiresApproval,
+                                          approvedByCustomer:
+                                              job.approvedByCustomer,
+                                          approvedAt: job.approvedAt,
+                                          imageUrls: job.imageUrls,
+                                          deletedAt: job.deletedAt,
+                                          deletedBy: job.deletedBy,
+                                        );
+
+                                        // Optimistic update
+                                        _startLocalOperation();
+                                        setState(() {
+                                          final index = _jobs.indexWhere(
+                                              (j) => j.id == job.id);
+                                          if (index != -1) {
+                                            _jobs[index] = updatedJob;
+                                          }
+                                          _bikes[bike.id!] = bike;
+                                          _applyFiltersAndSort();
+                                        });
+
+                                        // Save in background
+                                        try {
+                                          await _bikeshopService
+                                              .updateJob(updatedJob);
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                    'Bicicleta cambiada a: $bikeName'),
+                                                duration:
+                                                    const Duration(seconds: 1),
+                                              ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          // Revert on error
+                                          if (mounted) {
+                                            await _loadData();
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text('Error: $e'),
+                                                backgroundColor: Colors.red,
+                                              ),
+                                            );
+                                          }
+                                        } finally {
+                                          _endLocalOperation();
+                                        }
+                                      } catch (e) {
+                                        debugPrint('Error changing bike: $e');
+                                      }
+                                    },
+                            );
+                          }).toList(),
                         ),
                       ),
-                      subtitle: bike.serialNumber != null
-                          ? Text('N° Serie: ${bike.serialNumber}')
-                          : null,
-                      trailing: isSelected
-                          ? Icon(Icons.check_circle,
-                              color: Colors.green.shade700)
-                          : null,
-                      selected: isSelected,
-                      onTap: isSelected
-                          ? null
-                          : () async {
-                              Navigator.pop(context);
-                              try {
-                                final updatedJob = MechanicJob(
-                                  id: job.id,
-                                  tenantId: job.tenantId,
-                                  jobNumber: job.jobNumber,
-                                  customerId: job.customerId,
-                                  bikeId: bike.id!,
-                                  arrivalDate: job.arrivalDate,
-                                  deadline: job.deadline,
-                                  status: job.status,
-                                  priority: job.priority,
-                                  clientRequest: job.clientRequest,
-                                  diagnosis: job.diagnosis,
-                                  workPerformed: job.workPerformed,
-                                  notes: job.notes,
-                                  estimatedCost: job.estimatedCost,
-                                  finalCost: job.finalCost,
-                                  partsCost: job.partsCost,
-                                  laborCost: job.laborCost,
-                                  totalCost: job.totalCost,
-                                  invoiceId: job.invoiceId,
-                                  createdAt: job.createdAt,
-                                  updatedAt: DateTime.now(),
-                                );
-
-                                // Optimistic update
-                                _startLocalOperation();
-                                setState(() {
-                                  final index =
-                                      _jobs.indexWhere((j) => j.id == job.id);
-                                  if (index != -1) {
-                                    _jobs[index] = updatedJob;
-                                  }
-                                  _bikes[bike.id!] = bike;
-                                  _applyFiltersAndSort();
-                                });
-
-                                // Save in background
-                                try {
-                                  await _bikeshopService.updateJob(updatedJob);
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                            'Bicicleta cambiada a: $bikeName'),
-                                        duration: const Duration(seconds: 1),
-                                      ),
-                                    );
-                                  }
-                                } catch (e) {
-                                  // Revert on error
-                                  if (mounted) {
-                                    await _loadData();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Error: $e'),
-                                        backgroundColor: Colors.red,
-                                      ),
-                                    );
-                                  }
-                                } finally {
-                                  _endLocalOperation();
-                                }
-                              } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Error: $e'),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                    );
-                  }).toList(),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
                 ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              context.push('/clientes/${customer.id}?tab=bikes');
-            },
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Nueva Bici'),
-          ),
-        ],
-      ),
+                FilledButton.icon(
+                  onPressed: () async {
+                    // Create new bike
+                    final newBike = await showDialog<Bike>(
+                      context: context,
+                      builder: (context) => BikeFormDialog(
+                        customerId: customer.id!,
+                      ),
+                    );
+
+                    if (newBike != null && mounted) {
+                      setState(() {
+                        if (newBike.id != null) {
+                          _bikes[newBike.id!] = newBike;
+                        }
+                      });
+                      setDialogState(() {});
+                    }
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Nueva Bici'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

@@ -157,7 +157,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
+    // Defer initialization to avoid "setState() or markNeedsBuild() called during build"
+    // when services trigger notifyListeners() synchronously
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitialData());
   }
 
   @override
@@ -189,23 +191,28 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final jobStatusService =
           Provider.of<JobStatusService>(context, listen: false);
 
-      // Load customers
-      final customers = await customerService.getCustomers();
+      // Load data in parallel to speed up form opening
+      final results = await Future.wait([
+        customerService.getCustomers(forceRefresh: false),
+        inventoryService.getProducts(forceRefresh: false),
+        jobStatusService
+            .loadStatuses(), // Returns void, but we await completion
+      ]);
 
-      // Load products
-      final products = await inventoryService.getProducts();
+      final customers = results[0] as List<Customer>;
+      final products = results[1] as List<Product>;
+
+      // Compute derived data efficiently
       final serviceProducts = products
           .where((product) => product.productType == ProductType.service)
           .toList();
 
-      // Load custom statuses (ensure they're loaded)
-      await jobStatusService.loadStatuses();
       final customStatuses = jobStatusService.activeStatuses;
       debugPrint('📋 Loaded ${customStatuses.length} custom statuses');
 
       if (mounted) {
         setState(() {
-          _customers = customers.cast<Customer>();
+          _customers = customers;
           _products = products;
           _serviceProducts = serviceProducts;
           _customStatuses = customStatuses;
@@ -279,7 +286,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       // Load all job items (parts + services)
       final allItems = await bikeshopService.getJobItems(job.id!);
-      
+
       // Load multi-bike data from mechanic_job_bikes
       final jobBikes = await bikeshopService.getJobBikes(job.id!);
       debugPrint('📦 Loaded ${jobBikes.length} job bikes');
@@ -291,7 +298,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       // Helper to find/create product for an item
       Future<Product?> getProductForItem(MechanicJobItem item) async {
         if (item.productId == null) return null;
-        
+
         try {
           return _products.firstWhere((p) => p.id == item.productId);
         } catch (_) {
@@ -317,29 +324,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       // Build bike tabs from job bikes data
       final List<_BikeTabData> loadedBikeTabs = [];
-      
+
       if (jobBikes.isNotEmpty) {
         // Multi-bike job: create tab for each job bike
         for (final jobBike in jobBikes) {
           // Use bike from local cache, or from the joined data loaded by getJobBikes()
           Bike? bike = _bikes.firstWhereOrNull((b) => b.id == jobBike.bikeId);
           bike ??= jobBike.bike; // Fall back to bike loaded from join
-          
+
           if (bike == null) {
-            debugPrint('⚠️ Bike ${jobBike.bikeId} not found for customer or in join data');
+            debugPrint(
+                '⚠️ Bike ${jobBike.bikeId} not found for customer or in join data');
             continue;
           }
-          
+
           // Make sure this bike is in _bikes for UI consistency
           if (!_bikes.any((b) => b.id == bike!.id)) {
             _bikes.add(bike);
           }
-          
+
           final tab = _BikeTabData(
             bike: bike,
             jobBikeId: jobBike.id,
           );
-          
+
           // Set per-bike fields
           tab.clientRequestController.text = jobBike.workRequested ?? '';
           tab.diagnosisController.text = jobBike.diagnosis ?? '';
@@ -348,9 +356,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           tab.isWarrantyWork = jobBike.isWarrantyWork;
           tab.requiresApproval = jobBike.requiresApproval;
           tab.approvedByCustomer = jobBike.approvedByCustomer;
-          
+
           // Load items for this specific bike
-          final bikeItems = allItems.where((item) => item.jobBikeId == jobBike.id).toList();
+          final bikeItems =
+              allItems.where((item) => item.jobBikeId == jobBike.id).toList();
           for (final item in bikeItems) {
             final product = await getProductForItem(item);
             tab.partItems.add(_JobPartItem(
@@ -363,16 +372,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               notes: item.notes,
             ));
           }
-          
+
           loadedBikeTabs.add(tab);
-          debugPrint('✅ Loaded bike tab: ${bike.displayName} with ${tab.partItems.length} items');
+          debugPrint(
+              '✅ Loaded bike tab: ${bike.displayName} with ${tab.partItems.length} items');
         }
       } else {
         // Legacy single-bike job: create one tab from job data
         final bike = _bikes.firstWhereOrNull((b) => b.id == job.bikeId);
         if (bike != null) {
           final tab = _BikeTabData(bike: bike);
-          
+
           // Use job-level fields for the single bike
           tab.clientRequestController.text = job.clientRequest ?? '';
           tab.diagnosisController.text = job.diagnosis ?? '';
@@ -381,7 +391,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           tab.isWarrantyWork = job.isWarrantyJob;
           tab.requiresApproval = job.requiresApproval;
           tab.approvedByCustomer = job.approvedByCustomer;
-          
+
           // Load all items (no jobBikeId filtering for legacy)
           for (final item in allItems) {
             final product = await getProductForItem(item);
@@ -395,9 +405,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               notes: item.notes,
             ));
           }
-          
+
           loadedBikeTabs.add(tab);
-          debugPrint('✅ Loaded legacy single-bike tab: ${bike.displayName} with ${tab.partItems.length} items');
+          debugPrint(
+              '✅ Loaded legacy single-bike tab: ${bike.displayName} with ${tab.partItems.length} items');
         }
       }
 
@@ -407,7 +418,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _selectedCustomer = customer;
           _selectedPriority = job.priority;
           _selectedStatus = job.status;
-          
+
           // Load custom status
           if (job.customStatus != null) {
             _selectedCustomStatus = job.customStatus;
@@ -417,29 +428,33 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               _selectedCustomStatus = found.first;
             }
           }
-          
+
           _selectedDeadline = job.deadline;
           _selectedArrivalDate = job.arrivalDate;
           _taxTreatment = loadedTaxTreatment;
           _discountController.text = job.discountAmount.toString();
           _estimatedDurationController.text = '';
-          
+
           // Set bike tabs (multi-bike or legacy single-bike)
           _bikeTabs.clear();
           _bikeTabs.addAll(loadedBikeTabs);
           _selectedBikeTabIndex = 0;
-          
+
           // Set legacy fields for backward compat
           if (loadedBikeTabs.isNotEmpty) {
             _selectedBike = loadedBikeTabs.first.bike;
-            _clientRequestController.text = loadedBikeTabs.first.clientRequestController.text;
-            _diagnosisController.text = loadedBikeTabs.first.diagnosisController.text;
-            _workSummaryController.text = loadedBikeTabs.first.workRequestedController.text;
-            _technicianNotesController.text = loadedBikeTabs.first.technicianNotesController.text;
+            _clientRequestController.text =
+                loadedBikeTabs.first.clientRequestController.text;
+            _diagnosisController.text =
+                loadedBikeTabs.first.diagnosisController.text;
+            _workSummaryController.text =
+                loadedBikeTabs.first.workRequestedController.text;
+            _technicianNotesController.text =
+                loadedBikeTabs.first.technicianNotesController.text;
             _requiresApproval = loadedBikeTabs.first.requiresApproval;
             _isWarrantyJob = loadedBikeTabs.first.isWarrantyWork;
           }
-          
+
           // Clear legacy items (now per-bike)
           _partItems.clear();
           _serviceItems.clear();
@@ -877,7 +892,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     // MULTI-BIKE: Check that we have at least one bike tab
     if (_bikeTabs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Debe seleccionar al menos una bicicleta')),
+        const SnackBar(
+            content: Text('Debe seleccionar al menos una bicicleta')),
       );
       return;
     }
@@ -961,7 +977,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       // ============================================================
       // MULTI-BIKE: Save each bike tab as MechanicJobBike + its items
       // ============================================================
-      
+
       // First, delete all existing job items (we'll re-create them)
       if (widget.jobId != null) {
         final existingItems = await bikeshopService.getJobItems(jobId);
@@ -970,7 +986,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             await bikeshopService.deleteJobItem(existing.id!);
           }
         }
-        
+
         // Delete existing job bikes (we'll re-create them)
         final existingJobBikes = await bikeshopService.getJobBikes(jobId);
         for (final existingJB in existingJobBikes) {
@@ -1017,12 +1033,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final createdJobBike = await bikeshopService.addBikeToJob(jobBike);
         final jobBikeId = createdJobBike.id;
 
-        debugPrint('✅ Created job bike: ${tab.bike!.displayName} (id: $jobBikeId)');
+        debugPrint(
+            '✅ Created job bike: ${tab.bike!.displayName} (id: $jobBikeId)');
 
         // Save this bike's parts/products
         for (final item in tab.partItems) {
           if (item.name.isEmpty) continue; // Skip empty rows
-          
+
           final quantity = item.quantity.toDouble();
           final unitPrice = item.unitPrice;
           final jobItem = MechanicJobItem(
@@ -1052,7 +1069,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               );
               debugPrint('✅ Auto-tasks generated for ${item.name}');
             } catch (e) {
-              debugPrint('⚠️ Failed to generate auto-tasks for ${item.name}: $e');
+              debugPrint(
+                  '⚠️ Failed to generate auto-tasks for ${item.name}: $e');
             }
           }
         }
@@ -1095,7 +1113,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             );
             debugPrint('✅ Auto-tasks generated for service $name');
           } catch (e) {
-            debugPrint('⚠️ Failed to generate auto-tasks for service $name: $e');
+            debugPrint(
+                '⚠️ Failed to generate auto-tasks for service $name: $e');
           }
         }
       }
@@ -1715,7 +1734,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     required Widget child,
   }) {
     final hasBikeTabs = _selectedCustomer != null && _bikeTabs.isNotEmpty;
-    
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -1776,23 +1795,23 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             return Padding(
               padding: const EdgeInsets.only(right: 2),
               child: Material(
-                color: isSelected 
-                    ? theme.colorScheme.surface 
-                    : Colors.transparent,
+                color:
+                    isSelected ? theme.colorScheme.surface : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
                 child: InkWell(
                   onTap: () => setState(() => _selectedBikeTabIndex = index),
                   borderRadius: BorderRadius.circular(6),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.pedal_bike,
                           size: 14,
-                          color: isSelected 
-                              ? theme.colorScheme.primary 
+                          color: isSelected
+                              ? theme.colorScheme.primary
                               : theme.colorScheme.onSurfaceVariant,
                         ),
                         const SizedBox(width: 6),
@@ -1800,9 +1819,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           tab.bike?.displayName ?? 'Bici ${index + 1}',
                           style: TextStyle(
                             fontSize: 13,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                            color: isSelected 
-                                ? theme.colorScheme.primary 
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w400,
+                            color: isSelected
+                                ? theme.colorScheme.primary
                                 : theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
@@ -1814,7 +1834,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                             child: Icon(
                               Icons.close,
                               size: 14,
-                              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
+                              color: theme.colorScheme.onSurfaceVariant
+                                  .withOpacity(0.6),
                             ),
                           ),
                         ],
@@ -1872,7 +1893,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 label: tab.displayName,
                 isSelected: isSelected,
                 onTap: () => setState(() => _selectedBikeTabIndex = index),
-                onClose: _bikeTabs.length > 1 ? () => _removeBikeTab(index) : null,
+                onClose:
+                    _bikeTabs.length > 1 ? () => _removeBikeTab(index) : null,
               );
             }),
             // Add new tab button
@@ -1952,25 +1974,26 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             itemBuilder: (context) => [
               // Bike list - add to tabs (not just select)
               ..._bikes.map((bike) {
-                final alreadyInTabs = _bikeTabs.any((tab) => tab.bike?.id == bike.id);
+                final alreadyInTabs =
+                    _bikeTabs.any((tab) => tab.bike?.id == bike.id);
                 return PopupMenuItem<String>(
-                    value: 'bike_${bike.id}',
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${bike.displayName}${bike.serialNumber != null ? ' (S/N: ${bike.serialNumber})' : ''}',
-                          ),
+                  value: 'bike_${bike.id}',
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${bike.displayName}${bike.serialNumber != null ? ' (S/N: ${bike.serialNumber})' : ''}',
                         ),
-                        if (alreadyInTabs)
-                          Icon(Icons.check, size: 16, color: Colors.green[600]),
-                      ],
-                    ),
-                    onTap: () {
-                      // Use _addBikeTab to properly add to multi-bike system
-                      _addBikeTab(bike);
-                    },
-                  );
+                      ),
+                      if (alreadyInTabs)
+                        Icon(Icons.check, size: 16, color: Colors.green[600]),
+                    ],
+                  ),
+                  onTap: () {
+                    // Use _addBikeTab to properly add to multi-bike system
+                    _addBikeTab(bike);
+                  },
+                );
               }),
               // Divider
               if (_bikes.isNotEmpty) const PopupMenuDivider(),
@@ -2015,7 +2038,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       orElse: () => newBike,
                     );
                     _addBikeTab(addedBike);
-                    
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
@@ -2290,7 +2313,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         const SizedBox(height: 16),
         TextFormField(
           key: ValueKey('clientRequest_${currentTab?.tabId ?? "legacy"}'),
-          controller: currentTab?.clientRequestController ?? _clientRequestController,
+          controller:
+              currentTab?.clientRequestController ?? _clientRequestController,
           decoration: const InputDecoration(
             labelText: 'Solicitud del cliente',
             border: OutlineInputBorder(),
@@ -4511,14 +4535,16 @@ class _BrowserStyleBikeTabState extends State<_BrowserStyleBikeTab> {
                   widget.label,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: widget.isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight:
+                        widget.isSelected ? FontWeight.w600 : FontWeight.normal,
                     color: widget.isSelected
                         ? theme.colorScheme.onSurface
                         : theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
-              if (widget.onClose != null && (_isHovered || widget.isSelected)) ...[
+              if (widget.onClose != null &&
+                  (_isHovered || widget.isSelected)) ...[
                 const SizedBox(width: 8),
                 InkWell(
                   onTap: widget.onClose,
@@ -4528,7 +4554,8 @@ class _BrowserStyleBikeTabState extends State<_BrowserStyleBikeTab> {
                     child: Icon(
                       Icons.close,
                       size: 14,
-                      color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                      color:
+                          theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
                     ),
                   ),
                 ),
