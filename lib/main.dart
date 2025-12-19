@@ -503,7 +503,7 @@ class VinabikeApp extends StatelessWidget {
                 debugPrint('🔍 [Main] initialLocationOverride = $result');
                 return result;
               }
-              return '/';
+              return null;
             }();
 
             return MaterialApp.router(

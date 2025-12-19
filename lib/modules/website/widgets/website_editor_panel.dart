@@ -14,7 +14,7 @@ import '../services/website_service.dart';
 import 'block_resize_handle.dart';
 
 /// Professional side panel editor for website blocks
-/// Inspired by Odoo's website builder - clean, functional, elegant
+/// Clean, functional, and elegant interface
 class WebsiteEditorPanel extends StatefulWidget {
   final VoidCallback? onSave;
   final VoidCallback? onDiscard;
@@ -29,7 +29,8 @@ class WebsiteEditorPanel extends StatefulWidget {
   State<WebsiteEditorPanel> createState() => _WebsiteEditorPanelState();
 }
 
-class _WebsiteEditorPanelState extends State<WebsiteEditorPanel> with SingleTickerProviderStateMixin {
+class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _activeTab = 'edit'; // 'add', 'edit', 'theme'
 
@@ -48,7 +49,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel> with SingleTick
   @override
   Widget build(BuildContext context) {
     final editProvider = context.watch<WebsiteEditModeProvider>();
-    
+
     if (!editProvider.isEditMode) {
       return const SizedBox.shrink();
     }
@@ -90,20 +91,21 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel> with SingleTick
           // Undo/Redo buttons
           Consumer<WebsiteEditModeProvider>(
             builder: (context, editProvider, _) => _buildIconButton(
-              Icons.undo, 
-              'Deshacer', 
+              Icons.undo,
+              'Deshacer',
               editProvider.canUndo ? () => editProvider.undo() : null,
             ),
           ),
           Consumer<WebsiteEditModeProvider>(
             builder: (context, editProvider, _) => _buildIconButton(
-              Icons.redo, 
-              'Rehacer', 
+              Icons.redo,
+              'Rehacer',
               editProvider.canRedo ? () => editProvider.redo() : null,
             ),
           ),
           // Backup button
-          _buildIconButton(Icons.backup, 'Copias de seguridad', () => _showBackupsDialog(context)),
+          _buildIconButton(Icons.backup, 'Copias de seguridad',
+              () => _showBackupsDialog(context)),
           // Preview button
           _buildIconButton(Icons.phone_android, 'Vista móvil', () {}),
           const Spacer(),
@@ -125,11 +127,13 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel> with SingleTick
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00A09D),
               foregroundColor: Colors.white,
-              disabledBackgroundColor: const Color(0xFF00A09D).withValues(alpha: 0.5),
+              disabledBackgroundColor:
+                  const Color(0xFF00A09D).withValues(alpha: 0.5),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4)),
             ),
             child: const Text('Guardar', style: TextStyle(fontSize: 13)),
           ),
@@ -150,7 +154,8 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel> with SingleTick
     );
   }
 
-  Widget _buildIconButton(IconData icon, String tooltip, VoidCallback? onPressed) {
+  Widget _buildIconButton(
+      IconData icon, String tooltip, VoidCallback? onPressed) {
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -265,12 +270,15 @@ class _AddBlocksTab extends StatelessWidget {
           ]),
           _buildSection('Media', [
             _BlockOption('gallery', 'Galería', Icons.photo_library_rounded),
-            _BlockOption('videoBanner', 'Video Banner', Icons.play_circle_outline_rounded),
-            _BlockOption('brandLogos', 'Logos Marcas', Icons.branding_watermark_rounded),
+            _BlockOption('videoBanner', 'Video Banner',
+                Icons.play_circle_outline_rounded),
+            _BlockOption(
+                'brandLogos', 'Logos Marcas', Icons.branding_watermark_rounded),
             _BlockOption('partnersBanner', 'Partners', Icons.handshake_rounded),
           ]),
           _buildSection('Social', [
-            _BlockOption('testimonials', 'Testimonios', Icons.format_quote_rounded),
+            _BlockOption(
+                'testimonials', 'Testimonios', Icons.format_quote_rounded),
             _BlockOption('team', 'Equipo', Icons.groups_rounded),
             _BlockOption('stats', 'Estadísticas', Icons.analytics_rounded),
           ]),
@@ -415,7 +423,7 @@ class _EditBlockTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedId = editProvider.selectedBlockId;
-    
+
     if (selectedId == null) {
       return _buildNoSelection();
     }
@@ -423,10 +431,12 @@ class _EditBlockTab extends StatelessWidget {
     // Handle special elements (header/footer) - these are not blocks
     // Use ValueKey to preserve state across rebuilds
     if (selectedId == 'header') {
-      return _HeaderBlockControls(key: const ValueKey('header_controls'), provider: editProvider);
+      return _HeaderBlockControls(
+          key: const ValueKey('header_controls'), provider: editProvider);
     }
     if (selectedId == 'footer') {
-      return _FooterBlockControls(key: const ValueKey('footer_controls'), provider: editProvider);
+      return _FooterBlockControls(
+          key: const ValueKey('footer_controls'), provider: editProvider);
     }
 
     final block = editProvider.getBlock(selectedId);
@@ -445,9 +455,14 @@ class _EditBlockTab extends StatelessWidget {
         children: [
           _buildBlockHeader(blockType, isVisible, selectedId),
           const SizedBox(height: 16),
-          _BlockHeightControl(data: blockData, blockId: selectedId, blockType: blockType, provider: editProvider),
+          _BlockHeightControl(
+              data: blockData,
+              blockId: selectedId,
+              blockType: blockType,
+              provider: editProvider),
           const SizedBox(height: 16),
-          _BlockSpacingControl(data: blockData, blockId: selectedId, provider: editProvider),
+          _BlockSpacingControl(
+              data: blockData, blockId: selectedId, provider: editProvider),
           const SizedBox(height: 20),
           _buildBlockControls(blockType, blockData, selectedId),
         ],
@@ -590,31 +605,43 @@ class _EditBlockTab extends StatelessWidget {
     };
   }
 
-  Widget _buildBlockControls(String blockType, Map<String, dynamic> data, String blockId) {
+  Widget _buildBlockControls(
+      String blockType, Map<String, dynamic> data, String blockId) {
     // Build controls based on block type
     switch (blockType) {
       case 'hero':
-        return _HeroBlockControls(data: data, blockId: blockId, provider: editProvider);
+        return _HeroBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
       case 'carousel':
-        return _CarouselBlockControls(data: data, blockId: blockId, provider: editProvider);
+        return _CarouselBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
       case 'products':
-        return _ProductsBlockControls(data: data, blockId: blockId, provider: editProvider);
+        return _ProductsBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
       case 'about':
-        return _AboutBlockControls(data: data, blockId: blockId, provider: editProvider);
+        return _AboutBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
       case 'cta':
-        return _CtaBlockControls(data: data, blockId: blockId, provider: editProvider);
+        return _CtaBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
       case 'features':
-        return _FeaturesBlockControls(data: data, blockId: blockId, provider: editProvider);
+        return _FeaturesBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
       case 'categoryGrid':
-        return _CategoryGridBlockControls(data: data, blockId: blockId, provider: editProvider);
+        return _CategoryGridBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
       case 'videoBanner':
-        return _VideoBannerBlockControls(data: data, blockId: blockId, provider: editProvider);
+        return _VideoBannerBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
       case 'partnersBanner':
-        return _PartnersBannerBlockControls(data: data, blockId: blockId, provider: editProvider);
+        return _PartnersBannerBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
       case 'brandLogos':
-        return _BrandLogosBlockControls(data: data, blockId: blockId, provider: editProvider);
+        return _BrandLogosBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
       default:
-        return _GenericBlockControls(data: data, blockId: blockId, provider: editProvider);
+        return _GenericBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
     }
   }
 }
@@ -665,7 +692,8 @@ class _BlockHeightControlState extends State<_BlockHeightControl> {
     super.dispose();
   }
 
-  double? get _currentHeight => (widget.data['blockHeight'] as num?)?.toDouble();
+  double? get _currentHeight =>
+      (widget.data['blockHeight'] as num?)?.toDouble();
 
   void _setHeight(double? height) {
     widget.provider.updateBlockData(widget.blockId, 'blockHeight', height);
@@ -685,13 +713,19 @@ class _BlockHeightControlState extends State<_BlockHeightControl> {
           children: [
             const Text(
               'Altura',
-              style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600),
             ),
             const Spacer(),
             if (_currentHeight != null)
               Text(
                 '${_currentHeight!.toStringAsFixed(0)}px',
-                style: const TextStyle(color: Color(0xFF00A09D), fontSize: 11, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                    color: Color(0xFF00A09D),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500),
               ),
           ],
         ),
@@ -710,7 +744,9 @@ class _BlockHeightControlState extends State<_BlockHeightControl> {
               child: Row(
                 children: [
                   Icon(
-                    _showCustomInput ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    _showCustomInput
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
                     color: Colors.white38,
                     size: 16,
                   ),
@@ -731,7 +767,10 @@ class _BlockHeightControlState extends State<_BlockHeightControl> {
                 onTap: () => _setHeight(null),
                 child: const Text(
                   'Restablecer',
-                  style: TextStyle(color: Colors.white38, fontSize: 10, decoration: TextDecoration.underline),
+                  style: TextStyle(
+                      color: Colors.white38,
+                      fontSize: 10,
+                      decoration: TextDecoration.underline),
                 ),
               ),
           ],
@@ -756,7 +795,8 @@ class _BlockHeightControlState extends State<_BlockHeightControl> {
                       hintText: 'ej: 450',
                       hintStyle: TextStyle(color: Colors.white24, fontSize: 12),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       isDense: true,
                     ),
                     onSubmitted: (value) {
@@ -786,7 +826,10 @@ class _BlockHeightControlState extends State<_BlockHeightControl> {
                   child: const Center(
                     child: Text(
                       'Aplicar',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500),
                     ),
                   ),
                 ),
@@ -821,7 +864,8 @@ class _BlockSpacingControl extends StatefulWidget {
 }
 
 class _BlockSpacingControlState extends State<_BlockSpacingControl> {
-  double get _currentSpacing => (widget.data['spacingAfter'] as num?)?.toDouble() ?? 32.0;
+  double get _currentSpacing =>
+      (widget.data['spacingAfter'] as num?)?.toDouble() ?? 32.0;
 
   void _setSpacing(double spacing) {
     widget.provider.updateBlockData(widget.blockId, 'spacingAfter', spacing);
@@ -838,12 +882,18 @@ class _BlockSpacingControlState extends State<_BlockSpacingControl> {
             const SizedBox(width: 6),
             const Text(
               'Espaciado inferior',
-              style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600),
             ),
             const Spacer(),
             Text(
               _currentSpacing == 0 ? '0' : '${_currentSpacing.toInt()}px',
-              style: const TextStyle(color: Color(0xFF00A09D), fontSize: 11, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                  color: Color(0xFF00A09D),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -929,7 +979,9 @@ class _SpacingPresetButton extends StatelessWidget {
         child: Container(
           height: 28,
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF00A09D) : Colors.white.withValues(alpha: 0.08),
+            color: isSelected
+                ? const Color(0xFF00A09D)
+                : Colors.white.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
@@ -1030,7 +1082,8 @@ class _HeroBlockControls extends StatelessWidget {
         const SizedBox(height: 12),
         _ImagePicker(
           currentUrl: data['backgroundImage']?.toString(),
-          onChanged: (url) => provider.updateBlockData(blockId, 'backgroundImage', url),
+          onChanged: (url) =>
+              provider.updateBlockData(blockId, 'backgroundImage', url),
         ),
       ],
     );
@@ -1065,20 +1118,25 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
   }
 
   void _updateSlides(List<Map<String, dynamic>> newSlides) {
-    debugPrint('🎠 [CarouselControls] _updateSlides: saving ${newSlides.length} slides to provider');
-    debugPrint('🎠 [CarouselControls] First slide data: ${newSlides.isNotEmpty ? newSlides[0] : "empty"}');
+    debugPrint(
+        '🎠 [CarouselControls] _updateSlides: saving ${newSlides.length} slides to provider');
+    debugPrint(
+        '🎠 [CarouselControls] First slide data: ${newSlides.isNotEmpty ? newSlides[0] : "empty"}');
     widget.provider.updateBlockData(widget.blockId, 'slides', newSlides);
   }
 
   void _updateSlide(int index, String key, dynamic value) {
-    debugPrint('🎠🎠 [CarouselControls] _updateSlide CALLED: index=$index, key=$key, value=$value');
+    debugPrint(
+        '🎠🎠 [CarouselControls] _updateSlide CALLED: index=$index, key=$key, value=$value');
     final slides = List<Map<String, dynamic>>.from(_slides);
     if (index >= 0 && index < slides.length) {
       slides[index] = {...slides[index], key: value};
-      debugPrint('🎠 [CarouselControls] _updateSlide: index=$index, key=$key, value=$value');
+      debugPrint(
+          '🎠 [CarouselControls] _updateSlide: index=$index, key=$key, value=$value');
       _updateSlides(slides);
     } else {
-      debugPrint('🎠⚠️ [CarouselControls] _updateSlide: INVALID INDEX index=$index, slides.length=${slides.length}');
+      debugPrint(
+          '🎠⚠️ [CarouselControls] _updateSlide: INVALID INDEX index=$index, slides.length=${slides.length}');
     }
   }
 
@@ -1113,7 +1171,8 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
   /// Build slide fields inline (same pattern as VideoBanner)
   Widget _buildSlideFields(Map<String, dynamic> slide) {
     final showOverlay = slide['showOverlay'] ?? true;
-    final overlayOpacity = (slide['overlayOpacity'] as num?)?.toDouble() ?? 0.55;
+    final overlayOpacity =
+        (slide['overlayOpacity'] as num?)?.toDouble() ?? 0.55;
     final hasVideoFile = (slide['videoFileUrl']?.toString() ?? '').isNotEmpty;
 
     return Column(
@@ -1145,17 +1204,18 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           hint: '/tienda/productos',
         ),
         const SizedBox(height: 20),
-        
+
         // Image section
         _SectionHeader('IMAGEN DE FONDO'),
         const SizedBox(height: 8),
         _ImagePicker(
           currentUrl: slide['imageUrl']?.toString(),
-          onChanged: (url) => _updateSlide(_selectedSlideIndex, 'imageUrl', url),
+          onChanged: (url) =>
+              _updateSlide(_selectedSlideIndex, 'imageUrl', url),
         ),
-        
+
         const SizedBox(height: 20),
-        
+
         // Video section
         _SectionHeader('VIDEO DE FONDO (OPCIONAL)'),
         const SizedBox(height: 8),
@@ -1164,7 +1224,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           style: TextStyle(color: Colors.white38, fontSize: 11),
         ),
         const SizedBox(height: 12),
-        
+
         // YouTube URL option - use _EditorTextField like the title field
         _EditorTextField(
           label: 'URL de YouTube',
@@ -1179,23 +1239,24 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           },
           hint: 'https://youtube.com/watch?v=...',
         ),
-        
+
         const SizedBox(height: 12),
-        
+
         // Divider with "o"
         Row(
           children: [
             Expanded(child: Divider(color: Colors.white24)),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('o', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              child: Text('o',
+                  style: TextStyle(color: Colors.white38, fontSize: 12)),
             ),
             Expanded(child: Divider(color: Colors.white24)),
           ],
         ),
-        
+
         const SizedBox(height: 12),
-        
+
         // Upload video file button
         SizedBox(
           width: double.infinity,
@@ -1210,7 +1271,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             ),
           ),
         ),
-        
+
         // Show current video file if exists
         if (hasVideoFile) ...[
           const SizedBox(height: 8),
@@ -1233,7 +1294,8 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                 ),
                 IconButton(
                   icon: Icon(Icons.close, size: 16, color: Colors.green),
-                  onPressed: () => _updateSlide(_selectedSlideIndex, 'videoFileUrl', ''),
+                  onPressed: () =>
+                      _updateSlide(_selectedSlideIndex, 'videoFileUrl', ''),
                   padding: EdgeInsets.zero,
                   constraints: BoxConstraints(),
                 ),
@@ -1241,9 +1303,9 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             ),
           ),
         ],
-        
+
         const SizedBox(height: 20),
-        
+
         // Overlay settings
         _SectionHeader('OVERLAY'),
         const SizedBox(height: 8),
@@ -1260,7 +1322,8 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             min: 0.0,
             max: 1.0,
             divisions: 20,
-            onChanged: (v) => _updateSlide(_selectedSlideIndex, 'overlayOpacity', v),
+            onChanged: (v) =>
+                _updateSlide(_selectedSlideIndex, 'overlayOpacity', v),
           ),
         ],
       ],
@@ -1296,18 +1359,22 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           .select('tenant_id')
           .eq('user_id', user.id)
           .single();
-      
+
       final tenantId = profileResponse['tenant_id'] as String;
 
       // Upload to Supabase Storage
-      final fileName = 'video_${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final fileName =
+          'video_${DateTime.now().millisecondsSinceEpoch}_${file.name}';
       final storagePath = '$tenantId/videos/$fileName';
 
       await Supabase.instance.client.storage
           .from('website-assets')
-          .uploadBinary(storagePath, file.bytes!, fileOptions: FileOptions(
-            contentType: file.extension == 'mp4' ? 'video/mp4' : 'video/${file.extension ?? 'mp4'}',
-          ));
+          .uploadBinary(storagePath, file.bytes!,
+              fileOptions: FileOptions(
+                contentType: file.extension == 'mp4'
+                    ? 'video/mp4'
+                    : 'video/${file.extension ?? 'mp4'}',
+              ));
 
       // Get public URL
       final publicUrl = Supabase.instance.client.storage
@@ -1320,14 +1387,18 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Video subido correctamente'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Video subido correctamente'),
+              backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       debugPrint('[CarouselSlide] Error uploading video: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al subir video: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error al subir video: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
@@ -1337,7 +1408,8 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
   Widget build(BuildContext context) {
     final slides = _slides;
     final autoPlay = widget.data['autoPlay'] ?? true;
-    final intervalSeconds = (widget.data['intervalSeconds'] as num?)?.toInt() ?? 5;
+    final intervalSeconds =
+        (widget.data['intervalSeconds'] as num?)?.toInt() ?? 5;
     final showIndicators = widget.data['showIndicators'] ?? true;
     final showArrows = widget.data['showArrows'] ?? true;
     final animation = widget.data['animation']?.toString() ?? 'slide';
@@ -1351,7 +1423,8 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
         _EditorToggle(
           label: 'Reproducción automática',
           value: autoPlay,
-          onChanged: (v) => widget.provider.updateBlockData(widget.blockId, 'autoPlay', v),
+          onChanged: (v) =>
+              widget.provider.updateBlockData(widget.blockId, 'autoPlay', v),
         ),
         const SizedBox(height: 12),
         if (autoPlay) ...[
@@ -1361,7 +1434,8 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             min: 2,
             max: 15,
             divisions: 13,
-            onChanged: (v) => widget.provider.updateBlockData(widget.blockId, 'intervalSeconds', v.toInt()),
+            onChanged: (v) => widget.provider
+                .updateBlockData(widget.blockId, 'intervalSeconds', v.toInt()),
           ),
           const SizedBox(height: 12),
         ],
@@ -1373,21 +1447,24 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             ('fade', 'Desvanecer'),
             ('zoom', 'Zoom'),
           ],
-          onChanged: (v) => widget.provider.updateBlockData(widget.blockId, 'animation', v),
+          onChanged: (v) =>
+              widget.provider.updateBlockData(widget.blockId, 'animation', v),
         ),
         const SizedBox(height: 12),
         _EditorToggle(
           label: 'Mostrar indicadores',
           value: showIndicators,
-          onChanged: (v) => widget.provider.updateBlockData(widget.blockId, 'showIndicators', v),
+          onChanged: (v) => widget.provider
+              .updateBlockData(widget.blockId, 'showIndicators', v),
         ),
         const SizedBox(height: 12),
         _EditorToggle(
           label: 'Mostrar flechas',
           value: showArrows,
-          onChanged: (v) => widget.provider.updateBlockData(widget.blockId, 'showArrows', v),
+          onChanged: (v) =>
+              widget.provider.updateBlockData(widget.blockId, 'showArrows', v),
         ),
-        
+
         const SizedBox(height: 24),
         // Slides Section
         Row(
@@ -1407,7 +1484,9 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                   children: [
                     Icon(Icons.add, size: 14, color: Color(0xFF00A09D)),
                     SizedBox(width: 4),
-                    Text('Agregar', style: TextStyle(color: Color(0xFF00A09D), fontSize: 12)),
+                    Text('Agregar',
+                        style:
+                            TextStyle(color: Color(0xFF00A09D), fontSize: 12)),
                   ],
                 ),
               ),
@@ -1415,7 +1494,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           ],
         ),
         const SizedBox(height: 12),
-        
+
         // Slide tabs
         if (slides.isNotEmpty) ...[
           SizedBox(
@@ -1431,7 +1510,9 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                     margin: const EdgeInsets.only(right: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFF00A09D) : Colors.white.withValues(alpha: 0.1),
+                      color: isSelected
+                          ? const Color(0xFF00A09D)
+                          : Colors.white.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     alignment: Alignment.center,
@@ -1443,7 +1524,9 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                           style: TextStyle(
                             color: isSelected ? Colors.white70 : Colors.white70,
                             fontSize: 13,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                           ),
                         ),
                         if (slides.length > 1) ...[
@@ -1453,7 +1536,8 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                             child: Icon(
                               Icons.close,
                               size: 14,
-                              color: isSelected ? Colors.white70 : Colors.white38,
+                              color:
+                                  isSelected ? Colors.white70 : Colors.white38,
                             ),
                           ),
                         ],
@@ -1465,7 +1549,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             ),
           ),
           const SizedBox(height: 16),
-          
+
           // Selected slide editor - INLINE fields (not nested StatefulWidget)
           if (_selectedSlideIndex < slides.length)
             _buildSlideFields(slides[_selectedSlideIndex]),
@@ -1475,11 +1559,13 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  Icon(Icons.image_outlined, size: 40, color: Colors.white.withValues(alpha: 0.3)),
+                  Icon(Icons.image_outlined,
+                      size: 40, color: Colors.white.withValues(alpha: 0.3)),
                   const SizedBox(height: 12),
                   Text(
                     'No hay slides',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                    style:
+                        TextStyle(color: Colors.white.withValues(alpha: 0.5)),
                   ),
                   const SizedBox(height: 8),
                   TextButton.icon(
@@ -1545,18 +1631,22 @@ class _SlideEditorState extends State<_SlideEditor> {
           .select('tenant_id')
           .eq('user_id', user.id)
           .single();
-      
+
       final tenantId = profileResponse['tenant_id'] as String;
 
       // Upload to Supabase Storage
-      final fileName = 'carousel_video_${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final fileName =
+          'carousel_video_${DateTime.now().millisecondsSinceEpoch}_${file.name}';
       final storagePath = '$tenantId/videos/$fileName';
 
       await Supabase.instance.client.storage
           .from('website-assets')
-          .uploadBinary(storagePath, file.bytes!, fileOptions: FileOptions(
-            contentType: file.extension == 'mp4' ? 'video/mp4' : 'video/${file.extension ?? 'mp4'}',
-          ));
+          .uploadBinary(storagePath, file.bytes!,
+              fileOptions: FileOptions(
+                contentType: file.extension == 'mp4'
+                    ? 'video/mp4'
+                    : 'video/${file.extension ?? 'mp4'}',
+              ));
 
       // Get public URL
       final publicUrl = Supabase.instance.client.storage
@@ -1569,14 +1659,18 @@ class _SlideEditorState extends State<_SlideEditor> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Video subido correctamente'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Video subido correctamente'),
+              backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       debugPrint('[SlideEditor] Error uploading video: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al subir video: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error al subir video: $e'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1589,9 +1683,12 @@ class _SlideEditorState extends State<_SlideEditor> {
   @override
   Widget build(BuildContext context) {
     final showOverlay = widget.slide['showOverlay'] ?? true;
-    final overlayOpacity = (widget.slide['overlayOpacity'] as num?)?.toDouble() ?? 0.55;
-    final hasVideoFile = (widget.slide['videoFileUrl']?.toString() ?? '').isNotEmpty;
-    final hasYoutubeUrl = (widget.slide['videoUrl']?.toString() ?? '').isNotEmpty;
+    final overlayOpacity =
+        (widget.slide['overlayOpacity'] as num?)?.toDouble() ?? 0.55;
+    final hasVideoFile =
+        (widget.slide['videoFileUrl']?.toString() ?? '').isNotEmpty;
+    final hasYoutubeUrl =
+        (widget.slide['videoUrl']?.toString() ?? '').isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1615,17 +1712,22 @@ class _SlideEditorState extends State<_SlideEditor> {
           currentUrl: widget.slide['imageUrl']?.toString(),
           onChanged: (url) => widget.onUpdate('imageUrl', url),
         ),
-        
+
         const SizedBox(height: 20),
         // Video section
-        Text('VIDEO DE FONDO (OPCIONAL)', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+        Text('VIDEO DE FONDO (OPCIONAL)',
+            style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1)),
         const SizedBox(height: 8),
         Text(
           'Si se configura un video, se usará en vez de la imagen',
           style: TextStyle(color: Colors.white38, fontSize: 11),
         ),
         const SizedBox(height: 12),
-        
+
         // YouTube URL option
         _EditorTextField(
           label: 'URL de YouTube',
@@ -1640,32 +1742,38 @@ class _SlideEditorState extends State<_SlideEditor> {
           },
           hint: 'https://youtube.com/watch?v=...',
         ),
-        
+
         const SizedBox(height: 12),
-        
+
         // Divider with "o" (or)
         Row(
           children: [
             Expanded(child: Divider(color: Colors.white24)),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('o', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              child: Text('o',
+                  style: TextStyle(color: Colors.white38, fontSize: 12)),
             ),
             Expanded(child: Divider(color: Colors.white24)),
           ],
         ),
-        
+
         const SizedBox(height: 12),
-        
+
         // Upload video file button
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
             onPressed: _isUploading ? null : _uploadVideoFile,
-            icon: _isUploading 
-                ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            icon: _isUploading
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.upload_file, size: 18),
-            label: Text(_isUploading ? 'Subiendo...' : 'Subir archivo de video'),
+            label:
+                Text(_isUploading ? 'Subiendo...' : 'Subir archivo de video'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00A09D),
               foregroundColor: Colors.white,
@@ -1673,7 +1781,7 @@ class _SlideEditorState extends State<_SlideEditor> {
             ),
           ),
         ),
-        
+
         // Show current video file if exists
         if (hasVideoFile) ...[
           const SizedBox(height: 8),
@@ -1695,7 +1803,8 @@ class _SlideEditorState extends State<_SlideEditor> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.delete_outline, color: Colors.red.shade300, size: 18),
+                  icon: Icon(Icons.delete_outline,
+                      color: Colors.red.shade300, size: 18),
                   onPressed: () => widget.onUpdate('videoFileUrl', ''),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -1705,7 +1814,7 @@ class _SlideEditorState extends State<_SlideEditor> {
             ),
           ),
         ],
-        
+
         // Show YouTube status if exists
         if (hasYoutubeUrl && !hasVideoFile) ...[
           const SizedBox(height: 8),
@@ -1727,7 +1836,8 @@ class _SlideEditorState extends State<_SlideEditor> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.delete_outline, color: Colors.red.shade300, size: 18),
+                  icon: Icon(Icons.delete_outline,
+                      color: Colors.red.shade300, size: 18),
                   onPressed: () => widget.onUpdate('videoUrl', ''),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -1805,44 +1915,48 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
   Future<void> _loadData() async {
     try {
       final supabase = Supabase.instance.client;
-      
+
       // Load ALL active products (so user can see/deselect old selections)
       // We'll mark unavailable ones in the picker UI
       final productsResponse = await supabase
           .from('products')
-          .select('id, name, sku, price, image_url, category_id, is_active, is_published, stock_quantity')
+          .select(
+              'id, name, sku, price, image_url, category_id, is_active, is_published, stock_quantity')
           .eq('is_active', true)
           .order('name', ascending: true);
-      
+
       var allProducts = List<Map<String, dynamic>>.from(productsResponse);
-      
+
       // Also load selected products that might be inactive (so we can display/deselect them)
       final selectedIds = _selectedProductIds;
       if (selectedIds.isNotEmpty) {
         final selectedResponse = await supabase
             .from('products')
-            .select('id, name, sku, price, image_url, category_id, is_active, is_published, stock_quantity')
+            .select(
+                'id, name, sku, price, image_url, category_id, is_active, is_published, stock_quantity')
             .inFilter('id', selectedIds);
-        
+
         // Add any selected products not already in the list
         for (final selected in selectedResponse) {
-          final exists = allProducts.any((p) => p['id'].toString() == selected['id'].toString());
+          final exists = allProducts
+              .any((p) => p['id'].toString() == selected['id'].toString());
           if (!exists) {
             allProducts.add(Map<String, dynamic>.from(selected));
           }
         }
       }
-      
+
       // Load categories
       final categoriesResponse = await supabase
           .from('product_categories')
           .select('id, name')
           .order('name', ascending: true);
-      
+
       if (mounted) {
         setState(() {
           _availableProducts = allProducts;
-          _availableCategories = List<Map<String, dynamic>>.from(categoriesResponse);
+          _availableCategories =
+              List<Map<String, dynamic>>.from(categoriesResponse);
           _isLoading = false;
         });
       }
@@ -1862,7 +1976,8 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
     return [];
   }
 
-  String get _productSource => widget.data['productSource']?.toString() ?? 'featured';
+  String get _productSource =>
+      widget.data['productSource']?.toString() ?? 'featured';
   String? get _selectedCategoryId => widget.data['categoryId']?.toString();
   int get _itemsPerRow => (widget.data['itemsPerRow'] as num?)?.toInt() ?? 3;
   int get _maxProducts => (widget.data['maxProducts'] as num?)?.toInt() ?? 8;
@@ -1883,26 +1998,30 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
           value: widget.data['subtitle']?.toString() ?? '',
           onChanged: (v) => _updateField('subtitle', v),
         ),
-        
+
         const SizedBox(height: 20),
         _SectionHeader('FUENTE DE PRODUCTOS'),
         const SizedBox(height: 12),
-        
+
         // Product source selector
         _buildSourceSelector(),
-        
+
         const SizedBox(height: 16),
-        
+
         // Conditional content based on source
         if (_productSource == 'category') _buildCategorySelector(),
         if (_productSource == 'manual') _buildProductSelector(),
-        
+
         const SizedBox(height: 20),
         _SectionHeader('DISEÑO'),
         const SizedBox(height: 12),
-        
+
         // Items per row
-        Text('Productos por fila', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600)),
+        Text('Productos por fila',
+            style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         Row(
           children: [2, 3, 4].map((count) {
@@ -1915,10 +2034,13 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
                   width: 44,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+                    color: isSelected
+                        ? const Color(0xFF00A09D)
+                        : const Color(0xFF2D2D2D),
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(
-                      color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
+                      color:
+                          isSelected ? const Color(0xFF00A09D) : Colors.white24,
                     ),
                   ),
                   child: Center(
@@ -1935,7 +2057,7 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
             );
           }).toList(),
         ),
-        
+
         const SizedBox(height: 16),
         _EditorSlider(
           label: 'Máximo de productos',
@@ -1945,11 +2067,11 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
           divisions: 6,
           onChanged: (v) => _updateField('maxProducts', v.toInt()),
         ),
-        
+
         const SizedBox(height: 20),
         _SectionHeader('MOSTRAR'),
         const SizedBox(height: 12),
-        
+
         _EditorToggle(
           label: 'Mostrar precios',
           value: widget.data['showPrice'] ?? true,
@@ -1973,13 +2095,14 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
           value: widget.data['showBrand'] ?? false,
           onChanged: (v) => _updateField('showBrand', v),
         ),
-        
+
         // View all link
         if (widget.data['showViewAll'] != false) ...[
           const SizedBox(height: 16),
           _EditorTextField(
             label: 'Link "Ver todos"',
-            value: widget.data['viewAllLink']?.toString() ?? '/tienda/productos',
+            value:
+                widget.data['viewAllLink']?.toString() ?? '/tienda/productos',
             onChanged: (v) => _updateField('viewAllLink', v),
           ),
         ],
@@ -1994,7 +2117,7 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
       {'id': 'manual', 'label': 'Selección manual', 'icon': Icons.checklist},
       {'id': 'newest', 'label': 'Más recientes', 'icon': Icons.schedule},
     ];
-    
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -2005,7 +2128,9 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+              color: isSelected
+                  ? const Color(0xFF00A09D)
+                  : const Color(0xFF2D2D2D),
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
                 color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
@@ -2042,12 +2167,16 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       );
     }
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 12),
-        Text('Seleccionar categoría', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600)),
+        Text('Seleccionar categoría',
+            style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -2059,7 +2188,8 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
               value: _selectedCategoryId,
               hint: const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text('Seleccionar...', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                child: Text('Seleccionar...',
+                    style: TextStyle(color: Colors.white54, fontSize: 13)),
               ),
               isExpanded: true,
               dropdownColor: const Color(0xFF2D2D2D),
@@ -2091,7 +2221,7 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       );
     }
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2100,7 +2230,10 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
           children: [
             Text(
               'Productos seleccionados (${_selectedProductIds.length})',
-              style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600),
             ),
             const Spacer(),
             TextButton(
@@ -2139,13 +2272,21 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
               orElse: () => <String, dynamic>{},
             );
             if (product.isEmpty) return const SizedBox.shrink();
-            
+
             final isActive = product['is_active'] == true;
             final isPublished = product['is_published'] == true;
-            final stockQty = (product['inventory_qty'] as num?)?.toInt() ?? (product['stock_quantity'] as num?)?.toInt() ?? 0;
+            final stockQty = (product['inventory_qty'] as num?)?.toInt() ??
+                (product['stock_quantity'] as num?)?.toInt() ??
+                0;
             final isAvailable = isActive && isPublished && stockQty > 0;
-            final statusText = !isActive ? 'Inactivo' : stockQty <= 0 ? 'Sin stock' : !isPublished ? 'No publicado' : null;
-            
+            final statusText = !isActive
+                ? 'Inactivo'
+                : stockQty <= 0
+                    ? 'Sin stock'
+                    : !isPublished
+                        ? 'No publicado'
+                        : null;
+
             return Opacity(
               opacity: isAvailable ? 1.0 : 0.6,
               child: Container(
@@ -2154,7 +2295,9 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF2D2D2D),
                   borderRadius: BorderRadius.circular(4),
-                  border: !isAvailable ? Border.all(color: Colors.red.withValues(alpha: 0.3)) : null,
+                  border: !isAvailable
+                      ? Border.all(color: Colors.red.withValues(alpha: 0.3))
+                      : null,
                 ),
                 child: Row(
                   children: [
@@ -2173,7 +2316,8 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
                             : null,
                       ),
                       child: product['image_url'] == null
-                          ? const Icon(Icons.image, size: 16, color: Colors.white24)
+                          ? const Icon(Icons.image,
+                              size: 16, color: Colors.white24)
                           : null,
                     ),
                     const SizedBox(width: 8),
@@ -2186,7 +2330,8 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
                               Expanded(
                                 child: Text(
                                   product['name']?.toString() ?? '',
-                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 12),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -2194,21 +2339,24 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
                               if (statusText != null)
                                 Container(
                                   margin: const EdgeInsets.only(left: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4, vertical: 1),
                                   decoration: BoxDecoration(
                                     color: Colors.red.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                   child: Text(
                                     statusText,
-                                    style: const TextStyle(color: Colors.red, fontSize: 8),
+                                    style: const TextStyle(
+                                        color: Colors.red, fontSize: 8),
                                   ),
                                 ),
                             ],
                           ),
                           Text(
                             product['sku']?.toString() ?? '',
-                            style: const TextStyle(color: Colors.white38, fontSize: 10),
+                            style: const TextStyle(
+                                color: Colors.white38, fontSize: 10),
                           ),
                         ],
                       ),
@@ -2219,7 +2367,8 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: () {
-                        final newList = List<String>.from(_selectedProductIds)..remove(productId);
+                        final newList = List<String>.from(_selectedProductIds)
+                          ..remove(productId);
                         _updateField('selectedProducts', newList);
                       },
                     ),
@@ -2298,7 +2447,10 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
               children: [
                 const Text(
                   'Seleccionar productos',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600),
                 ),
                 const Spacer(),
                 IconButton(
@@ -2314,10 +2466,12 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
               decoration: InputDecoration(
                 hintText: 'Buscar por nombre o SKU...',
                 hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
-                prefixIcon: const Icon(Icons.search, color: Colors.white38, size: 20),
+                prefixIcon:
+                    const Icon(Icons.search, color: Colors.white38, size: 20),
                 filled: true,
                 fillColor: const Color(0xFF2D2D2D),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(4),
                   borderSide: BorderSide.none,
@@ -2348,9 +2502,12 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                   final productId = product['id'].toString();
                   final isSelected = _selected.contains(productId);
                   final isPublished = product['is_published'] == true;
-                  final stockQty = (product['inventory_qty'] as num?)?.toInt() ?? (product['stock_quantity'] as num?)?.toInt() ?? 0;
+                  final stockQty =
+                      (product['inventory_qty'] as num?)?.toInt() ??
+                          (product['stock_quantity'] as num?)?.toInt() ??
+                          0;
                   final isAvailable = isPublished && stockQty > 0;
-                  
+
                   return InkWell(
                     onTap: () {
                       setState(() {
@@ -2364,11 +2521,15 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                     child: Opacity(
                       opacity: isAvailable ? 1.0 : 0.5,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF00A09D).withValues(alpha: 0.2) : Colors.transparent,
+                          color: isSelected
+                              ? const Color(0xFF00A09D).withValues(alpha: 0.2)
+                              : Colors.transparent,
                           border: Border(
-                            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                            bottom: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.05)),
                           ),
                         ),
                         child: Row(
@@ -2378,14 +2539,19 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                               width: 20,
                               height: 20,
                               decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+                                color: isSelected
+                                    ? const Color(0xFF00A09D)
+                                    : const Color(0xFF2D2D2D),
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(
-                                  color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
+                                  color: isSelected
+                                      ? const Color(0xFF00A09D)
+                                      : Colors.white24,
                                 ),
                               ),
                               child: isSelected
-                                  ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                  ? const Icon(Icons.check,
+                                      size: 14, color: Colors.white)
                                   : null,
                             ),
                             const SizedBox(width: 12),
@@ -2398,13 +2564,15 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                                 borderRadius: BorderRadius.circular(4),
                                 image: product['image_url'] != null
                                     ? DecorationImage(
-                                        image: NetworkImage(product['image_url']),
+                                        image:
+                                            NetworkImage(product['image_url']),
                                         fit: BoxFit.cover,
                                       )
                                     : null,
                               ),
                               child: product['image_url'] == null
-                                  ? const Icon(Icons.image, size: 20, color: Colors.white24)
+                                  ? const Icon(Icons.image,
+                                      size: 20, color: Colors.white24)
                                   : null,
                             ),
                             const SizedBox(width: 12),
@@ -2418,29 +2586,39 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                                       Expanded(
                                         child: Text(
                                           product['name']?.toString() ?? '',
-                                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                       if (!isAvailable)
                                         Container(
-                                          margin: const EdgeInsets.only(left: 4),
-                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                          margin:
+                                              const EdgeInsets.only(left: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 4, vertical: 1),
                                           decoration: BoxDecoration(
-                                            color: Colors.red.withValues(alpha: 0.2),
-                                            borderRadius: BorderRadius.circular(2),
+                                            color: Colors.red
+                                                .withValues(alpha: 0.2),
+                                            borderRadius:
+                                                BorderRadius.circular(2),
                                           ),
                                           child: Text(
-                                            stockQty <= 0 ? 'Sin stock' : 'No publicado',
-                                            style: const TextStyle(color: Colors.red, fontSize: 9),
+                                            stockQty <= 0
+                                                ? 'Sin stock'
+                                                : 'No publicado',
+                                            style: const TextStyle(
+                                                color: Colors.red, fontSize: 9),
                                           ),
                                         ),
                                     ],
                                   ),
                                   Text(
                                     'SKU: ${product['sku'] ?? '-'} · \$${NumberFormat('#,###', 'es_CL').format(product['price'] ?? 0)}',
-                                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                    style: const TextStyle(
+                                        color: Colors.white38, fontSize: 11),
                                   ),
                                 ],
                               ),
@@ -2584,8 +2762,9 @@ class _FeaturesBlockControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final features = (data['features'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    
+    final features =
+        (data['features'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2662,7 +2841,8 @@ class _FeatureItem extends StatelessWidget {
             children: [
               Text(
                 '#${index + 1}',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 12),
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5), fontSize: 12),
               ),
               const Spacer(),
               InkWell(
@@ -2731,7 +2911,8 @@ class _GenericBlockControls extends StatelessWidget {
           _EditorTextField(
             label: 'Descripción',
             value: data['description']?.toString() ?? '',
-            onChanged: (v) => provider.updateBlockData(blockId, 'description', v),
+            onChanged: (v) =>
+                provider.updateBlockData(blockId, 'description', v),
             maxLines: 3,
           ),
         ],
@@ -2761,27 +2942,48 @@ class _ThemeTabState extends State<_ThemeTab> {
   // Colors
   final _primaryColorController = TextEditingController();
   final _accentColorController = TextEditingController();
-  
+
   // Typography
   String _headingFont = 'Inter';
   String _bodyFont = 'Inter';
   String _headingSize = 'normal';
   String _bodySize = 'normal';
-  
+
   // Button styles
   String _buttonStyle = 'rounded';
   String _buttonSize = 'medium';
-  
+
   // Background
   String _pageBackground = 'white';
-  
+
   bool _loaded = false;
 
-  final _fonts = ['Inter', 'Roboto', 'Open Sans', 'Montserrat', 'Poppins', 'Lato', 'Oswald', 'Playfair Display'];
+  final _fonts = [
+    'Inter',
+    'Roboto',
+    'Open Sans',
+    'Montserrat',
+    'Poppins',
+    'Lato',
+    'Oswald',
+    'Playfair Display'
+  ];
   final _sizes = {'small': 'Pequeño', 'normal': 'Normal', 'large': 'Grande'};
-  final _buttonStyles = {'rounded': 'Redondeado', 'square': 'Cuadrado', 'pill': 'Pill'};
-  final _buttonSizes = {'small': 'Pequeño', 'medium': 'Mediano', 'large': 'Grande'};
-  final _backgrounds = {'white': 'Blanco', 'light': 'Gris claro', 'dark': 'Oscuro'};
+  final _buttonStyles = {
+    'rounded': 'Redondeado',
+    'square': 'Cuadrado',
+    'pill': 'Pill'
+  };
+  final _buttonSizes = {
+    'small': 'Pequeño',
+    'medium': 'Mediano',
+    'large': 'Grande'
+  };
+  final _backgrounds = {
+    'white': 'Blanco',
+    'light': 'Gris claro',
+    'dark': 'Oscuro'
+  };
 
   @override
   void didChangeDependencies() {
@@ -2794,8 +2996,10 @@ class _ThemeTabState extends State<_ThemeTab> {
 
   void _loadSettings() {
     final service = context.read<WebsiteService>();
-    _primaryColorController.text = service.getSetting('theme_primary_color', '#1B5E20');
-    _accentColorController.text = service.getSetting('theme_accent_color', '#FF6D00');
+    _primaryColorController.text =
+        service.getSetting('theme_primary_color', '#1B5E20');
+    _accentColorController.text =
+        service.getSetting('theme_accent_color', '#FF6D00');
     _headingFont = service.getSetting('heading_font', 'Inter');
     _bodyFont = service.getSetting('body_font', 'Inter');
     _headingSize = service.getSetting('heading_size', 'normal');
@@ -2818,7 +3022,7 @@ class _ThemeTabState extends State<_ThemeTab> {
       'button_size': _buttonSize,
       'page_background': _pageBackground,
     });
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -2864,9 +3068,9 @@ class _ThemeTabState extends State<_ThemeTab> {
               ],
             ),
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // ========== COLORS SECTION ==========
           _SectionHeader('Colores'),
           const SizedBox(height: 12),
@@ -2879,13 +3083,13 @@ class _ThemeTabState extends State<_ThemeTab> {
             label: 'Color de acento',
             controller: _accentColorController,
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // ========== TYPOGRAPHY SECTION ==========
           _SectionHeader('Tipografía'),
           const SizedBox(height: 12),
-          
+
           _buildDropdown(
             label: 'Fuente de títulos',
             value: _headingFont,
@@ -2893,7 +3097,7 @@ class _ThemeTabState extends State<_ThemeTab> {
             onChanged: (v) => setState(() => _headingFont = v!),
           ),
           const SizedBox(height: 12),
-          
+
           _buildDropdown(
             label: 'Tamaño de títulos',
             value: _headingSize,
@@ -2902,7 +3106,7 @@ class _ThemeTabState extends State<_ThemeTab> {
             onChanged: (v) => setState(() => _headingSize = v!),
           ),
           const SizedBox(height: 16),
-          
+
           _buildDropdown(
             label: 'Fuente de texto',
             value: _bodyFont,
@@ -2910,7 +3114,7 @@ class _ThemeTabState extends State<_ThemeTab> {
             onChanged: (v) => setState(() => _bodyFont = v!),
           ),
           const SizedBox(height: 12),
-          
+
           _buildDropdown(
             label: 'Tamaño de texto',
             value: _bodySize,
@@ -2918,13 +3122,13 @@ class _ThemeTabState extends State<_ThemeTab> {
             labels: _sizes,
             onChanged: (v) => setState(() => _bodySize = v!),
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // ========== BUTTON STYLES SECTION ==========
           _SectionHeader('Estilo de botones'),
           const SizedBox(height: 12),
-          
+
           _buildDropdown(
             label: 'Forma',
             value: _buttonStyle,
@@ -2933,7 +3137,7 @@ class _ThemeTabState extends State<_ThemeTab> {
             onChanged: (v) => setState(() => _buttonStyle = v!),
           ),
           const SizedBox(height: 12),
-          
+
           _buildDropdown(
             label: 'Tamaño',
             value: _buttonSize,
@@ -2941,13 +3145,13 @@ class _ThemeTabState extends State<_ThemeTab> {
             labels: _buttonSizes,
             onChanged: (v) => setState(() => _buttonSize = v!),
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // ========== BACKGROUND SECTION ==========
           _SectionHeader('Fondo de página'),
           const SizedBox(height: 12),
-          
+
           _buildDropdown(
             label: 'Color de fondo',
             value: _pageBackground,
@@ -2955,9 +3159,9 @@ class _ThemeTabState extends State<_ThemeTab> {
             labels: _backgrounds,
             onChanged: (v) => setState(() => _pageBackground = v!),
           ),
-          
+
           const SizedBox(height: 32),
-          
+
           // Save button
           SizedBox(
             width: double.infinity,
@@ -2976,7 +3180,7 @@ class _ThemeTabState extends State<_ThemeTab> {
       ),
     );
   }
-  
+
   Widget _buildDropdown({
     required String label,
     required String value,
@@ -3109,21 +3313,24 @@ class _LogoUploaderState extends State<_LogoUploader> {
       setState(() => _isUploading = true);
 
       final bytes = await image.readAsBytes();
-      final fileName = 'logo_${DateTime.now().millisecondsSinceEpoch}_${image.name}';
+      final fileName =
+          'logo_${DateTime.now().millisecondsSinceEpoch}_${image.name}';
       final filePath = 'website-images/$fileName';
 
       final supabase = Supabase.instance.client;
-      
-      await supabase.storage.from(StorageConfig.defaultBucket).uploadBinary(
-        filePath,
-        bytes,
-        fileOptions: FileOptions(
-          contentType: _getContentType(image.name),
-          upsert: true,
-        ),
-      );
 
-      final publicUrl = supabase.storage.from(StorageConfig.defaultBucket).getPublicUrl(filePath);
+      await supabase.storage.from(StorageConfig.defaultBucket).uploadBinary(
+            filePath,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: _getContentType(image.name),
+              upsert: true,
+            ),
+          );
+
+      final publicUrl = supabase.storage
+          .from(StorageConfig.defaultBucket)
+          .getPublicUrl(filePath);
 
       setState(() => _isUploading = false);
       widget.onChanged(publicUrl);
@@ -3154,19 +3361,24 @@ class _LogoUploaderState extends State<_LogoUploader> {
   String _getContentType(String fileName) {
     final ext = fileName.split('.').last.toLowerCase();
     switch (ext) {
-      case 'png': return 'image/png';
+      case 'png':
+        return 'image/png';
       case 'jpg':
-      case 'jpeg': return 'image/jpeg';
-      case 'webp': return 'image/webp';
-      case 'svg': return 'image/svg+xml';
-      default: return 'image/png';
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'webp':
+        return 'image/webp';
+      case 'svg':
+        return 'image/svg+xml';
+      default:
+        return 'image/png';
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final hasLogo = widget.currentUrl != null && widget.currentUrl!.isNotEmpty;
-    
+
     return InkWell(
       onTap: _isUploading ? null : _pickAndUploadLogo,
       borderRadius: BorderRadius.circular(8),
@@ -3177,8 +3389,8 @@ class _LogoUploaderState extends State<_LogoUploader> {
           color: const Color(0xFF2D2D2D),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: _isUploading 
-                ? const Color(0xFF00A09D) 
+            color: _isUploading
+                ? const Color(0xFF00A09D)
                 : Colors.white.withValues(alpha: 0.1),
           ),
         ),
@@ -3206,7 +3418,8 @@ class _LogoUploaderState extends State<_LogoUploader> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.edit, color: Colors.white38, size: 18),
+                            const Icon(Icons.edit,
+                                color: Colors.white38, size: 18),
                             const SizedBox(height: 4),
                             Text(
                               'Cambiar',
@@ -3223,7 +3436,8 @@ class _LogoUploaderState extends State<_LogoUploader> {
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.add_photo_alternate, color: Colors.white38, size: 28),
+                      const Icon(Icons.add_photo_alternate,
+                          color: Colors.white38, size: 28),
                       const SizedBox(height: 6),
                       Text(
                         'Subir logo',
@@ -3284,9 +3498,10 @@ class _EditorTextField extends StatefulWidget {
 
 class _EditorTextFieldState extends State<_EditorTextField> {
   TextEditingController? _internalController;
-  
+
   TextEditingController get _effectiveController {
-    return widget.controller ?? (_internalController ??= TextEditingController(text: widget.value));
+    return widget.controller ??
+        (_internalController ??= TextEditingController(text: widget.value));
   }
 
   @override
@@ -3299,12 +3514,13 @@ class _EditorTextFieldState extends State<_EditorTextField> {
       _internalController!.addListener(_onControllerChanged);
     }
   }
-  
+
   void _onControllerChanged() {
     // This fires on ANY text change including paste
     final text = _effectiveController.text;
     if (text != widget.value) {
-      debugPrint('📝 [_EditorTextField] controller listener: label="${widget.label}", value="$text"');
+      debugPrint(
+          '📝 [_EditorTextField] controller listener: label="${widget.label}", value="$text"');
       widget.onChanged(text);
     }
   }
@@ -3314,7 +3530,8 @@ class _EditorTextFieldState extends State<_EditorTextField> {
     super.didUpdateWidget(oldWidget);
     // Only update internal controller if we own it and value changed externally
     if (widget.controller == null && _internalController != null) {
-      if (oldWidget.value != widget.value && _internalController!.text != widget.value) {
+      if (oldWidget.value != widget.value &&
+          _internalController!.text != widget.value) {
         // Remove listener temporarily to avoid triggering onChanged
         _internalController!.removeListener(_onControllerChanged);
         _internalController!.text = widget.value;
@@ -3352,14 +3569,17 @@ class _EditorTextFieldState extends State<_EditorTextField> {
             hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
             filled: true,
             fillColor: const Color(0xFF2D2D2D),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(6),
-              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              borderSide:
+                  BorderSide(color: Colors.white.withValues(alpha: 0.1)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(6),
-              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              borderSide:
+                  BorderSide(color: Colors.white.withValues(alpha: 0.1)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(6),
@@ -3367,7 +3587,8 @@ class _EditorTextFieldState extends State<_EditorTextField> {
             ),
           ),
           onChanged: (v) {
-            debugPrint('📝 [_EditorTextField] onChanged: label="${widget.label}", value="$v"');
+            debugPrint(
+                '📝 [_EditorTextField] onChanged: label="${widget.label}", value="$v"');
             widget.onChanged(v);
           },
         ),
@@ -3394,7 +3615,8 @@ class _MiniTextField extends StatelessWidget {
       style: const TextStyle(color: Colors.white, fontSize: 12),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
+        hintStyle:
+            TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
         filled: true,
         fillColor: const Color(0xFF1E1E1E),
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -3468,7 +3690,8 @@ class _EditorSlider extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            Text(label,
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
@@ -3520,7 +3743,8 @@ class _EditorDropdown extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(label,
+            style: const TextStyle(color: Colors.white70, fontSize: 12)),
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -3535,11 +3759,14 @@ class _EditorDropdown extends StatelessWidget {
               isExpanded: true,
               dropdownColor: const Color(0xFF2D2D2D),
               style: const TextStyle(color: Colors.white, fontSize: 13),
-              icon: const Icon(Icons.expand_more, color: Colors.white54, size: 18),
-              items: options.map((opt) => DropdownMenuItem(
-                value: opt.$1,
-                child: Text(opt.$2),
-              )).toList(),
+              icon: const Icon(Icons.expand_more,
+                  color: Colors.white54, size: 18),
+              items: options
+                  .map((opt) => DropdownMenuItem(
+                        value: opt.$1,
+                        child: Text(opt.$2),
+                      ))
+                  .toList(),
               onChanged: (v) => onChanged(v ?? value),
             ),
           ),
@@ -3585,26 +3812,29 @@ class _ImagePickerState extends State<_ImagePicker> {
 
       // Read file bytes
       final bytes = await image.readAsBytes();
-      final fileName = 'website_${DateTime.now().millisecondsSinceEpoch}_${image.name}';
+      final fileName =
+          'website_${DateTime.now().millisecondsSinceEpoch}_${image.name}';
       final filePath = 'website-images/$fileName';
 
       // Upload to Supabase Storage
       final supabase = Supabase.instance.client;
-      
+
       // Use the standard vinabike-assets bucket
       await supabase.storage.from(StorageConfig.defaultBucket).uploadBinary(
-        filePath,
-        bytes,
-        fileOptions: FileOptions(
-          contentType: _getContentType(image.name),
-          upsert: true,
-        ),
-      );
+            filePath,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: _getContentType(image.name),
+              upsert: true,
+            ),
+          );
 
       setState(() => _uploadProgress = 0.8);
 
       // Get public URL
-      final publicUrl = supabase.storage.from(StorageConfig.defaultBucket).getPublicUrl(filePath);
+      final publicUrl = supabase.storage
+          .from(StorageConfig.defaultBucket)
+          .getPublicUrl(filePath);
 
       setState(() {
         _isUploading = false;
@@ -3656,7 +3886,7 @@ class _ImagePickerState extends State<_ImagePicker> {
   @override
   Widget build(BuildContext context) {
     final hasImage = widget.currentUrl != null && widget.currentUrl!.isNotEmpty;
-    
+
     return Column(
       children: [
         // Image preview / upload area
@@ -3670,8 +3900,8 @@ class _ImagePickerState extends State<_ImagePicker> {
               color: const Color(0xFF2D2D2D),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: _isUploading 
-                    ? const Color(0xFF00A09D) 
+                color: _isUploading
+                    ? const Color(0xFF00A09D)
                     : Colors.white.withValues(alpha: 0.1),
                 width: _isUploading ? 2 : 1,
               ),
@@ -3691,7 +3921,8 @@ class _ImagePickerState extends State<_ImagePicker> {
                         height: 32,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00A09D)),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Color(0xFF00A09D)),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -3735,7 +3966,8 @@ class _ImagePickerState extends State<_ImagePicker> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF00A09D).withValues(alpha: 0.1),
+                              color: const Color(0xFF00A09D)
+                                  .withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(50),
                             ),
                             child: const Icon(
@@ -3783,7 +4015,7 @@ class _ImagePickerState extends State<_ImagePicker> {
         child: Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: isDestructive 
+            color: isDestructive
                 ? Colors.red.shade700.withValues(alpha: 0.9)
                 : Colors.black.withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(4),
@@ -3832,10 +4064,12 @@ class _ColorField extends StatelessWidget {
                 style: const TextStyle(color: Colors.white, fontSize: 12),
                 decoration: InputDecoration(
                   hintText: '#RRGGBB',
-                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
+                  hintStyle: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
                   filled: true,
                   fillColor: const Color(0xFF2D2D2D),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
                     borderSide: BorderSide.none,
@@ -3879,16 +4113,21 @@ class _CategoryGridBlockControls extends StatefulWidget {
   });
 
   @override
-  State<_CategoryGridBlockControls> createState() => _CategoryGridBlockControlsState();
+  State<_CategoryGridBlockControls> createState() =>
+      _CategoryGridBlockControlsState();
 }
 
-class _CategoryGridBlockControlsState extends State<_CategoryGridBlockControls> {
+class _CategoryGridBlockControlsState
+    extends State<_CategoryGridBlockControls> {
   int _selectedCategoryIndex = 0;
 
   List<Map<String, dynamic>> get _categories {
     final raw = widget.data['categories'];
     if (raw is List) {
-      return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      return raw
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
     }
     return [];
   }
@@ -3950,7 +4189,12 @@ class _CategoryGridBlockControlsState extends State<_CategoryGridBlockControls> 
           onChanged: (v) => _updateField('subtitle', v),
         ),
         const SizedBox(height: 20),
-        Text('Categorías', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+        Text('Categorías',
+            style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1)),
         const SizedBox(height: 8),
         // Category selector chips
         SingleChildScrollView(
@@ -3966,12 +4210,17 @@ class _CategoryGridBlockControlsState extends State<_CategoryGridBlockControls> 
                   child: GestureDetector(
                     onTap: () => setState(() => _selectedCategoryIndex = index),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+                        color: isSelected
+                            ? const Color(0xFF00A09D)
+                            : const Color(0xFF2D2D2D),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
+                          color: isSelected
+                              ? const Color(0xFF00A09D)
+                              : Colors.white24,
                         ),
                       ),
                       child: Text(
@@ -3994,7 +4243,8 @@ class _CategoryGridBlockControlsState extends State<_CategoryGridBlockControls> 
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.white24),
                   ),
-                  child: const Icon(Icons.add, color: Color(0xFF00A09D), size: 16),
+                  child:
+                      const Icon(Icons.add, color: Color(0xFF00A09D), size: 16),
                 ),
               ),
             ],
@@ -4002,53 +4252,75 @@ class _CategoryGridBlockControlsState extends State<_CategoryGridBlockControls> 
         ),
         const SizedBox(height: 16),
         // Selected category editor
-        if (_categories.isNotEmpty && _selectedCategoryIndex < _categories.length) ...[
+        if (_categories.isNotEmpty &&
+            _selectedCategoryIndex < _categories.length) ...[
           // Image picker for this category
           _SectionHeader('Imagen de categoría'),
           const SizedBox(height: 8),
           _ImagePicker(
-            currentUrl: _categories[_selectedCategoryIndex]['imageUrl']?.toString(),
-            onChanged: (url) => _updateCategory(_selectedCategoryIndex, 'imageUrl', url),
+            currentUrl:
+                _categories[_selectedCategoryIndex]['imageUrl']?.toString(),
+            onChanged: (url) =>
+                _updateCategory(_selectedCategoryIndex, 'imageUrl', url),
           ),
           const SizedBox(height: 16),
           _EditorTextField(
             label: 'Título categoría',
-            value: _categories[_selectedCategoryIndex]['title']?.toString() ?? '',
-            onChanged: (v) => _updateCategory(_selectedCategoryIndex, 'title', v),
+            value:
+                _categories[_selectedCategoryIndex]['title']?.toString() ?? '',
+            onChanged: (v) =>
+                _updateCategory(_selectedCategoryIndex, 'title', v),
           ),
           const SizedBox(height: 12),
           _EditorTextField(
             label: 'Subtítulo',
-            value: _categories[_selectedCategoryIndex]['subtitle']?.toString() ?? '',
-            onChanged: (v) => _updateCategory(_selectedCategoryIndex, 'subtitle', v),
+            value:
+                _categories[_selectedCategoryIndex]['subtitle']?.toString() ??
+                    '',
+            onChanged: (v) =>
+                _updateCategory(_selectedCategoryIndex, 'subtitle', v),
           ),
           const SizedBox(height: 12),
           _EditorTextField(
             label: 'Texto botón',
-            value: _categories[_selectedCategoryIndex]['ctaText']?.toString() ?? '',
-            onChanged: (v) => _updateCategory(_selectedCategoryIndex, 'ctaText', v),
+            value: _categories[_selectedCategoryIndex]['ctaText']?.toString() ??
+                '',
+            onChanged: (v) =>
+                _updateCategory(_selectedCategoryIndex, 'ctaText', v),
           ),
           const SizedBox(height: 12),
           _EditorTextField(
             label: 'Link botón',
-            value: _categories[_selectedCategoryIndex]['ctaLink']?.toString() ?? '',
-            onChanged: (v) => _updateCategory(_selectedCategoryIndex, 'ctaLink', v),
+            value: _categories[_selectedCategoryIndex]['ctaLink']?.toString() ??
+                '',
+            onChanged: (v) =>
+                _updateCategory(_selectedCategoryIndex, 'ctaLink', v),
           ),
           const SizedBox(height: 12),
           // Size selector
-          Text('Tamaño', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+          Text('Tamaño',
+              style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1)),
           const SizedBox(height: 8),
           Row(
             children: ['large', 'medium'].map((size) {
-              final isSelected = _categories[_selectedCategoryIndex]['size'] == size;
+              final isSelected =
+                  _categories[_selectedCategoryIndex]['size'] == size;
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: GestureDetector(
-                  onTap: () => _updateCategory(_selectedCategoryIndex, 'size', size),
+                  onTap: () =>
+                      _updateCategory(_selectedCategoryIndex, 'size', size),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+                      color: isSelected
+                          ? const Color(0xFF00A09D)
+                          : const Color(0xFF2D2D2D),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -4093,7 +4365,8 @@ class _VideoBannerBlockControls extends StatefulWidget {
   });
 
   @override
-  State<_VideoBannerBlockControls> createState() => _VideoBannerBlockControlsState();
+  State<_VideoBannerBlockControls> createState() =>
+      _VideoBannerBlockControlsState();
 }
 
 class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
@@ -4134,18 +4407,22 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
           .select('tenant_id')
           .eq('user_id', user.id)
           .single();
-      
+
       final tenantId = profileResponse['tenant_id'] as String;
 
       // Upload to Supabase Storage
-      final fileName = 'video_${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final fileName =
+          'video_${DateTime.now().millisecondsSinceEpoch}_${file.name}';
       final storagePath = '$tenantId/videos/$fileName';
 
       await Supabase.instance.client.storage
           .from('website-assets')
-          .uploadBinary(storagePath, file.bytes!, fileOptions: FileOptions(
-            contentType: file.extension == 'mp4' ? 'video/mp4' : 'video/${file.extension ?? 'mp4'}',
-          ));
+          .uploadBinary(storagePath, file.bytes!,
+              fileOptions: FileOptions(
+                contentType: file.extension == 'mp4'
+                    ? 'video/mp4'
+                    : 'video/${file.extension ?? 'mp4'}',
+              ));
 
       // Get public URL
       final publicUrl = Supabase.instance.client.storage
@@ -4158,14 +4435,18 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Video subido correctamente'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Video subido correctamente'),
+              backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       debugPrint('[VideoBanner] Error uploading video: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al subir video: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error al subir video: $e'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -4177,8 +4458,10 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
 
   @override
   Widget build(BuildContext context) {
-    final hasVideoFile = (widget.data['videoFileUrl']?.toString() ?? '').isNotEmpty;
-    final hasYoutubeUrl = (widget.data['videoUrl']?.toString() ?? '').isNotEmpty;
+    final hasVideoFile =
+        (widget.data['videoFileUrl']?.toString() ?? '').isNotEmpty;
+    final hasYoutubeUrl =
+        (widget.data['videoUrl']?.toString() ?? '').isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -4202,16 +4485,21 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
           onChanged: (v) => _updateField('imageUrl', v),
         ),
         const SizedBox(height: 20),
-        
+
         // Video section header
-        Text('VIDEO DE FONDO', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+        Text('VIDEO DE FONDO',
+            style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1)),
         const SizedBox(height: 8),
         Text(
           'El video se reproducirá automáticamente, sin sonido, en loop',
           style: TextStyle(color: Colors.white38, fontSize: 11),
         ),
         const SizedBox(height: 12),
-        
+
         // YouTube URL option
         _EditorTextField(
           label: 'URL de YouTube',
@@ -4225,32 +4513,38 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
           },
           hint: 'https://youtube.com/watch?v=...',
         ),
-        
+
         const SizedBox(height: 12),
-        
+
         // Divider with "o" (or)
         Row(
           children: [
             Expanded(child: Divider(color: Colors.white24)),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('o', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              child: Text('o',
+                  style: TextStyle(color: Colors.white38, fontSize: 12)),
             ),
             Expanded(child: Divider(color: Colors.white24)),
           ],
         ),
-        
+
         const SizedBox(height: 12),
-        
+
         // Upload video file button
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
             onPressed: _isUploading ? null : _uploadVideoFile,
-            icon: _isUploading 
-                ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            icon: _isUploading
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.upload_file, size: 18),
-            label: Text(_isUploading ? 'Subiendo...' : 'Subir archivo de video'),
+            label:
+                Text(_isUploading ? 'Subiendo...' : 'Subir archivo de video'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00A09D),
               foregroundColor: Colors.white,
@@ -4258,7 +4552,7 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
             ),
           ),
         ),
-        
+
         // Show current video file if exists
         if (hasVideoFile) ...[
           const SizedBox(height: 8),
@@ -4280,7 +4574,8 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.delete_outline, color: Colors.red.shade300, size: 18),
+                  icon: Icon(Icons.delete_outline,
+                      color: Colors.red.shade300, size: 18),
                   onPressed: () => _updateField('videoFileUrl', ''),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -4290,7 +4585,7 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
             ),
           ),
         ],
-        
+
         // Show YouTube status if exists
         if (hasYoutubeUrl && !hasVideoFile) ...[
           const SizedBox(height: 8),
@@ -4317,11 +4612,12 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
         ],
 
         const SizedBox(height: 20),
-        
+
         // Show CTA toggle
         Row(
           children: [
-            const Text('Mostrar botón', style: TextStyle(color: Colors.white70, fontSize: 13)),
+            const Text('Mostrar botón',
+                style: TextStyle(color: Colors.white70, fontSize: 13)),
             const Spacer(),
             Switch(
               value: widget.data['showCta'] != false,
@@ -4350,7 +4646,12 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
           ),
         ],
         const SizedBox(height: 16),
-        Text('Opacidad overlay', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+        Text('Opacidad overlay',
+            style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1)),
         Slider(
           value: (widget.data['overlayOpacity'] as num?)?.toDouble() ?? 0.5,
           min: 0,
@@ -4379,10 +4680,12 @@ class _PartnersBannerBlockControls extends StatefulWidget {
   });
 
   @override
-  State<_PartnersBannerBlockControls> createState() => _PartnersBannerBlockControlsState();
+  State<_PartnersBannerBlockControls> createState() =>
+      _PartnersBannerBlockControlsState();
 }
 
-class _PartnersBannerBlockControlsState extends State<_PartnersBannerBlockControls> {
+class _PartnersBannerBlockControlsState
+    extends State<_PartnersBannerBlockControls> {
   List<String> get _items {
     final raw = widget.data['items'];
     if (raw is List) {
@@ -4434,7 +4737,12 @@ class _PartnersBannerBlockControlsState extends State<_PartnersBannerBlockContro
           onChanged: (v) => _updateField('imageUrl', v),
         ),
         const SizedBox(height: 20),
-        Text('Elementos de lista', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+        Text('Elementos de lista',
+            style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1)),
         const SizedBox(height: 8),
         ..._items.asMap().entries.map((entry) {
           final index = entry.key;
@@ -4452,7 +4760,8 @@ class _PartnersBannerBlockControlsState extends State<_PartnersBannerBlockContro
                 ),
                 if (_items.length > 1)
                   IconButton(
-                    icon: Icon(Icons.remove_circle_outline, color: Colors.red.shade300, size: 20),
+                    icon: Icon(Icons.remove_circle_outline,
+                        color: Colors.red.shade300, size: 20),
                     onPressed: () => _removeItem(index),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -4487,7 +4796,8 @@ class _BrandLogosBlockControls extends StatefulWidget {
   });
 
   @override
-  State<_BrandLogosBlockControls> createState() => _BrandLogosBlockControlsState();
+  State<_BrandLogosBlockControls> createState() =>
+      _BrandLogosBlockControlsState();
 }
 
 class _BrandLogosBlockControlsState extends State<_BrandLogosBlockControls> {
@@ -4624,7 +4934,7 @@ class _BrandLogosBlockControlsState extends State<_BrandLogosBlockControls> {
           ],
         ),
         const SizedBox(height: 20),
-        
+
         // Horizontal brand navigator
         Row(
           children: [
@@ -4683,7 +4993,7 @@ class _BrandLogosBlockControlsState extends State<_BrandLogosBlockControls> {
           ],
         ),
         const SizedBox(height: 12),
-        
+
         // Navigation arrows + current brand indicator
         if (brands.isNotEmpty) ...[
           Row(
@@ -4701,9 +5011,8 @@ class _BrandLogosBlockControlsState extends State<_BrandLogosBlockControls> {
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
-                      color: _currentIndex > 0
-                          ? Colors.white24
-                          : Colors.white12,
+                      color:
+                          _currentIndex > 0 ? Colors.white24 : Colors.white12,
                     ),
                   ),
                   child: Icon(
@@ -4724,9 +5033,8 @@ class _BrandLogosBlockControlsState extends State<_BrandLogosBlockControls> {
                     height: 8,
                     margin: const EdgeInsets.symmetric(horizontal: 3),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFF00A09D)
-                          : Colors.white24,
+                      color:
+                          isSelected ? const Color(0xFF00A09D) : Colors.white24,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -4753,21 +5061,25 @@ class _BrandLogosBlockControlsState extends State<_BrandLogosBlockControls> {
                   child: Icon(
                     Icons.chevron_right,
                     size: 20,
-                    color: _currentIndex < brands.length - 1 ? Colors.white70 : Colors.white24,
+                    color: _currentIndex < brands.length - 1
+                        ? Colors.white70
+                        : Colors.white24,
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          
+
           // Current brand editor (compact)
           _BrandLogoEditorCompact(
             index: _currentIndex,
             brand: brands[_currentIndex],
             totalBrands: brands.length,
-            onUpdateField: (field, value) => _updateBrand(_currentIndex, field, value),
-            onRemove: brands.length > 1 ? () => _removeBrand(_currentIndex) : null,
+            onUpdateField: (field, value) =>
+                _updateBrand(_currentIndex, field, value),
+            onRemove:
+                brands.length > 1 ? () => _removeBrand(_currentIndex) : null,
           ),
         ] else ...[
           // Empty state
@@ -4780,7 +5092,8 @@ class _BrandLogosBlockControlsState extends State<_BrandLogosBlockControls> {
             ),
             child: Column(
               children: [
-                Icon(Icons.branding_watermark_outlined, size: 32, color: Colors.white38),
+                Icon(Icons.branding_watermark_outlined,
+                    size: 32, color: Colors.white38),
                 const SizedBox(height: 8),
                 Text(
                   'Sin marcas',
@@ -4827,7 +5140,8 @@ class _LogoSizeOption extends StatelessWidget {
           width: 40,
           height: 36,
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
+            color:
+                isSelected ? const Color(0xFF00A09D) : const Color(0xFF2D2D2D),
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
@@ -4874,39 +5188,40 @@ class _BrandLogoEditorState extends State<_BrandLogoEditor> {
 
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
-    
+
     try {
       final pickedFile = await picker.pickImage(
         source: ImageSource.gallery,
         maxWidth: 400,
         maxHeight: 200,
       );
-      
+
       if (pickedFile == null) return;
-      
+
       setState(() => _isUploading = true);
-      
+
       final bytes = await pickedFile.readAsBytes();
       final fileName = pickedFile.name;
-      
+
       // Upload to Supabase Storage
       final supabase = Supabase.instance.client;
       final uniqueName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
       final path = 'brand-logos/$uniqueName';
-      
+
       await supabase.storage.from('vinabike-assets').uploadBinary(
-        path,
-        bytes,
-        fileOptions: const FileOptions(
-          cacheControl: '3600',
-          upsert: true,
-        ),
-      );
-      
-      final publicUrl = supabase.storage.from('vinabike-assets').getPublicUrl(path);
-      
+            path,
+            bytes,
+            fileOptions: const FileOptions(
+              cacheControl: '3600',
+              upsert: true,
+            ),
+          );
+
+      final publicUrl =
+          supabase.storage.from('vinabike-assets').getPublicUrl(path);
+
       widget.onUpdateField('imageUrl', publicUrl);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -4970,10 +5285,12 @@ class _BrandLogoEditorState extends State<_BrandLogoEditor> {
               const Spacer(),
               if (widget.totalBrands > 1)
                 IconButton(
-                  icon: Icon(Icons.delete_outline, size: 16, color: Colors.red.shade300),
+                  icon: Icon(Icons.delete_outline,
+                      size: 16, color: Colors.red.shade300),
                   onPressed: widget.onRemove,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints:
+                      const BoxConstraints(minWidth: 28, minHeight: 28),
                   tooltip: 'Eliminar',
                 ),
             ],
@@ -4989,11 +5306,12 @@ class _BrandLogoEditorState extends State<_BrandLogoEditor> {
                 color: Colors.white.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: imageUrl.isNotEmpty 
-                      ? const Color(0xFF00A09D) 
+                  color: imageUrl.isNotEmpty
+                      ? const Color(0xFF00A09D)
                       : Colors.white.withValues(alpha: 0.2),
                   width: imageUrl.isNotEmpty ? 2 : 1,
-                  style: imageUrl.isEmpty ? BorderStyle.solid : BorderStyle.solid,
+                  style:
+                      imageUrl.isEmpty ? BorderStyle.solid : BorderStyle.solid,
                 ),
               ),
               child: _isUploading
@@ -5017,7 +5335,8 @@ class _BrandLogoEditorState extends State<_BrandLogoEditor> {
                                   imageUrl,
                                   fit: BoxFit.contain,
                                   errorBuilder: (context, error, stackTrace) {
-                                    return const Icon(Icons.broken_image, color: Colors.white38, size: 32);
+                                    return const Icon(Icons.broken_image,
+                                        color: Colors.white38, size: 32);
                                   },
                                 ),
                               ),
@@ -5031,7 +5350,8 @@ class _BrandLogoEditorState extends State<_BrandLogoEditor> {
                                   color: const Color(0xFF00A09D),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: const Icon(Icons.edit, size: 12, color: Colors.white),
+                                child: const Icon(Icons.edit,
+                                    size: 12, color: Colors.white),
                               ),
                             ),
                           ],
@@ -5039,7 +5359,9 @@ class _BrandLogoEditorState extends State<_BrandLogoEditor> {
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.cloud_upload_outlined, size: 28, color: Colors.white.withValues(alpha: 0.4)),
+                            Icon(Icons.cloud_upload_outlined,
+                                size: 28,
+                                color: Colors.white.withValues(alpha: 0.4)),
                             const SizedBox(height: 4),
                             Text(
                               'Click para subir logo',
@@ -5098,7 +5420,8 @@ class _BrandLogoEditorCompact extends StatefulWidget {
   });
 
   @override
-  State<_BrandLogoEditorCompact> createState() => _BrandLogoEditorCompactState();
+  State<_BrandLogoEditorCompact> createState() =>
+      _BrandLogoEditorCompactState();
 }
 
 class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
@@ -5106,39 +5429,40 @@ class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
 
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
-    
+
     try {
       final pickedFile = await picker.pickImage(
         source: ImageSource.gallery,
         maxWidth: 400,
         maxHeight: 200,
       );
-      
+
       if (pickedFile == null) return;
-      
+
       setState(() => _isUploading = true);
-      
+
       final bytes = await pickedFile.readAsBytes();
       final fileName = pickedFile.name;
-      
+
       // Upload to Supabase Storage
       final supabase = Supabase.instance.client;
       final uniqueName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
       final path = 'brand-logos/$uniqueName';
-      
+
       await supabase.storage.from('vinabike-assets').uploadBinary(
-        path,
-        bytes,
-        fileOptions: const FileOptions(
-          cacheControl: '3600',
-          upsert: true,
-        ),
-      );
-      
-      final publicUrl = supabase.storage.from('vinabike-assets').getPublicUrl(path);
-      
+            path,
+            bytes,
+            fileOptions: const FileOptions(
+              cacheControl: '3600',
+              upsert: true,
+            ),
+          );
+
+      final publicUrl =
+          supabase.storage.from('vinabike-assets').getPublicUrl(path);
+
       widget.onUpdateField('imageUrl', publicUrl);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -5175,7 +5499,8 @@ class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF00A09D).withValues(alpha: 0.3)),
+        border:
+            Border.all(color: const Color(0xFF00A09D).withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5208,13 +5533,14 @@ class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
                       color: Colors.red.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: Icon(Icons.delete_outline, size: 16, color: Colors.red.shade300),
+                    child: Icon(Icons.delete_outline,
+                        size: 16, color: Colors.red.shade300),
                   ),
                 ),
             ],
           ),
           const SizedBox(height: 12),
-          
+
           // Image upload area
           GestureDetector(
             onTap: _isUploading ? null : _pickAndUploadImage,
@@ -5225,8 +5551,8 @@ class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
                 color: Colors.white.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: imageUrl.isNotEmpty 
-                      ? const Color(0xFF00A09D) 
+                  color: imageUrl.isNotEmpty
+                      ? const Color(0xFF00A09D)
                       : Colors.white.withValues(alpha: 0.2),
                   width: imageUrl.isNotEmpty ? 2 : 1,
                 ),
@@ -5252,7 +5578,8 @@ class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
                                   imageUrl,
                                   fit: BoxFit.contain,
                                   errorBuilder: (context, error, stackTrace) {
-                                    return const Icon(Icons.broken_image, color: Colors.white38, size: 32);
+                                    return const Icon(Icons.broken_image,
+                                        color: Colors.white38, size: 32);
                                   },
                                 ),
                               ),
@@ -5266,7 +5593,8 @@ class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
                                   color: const Color(0xFF00A09D),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: const Icon(Icons.edit, size: 12, color: Colors.white),
+                                child: const Icon(Icons.edit,
+                                    size: 12, color: Colors.white),
                               ),
                             ),
                           ],
@@ -5274,7 +5602,9 @@ class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.cloud_upload_outlined, size: 32, color: Colors.white.withValues(alpha: 0.4)),
+                            Icon(Icons.cloud_upload_outlined,
+                                size: 32,
+                                color: Colors.white.withValues(alpha: 0.4)),
                             const SizedBox(height: 6),
                             Text(
                               'Click para subir logo',
@@ -5295,7 +5625,7 @@ class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
             ),
           ),
           const SizedBox(height: 12),
-          
+
           // Name field
           _EditorTextField(
             label: 'Nombre (opcional)',
@@ -5304,7 +5634,7 @@ class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
             hint: 'Ej: Shimano, SRAM...',
           ),
           const SizedBox(height: 8),
-          
+
           // Link field
           _EditorTextField(
             label: 'Enlace (opcional)',
@@ -5333,19 +5663,26 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   final _logoUrlController = TextEditingController();
   final _topBannerController = TextEditingController();
   final _headerBgColorController = TextEditingController();
-  
+
   // Header style options
   String _headerStyle = 'solid';
   String _headerColorMode = 'light';
   bool _showTopBanner = false;
   bool _headerShadow = true;
   List<Map<String, String>> _navLinks = [];
-  
+
   bool _loaded = false;
   bool _hasLocalChanges = false;
 
-  final _headerStyles = {'solid': 'Sólido', 'transparent': 'Transparente (sobre hero)', 'sticky': 'Fijo al hacer scroll'};
-  final _headerColorModes = {'light': 'Claro (texto oscuro)', 'dark': 'Oscuro (texto claro)'};
+  final _headerStyles = {
+    'solid': 'Sólido',
+    'transparent': 'Transparente (sobre hero)',
+    'sticky': 'Fijo al hacer scroll'
+  };
+  final _headerColorModes = {
+    'light': 'Claro (texto oscuro)',
+    'dark': 'Oscuro (texto claro)'
+  };
 
   @override
   void initState() {
@@ -5363,17 +5700,18 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       _syncPendingSettingsToProvider();
     }
   }
-  
+
   void _markChanged() {
     if (!_hasLocalChanges) {
       _hasLocalChanges = true;
     }
     _syncPendingSettingsToProvider();
   }
-  
+
   /// Sync current header settings to provider for saving with main button
   void _syncPendingSettingsToProvider() {
-    debugPrint('🔧 [HeaderSettings] Syncing to provider: header_show_top_banner = $_showTopBanner');
+    debugPrint(
+        '🔧 [HeaderSettings] Syncing to provider: header_show_top_banner = $_showTopBanner');
     widget.provider.updateHeaderSettings({
       'store_name': _storeNameController.text,
       'logo_url': _logoUrlController.text,
@@ -5400,22 +5738,27 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     final service = context.read<WebsiteService>();
     _storeNameController.text = service.getSetting('store_name', '');
     _logoUrlController.text = service.getSetting('logo_url', '');
-    _topBannerController.text = service.getSetting('top_banner_text', 'Envíos a todo Chile');
-    _headerBgColorController.text = service.getSetting('header_bg_color', '#FFFFFF');
-    
+    _topBannerController.text =
+        service.getSetting('top_banner_text', 'Envíos a todo Chile');
+    _headerBgColorController.text =
+        service.getSetting('header_bg_color', '#FFFFFF');
+
     _headerStyle = service.getSetting('header_style', 'solid');
     _headerColorMode = service.getSetting('header_color_mode', 'light');
-    final rawBannerValue = service.getSetting('header_show_top_banner', 'false');
+    final rawBannerValue =
+        service.getSetting('header_show_top_banner', 'false');
     _showTopBanner = rawBannerValue == 'true';
-    debugPrint('🔧 [HeaderSettings] _loadSettings: rawBannerValue="$rawBannerValue" → _showTopBanner=$_showTopBanner');
+    debugPrint(
+        '🔧 [HeaderSettings] _loadSettings: rawBannerValue="$rawBannerValue" → _showTopBanner=$_showTopBanner');
     _headerShadow = service.getSetting('header_shadow', 'true') == 'true';
-    
+
     // Parse nav links from JSON
     final navLinksJson = service.getSetting('header_nav_links', '');
     if (navLinksJson.isNotEmpty) {
       try {
         final decoded = jsonDecode(navLinksJson) as List;
-        _navLinks = decoded.map((e) => Map<String, String>.from(e as Map)).toList();
+        _navLinks =
+            decoded.map((e) => Map<String, String>.from(e as Map)).toList();
       } catch (_) {
         _navLinks = _getDefaultNavLinks();
       }
@@ -5423,7 +5766,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       _navLinks = _getDefaultNavLinks();
     }
   }
-  
+
   List<Map<String, String>> _getDefaultNavLinks() {
     return [
       {'label': 'Inicio', 'url': '/tienda'},
@@ -5457,7 +5800,8 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
                   color: Colors.blue.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.web_asset, color: Colors.blue, size: 20),
+                child:
+                    const Icon(Icons.web_asset, color: Colors.blue, size: 20),
               ),
               const SizedBox(width: 12),
               const Expanded(
@@ -5481,9 +5825,9 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Logo section
           _SectionHeader('Logo'),
           const SizedBox(height: 12),
@@ -5495,9 +5839,9 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
               setState(() {});
             },
           ),
-          
+
           const SizedBox(height: 20),
-          
+
           // Store name
           _EditorTextField(
             label: 'Nombre de la tienda',
@@ -5506,9 +5850,9 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
             onChanged: (_) {},
             hint: 'Mi Tienda',
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Top banner text
           _EditorTextField(
             label: 'Texto del banner superior',
@@ -5517,13 +5861,13 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
             onChanged: (_) {},
             hint: 'Envíos gratis en compras sobre \$50.000',
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // ========== HEADER STYLE SECTION ==========
           _SectionHeader('Estilo del header'),
           const SizedBox(height: 12),
-          
+
           // Header style dropdown
           _buildDropdown(
             label: 'Modo de visualización',
@@ -5536,7 +5880,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
             },
           ),
           const SizedBox(height: 12),
-          
+
           // Color mode dropdown
           _buildDropdown(
             label: 'Modo de color',
@@ -5549,20 +5893,21 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
             },
           ),
           const SizedBox(height: 12),
-          
+
           // Background color
           _ColorField(
             label: 'Color de fondo',
             controller: _headerBgColorController,
           ),
           const SizedBox(height: 16),
-          
+
           // Toggles
           _buildSwitch(
             label: 'Mostrar banner superior',
             value: _showTopBanner,
             onChanged: (v) {
-              debugPrint('🔧 [HeaderSettings] Toggling showTopBanner: $_showTopBanner → $v');
+              debugPrint(
+                  '🔧 [HeaderSettings] Toggling showTopBanner: $_showTopBanner → $v');
               setState(() {
                 _showTopBanner = v;
                 _hasLocalChanges = true;
@@ -5587,13 +5932,13 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
               });
             },
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // ========== NAVIGATION LINKS SECTION ==========
           _SectionHeader('Links de navegación'),
           const SizedBox(height: 12),
-          
+
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -5616,9 +5961,11 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
                     ),
                     IconButton(
                       onPressed: _addNavLink,
-                      icon: const Icon(Icons.add, color: Colors.white70, size: 18),
+                      icon: const Icon(Icons.add,
+                          color: Colors.white70, size: 18),
                       tooltip: 'Agregar link',
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      constraints:
+                          const BoxConstraints(minWidth: 32, minHeight: 32),
                       padding: EdgeInsets.zero,
                     ),
                   ],
@@ -5662,9 +6009,9 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
               ],
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Info text - changes are saved with main button
           Container(
             padding: const EdgeInsets.all(12),
@@ -5690,7 +6037,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       ),
     );
   }
-  
+
   Widget _buildDropdown({
     required String label,
     required String value,
@@ -5701,7 +6048,8 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(label,
+            style: const TextStyle(color: Colors.white70, fontSize: 12)),
         const SizedBox(height: 6),
         Container(
           decoration: BoxDecoration(
@@ -5716,10 +6064,12 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
               isExpanded: true,
               dropdownColor: const Color(0xFF2D2D2D),
               style: const TextStyle(color: Colors.white, fontSize: 14),
-              items: items.map((item) => DropdownMenuItem(
-                value: item,
-                child: Text(labels?[item] ?? item),
-              )).toList(),
+              items: items
+                  .map((item) => DropdownMenuItem(
+                        value: item,
+                        child: Text(labels?[item] ?? item),
+                      ))
+                  .toList(),
               onChanged: onChanged,
             ),
           ),
@@ -5727,7 +6077,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       ],
     );
   }
-  
+
   Widget _buildSwitch({
     required String label,
     required bool value,
@@ -5736,7 +6086,8 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     return Row(
       children: [
         Expanded(
-          child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          child: Text(label,
+              style: const TextStyle(color: Colors.white70, fontSize: 13)),
         ),
         Switch(
           value: value,
@@ -5752,7 +6103,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       ],
     );
   }
-  
+
   void _addNavLink() {
     _showNavLinkDialog(
       onSave: (label, url) {
@@ -5761,7 +6112,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       },
     );
   }
-  
+
   void _editNavLink(int index) {
     final link = _navLinks[index];
     _showNavLinkDialog(
@@ -5773,7 +6124,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       },
     );
   }
-  
+
   void _showNavLinkDialog({
     String initialLabel = '',
     String initialUrl = '',
@@ -5781,12 +6132,13 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   }) {
     final labelController = TextEditingController(text: initialLabel);
     final urlController = TextEditingController(text: initialUrl);
-    
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF2D2D2D),
-        title: const Text('Link de navegación', style: TextStyle(color: Colors.white)),
+        title: const Text('Link de navegación',
+            style: TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -5796,8 +6148,10 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
               decoration: const InputDecoration(
                 labelText: 'Texto del link',
                 labelStyle: TextStyle(color: Colors.white60),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00A09D))),
+                enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF00A09D))),
               ),
             ),
             const SizedBox(height: 16),
@@ -5807,8 +6161,10 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
               decoration: const InputDecoration(
                 labelText: 'URL (ej: /tienda/productos)',
                 labelStyle: TextStyle(color: Colors.white60),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00A09D))),
+                enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF00A09D))),
               ),
             ),
           ],
@@ -5816,16 +6172,19 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white60)),
+            child:
+                const Text('Cancelar', style: TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
             onPressed: () {
-              if (labelController.text.isNotEmpty && urlController.text.isNotEmpty) {
+              if (labelController.text.isNotEmpty &&
+                  urlController.text.isNotEmpty) {
                 onSave(labelController.text, urlController.text);
                 Navigator.pop(ctx);
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00A09D)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00A09D)),
             child: const Text('Guardar'),
           ),
         ],
@@ -5888,7 +6247,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
       'twitter_handle': _twitterController.text,
       'youtube_handle': _youtubeController.text,
     });
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -5928,7 +6287,8 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                   color: Colors.green.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.web_asset_off, color: Colors.green, size: 20),
+                child: const Icon(Icons.web_asset_off,
+                    color: Colors.green, size: 20),
               ),
               const SizedBox(width: 12),
               const Expanded(
@@ -5952,13 +6312,13 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Contact section
           _SectionHeader('Contacto'),
           const SizedBox(height: 12),
-          
+
           _EditorTextField(
             label: 'Email',
             value: _emailController.text,
@@ -5967,7 +6327,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
             hint: 'contacto@mitienda.cl',
           ),
           const SizedBox(height: 12),
-          
+
           _EditorTextField(
             label: 'Teléfono',
             value: _phoneController.text,
@@ -5976,7 +6336,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
             hint: '+56 2 1234 5678',
           ),
           const SizedBox(height: 12),
-          
+
           _EditorTextField(
             label: 'WhatsApp',
             value: _whatsappController.text,
@@ -5985,7 +6345,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
             hint: '+56912345678',
           ),
           const SizedBox(height: 12),
-          
+
           _EditorTextField(
             label: 'Dirección',
             value: _addressController.text,
@@ -5993,13 +6353,13 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
             onChanged: (_) {},
             hint: 'Av. Principal 123, Santiago',
           ),
-          
+
           const SizedBox(height: 20),
-          
+
           // Social media section
           _SectionHeader('Redes sociales'),
           const SizedBox(height: 12),
-          
+
           _EditorTextField(
             label: 'Facebook',
             value: _facebookController.text,
@@ -6008,7 +6368,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
             hint: 'mitienda',
           ),
           const SizedBox(height: 12),
-          
+
           _EditorTextField(
             label: 'Instagram',
             value: _instagramController.text,
@@ -6017,7 +6377,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
             hint: '@mitienda',
           ),
           const SizedBox(height: 12),
-          
+
           _EditorTextField(
             label: 'Twitter/X',
             value: _twitterController.text,
@@ -6026,7 +6386,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
             hint: '@mitienda',
           ),
           const SizedBox(height: 12),
-          
+
           _EditorTextField(
             label: 'YouTube',
             value: _youtubeController.text,
@@ -6034,9 +6394,9 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
             onChanged: (_) {},
             hint: 'mitienda',
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Save button
           SizedBox(
             width: double.infinity,
@@ -6327,7 +6687,8 @@ class _BackupsDialogState extends State<_BackupsDialog> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E1E1E),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Row(
                 children: [
@@ -6379,7 +6740,8 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                         borderRadius: BorderRadius.circular(6),
                         borderSide: BorderSide.none,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -6396,7 +6758,8 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                         borderRadius: BorderRadius.circular(6),
                         borderSide: BorderSide.none,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -6408,10 +6771,13 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                           ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
                             )
                           : const Icon(Icons.add),
-                      label: Text(_isCreating ? 'Creando...' : 'Crear copia de seguridad'),
+                      label: Text(_isCreating
+                          ? 'Creando...'
+                          : 'Crear copia de seguridad'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF00A09D),
                         foregroundColor: Colors.white,
@@ -6437,7 +6803,8 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.error_outline, color: Colors.red, size: 48),
+                                Icon(Icons.error_outline,
+                                    color: Colors.red, size: 48),
                                 const SizedBox(height: 8),
                                 Text(
                                   'Error cargando copias',
@@ -6455,7 +6822,8 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.inventory_2_outlined, color: Colors.white24, size: 48),
+                                    Icon(Icons.inventory_2_outlined,
+                                        color: Colors.white24, size: 48),
                                     const SizedBox(height: 8),
                                     const Text(
                                       'No hay copias de seguridad',
@@ -6465,18 +6833,19 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                                 ),
                               )
                             : ListView.builder(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                              itemCount: _backups.length,
-                              itemBuilder: (context, index) {
-                                final backup = _backups[index];
-                                return _BackupListItem(
-                                  backup: backup,
-                                  onRestore: () => _restoreBackup(backup),
-                                  onDelete: () => _deleteBackup(backup),
-                                  isRestoring: _isRestoring,
-                                );
-                              },
-                            ),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                itemCount: _backups.length,
+                                itemBuilder: (context, index) {
+                                  final backup = _backups[index];
+                                  return _BackupListItem(
+                                    backup: backup,
+                                    onRestore: () => _restoreBackup(backup),
+                                    onDelete: () => _deleteBackup(backup),
+                                    isRestoring: _isRestoring,
+                                  );
+                                },
+                              ),
               ),
             ),
           ],
@@ -6502,7 +6871,7 @@ class _BackupListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-    
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -6515,10 +6884,13 @@ class _BackupListItem extends StatelessWidget {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         leading: CircleAvatar(
-          backgroundColor: backup.isAutoBackup ? Colors.orange.withValues(alpha: 0.2) : const Color(0xFF00A09D).withValues(alpha: 0.2),
+          backgroundColor: backup.isAutoBackup
+              ? Colors.orange.withValues(alpha: 0.2)
+              : const Color(0xFF00A09D).withValues(alpha: 0.2),
           child: Icon(
             backup.isAutoBackup ? Icons.autorenew : Icons.backup,
-            color: backup.isAutoBackup ? Colors.orange : const Color(0xFF00A09D),
+            color:
+                backup.isAutoBackup ? Colors.orange : const Color(0xFF00A09D),
             size: 20,
           ),
         ),
@@ -6545,7 +6917,8 @@ class _BackupListItem extends StatelessWidget {
                 if (backup.isAutoBackup)
                   Container(
                     margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: Colors.orange.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(4),
@@ -6594,3 +6967,4 @@ class _BackupListItem extends StatelessWidget {
     );
   }
 }
+

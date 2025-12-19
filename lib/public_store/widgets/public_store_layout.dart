@@ -42,11 +42,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   Widget build(BuildContext context) {
     final supabase = Supabase.instance.client;
     final isLoggedIn = supabase.auth.currentUser != null;
-    
+
     // Watch providers to rebuild when data changes
     context.watch<PublicStoreTenantProvider>();
     final websiteService = context.watch<WebsiteService>();
-    
+
     // Don't block rendering - just use defaults until settings load
     // This makes the site feel faster
 
@@ -56,7 +56,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       'Todo lo que necesitas para tu bicicleta en Viña del Mar',
     );
     final logoUrl = websiteService.getSetting('logo_url', '');
-    final topBannerText = websiteService.getSetting('top_banner_text', 'Envíos a todo Chile');
+    final topBannerText =
+        websiteService.getSetting('top_banner_text', 'Envíos a todo Chile');
     final contactEmail =
         websiteService.getSetting('contact_email', 'contacto@vinabike.cl');
     final contactPhone =
@@ -86,25 +87,29 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       websiteService.getSetting('theme_background_color', ''),
       Colors.white,
     );
-    
+
     // Header settings (DJI-style customization)
     final headerStyle = websiteService.getSetting('header_style', 'solid');
-    final headerColorMode = websiteService.getSetting('header_color_mode', 'light');
-    final showTopBannerRaw = websiteService.getSetting('header_show_top_banner', 'false');
+    final headerColorMode =
+        websiteService.getSetting('header_color_mode', 'light');
+    final showTopBannerRaw =
+        websiteService.getSetting('header_show_top_banner', 'false');
     final showTopBanner = showTopBannerRaw == 'true';
-    final headerShadow = websiteService.getSetting('header_shadow', 'true') == 'true';
+    final headerShadow =
+        websiteService.getSetting('header_shadow', 'true') == 'true';
     final headerBgColor = _resolveColor(
       websiteService.getSetting('header_bg_color', ''),
       Colors.white,
     );
-    
+
     // Parse nav links (rewrite to clean paths when on public store domain)
     List<Map<String, String>> navLinks = [];
     final navLinksJson = websiteService.getSetting('header_nav_links', '');
     if (navLinksJson.isNotEmpty) {
       try {
         final decoded = jsonDecode(navLinksJson) as List;
-        navLinks = decoded.map((e) => Map<String, String>.from(e as Map)).toList();
+        navLinks =
+            decoded.map((e) => Map<String, String>.from(e as Map)).toList();
       } catch (_) {
         navLinks = [
           {'label': 'Inicio', 'url': '/tienda'},
@@ -143,7 +148,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
     final isPreviewMode = editProvider.isPreviewMode;
-    
+
     // Build footer (reused in all layouts)
     final footerWidget = _buildFooter(
       context: context,
@@ -160,9 +165,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       accentColor: accentColor,
       isEditMode: isEditMode,
     );
-    
+
     // Build header widget builder for special layouts
-    Widget buildHeaderWidget({bool isOverlay = false, Color? overrideBgColor, String? overrideColorMode, bool? overrideShowBanner, bool? overrideShadow}) {
+    Widget buildHeaderWidget(
+        {bool isOverlay = false,
+        Color? overrideBgColor,
+        String? overrideColorMode,
+        bool? overrideShowBanner,
+        bool? overrideShadow}) {
       return _buildHeader(
         context: context,
         storeName: storeName,
@@ -183,14 +193,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         isOverlay: isOverlay,
       );
     }
-    
+
     // Build the main page content based on header style
     Widget pageContent;
-    
+
     // Check if we're on the homepage (route is exactly '/tienda' or '/')
     final currentRoute = GoRouterState.of(context).uri.path;
-    final isHomePage = currentRoute == '/tienda' || currentRoute == '/' || currentRoute == '/tienda/';
-    
+    final isHomePage = currentRoute == '/tienda' ||
+        currentRoute == '/' ||
+        currentRoute == '/tienda/';
+
     if (headerStyle == 'transparent' && isHomePage) {
       // TRANSPARENT: Header floats over hero ONLY ON HOMEPAGE
       pageContent = SingleChildScrollView(
@@ -211,7 +223,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               child: buildHeaderWidget(
                 isOverlay: true,
                 overrideBgColor: Colors.transparent,
-                overrideColorMode: headerColorMode, // Use configured color mode (dark = white text)
+                overrideColorMode:
+                    headerColorMode, // Use configured color mode (dark = white text)
                 overrideShadow: false,
               ),
             ),
@@ -317,8 +330,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         backgroundColor: backgroundColor,
         body: Column(
           children: [
-            // Preview top bar (Odoo-style)
-            _buildPreviewTopBar(context, editProvider, websiteService, storeName),
+            // Preview top bar (Live Editor)
+            _buildPreviewTopBar(
+                context, editProvider, websiteService, storeName),
             // Page content
             Expanded(child: pageContent),
           ],
@@ -354,17 +368,21 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   final editProvider = context.watch<WebsiteEditModeProvider>();
                   final isInEditorContext = editProvider.isInEditorContext;
                   final websiteService = context.read<WebsiteService>();
-                  
+
                   // Don't show the floating button if we're already in editor context
                   if (isInEditorContext) return const SizedBox.shrink();
-                  
+
                   return FloatingActionButton.extended(
                     onPressed: () {
-                      debugPrint('🎨 [Layout] Edit button pressed. Entering preview mode');
+                      debugPrint(
+                          '🎨 [Layout] Edit button pressed. Entering preview mode');
                       // Enter preview mode first (shows top bar with Editar button)
-                      final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
-                      final settings = Map<String, dynamic>.from(websiteService.settings);
-                      debugPrint('🎨 [Layout] Entering preview mode with ${blocks.length} blocks');
+                      final blocks = List<Map<String, dynamic>>.from(
+                          websiteService.blocks);
+                      final settings =
+                          Map<String, dynamic>.from(websiteService.settings);
+                      debugPrint(
+                          '🎨 [Layout] Entering preview mode with ${blocks.length} blocks');
                       editProvider.enterPreviewMode(blocks, settings);
                     },
                     backgroundColor: accentColor,
@@ -404,7 +422,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           // Logo/brand
           Row(
             children: [
-              Icon(Icons.language, color: Colors.white.withValues(alpha: 0.8), size: 20),
+              Icon(Icons.language,
+                  color: Colors.white.withValues(alpha: 0.8), size: 20),
               const SizedBox(width: 8),
               Text(
                 'Sitio web',
@@ -422,9 +441,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           _buildPreviewNavItem('Comercio electrónico', false),
           _buildPreviewNavItem('Reportes', false),
           _buildPreviewNavItem('Configuración', false),
-          
+
           const Spacer(),
-          
+
           // Store name dropdown
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -440,18 +459,20 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                 ),
                 const SizedBox(width: 4),
-                const Icon(Icons.arrow_drop_down, color: Colors.white, size: 18),
+                const Icon(Icons.arrow_drop_down,
+                    color: Colors.white, size: 18),
               ],
             ),
           ),
           const SizedBox(width: 16),
-          
+
           // Published toggle
           Row(
             children: [
               Text(
                 'Publicado',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13),
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8), fontSize: 13),
               ),
               const SizedBox(width: 8),
               Switch(
@@ -463,17 +484,18 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ],
           ),
           const SizedBox(width: 16),
-          
+
           // Mobile preview button
           IconButton(
             onPressed: () {},
-            icon: const Icon(Icons.phone_android, color: Colors.white70, size: 20),
+            icon: const Icon(Icons.phone_android,
+                color: Colors.white70, size: 20),
             tooltip: 'Vista móvil',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           ),
           const SizedBox(width: 8),
-          
+
           // New page button
           TextButton(
             onPressed: () {},
@@ -484,7 +506,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             child: const Text('Nuevo', style: TextStyle(fontSize: 13)),
           ),
           const SizedBox(width: 8),
-          
+
           // EDIT button (main action)
           ElevatedButton(
             onPressed: () {
@@ -494,7 +516,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               backgroundColor: Colors.red.shade600,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4)),
             ),
             child: const Text(
               'Editar',
@@ -502,7 +525,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ),
           ),
           const SizedBox(width: 8),
-          
+
           // Close/exit button - go back to Website Management
           IconButton(
             onPressed: () {
@@ -553,11 +576,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       // Get tenant ID
       final tenantProvider = context.read<PublicStoreTenantProvider>();
       final tenantId = tenantProvider.tenantId;
-      
+
       if (tenantId == null) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Error: No se pudo identificar el tenant')),
+            const SnackBar(
+                content: Text('Error: No se pudo identificar el tenant')),
           );
         }
         return;
@@ -571,25 +595,31 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       }
 
       // Save header settings if there are pending changes
-      debugPrint('🔄 [SaveChanges] hasHeaderChanges=${editProvider.hasHeaderChanges}, pendingSettings=${editProvider.pendingHeaderSettings.keys.join(', ')}');
-      if (editProvider.hasHeaderChanges && editProvider.pendingHeaderSettings.isNotEmpty) {
-        debugPrint('🔄 [SaveChanges] Saving header settings: ${editProvider.pendingHeaderSettings}');
+      debugPrint(
+          '🔄 [SaveChanges] hasHeaderChanges=${editProvider.hasHeaderChanges}, pendingSettings=${editProvider.pendingHeaderSettings.keys.join(', ')}');
+      if (editProvider.hasHeaderChanges &&
+          editProvider.pendingHeaderSettings.isNotEmpty) {
+        debugPrint(
+            '🔄 [SaveChanges] Saving header settings: ${editProvider.pendingHeaderSettings}');
         await websiteService.saveSettings(editProvider.pendingHeaderSettings);
         debugPrint('✅ [SaveChanges] Header settings saved');
       } else {
-        debugPrint('⚠️ [SaveChanges] Skipping header save: hasHeaderChanges=${editProvider.hasHeaderChanges}, isEmpty=${editProvider.pendingHeaderSettings.isEmpty}');
+        debugPrint(
+            '⚠️ [SaveChanges] Skipping header save: hasHeaderChanges=${editProvider.hasHeaderChanges}, isEmpty=${editProvider.pendingHeaderSettings.isEmpty}');
       }
 
       // Convert blocks to the format expected by saveBlocks
       final blocks = editProvider.blocks;
       final pageId = editProvider.currentPageId; // Multi-page editing support
       final pageSlug = editProvider.currentPageSlug;
-      debugPrint('🔄 [SaveChanges] Saving ${blocks.length} blocks for page: ${pageSlug ?? "home"} (id: $pageId)');
-      
+      debugPrint(
+          '🔄 [SaveChanges] Saving ${blocks.length} blocks for page: ${pageSlug ?? "home"} (id: $pageId)');
+
       final blocksForSave = blocks.asMap().entries.map((entry) {
         final index = entry.key;
         final block = entry.value;
-        debugPrint('  Block ${index}: id=${block['id']}, type=${block['block_type']}');
+        debugPrint(
+            '  Block ${index}: id=${block['id']}, type=${block['block_type']}');
         final blockType = block['block_type'] ?? block['type'];
         final blockData = block['block_data'] ?? block['data'] ?? {};
         final isVisible = block['is_visible'] ?? block['isVisible'] ?? true;
@@ -606,7 +636,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       // Save blocks - use page-specific save if editing a non-home page
       if (pageId != null) {
         await websiteService.saveBlocksForPage(pageId, blocksForSave);
-        debugPrint('✅ [SaveChanges] Blocks saved to page: $pageSlug (id: $pageId)');
+        debugPrint(
+            '✅ [SaveChanges] Blocks saved to page: $pageSlug (id: $pageId)');
       } else {
         await websiteService.saveBlocks(blocksForSave);
         debugPrint('✅ [SaveChanges] Blocks saved to home page');
@@ -615,7 +646,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       // Mark as saved and clear header changes
       editProvider.markAsSaved();
       editProvider.clearHeaderChanged();
-      
+
       // Reload blocks to get fresh data and update provider
       List<Map<String, dynamic>> freshBlocks;
       if (pageId != null) {
@@ -623,12 +654,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           pageId,
           tenantId: tenantId,
         );
-        debugPrint('✅ [SaveChanges] Reloaded ${freshBlocks.length} blocks for page: $pageSlug');
+        debugPrint(
+            '✅ [SaveChanges] Reloaded ${freshBlocks.length} blocks for page: $pageSlug');
       } else {
         freshBlocks = await websiteService.loadBlocksForTenant(tenantId);
-        debugPrint('✅ [SaveChanges] Reloaded ${freshBlocks.length} blocks for home page');
+        debugPrint(
+            '✅ [SaveChanges] Reloaded ${freshBlocks.length} blocks for home page');
       }
-      
+
       // Update the edit provider with fresh blocks from database
       editProvider.updateBlocksAfterSave(freshBlocks);
 
@@ -673,7 +706,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     bool isOverlay = false, // For transparent mode when scrolled up
   }) {
     final cart = context.watch<CartProvider>();
-    
+
     // Determine colors based on mode
     final isDarkMode = headerColorMode == 'dark' || isOverlay;
     final textColor = isDarkMode ? Colors.white : Colors.black87;
@@ -716,10 +749,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         const SizedBox(width: 8),
                         Text(
                           topBannerText,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                         ),
                       ],
                     ),
@@ -732,10 +766,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         const SizedBox(width: 8),
                         Text(
                           'Contáctanos: $contactPhone',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                         ),
                       ],
                     ),
@@ -748,10 +783,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         const SizedBox(width: 8),
                         Text(
                           contactEmail,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                         ),
                       ],
                     ),
@@ -776,7 +812,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                             filterQuality: FilterQuality.high,
                             color: isDarkMode ? Colors.white : null,
                             colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
-                            errorBuilder: (context, error, stackTrace) => _buildTextLogo(context, storeName, textColor),
+                            errorBuilder: (context, error, stackTrace) =>
+                                _buildTextLogo(context, storeName, textColor),
                           )
                         : Image.asset(
                             'assets/images/vinabike_logo.png',
@@ -784,7 +821,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                             filterQuality: FilterQuality.high,
                             color: isDarkMode ? Colors.white : null,
                             colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
-                            errorBuilder: (context, error, stackTrace) => _buildTextLogo(context, storeName, textColor),
+                            errorBuilder: (context, error, stackTrace) =>
+                                _buildTextLogo(context, storeName, textColor),
                           ),
                   ),
                 ),
@@ -793,9 +831,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   child: Row(
                     children: navLinks.isEmpty
                         ? [
-                            _buildNavLink(context, 'Inicio', '/tienda', textColor),
+                            _buildNavLink(
+                                context, 'Inicio', '/tienda', textColor),
                             const SizedBox(width: 24),
-                            _buildNavLink(context, 'Productos', '/tienda/productos', textColor),
+                            _buildNavLink(context, 'Productos',
+                                '/tienda/productos', textColor),
                             const SizedBox(width: 24),
                             _buildInfoDropdown(context, textColor),
                           ]
@@ -803,7 +843,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                             ...navLinks.map((link) {
                               return Padding(
                                 padding: const EdgeInsets.only(right: 24),
-                                child: _buildNavLink(context, link['label'] ?? '', link['url'] ?? '/', textColor),
+                                child: _buildNavLink(
+                                    context,
+                                    link['label'] ?? '',
+                                    link['url'] ?? '/',
+                                    textColor),
                               );
                             }),
                             _buildInfoDropdown(context, textColor),
@@ -891,7 +935,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     alignment: Alignment.topLeft,
                     child: Container(
                       margin: const EdgeInsets.all(4),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.blue,
                         borderRadius: BorderRadius.circular(4),
@@ -1118,11 +1163,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                   ),
                         ),
                         const SizedBox(height: 16),
-                        _buildFooterLink(context, 'Sobre Nosotros', '/nosotros', primaryColor),
-                        _buildFooterLink(context, 'Términos y Condiciones', '/terminos', primaryColor),
-                        _buildFooterLink(context, 'Política de Privacidad', '/privacidad', primaryColor),
-                        _buildFooterLink(context, 'Política de Devoluciones', '/devoluciones', primaryColor),
-                        _buildFooterLink(context, 'Envíos', '/envios', primaryColor),
+                        _buildFooterLink(context, 'Sobre Nosotros', '/nosotros',
+                            primaryColor),
+                        _buildFooterLink(context, 'Términos y Condiciones',
+                            '/terminos', primaryColor),
+                        _buildFooterLink(context, 'Política de Privacidad',
+                            '/privacidad', primaryColor),
+                        _buildFooterLink(context, 'Política de Devoluciones',
+                            '/devoluciones', primaryColor),
+                        _buildFooterLink(
+                            context, 'Envíos', '/envios', primaryColor),
                       ],
                     ),
                   ),
@@ -1244,7 +1294,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     alignment: Alignment.topLeft,
                     child: Container(
                       margin: const EdgeInsets.all(4),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.green,
                         borderRadius: BorderRadius.circular(4),
@@ -1277,7 +1328,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     return footerContent;
   }
 
-  Widget _buildTextLogo(BuildContext context, String storeName, Color primaryColor) {
+  Widget _buildTextLogo(
+      BuildContext context, String storeName, Color primaryColor) {
     return Text(
       storeName.isNotEmpty ? storeName.toUpperCase() : 'MI TIENDA',
       style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -1326,7 +1378,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   Widget _buildInfoDropdown(BuildContext context, Color textColor) {
     // Capture the GoRouter instance from the correct context BEFORE building popup
     final goRouter = GoRouter.of(context);
-    
+
     return PopupMenuButton<String>(
       offset: const Offset(0, 40),
       shape: RoundedRectangleBorder(
@@ -1567,8 +1619,7 @@ class _StickyHeaderScaffold extends StatefulWidget {
   });
 
   @override
-  State<_StickyHeaderScaffold> createState() =>
-      _StickyHeaderScaffoldState();
+  State<_StickyHeaderScaffold> createState() => _StickyHeaderScaffoldState();
 }
 
 class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
@@ -1602,9 +1653,10 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
     final bool isScrolled = _scrollOffset > 50;
 
     // When scrolled, switch to light mode (dark text on white bg)
-    final String effectiveColorMode = isScrolled ? 'light' : widget.headerColorMode;
-    final Color effectiveBgColor = isScrolled 
-        ? widget.headerBgColor 
+    final String effectiveColorMode =
+        isScrolled ? 'light' : widget.headerColorMode;
+    final Color effectiveBgColor = isScrolled
+        ? widget.headerBgColor
         : widget.headerBgColor.withValues(alpha: headerOpacity);
 
     return Stack(

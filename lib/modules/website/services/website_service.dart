@@ -18,26 +18,27 @@ class WebsiteService extends ChangeNotifier {
   Map<String, String> _settings = {};
   List<ThemePreset> _themePresets = [];
   List<OnlineOrder> _orders = [];
-  List<Map<String, dynamic>> _blocks = []; // Odoo-style editor blocks
+  List<Map<String, dynamic>> _blocks = []; // Visual Editor blocks
 
   bool _isLoading = false;
   bool _isInitializing = false;
   String? _error;
   bool _disposed = false; // Track disposal state
-  bool _hasLoadedForTenant = false; // Track if loadBlocksForTenant completed (even with no blocks)
-  
+  bool _hasLoadedForTenant =
+      false; // Track if loadBlocksForTenant completed (even with no blocks)
+
   // Realtime subscriptions
   RealtimeChannel? _ordersChannel;
-  
+
   // ============================================================
   // PAGE CACHE - Load once, instant on revisit (5 min TTL)
   // ============================================================
   static final Map<String, _CachedPage> _pageCache = {};
   static const Duration _cacheTTL = Duration(minutes: 5);
-  
+
   /// Clear all cached pages (call when content is edited)
   static void clearPageCache() => _pageCache.clear();
-  
+
   /// Clear cache for a specific slug
   static void invalidatePageCache(String slug) => _pageCache.remove(slug);
 
@@ -93,7 +94,8 @@ class WebsiteService extends ChangeNotifier {
   @Deprecated('Use saveBlocks() with block_type="hero" instead')
   Future<void> saveBanner(WebsiteBanner banner) async {
     try {
-      final tenantId = await _tenantService.getTenantId(); // ✅ Use async version
+      final tenantId =
+          await _tenantService.getTenantId(); // ✅ Use async version
       if (tenantId == null) {
         throw Exception('No se pudo obtener el tenant_id del usuario');
       }
@@ -171,19 +173,23 @@ class WebsiteService extends ChangeNotifier {
       await loadPages(); // Ensure pages are loaded
       final homePage = _pages.firstWhere(
         (p) => p.isHome && p.isPublished,
-        orElse: () => _pages.isNotEmpty ? _pages.first : throw Exception('No pages found'),
+        orElse: () => _pages.isNotEmpty
+            ? _pages.first
+            : throw Exception('No pages found'),
       );
       homePageId = homePage.id;
       debugPrint('[WebsiteService] Home page ID: $homePageId');
 
-      debugPrint('[WebsiteService] Querying website_blocks for home page only...');
+      debugPrint(
+          '[WebsiteService] Querying website_blocks for home page only...');
       final response = await _supabase
           .from('website_blocks')
           .select()
           .eq('tenant_id', tenantId) // ✅ Filter by tenant
           .eq('page_id', homePageId) // ✅ Filter by HOME PAGE ONLY
           .order('order_index', ascending: true);
-      debugPrint('[WebsiteService] Query complete, got ${(response as List).length} blocks');
+      debugPrint(
+          '[WebsiteService] Query complete, got ${(response as List).length} blocks');
 
       final data = List<Map<String, dynamic>>.from(response);
       data.sort(
@@ -207,20 +213,22 @@ class WebsiteService extends ChangeNotifier {
   /// Load blocks for a specific tenant's HOME PAGE (used by public store for anonymous visitors)
   /// This method does NOT require authentication - it uses the provided tenant_id
   /// from subdomain detection (PublicStoreTenantProvider)
-  /// 
+  ///
   /// OPTIMIZED: Uses a single query with JOIN to get home page + blocks together
-  Future<List<Map<String, dynamic>>> loadBlocksForTenant(String tenantId) async {
+  Future<List<Map<String, dynamic>>> loadBlocksForTenant(
+      String tenantId) async {
     final sw = Stopwatch()..start();
-    
+
     // Prevent duplicate loads
     if (_hasLoadedForTenant) {
-      debugPrint('[WebsiteService] Already loaded for tenant, returning cached blocks: ${_blocks.length}');
+      debugPrint(
+          '[WebsiteService] Already loaded for tenant, returning cached blocks: ${_blocks.length}');
       return _blocks;
     }
-    
+
     try {
       debugPrint('[WebsiteService] Loading blocks for tenant: $tenantId');
-      
+
       // OPTIMIZED: Single query with JOIN - get home page with its blocks in one round trip
       final pagesWithBlocks = await _supabase
           .from('website_pages')
@@ -229,16 +237,17 @@ class WebsiteService extends ChangeNotifier {
           .eq('is_home', true)
           .eq('is_published', true)
           .limit(1);
-      
-      debugPrint('⏱️ [WebsiteService] Pages+Blocks JOIN query: ${sw.elapsedMilliseconds}ms');
-      
+
+      debugPrint(
+          '⏱️ [WebsiteService] Pages+Blocks JOIN query: ${sw.elapsedMilliseconds}ms');
+
       List<Map<String, dynamic>> data = [];
-      
+
       if ((pagesWithBlocks as List).isNotEmpty) {
         final homePage = pagesWithBlocks[0];
         final homePageId = homePage['id']?.toString();
         debugPrint('[WebsiteService] Found home page: $homePageId');
-        
+
         // Extract blocks from the JOIN result
         final blocks = homePage['website_blocks'] as List? ?? [];
         data = List<Map<String, dynamic>>.from(blocks);
@@ -251,32 +260,34 @@ class WebsiteService extends ChangeNotifier {
             .eq('is_published', true)
             .order('created_at', ascending: true)
             .limit(1);
-        
+
         if ((firstPageWithBlocks as List).isNotEmpty) {
-          final blocks = firstPageWithBlocks[0]['website_blocks'] as List? ?? [];
+          final blocks =
+              firstPageWithBlocks[0]['website_blocks'] as List? ?? [];
           data = List<Map<String, dynamic>>.from(blocks);
         }
       }
-      
+
       if (data.isEmpty) {
         debugPrint('[WebsiteService] No blocks found for tenant $tenantId');
         _hasLoadedForTenant = true;
         _safeNotifyListeners();
         return [];
       }
-      
+
       // Sort by order_index
       data.sort(
         (a, b) => (a['order_index'] ?? 0).compareTo(b['order_index'] ?? 0),
       );
-      
-      debugPrint('⏱️ [WebsiteService] Total loadBlocksForTenant: ${sw.elapsedMilliseconds}ms (${data.length} blocks)');
-      
+
+      debugPrint(
+          '⏱️ [WebsiteService] Total loadBlocksForTenant: ${sw.elapsedMilliseconds}ms (${data.length} blocks)');
+
       // Cache the blocks for reuse
       _blocks = data;
       _hasLoadedForTenant = true;
       _safeNotifyListeners();
-      
+
       return data;
     } catch (e) {
       debugPrint('[WebsiteService] Error loading blocks for tenant: $e');
@@ -302,11 +313,11 @@ class WebsiteService extends ChangeNotifier {
           .eq('tenant_id', tenantId)
           .eq('is_home', true)
           .limit(1);
-      
+
       if ((pagesResponse as List).isNotEmpty) {
         homePageId = pagesResponse[0]['id']?.toString();
       }
-      
+
       // If no home page found, create one
       if (homePageId == null) {
         debugPrint('[WebsiteService] No home page found, creating one...');
@@ -343,7 +354,8 @@ class WebsiteService extends ChangeNotifier {
           final blockType = block['type'] ?? block['block_type'];
           final blockData = block['data'] ?? block['block_data'] ?? {};
           final isVisible = block['isVisible'] ?? block['is_visible'] ?? true;
-          final orderIndex = block['order_index'] ?? block['sort_order'] ?? index;
+          final orderIndex =
+              block['order_index'] ?? block['sort_order'] ?? index;
 
           return {
             'id': block['id'],
@@ -413,7 +425,8 @@ class WebsiteService extends ChangeNotifier {
 
   /// Load featured products for a specific tenant (used by public store for anonymous visitors)
   /// This method does NOT require authentication
-  Future<List<FeaturedProduct>> loadFeaturedProductsForTenant(String tenantId) async {
+  Future<List<FeaturedProduct>> loadFeaturedProductsForTenant(
+      String tenantId) async {
     try {
       final response = await _supabase
           .from('featured_products')
@@ -424,10 +437,10 @@ class WebsiteService extends ChangeNotifier {
       final products = (response as List)
           .map((json) => FeaturedProduct.fromJson(json))
           .toList();
-      
+
       // Also update internal state
       _featuredProducts = products;
-      
+
       return products;
     } catch (e) {
       return [];
@@ -436,7 +449,8 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> addFeaturedProduct(String productId) async {
     try {
-      final tenantId = await _tenantService.getTenantId(); // ✅ Use async version
+      final tenantId =
+          await _tenantService.getTenantId(); // ✅ Use async version
       if (tenantId == null) {
         throw Exception('No se pudo obtener el tenant_id del usuario');
       }
@@ -523,7 +537,8 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> saveContent(WebsiteContent content) async {
     try {
-      final tenantId = await _tenantService.getTenantId(); // ✅ Use async version
+      final tenantId =
+          await _tenantService.getTenantId(); // ✅ Use async version
       if (tenantId == null) {
         throw Exception('No se pudo obtener el tenant_id del usuario');
       }
@@ -598,21 +613,24 @@ class WebsiteService extends ChangeNotifier {
           .select()
           .eq('tenant_id', tenantId);
 
-      debugPrint('⏱️ [WebsiteService] Settings query: ${sw.elapsedMilliseconds}ms');
+      debugPrint(
+          '⏱️ [WebsiteService] Settings query: ${sw.elapsedMilliseconds}ms');
 
       final settings = <String, String>{};
       for (final row in response as List) {
         settings[row['key'] as String] = row['value'] as String? ?? '';
       }
-      
+
       // Also update internal state so getSetting() works
       _settings = settings;
       _themePresets = _parseThemePresets(_settings['theme_presets']);
-      
-      debugPrint('⏱️ [WebsiteService] Settings total: ${sw.elapsedMilliseconds}ms (${settings.length} settings)');
+
+      debugPrint(
+          '⏱️ [WebsiteService] Settings total: ${sw.elapsedMilliseconds}ms (${settings.length} settings)');
       return settings;
     } catch (e) {
-      debugPrint('⏱️ [WebsiteService] Settings ERROR: ${sw.elapsedMilliseconds}ms - $e');
+      debugPrint(
+          '⏱️ [WebsiteService] Settings ERROR: ${sw.elapsedMilliseconds}ms - $e');
       return {};
     }
   }
@@ -706,64 +724,67 @@ class WebsiteService extends ChangeNotifier {
     required String errorContext,
   }) async {
     if (values.isEmpty) {
-      debugPrint('⚠️ [WebsiteService] _upsertSettings called with empty values - skipping');
+      debugPrint(
+          '⚠️ [WebsiteService] _upsertSettings called with empty values - skipping');
       return;
     }
 
     try {
       final tenantId = await _tenantService.getTenantId();
-      debugPrint('💾 [WebsiteService] _upsertSettings: tenantId=$tenantId, ${values.length} settings to save');
+      debugPrint(
+          '💾 [WebsiteService] _upsertSettings: tenantId=$tenantId, ${values.length} settings to save');
       if (tenantId == null) {
         throw Exception('No tenant ID available');
       }
 
       final timestamp = DateTime.now().toIso8601String();
-      
+
       // Update or insert each setting individually
       for (final entry in values.entries) {
-        debugPrint('💾 [WebsiteService] Upserting setting: ${entry.key} = ${entry.value} for tenant $tenantId');
+        debugPrint(
+            '💾 [WebsiteService] Upserting setting: ${entry.key} = ${entry.value} for tenant $tenantId');
         try {
           // Try UPDATE first (most common case after initial setup)
           final updateResult = await _supabase
-            .from('website_settings')
-            .update({
-              'value': entry.value?.toString() ?? '',
-              'updated_at': timestamp,
-            })
-            .eq('tenant_id', tenantId)
-            .eq('key', entry.key)
-            .select();
-          debugPrint('✅ [WebsiteService] Updated ${entry.key}: ${updateResult.length} rows affected');
-          
-          // If no rows were updated, insert new row
-          if (updateResult.isEmpty) {
-            await _supabase
-              .from('website_settings')
-              .insert({
-                'key': entry.key,
-                'value': entry.value?.toString() ?? '',
-                'tenant_id': tenantId,
-                'updated_at': timestamp,
-              });
-          }
-        } catch (e) {
-          debugPrint('⚠️ Error upserting setting ${entry.key}: $e');
-          // If INSERT fails due to conflict, try UPDATE again (race condition)
-          if (e.toString().contains('409') || e.toString().contains('Conflict')) {
-            await _supabase
               .from('website_settings')
               .update({
                 'value': entry.value?.toString() ?? '',
                 'updated_at': timestamp,
               })
               .eq('tenant_id', tenantId)
-              .eq('key', entry.key);
+              .eq('key', entry.key)
+              .select();
+          debugPrint(
+              '✅ [WebsiteService] Updated ${entry.key}: ${updateResult.length} rows affected');
+
+          // If no rows were updated, insert new row
+          if (updateResult.isEmpty) {
+            await _supabase.from('website_settings').insert({
+              'key': entry.key,
+              'value': entry.value?.toString() ?? '',
+              'tenant_id': tenantId,
+              'updated_at': timestamp,
+            });
+          }
+        } catch (e) {
+          debugPrint('⚠️ Error upserting setting ${entry.key}: $e');
+          // If INSERT fails due to conflict, try UPDATE again (race condition)
+          if (e.toString().contains('409') ||
+              e.toString().contains('Conflict')) {
+            await _supabase
+                .from('website_settings')
+                .update({
+                  'value': entry.value?.toString() ?? '',
+                  'updated_at': timestamp,
+                })
+                .eq('tenant_id', tenantId)
+                .eq('key', entry.key);
           } else {
             rethrow;
           }
         }
       }
-      
+
       await loadSettings();
     } catch (e) {
       _error = '$errorContext: $e';
@@ -785,16 +806,13 @@ class WebsiteService extends ChangeNotifier {
     try {
       // Load orders with items in a SINGLE query (no N+1 problem)
       // Limit to recent 100 orders for performance - use pagination for full list
-      final response = await _supabase
-          .from('online_orders')
-          .select('''
+      final response = await _supabase.from('online_orders').select('''
             *,
             online_order_items (*)
-          ''')
-          .order('created_at', ascending: false)
-          .limit(100);
+          ''').order('created_at', ascending: false).limit(100);
 
-      _orders = (response as List).map((json) => OnlineOrder.fromJson(json)).toList();
+      _orders =
+          (response as List).map((json) => OnlineOrder.fromJson(json)).toList();
 
       _error = null;
     } catch (e) {
@@ -831,10 +849,10 @@ class WebsiteService extends ChangeNotifier {
 
       final order = OnlineOrder.fromJson(response);
       debugPrint('🎉 [WebsiteService] Order parsed: ${order.orderNumber}');
-      
+
       final items = await _loadOrderItems(order.id);
       debugPrint('🎉 [WebsiteService] Order items loaded: ${items.length}');
-      
+
       return order.copyWith(items: items);
     } catch (e, stackTrace) {
       debugPrint('❌ [WebsiteService] Error loading order: $e');
@@ -848,7 +866,7 @@ class WebsiteService extends ChangeNotifier {
       List<Map<String, dynamic>> orderItems) async {
     try {
       debugPrint('🛒 [WebsiteService] createOrder() called');
-      
+
       // Insert order and get the generated ID
       final orderResponse = await _supabase
           .from('online_orders')
@@ -868,13 +886,14 @@ class WebsiteService extends ChangeNotifier {
       }).toList();
 
       await _supabase.from('online_order_items').insert(itemsToInsert);
-      debugPrint('🛒 [WebsiteService] Order items inserted: ${itemsToInsert.length}');
+      debugPrint(
+          '🛒 [WebsiteService] Order items inserted: ${itemsToInsert.length}');
 
       // DON'T call loadOrders() here - it causes a full rebuild of the widget tree
       // which triggers navigation issues in the public store.
       // The checkout page only needs the orderId to proceed.
       // Admin pages can refresh orders list separately if needed.
-      
+
       debugPrint('🛒 [WebsiteService] ✅ createOrder() completed successfully');
       return orderId;
     } catch (e) {
@@ -1107,11 +1126,11 @@ class WebsiteService extends ChangeNotifier {
           .order('is_home', ascending: false)
           .order('title', ascending: true);
 
-      _pages = (response as List)
-          .map((json) => WebsitePage.fromJson(json))
-          .toList();
+      _pages =
+          (response as List).map((json) => WebsitePage.fromJson(json)).toList();
 
-      debugPrint('[WebsiteService] Loaded ${_pages.length} pages for tenant $tenantId');
+      debugPrint(
+          '[WebsiteService] Loaded ${_pages.length} pages for tenant $tenantId');
 
       _safeNotifyListeners();
     } catch (e) {
@@ -1198,11 +1217,8 @@ class WebsiteService extends ChangeNotifier {
       final data = page.toInsertJson();
       data['tenant_id'] = tenantId;
 
-      final response = await _supabase
-          .from('website_pages')
-          .insert(data)
-          .select()
-          .single();
+      final response =
+          await _supabase.from('website_pages').insert(data).select().single();
 
       final newPage = WebsitePage.fromJson(response);
       _pages.add(newPage);
@@ -1227,7 +1243,7 @@ class WebsiteService extends ChangeNotifier {
           .single();
 
       final updatedPage = WebsitePage.fromJson(response);
-      
+
       // Update local cache
       final index = _pages.indexWhere((p) => p.id == page.id);
       if (index >= 0) {
@@ -1246,10 +1262,7 @@ class WebsiteService extends ChangeNotifier {
   /// Delete a page (fails for system pages)
   Future<void> deletePage(String pageId) async {
     try {
-      await _supabase
-          .from('website_pages')
-          .delete()
-          .eq('id', pageId);
+      await _supabase.from('website_pages').delete().eq('id', pageId);
 
       _pages.removeWhere((p) => p.id == pageId);
       _safeNotifyListeners();
@@ -1263,13 +1276,10 @@ class WebsiteService extends ChangeNotifier {
   /// Publish or unpublish a page
   Future<void> togglePagePublished(String pageId, bool published) async {
     try {
-      await _supabase
-          .from('website_pages')
-          .update({
-            'is_published': published,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', pageId);
+      await _supabase.from('website_pages').update({
+        'is_published': published,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', pageId);
 
       await loadPages();
     } catch (e) {
@@ -1282,13 +1292,10 @@ class WebsiteService extends ChangeNotifier {
   /// Set a page as home page
   Future<void> setHomePage(String pageId) async {
     try {
-      await _supabase
-          .from('website_pages')
-          .update({
-            'is_home': true,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', pageId);
+      await _supabase.from('website_pages').update({
+        'is_home': true,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', pageId);
 
       await loadPages();
     } catch (e) {
@@ -1326,7 +1333,8 @@ class WebsiteService extends ChangeNotifier {
   }
 
   /// Save blocks for a specific page
-  Future<void> saveBlocksForPage(String pageId, List<Map<String, dynamic>> blocks) async {
+  Future<void> saveBlocksForPage(
+      String pageId, List<Map<String, dynamic>> blocks) async {
     try {
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) {
@@ -1479,7 +1487,7 @@ class WebsiteService extends ChangeNotifier {
           .single();
 
       final updatedNav = WebsiteNavigation.fromJson(response);
-      
+
       // Update local cache
       final index = _navigation.indexWhere((n) => n.id == nav.id);
       if (index >= 0) {
@@ -1499,10 +1507,7 @@ class WebsiteService extends ChangeNotifier {
   /// Delete a navigation item and its children
   Future<void> deleteNavigation(String navId) async {
     try {
-      await _supabase
-          .from('website_navigation')
-          .delete()
-          .eq('id', navId);
+      await _supabase.from('website_navigation').delete().eq('id', navId);
 
       _navigation.removeWhere((n) => n.id == navId || n.parentId == navId);
       _buildNavigationHierarchy();
@@ -1515,16 +1520,14 @@ class WebsiteService extends ChangeNotifier {
   }
 
   /// Reorder navigation items
-  Future<void> reorderNavigation(MenuLocation location, List<String> orderedIds) async {
+  Future<void> reorderNavigation(
+      MenuLocation location, List<String> orderedIds) async {
     try {
       for (int i = 0; i < orderedIds.length; i++) {
-        await _supabase
-            .from('website_navigation')
-            .update({
-              'order_index': i,
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .eq('id', orderedIds[i]);
+        await _supabase.from('website_navigation').update({
+          'order_index': i,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', orderedIds[i]);
       }
 
       await loadNavigation();
@@ -1564,13 +1567,13 @@ class WebsiteService extends ChangeNotifier {
         loadSettings(),
         // Orders are lazy-loaded when OnlineOrdersPage is opened (performance)
         loadBlocks(), // Load Odoo-style blocks
-        loadPages(),  // Load multi-page support
+        loadPages(), // Load multi-page support
         loadNavigation(), // Load navigation menus
       ]);
-      
+
       // Link navigation items to their pages
       await linkNavigationToPages();
-      
+
       // Realtime subscriptions setup deferred until needed
     } finally {
       _isInitializing = false;
@@ -1616,7 +1619,8 @@ class WebsiteService extends ChangeNotifier {
           )
           .subscribe();
 
-      debugPrint('✅ [WebsiteService] Realtime subscription active for online_orders');
+      debugPrint(
+          '✅ [WebsiteService] Realtime subscription active for online_orders');
     } catch (e) {
       debugPrint('❌ [WebsiteService] Failed to setup realtime: $e');
     }
@@ -1625,7 +1629,7 @@ class WebsiteService extends ChangeNotifier {
   // ============================================================================
   // CACHED PAGE LOADING - For public store policy pages
   // ============================================================================
-  
+
   /// Load a page by slug with caching (for instant revisits)
   /// Returns page info and blocks, or null if not found
   Future<_CachedPage?> loadPageWithBlocks(
@@ -1638,15 +1642,15 @@ class WebsiteService extends ChangeNotifier {
     if (cached != null && !cached.isExpired) {
       return cached;
     }
-    
+
     try {
       // Load page
       final page = await getPageBySlug(slug, tenantId: tenantId);
       if (page == null) return null;
-      
+
       // Load blocks
       final blocks = await loadBlocksForPage(page.id, tenantId: tenantId);
-      
+
       // Cache and return
       final result = _CachedPage(
         page: page,
@@ -1674,12 +1678,13 @@ class _CachedPage {
   final WebsitePage page;
   final List<Map<String, dynamic>> blocks;
   final DateTime cachedAt;
-  
+
   _CachedPage({
     required this.page,
     required this.blocks,
     required this.cachedAt,
   });
-  
-  bool get isExpired => DateTime.now().difference(cachedAt) > WebsiteService._cacheTTL;
+
+  bool get isExpired =>
+      DateTime.now().difference(cachedAt) > WebsiteService._cacheTTL;
 }

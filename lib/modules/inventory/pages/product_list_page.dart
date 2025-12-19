@@ -136,6 +136,13 @@ class _ProductListPageState extends State<ProductListPage> {
     ]);
   }
 
+  // 🔽 Selection State
+  final Set<String> _selectedProductIds = {};
+  bool get _isMultiSelectMode => _selectedProductIds.isNotEmpty;
+
+  // 🔽 Resizing State
+  bool _isResizing = false;
+
   @override
   void didUpdateWidget(ProductListPage oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -428,8 +435,11 @@ class _ProductListPageState extends State<ProductListPage> {
         // 1. Sleek Header Area (Title + Primary Actions)
         _buildHeaderArea(theme),
 
+        // 1.5 Bulk Actions Bar (Overlays standard header/filters when active)
+        if (_isMultiSelectMode) _buildBulkActionsBar(theme),
+
         // 2. Smart Filter Bar (Separated, minimal)
-        _buildSmartFilterBar(theme),
+        if (!_isMultiSelectMode) _buildSmartFilterBar(theme),
 
         // 3. Main Content
         Expanded(
@@ -1125,43 +1135,88 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildTableViewWithScrollableHeader(ThemeData theme) {
-    return Row(
-      children: [
-        // Main area with fixed header and table header
-        Expanded(
-          child: Column(
-            children: [
-              // Fixed table header
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                      bottom:
-                          BorderSide(color: theme.colorScheme.outlineVariant)),
-                  color: theme.colorScheme.surface,
-                ),
-                child: _buildTableHeader(theme),
-              ),
+    return LayoutBuilder(builder: (context, constraints) {
+      // Default to 400 or 1/3 if width not set yet
+      // This ensures we always have a valid width
+      if (_detailPaneWidth == 400 && constraints.maxWidth > 1200) {
+        // _detailPaneWidth = constraints.maxWidth * 0.3;
+      }
 
-              // Scrollable table rows
-              Expanded(
-                child: ListView.builder(
-                  controller: _tableScrollController,
-                  itemCount: _paginatedProducts.length,
-                  itemBuilder: (context, index) {
-                    final product = _paginatedProducts[index];
-                    return _buildZohoTableRow(product, theme);
-                  },
+      return Row(
+        children: [
+          // Main area with fixed header and table header
+          Expanded(
+            child: Column(
+              children: [
+                // Fixed table header
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                        bottom: BorderSide(
+                            color: theme.colorScheme.outlineVariant)),
+                    color: theme.colorScheme.surface,
+                  ),
+                  child: _buildTableHeader(theme),
                 ),
-              ),
-              // Pagination controls
-              _buildPaginationControls(theme),
-            ],
+
+                // Scrollable table rows
+                Expanded(
+                  child: ListView.builder(
+                    controller: _tableScrollController,
+                    itemCount: _paginatedProducts.length,
+                    itemBuilder: (context, index) {
+                      final product = _paginatedProducts[index];
+                      return _buildZohoTableRow(product, theme);
+                    },
+                  ),
+                ),
+                // Pagination controls
+                _buildPaginationControls(theme),
+              ],
+            ),
           ),
-        ),
-        // Split-pane detail view
-        if (_selectedProduct != null) _buildDetailPane(theme),
-      ],
-    );
+          // Split-pane detail view
+          if (_selectedProduct != null)
+            SizedBox(
+              width: _detailPaneWidth,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildDetailPane(theme),
+                  // Resize Handle Overlay
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 10,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.resizeLeftRight,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onHorizontalDragUpdate: (details) {
+                          setState(() {
+                            _isResizing = true;
+                            _detailPaneWidth -= details.delta.dx;
+                            // Clamp width between reasonable limits
+                            if (_detailPaneWidth < 300) _detailPaneWidth = 300;
+                            if (_detailPaneWidth > constraints.maxWidth * 0.6)
+                              _detailPaneWidth = constraints.maxWidth * 0.6;
+                          });
+                        },
+                        onHorizontalDragEnd: (_) =>
+                            setState(() => _isResizing = false),
+                        child: Container(
+                          color: Colors.transparent,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
+    });
   }
 
   Widget _buildCardGridView(ThemeData theme) {
@@ -1190,6 +1245,26 @@ class _ProductListPageState extends State<ProductListPage> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
+          // Select All Checkbox
+          SizedBox(
+            width: 40,
+            child: Checkbox(
+              value: _filteredProducts.isNotEmpty &&
+                  _selectedProductIds.length == _filteredProducts.length,
+              tristate: true,
+              onChanged: (bool? value) {
+                setState(() {
+                  if (value == true) {
+                    _selectedProductIds.addAll(_filteredProducts
+                        .where((p) => p.id != null)
+                        .map((p) => p.id!));
+                  } else {
+                    _selectedProductIds.clear();
+                  }
+                });
+              },
+            ),
+          ),
           _buildHeaderCell(
             theme,
             'Producto',
@@ -1324,6 +1399,24 @@ class _ProductListPageState extends State<ProductListPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
+                // Selection Checkbox
+                SizedBox(
+                  width: 40,
+                  child: Checkbox(
+                    value: product.id != null &&
+                        _selectedProductIds.contains(product.id!),
+                    onChanged: (bool? value) {
+                      if (product.id == null) return;
+                      setState(() {
+                        if (value == true) {
+                          _selectedProductIds.add(product.id!);
+                        } else {
+                          _selectedProductIds.remove(product.id!);
+                        }
+                      });
+                    },
+                  ),
+                ),
                 // Product Name & Image
                 Expanded(
                   flex: 4,
@@ -1481,6 +1574,72 @@ class _ProductListPageState extends State<ProductListPage> {
         if (isProductSet && isExpanded)
           _buildSetComponentsPanel(product, theme),
       ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // BULK ACTIONS BAR
+  // ---------------------------------------------------------------------------
+
+  Widget _buildBulkActionsBar(ThemeData theme) {
+    return Container(
+      height: 56,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle, color: theme.colorScheme.primary, size: 20),
+          const SizedBox(width: 12),
+          Text(
+            '${_selectedProductIds.length} seleccionados',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const Spacer(),
+          TextButton.icon(
+            onPressed: () {
+              // Placeholder for bulk update
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Edición masiva: Próximamente')),
+              );
+            },
+            icon: const Icon(Icons.edit, size: 18),
+            label: const Text('Editar'),
+            style: TextButton.styleFrom(
+              foregroundColor: theme.colorScheme.onPrimaryContainer,
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: () {
+              // Placeholder for bulk delete
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text('Eliminación masiva: Próximamente')),
+              );
+            },
+            icon: const Icon(Icons.delete, size: 18),
+            label: const Text('Eliminar'),
+            style: TextButton.styleFrom(
+              foregroundColor: theme.colorScheme.error,
+            ),
+          ),
+          const VerticalDivider(indent: 12, endIndent: 12),
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: 'Cancelar selección',
+            onPressed: () => setState(() => _selectedProductIds.clear()),
+            color: theme.colorScheme.onPrimaryContainer,
+          ),
+        ],
+      ),
     );
   }
 
@@ -1837,7 +1996,7 @@ class _ProductListPageState extends State<ProductListPage> {
     if (_selectedProduct == null) return const SizedBox.shrink();
 
     return Container(
-      width: _detailPaneWidth,
+      // width: _detailPaneWidth, // Controlled by parent Stack
       decoration: BoxDecoration(
         border:
             Border(left: BorderSide(color: theme.colorScheme.outlineVariant)),
@@ -1869,8 +2028,11 @@ class _ProductListPageState extends State<ProductListPage> {
                       aspectRatio: 16 / 9,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.network(_selectedProduct!.imageUrl!,
-                            fit: BoxFit.cover),
+                        child: Container(
+                          color: Colors.white,
+                          child: Image.network(_selectedProduct!.imageUrl!,
+                              fit: BoxFit.contain),
+                        ),
                       ),
                     ),
                   const SizedBox(height: 16),

@@ -313,6 +313,15 @@ class AppRouter {
           return null;
         }
 
+        // --------------------------------------------------------------------
+        // ERP DOMAIN PROTECTION: Redirect root '/' to login/dashboard
+        // --------------------------------------------------------------------
+        // The ERP domain should NEVER show the public store home page at root.
+        // It must always redirect to the application interface.
+        if (state.uri.path == '/') {
+          return authService.isAuthenticated ? '/dashboard' : '/login';
+        }
+
         final isLoggedIn = authService.isAuthenticated;
 
         // Allow access to public store routes without authentication
