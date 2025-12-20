@@ -820,6 +820,10 @@ class AddBlockDialog extends StatelessWidget {
     final blockTypes = [
       ('hero', 'Hero Banner', Icons.view_carousel, 'Banner principal con imagen y texto'),
       ('carousel', 'Carrusel', Icons.view_carousel_outlined, 'Carrusel de imágenes rotativas'),
+      ('canvas', 'Canvas', Icons.dashboard_customize_outlined, 'Sección libre con elementos arrastrables (texto/botón)'),
+      ('text', 'Texto', Icons.text_fields, 'Texto libre con edición inline'),
+      ('button', 'Botón', Icons.smart_button, 'Botón con enlace (a páginas o secciones)'),
+      ('divider', 'Separador', Icons.horizontal_rule, 'Línea/separador entre secciones'),
       ('products', 'Productos', Icons.shopping_bag, 'Muestra productos destacados'),
       ('about', 'Sobre Nosotros', Icons.info, 'Sección informativa'),
       ('services', 'Servicios', Icons.build, 'Lista de servicios'),

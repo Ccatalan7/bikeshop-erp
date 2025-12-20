@@ -13,7 +13,7 @@ import '../../modules/website/widgets/inline_edit_toolbar.dart' show AddBlockDia
 import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/models/product.dart';
-import '../../shared/widgets/branded_loading.dart';
+import '../../shared/services/tenant_service.dart';
 import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 
@@ -28,6 +28,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
   List<Product> _featuredProducts = [];
   bool _editModeChecked = false; // Track if we've checked edit mode for this navigation
   bool _featuredProductsLoaded = false; // Load featured products once
+  String? _resolvedTenantId;
+  bool _isResolvingTenantId = false;
 
   static const List<String> _responsiveBreakpoints = [
     'desktop',
@@ -40,18 +42,66 @@ class _PublicHomePageState extends State<PublicHomePage> {
     super.initState();
     // Load featured products once
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureTenantId();
       _loadFeaturedProductsOnce();
     });
+  }
+
+  Future<void> _ensureTenantId() async {
+    if (!mounted) return;
+    if (_resolvedTenantId != null && _resolvedTenantId!.isNotEmpty) return;
+    if (_isResolvingTenantId) return;
+    _isResolvingTenantId = true;
+    try {
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      final providerId = tenantProvider.tenantId;
+      if (providerId != null && providerId.isNotEmpty) {
+        _resolvedTenantId = providerId;
+        return;
+      }
+    } catch (_) {
+      // Provider may not exist in ERP host; ignore.
+    }
+
+    try {
+      final id = await TenantService().getTenantId();
+      if (!mounted) return;
+      if (id != null && id.isNotEmpty) {
+        setState(() => _resolvedTenantId = id);
+      }
+    } finally {
+      _isResolvingTenantId = false;
+    }
+  }
+
+  Future<String?> _effectiveTenantId() async {
+    // If we're disposed, we can no longer safely touch context/provider.
+    if (!mounted) return _resolvedTenantId;
+    try {
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      final providerId = tenantProvider.tenantId;
+      if (providerId != null && providerId.isNotEmpty) return providerId;
+    } catch (_) {}
+    if (_resolvedTenantId != null && _resolvedTenantId!.isNotEmpty) {
+      return _resolvedTenantId;
+    }
+    final id = await TenantService().getTenantId();
+    if (!mounted) return _resolvedTenantId;
+    if (id != null && id.isNotEmpty) {
+      setState(() => _resolvedTenantId = id);
+      return id;
+    }
+    return null;
   }
   
   Future<void> _loadFeaturedProductsOnce() async {
     if (_featuredProductsLoaded || !mounted) return;
+
+    final tenantId = await _effectiveTenantId();
+    if (tenantId == null || tenantId.isEmpty) return;
     _featuredProductsLoaded = true;
     
-    final tenantProvider = context.read<PublicStoreTenantProvider>();
-    final tenantId = tenantProvider.tenantId;
-    if (tenantId == null) return;
-    
+    if (!mounted) return;
     final websiteService = context.read<WebsiteService>();
     final featuredEntries = await websiteService.loadFeaturedProductsForTenant(tenantId);
     final activeFeatured = featuredEntries.where((fp) => fp.active).toList();
@@ -64,6 +114,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
     }
   }
   
+  // ignore: unused_element
   void _checkAutoEditMode() {
     if (!mounted || _editModeChecked) return;
     _editModeChecked = true;
@@ -158,6 +209,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
   /// Update the edit provider with home page blocks if we're in edit mode
   /// and coming from a different page
+  // ignore: unused_element
   void _updateEditProviderIfNeeded() {
     if (!mounted) return;
     
@@ -260,13 +312,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
       return const [];
     }
 
-    // Get tenant from provider (detected from subdomain)
-    final tenantProvider = context.read<PublicStoreTenantProvider>();
-    final tenantId = tenantProvider.tenantId;
-
-    if (tenantId == null) {
-      return const [];
-    }
+    final tenantId = await _effectiveTenantId();
+    if (tenantId == null || tenantId.isEmpty) return const [];
 
     final productIds =
         featuredEntries.map((entry) => entry.productId).toSet().toList();
@@ -394,6 +441,11 @@ class _PublicHomePageState extends State<PublicHomePage> {
     // Read data from providers - WATCH WebsiteService to rebuild when blocks load
     final tenantProvider = context.read<PublicStoreTenantProvider>();
     final websiteService = context.watch<WebsiteService>(); // Changed to watch() for progressive loading
+    if (tenantProvider.tenantId == null &&
+        (_resolvedTenantId == null || _resolvedTenantId!.isEmpty)) {
+      // ERP/editor host: resolve tenant via TenantService so product blocks can load.
+      _ensureTenantId();
+    }
     
     final primaryColor = _resolveColor(
       websiteService.getSetting('theme_primary_color', ''),
@@ -502,6 +554,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
       );
 
     // Build the page content (blocks)
+    final effectiveTenantId = tenantProvider.tenantId ?? _resolvedTenantId;
     Widget pageContent = _buildPageContent(
       context: context,
       visibleBlocks: visibleBlocks,
@@ -516,7 +569,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
       textColor: textColor,
       sectionSpacing: sectionSpacing,
       containerPadding: containerPadding,
-      tenantId: tenantProvider.tenantId,
+      tenantId: effectiveTenantId,
       isInitialLoading: false, // Loading handled by main.dart
     );
 
@@ -735,7 +788,9 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
     // Full-width blocks (like Commencal's edge-to-edge banners) get no horizontal padding
     final blockTypeNormalized = blockType.toLowerCase();
-    final isFullWidthBlock = const [
+    final fullBleed = _toBool(data['fullBleed']) ?? false;
+    final isFullWidthBlock = fullBleed ||
+        const [
       'hero',
       'carousel',
       'videobanner',

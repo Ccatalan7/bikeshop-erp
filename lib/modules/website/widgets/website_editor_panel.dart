@@ -8,7 +8,9 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/constants/storage_constants.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../providers/website_edit_mode_provider.dart';
+import '../models/website_page_models.dart';
 import '../services/website_backup_service.dart';
 import '../services/website_service.dart';
 import 'block_resize_handle.dart';
@@ -255,15 +257,138 @@ class _AddBlocksTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final blocks = editProvider.blocks;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // =========================
+          // PAGE STRUCTURE (Wix-like)
+          // =========================
+          const Text(
+            'ESTRUCTURA DE LA PÁGINA',
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: blocks.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text(
+                      'Aún no hay bloques. Agrega uno desde abajo.',
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                  )
+                : ReorderableListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    itemCount: blocks.length,
+                    onReorder: (oldIndex, newIndex) =>
+                        editProvider.reorderBlocks(oldIndex, newIndex),
+                    itemBuilder: (context, index) {
+                      final block = blocks[index];
+                      final id = block['id']?.toString() ?? 'block_$index';
+                      final type =
+                          (block['block_type'] ?? block['type'] ?? '').toString();
+                      final isVisible = block['is_visible'] ?? true;
+                      final isSelected = editProvider.selectedBlockId == id;
+
+                      return Container(
+                        key: ValueKey('structure_$id'),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF00A09D).withValues(alpha: 0.12)
+                              : Colors.transparent,
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.06),
+                            ),
+                          ),
+                        ),
+                        child: InkWell(
+                          onTap: () => editProvider.selectBlock(id),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 10),
+                            child: Row(
+                              children: [
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  child: const Icon(
+                                    Icons.drag_handle,
+                                    color: Colors.white38,
+                                    size: 18,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  _blockIcon(type),
+                                  color: Colors.white70,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _blockLabel(type),
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 13,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () =>
+                                      editProvider.toggleBlockVisibility(id),
+                                  icon: Icon(
+                                    isVisible ? Icons.visibility : Icons.visibility_off,
+                                    size: 18,
+                                    color: isVisible ? Colors.white54 : Colors.orange.shade300,
+                                  ),
+                                  tooltip: isVisible ? 'Ocultar' : 'Mostrar',
+                                  constraints: const BoxConstraints(
+                                      minWidth: 32, minHeight: 32),
+                                  padding: EdgeInsets.zero,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          const SizedBox(height: 20),
+
           _buildSection('Estructura', [
             _BlockOption('hero', 'Hero', Icons.view_carousel_rounded),
             _BlockOption('carousel', 'Carrusel', Icons.view_array_rounded),
             _BlockOption('categoryGrid', 'Categorías', Icons.grid_view_rounded),
+            _BlockOption('canvas', 'Canvas', Icons.dashboard_customize_outlined),
+          ]),
+          _buildSection('Elementos', [
+            _BlockOption('text', 'Texto', Icons.text_fields_rounded),
+            _BlockOption('button', 'Botón', Icons.smart_button_rounded),
+            _BlockOption('divider', 'Separador', Icons.horizontal_rule_rounded),
+          ]),
+          _buildSection('Canvas (arrastrable)', [
+            _BlockOption('canvas_el:text', 'Texto', Icons.text_fields_rounded),
+            _BlockOption('canvas_el:button', 'Botón', Icons.smart_button_rounded),
+            _BlockOption('canvas_el:image', 'Imagen', Icons.image_outlined),
+            _BlockOption('canvas_el:product', 'Producto', Icons.inventory_2_outlined),
+            _BlockOption('canvas_el:productsGallery', 'Galería productos', Icons.grid_view_rounded),
           ]),
           _buildSection('Contenido', [
             _BlockOption('products', 'Productos', Icons.shopping_bag_rounded),
@@ -365,6 +490,21 @@ class _AddBlocksTab extends StatelessWidget {
         },
         child: GestureDetector(
           onTap: () {
+            if (option.type.startsWith('canvas_el:')) {
+              final elementType = option.type.replaceFirst('canvas_el:', '');
+              final ok = editProvider.addCanvasElementToSelectedCanvas(elementType);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(ok
+                      ? 'Elemento "$elementType" agregado al Canvas'
+                      : 'Selecciona un bloque Canvas para agregar elementos'),
+                  duration: const Duration(seconds: 2),
+                  backgroundColor: ok ? const Color(0xFF00A09D) : Colors.orange,
+                ),
+              );
+              return;
+            }
+
             editProvider.addBlock(option.type);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -405,6 +545,108 @@ class _AddBlocksTab extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static IconData _blockIcon(String type) {
+    switch (type) {
+      case 'hero':
+        return Icons.view_carousel_rounded;
+      case 'carousel':
+        return Icons.view_array_rounded;
+      case 'products':
+        return Icons.shopping_bag_rounded;
+      case 'about':
+        return Icons.info_rounded;
+      case 'services':
+        return Icons.build_rounded;
+      case 'features':
+        return Icons.star_rounded;
+      case 'testimonials':
+        return Icons.format_quote_rounded;
+      case 'team':
+        return Icons.groups_rounded;
+      case 'stats':
+        return Icons.analytics_rounded;
+      case 'faq':
+        return Icons.help_outline_rounded;
+      case 'pricing':
+        return Icons.payments_rounded;
+      case 'contact':
+        return Icons.contact_mail_rounded;
+      case 'cta':
+        return Icons.touch_app_rounded;
+      case 'gallery':
+        return Icons.photo_library_rounded;
+      case 'categoryGrid':
+        return Icons.grid_view_rounded;
+      case 'videoBanner':
+        return Icons.play_circle_outline_rounded;
+      case 'partnersBanner':
+        return Icons.handshake_rounded;
+      case 'brandLogos':
+        return Icons.branding_watermark_rounded;
+      case 'canvas':
+        return Icons.dashboard_customize_outlined;
+      case 'text':
+        return Icons.text_fields_rounded;
+      case 'button':
+        return Icons.smart_button_rounded;
+      case 'divider':
+        return Icons.horizontal_rule_rounded;
+      default:
+        return Icons.widgets_rounded;
+    }
+  }
+
+  static String _blockLabel(String type) {
+    switch (type) {
+      case 'hero':
+        return 'Hero / Banner';
+      case 'carousel':
+        return 'Carrusel';
+      case 'categoryGrid':
+        return 'Categorías';
+      case 'canvas':
+        return 'Canvas';
+      case 'text':
+        return 'Texto';
+      case 'button':
+        return 'Botón';
+      case 'divider':
+        return 'Separador';
+      case 'products':
+        return 'Productos';
+      case 'about':
+        return 'Nosotros';
+      case 'services':
+        return 'Servicios';
+      case 'features':
+        return 'Beneficios';
+      case 'gallery':
+        return 'Galería';
+      case 'videoBanner':
+        return 'Video Banner';
+      case 'brandLogos':
+        return 'Logos Marcas';
+      case 'partnersBanner':
+        return 'Partners';
+      case 'testimonials':
+        return 'Testimonios';
+      case 'team':
+        return 'Equipo';
+      case 'stats':
+        return 'Estadísticas';
+      case 'cta':
+        return 'Call to Action';
+      case 'pricing':
+        return 'Precios';
+      case 'contact':
+        return 'Contacto';
+      case 'faq':
+        return 'FAQ';
+      default:
+        return type;
+    }
   }
 }
 
@@ -588,6 +830,10 @@ class _EditBlockTab extends StatelessWidget {
     return switch (type) {
       'hero' => Icons.view_carousel_rounded,
       'carousel' => Icons.view_array_rounded,
+      'canvas' => Icons.dashboard_customize_outlined,
+      'text' => Icons.text_fields_rounded,
+      'button' => Icons.smart_button_rounded,
+      'divider' => Icons.horizontal_rule_rounded,
       'products' => Icons.shopping_bag_rounded,
       'about' => Icons.info_rounded,
       'services' => Icons.build_rounded,
@@ -617,6 +863,18 @@ class _EditBlockTab extends StatelessWidget {
             data: data, blockId: blockId, provider: editProvider);
       case 'carousel':
         return _CarouselBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
+      case 'canvas':
+        return _CanvasBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
+      case 'text':
+        return _TextBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
+      case 'button':
+        return _ButtonBlockControls(
+            data: data, blockId: blockId, provider: editProvider);
+      case 'divider':
+        return _DividerBlockControls(
             data: data, blockId: blockId, provider: editProvider);
       case 'products':
         return _ProductsBlockControls(
@@ -1608,7 +1866,6 @@ class _SlideEditor extends StatefulWidget {
   final void Function(String key, dynamic value) onUpdate;
 
   const _SlideEditor({
-    super.key,
     required this.slide,
     required this.onUpdate,
   });
@@ -2473,6 +2730,112 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
   }
 }
 
+class _SelectedProductRow extends StatelessWidget {
+  final Map<String, dynamic> product;
+  final VoidCallback onRemove;
+
+  const _SelectedProductRow({
+    required this.product,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = product['is_active'] == true;
+    final isPublished = product['is_published'] == true;
+    final stockQty = (product['inventory_qty'] as num?)?.toInt() ??
+        (product['stock_quantity'] as num?)?.toInt() ??
+        0;
+    final isAvailable = isActive && isPublished && stockQty > 0;
+    final statusText = !isActive
+        ? 'Inactivo'
+        : stockQty <= 0
+            ? 'Sin stock'
+            : !isPublished
+                ? 'No publicado'
+                : null;
+
+    return Opacity(
+      opacity: isAvailable ? 1.0 : 0.6,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.circular(4),
+          border:
+              !isAvailable ? Border.all(color: Colors.red.withValues(alpha: 0.3)) : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFF3D3D3D),
+                borderRadius: BorderRadius.circular(4),
+                image: product['image_url'] != null
+                    ? DecorationImage(
+                        image: NetworkImage(product['image_url']),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+              ),
+              child: product['image_url'] == null
+                  ? const Icon(Icons.image, size: 16, color: Colors.white24)
+                  : null,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          product['name']?.toString() ?? '',
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (statusText != null)
+                        Container(
+                          margin: const EdgeInsets.only(left: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                          child: Text(
+                            statusText,
+                            style: const TextStyle(color: Colors.red, fontSize: 8),
+                          ),
+                        ),
+                    ],
+                  ),
+                  Text(
+                    product['sku']?.toString() ?? '',
+                    style: const TextStyle(color: Colors.white38, fontSize: 10),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 16),
+              color: Colors.white38,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: onRemove,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Product picker dialog
 class _ProductPickerDialog extends StatefulWidget {
   final List<Map<String, dynamic>> availableProducts;
@@ -3018,6 +3381,1473 @@ class _GenericBlockControls extends StatelessWidget {
     );
   }
 }
+
+/// Controls for simple Text block (inline-edit on canvas + fallback editing here).
+class _TextBlockControls extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String blockId;
+  final WebsiteEditModeProvider provider;
+
+  const _TextBlockControls({
+    required this.data,
+    required this.blockId,
+    required this.provider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final preset = (data['preset'] ?? 'paragraph').toString();
+    final maxWidth = (data['maxWidth'] as num?)?.toDouble() ?? 800.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader('Texto'),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Texto (también se edita haciendo clic en la página)',
+          value: data['text']?.toString() ?? '',
+          onChanged: (v) => provider.updateBlockData(blockId, 'text', v),
+          maxLines: 4,
+        ),
+        const SizedBox(height: 16),
+        _EditorDropdown(
+          label: 'Preset',
+          value: preset,
+          options: const [
+            ('heading', 'Título'),
+            ('subheading', 'Subtítulo'),
+            ('paragraph', 'Párrafo'),
+            ('caption', 'Texto pequeño'),
+          ],
+          onChanged: (v) => provider.updateBlockData(blockId, 'preset', v),
+        ),
+        const SizedBox(height: 16),
+        _EditorSlider(
+          label: 'Ancho máximo',
+          value: maxWidth.clamp(200, 1200),
+          min: 200,
+          max: 1200,
+          divisions: 50,
+          valueLabel: '${maxWidth.toStringAsFixed(0)}px',
+          onChanged: (v) => provider.updateBlockData(blockId, 'maxWidth', v),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Tip: usa la barra flotante de formato (negrita, color, alineación) sobre el texto.',
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
+/// Controls for Button block (inline label + link picker).
+class _ButtonBlockControls extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String blockId;
+  final WebsiteEditModeProvider provider;
+
+  const _ButtonBlockControls({
+    required this.data,
+    required this.blockId,
+    required this.provider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = (data['style'] ?? 'filled').toString();
+    final link = (data['link'] ?? '').toString();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader('Botón'),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Texto del botón',
+          value: data['label']?.toString() ?? '',
+          onChanged: (v) => provider.updateBlockData(blockId, 'label', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Enlace',
+          value: link,
+          onChanged: (v) => provider.updateBlockData(blockId, 'link', v),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _pickPage(context),
+                icon: const Icon(Icons.article_outlined, size: 16),
+                label: const Text('Elegir página'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white70,
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _pickCommonLink(context),
+                icon: const Icon(Icons.link, size: 16),
+                label: const Text('Enlaces rápidos'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white70,
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _EditorDropdown(
+          label: 'Estilo',
+          value: style,
+          options: const [
+            ('filled', 'Relleno'),
+            ('outline', 'Borde'),
+            ('text', 'Texto'),
+          ],
+          onChanged: (v) => provider.updateBlockData(blockId, 'style', v),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickPage(BuildContext context) async {
+    final websiteService = context.read<WebsiteService>();
+    try {
+      if (websiteService.pages.isEmpty) {
+        await websiteService.loadPages();
+      }
+    } catch (_) {
+      // If load fails (e.g., in public store without ERP auth), we'll still show whatever we have.
+    }
+
+    final pages = websiteService.pages;
+    if (!context.mounted) return;
+
+    final selected = await showDialog<WebsitePage>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Elegir página'),
+        content: SizedBox(
+          width: 420,
+          height: 520,
+          child: ListView(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.home_outlined),
+                title: const Text('Inicio'),
+                subtitle: const Text('/'),
+                onTap: () => Navigator.pop(
+                  context,
+                  WebsitePage(
+                    id: '',
+                    tenantId: '',
+                    slug: '',
+                    title: 'Inicio',
+                    isHome: true,
+                    createdAt: DateTime.now(),
+                    updatedAt: DateTime.now(),
+                  ),
+                ),
+              ),
+              const Divider(),
+              ...pages.map((page) {
+                return ListTile(
+                  leading: Icon(page.isHome ? Icons.home : Icons.article_outlined),
+                  title: Text(page.title),
+                  subtitle: Text(page.isHome ? '/' : '/pagina/${page.slug}'),
+                  onTap: () => Navigator.pop(context, page),
+                );
+              }),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+
+    if (selected == null) return;
+    final nextLink = selected.isHome ? '/' : '/pagina/${selected.slug}';
+    provider.updateBlockData(blockId, 'link', nextLink);
+  }
+
+  Future<void> _pickCommonLink(BuildContext context) async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enlaces rápidos'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.shopping_bag_outlined),
+                title: const Text('Productos'),
+                subtitle: const Text('/productos'),
+                onTap: () => Navigator.pop(context, '/productos'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.contact_mail_outlined),
+                title: const Text('Contacto'),
+                subtitle: const Text('/contacto'),
+                onTap: () => Navigator.pop(context, '/contacto'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.shopping_cart_outlined),
+                title: const Text('Carrito'),
+                subtitle: const Text('/carrito'),
+                onTap: () => Navigator.pop(context, '/carrito'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.payment_outlined),
+                title: const Text('Checkout'),
+                subtitle: const Text('/checkout'),
+                onTap: () => Navigator.pop(context, '/checkout'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+    if (selected == null) return;
+    provider.updateBlockData(blockId, 'link', selected);
+  }
+}
+
+/// Controls for Divider / Separator block.
+class _DividerBlockControls extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String blockId;
+  final WebsiteEditModeProvider provider;
+
+  const _DividerBlockControls({
+    required this.data,
+    required this.blockId,
+    required this.provider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final thickness = (data['thickness'] as num?)?.toDouble() ?? 1.0;
+    final color = (data['color'] ?? '#E0E0E0').toString();
+    final widthPct = (data['widthPct'] as num?)?.toDouble() ?? 1.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader('Separador'),
+        const SizedBox(height: 12),
+        _EditorSlider(
+          label: 'Grosor',
+          value: thickness.clamp(1, 12),
+          min: 1,
+          max: 12,
+          divisions: 11,
+          valueLabel: '${thickness.toStringAsFixed(0)}px',
+          onChanged: (v) => provider.updateBlockData(blockId, 'thickness', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Color (hex)',
+          value: color,
+          onChanged: (v) => provider.updateBlockData(blockId, 'color', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorSlider(
+          label: 'Ancho',
+          value: widthPct.clamp(0.1, 1.0),
+          min: 0.1,
+          max: 1.0,
+          divisions: 9,
+          valueLabel: '${(widthPct * 100).toStringAsFixed(0)}%',
+          onChanged: (v) => provider.updateBlockData(blockId, 'widthPct', v),
+        ),
+      ],
+    );
+  }
+}
+
+/// Controls for the free-position Canvas block (Wix-like).
+class _CanvasBlockControls extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String blockId;
+  final WebsiteEditModeProvider provider;
+
+  const _CanvasBlockControls({
+    required this.data,
+    required this.blockId,
+    required this.provider,
+  });
+
+  List<Map<String, dynamic>> _elements() {
+    final raw = data['elements'];
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    return <Map<String, dynamic>>[];
+  }
+
+  String? _activeElementId() {
+    final raw = data['activeElementId'];
+    final id = raw?.toString();
+    if (id == null || id.trim().isEmpty) return null;
+    return id.trim();
+  }
+
+  void _setActive(String? id) {
+    provider.updateBlockData(blockId, 'activeElementId', id);
+  }
+
+  void _setElements(List<Map<String, dynamic>> elements) {
+    provider.updateBlockData(blockId, 'elements', elements);
+  }
+
+  void _updateElement(
+    String elementId,
+    Map<String, dynamic> patch,
+  ) {
+    final elements = _elements();
+    final idx = elements.indexWhere((e) => e['id']?.toString() == elementId);
+    if (idx == -1) return;
+    elements[idx] = {
+      ...elements[idx],
+      ...patch,
+    };
+    _setElements(elements);
+  }
+
+  void _deleteElement(String elementId) {
+    final elements = _elements()..removeWhere((e) => e['id']?.toString() == elementId);
+    _setElements(elements);
+    if (_activeElementId() == elementId) {
+      _setActive(null);
+    }
+  }
+
+  void _moveElement(String elementId, int delta) {
+    final elements = _elements();
+    final idx = elements.indexWhere((e) => e['id']?.toString() == elementId);
+    if (idx == -1) return;
+    final nextIdx = (idx + delta).clamp(0, elements.length - 1);
+    if (nextIdx == idx) return;
+    final item = elements.removeAt(idx);
+    elements.insert(nextIdx, item);
+    _setElements(elements);
+  }
+
+  void _addElement(String type) {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final id = 'el_$now';
+    final elements = _elements();
+    final next = <String, dynamic>{
+      'id': id,
+      'type': type,
+      'x': 24.0,
+      'y': 24.0,
+      'w': type == 'button' ? 220.0 : 360.0,
+      'h': type == 'button' ? 56.0 : 72.0,
+    };
+    if (type == 'button') {
+      next.addAll({
+        'label': 'Botón',
+        'style': 'filled', // filled|outline|text
+        'bgColor': '#00A09D',
+        'fgColor': '#FFFFFF',
+        'radius': 12.0,
+        'fontSize': 14.0,
+        'link': '/',
+      });
+    } else {
+      next.addAll({
+        'text': 'Texto',
+        'fontSize': 28.0,
+        'fontWeight': 'w700',
+        'color': '#111111',
+        'align': 'left',
+      });
+    }
+    elements.add(next);
+    _setElements(elements);
+    _setActive(id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final height = (data['blockHeight'] as num?)?.toDouble() ?? 420.0;
+    final heightMode = (data['heightMode'] ?? 'fixed').toString();
+    final vhPct = (data['vhPct'] as num?)?.toDouble() ?? 0.7;
+    final fullBleed = (data['fullBleed'] as bool?) ?? false;
+    final bg = (data['backgroundColor'] ?? '#FFFFFF').toString();
+    final backgroundImageUrl = (data['backgroundImageUrl'] ?? '').toString();
+    final backgroundVideoUrl = (data['backgroundVideoUrl'] ?? '').toString();
+    final backgroundYoutubeId = (data['backgroundYoutubeId'] ?? '').toString();
+    final overlayEnabled = (data['overlayEnabled'] as bool?) ?? false;
+    final overlayOpacity =
+        (data['overlayOpacity'] as num?)?.toDouble() ?? 0.35;
+    final overlayColor = (data['overlayColor'] ?? '#000000').toString();
+    final backgroundFit = (data['backgroundFit'] ?? 'cover').toString();
+    final showGrid = (data['showGrid'] as bool?) ?? true;
+    final snap = (data['snap'] as bool?) ?? true;
+    final gridSize = (data['gridSize'] as num?)?.toDouble() ?? 8.0;
+    final snapDistance = (data['snapDistance'] as num?)?.toDouble() ?? 6.0;
+
+    final elements = _elements();
+    final activeId = _activeElementId();
+    final active = activeId == null
+        ? null
+        : elements.cast<Map<String, dynamic>?>().firstWhere(
+              (e) => e?['id']?.toString() == activeId,
+              orElse: () => null,
+            );
+    final activeType = (active?['type'] ?? '').toString();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader('Canvas'),
+        const SizedBox(height: 12),
+        _EditorToggle(
+          label: 'Full-bleed (sin padding)',
+          value: fullBleed,
+          onChanged: (v) => provider.updateBlockData(blockId, 'fullBleed', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorDropdown(
+          label: 'Altura',
+          value: heightMode,
+          options: const [
+            ('fixed', 'Fija'),
+            ('viewport', 'Viewport (pantalla)'),
+          ],
+          onChanged: (v) => provider.updateBlockData(blockId, 'heightMode', v),
+        ),
+        const SizedBox(height: 12),
+        if (heightMode == 'viewport') ...[
+          _EditorSlider(
+            label: 'Viewport height',
+            value: vhPct.clamp(0.2, 1.0),
+            min: 0.2,
+            max: 1.0,
+            divisions: 16,
+            valueLabel: '${(vhPct * 100).toStringAsFixed(0)}%',
+            onChanged: (v) => provider.updateBlockData(blockId, 'vhPct', v),
+          ),
+        ] else ...[
+          _EditorSlider(
+            label: 'Altura del canvas',
+            value: height.clamp(220, 1600),
+            min: 220,
+            max: 1600,
+            divisions: 69,
+            valueLabel: '${height.toStringAsFixed(0)}px',
+            onChanged: (v) =>
+                provider.updateBlockData(blockId, 'blockHeight', v),
+          ),
+        ],
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Color de fondo (hex)',
+          value: bg,
+          onChanged: (v) => provider.updateBlockData(blockId, 'backgroundColor', v),
+        ),
+        const SizedBox(height: 12),
+        const _SectionHeader('Background'),
+        const SizedBox(height: 12),
+        _ImagePicker(
+          currentUrl: backgroundImageUrl,
+          onChanged: (url) =>
+              provider.updateBlockData(blockId, 'backgroundImageUrl', url),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Video URL (mp4/webm) (opcional)',
+          value: backgroundVideoUrl,
+          onChanged: (v) =>
+              provider.updateBlockData(blockId, 'backgroundVideoUrl', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'YouTube ID (opcional)',
+          value: backgroundYoutubeId,
+          onChanged: (v) =>
+              provider.updateBlockData(blockId, 'backgroundYoutubeId', v),
+          hint: 'Ej: dQw4w9WgXcQ',
+        ),
+        const SizedBox(height: 12),
+        _EditorDropdown(
+          label: 'Fit',
+          value: backgroundFit,
+          options: const [
+            ('cover', 'Cover'),
+            ('contain', 'Contain'),
+          ],
+          onChanged: (v) => provider.updateBlockData(blockId, 'backgroundFit', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorToggle(
+          label: 'Overlay',
+          value: overlayEnabled,
+          onChanged: (v) =>
+              provider.updateBlockData(blockId, 'overlayEnabled', v),
+        ),
+        if (overlayEnabled) ...[
+          const SizedBox(height: 12),
+          _EditorTextField(
+            label: 'Overlay color (hex)',
+            value: overlayColor,
+            onChanged: (v) =>
+                provider.updateBlockData(blockId, 'overlayColor', v),
+          ),
+          const SizedBox(height: 12),
+          _EditorSlider(
+            label: 'Opacidad overlay',
+            value: overlayOpacity.clamp(0.0, 0.9),
+            min: 0.0,
+            max: 0.9,
+            divisions: 18,
+            valueLabel: overlayOpacity.toStringAsFixed(2),
+            onChanged: (v) =>
+                provider.updateBlockData(blockId, 'overlayOpacity', v),
+          ),
+        ],
+        const SizedBox(height: 12),
+        _EditorToggle(
+          label: 'Mostrar grid',
+          value: showGrid,
+          onChanged: (v) => provider.updateBlockData(blockId, 'showGrid', v),
+        ),
+        const SizedBox(height: 8),
+        _EditorToggle(
+          label: 'Snapping',
+          value: snap,
+          onChanged: (v) => provider.updateBlockData(blockId, 'snap', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorSlider(
+          label: 'Tamaño grid',
+          value: gridSize.clamp(4, 24),
+          min: 4,
+          max: 24,
+          divisions: 20,
+          valueLabel: '${gridSize.toStringAsFixed(0)}px',
+          onChanged: (v) => provider.updateBlockData(blockId, 'gridSize', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorSlider(
+          label: 'Distancia snap',
+          value: snapDistance.clamp(2, 16),
+          min: 2,
+          max: 16,
+          divisions: 14,
+          valueLabel: '${snapDistance.toStringAsFixed(0)}px',
+          onChanged: (v) => provider.updateBlockData(blockId, 'snapDistance', v),
+        ),
+        const SizedBox(height: 18),
+
+        _SectionHeader('Elementos (${elements.length})'),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _addElement('text'),
+                icon: const Icon(Icons.text_fields_rounded, size: 18),
+                label: const Text('Texto'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _addElement('button'),
+                icon: const Icon(Icons.smart_button_rounded, size: 18),
+                label: const Text('Botón'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (elements.isEmpty)
+          Text(
+            'Agrega elementos y arrástralos en el canvas.',
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+          )
+        else
+          Column(
+            children: elements.map((e) {
+              final id = e['id']?.toString() ?? '';
+              final type = (e['type'] ?? 'text').toString();
+              final title = type == 'button'
+                  ? (e['label'] ?? 'Botón').toString()
+                  : (e['text'] ?? 'Texto').toString();
+              final isActive = id == activeId;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isActive
+                        ? const Color(0xFF00A09D)
+                        : Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(
+                    type == 'button'
+                        ? Icons.smart_button_rounded
+                        : Icons.text_fields_rounded,
+                    color: Colors.white70,
+                    size: 18,
+                  ),
+                  title: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                  onTap: () => _setActive(id),
+                  trailing: IconButton(
+                    tooltip: 'Eliminar',
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    color: Colors.red.shade300,
+                    onPressed: () => _deleteElement(id),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+
+        const SizedBox(height: 18),
+
+        if (active == null) ...[
+          Text(
+            'Selecciona un elemento (clic en el canvas o en la lista) para editarlo.',
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+          ),
+        ] else ...[
+          _SectionHeader('Editar elemento'),
+          const SizedBox(height: 12),
+          if (activeType == 'text') ...[
+            _EditorTextField(
+              label: 'Texto',
+              value: active['text']?.toString() ?? '',
+              onChanged: (v) => _updateElement(activeId!, {'text': v}),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 12),
+            _EditorSlider(
+              label: 'Tamaño fuente',
+              value: ((active['fontSize'] as num?)?.toDouble() ?? 24).clamp(10, 80),
+              min: 10,
+              max: 80,
+              divisions: 70,
+              valueLabel:
+                  '${((active['fontSize'] as num?)?.toDouble() ?? 24).toStringAsFixed(0)}px',
+              onChanged: (v) => _updateElement(activeId!, {'fontSize': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Peso',
+              value: (active['fontWeight'] ?? 'w600').toString(),
+              options: const [
+                ('w400', 'Normal'),
+                ('w500', 'Medio'),
+                ('w600', 'Semi-bold'),
+                ('w700', 'Bold'),
+              ],
+              onChanged: (v) => _updateElement(activeId!, {'fontWeight': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Alineación',
+              value: (active['align'] ?? 'left').toString(),
+              options: const [
+                ('left', 'Izquierda'),
+                ('center', 'Centro'),
+                ('right', 'Derecha'),
+              ],
+              onChanged: (v) => _updateElement(activeId!, {'align': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              label: 'Color (hex)',
+              value: (active['color'] ?? '#111111').toString(),
+              onChanged: (v) => _updateElement(activeId!, {'color': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Animación',
+              value: (active['anim'] ?? 'none').toString(),
+              options: const [
+                ('none', 'Ninguna'),
+                ('fade', 'Fade'),
+                ('fadeUp', 'Fade up'),
+              ],
+              onChanged: (v) => _updateElement(activeId!, {'anim': v}),
+            ),
+          ] else if (activeType == 'button') ...[
+            _EditorTextField(
+              label: 'Texto del botón',
+              value: active['label']?.toString() ?? '',
+              onChanged: (v) => _updateElement(activeId!, {'label': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Estilo',
+              value: (active['style'] ?? 'filled').toString(),
+              options: const [
+                ('filled', 'Relleno'),
+                ('outline', 'Borde'),
+                ('text', 'Texto'),
+              ],
+              onChanged: (v) => _updateElement(activeId!, {'style': v}),
+            ),
+            const SizedBox(height: 12),
+            _LinkPicker(
+              label: 'Link',
+              currentLink: (active['link'] ?? '/').toString(),
+              onChanged: (v) => _updateElement(activeId!, {'link': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              label: 'Color fondo (hex)',
+              value: (active['bgColor'] ?? '#00A09D').toString(),
+              onChanged: (v) => _updateElement(activeId!, {'bgColor': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              label: 'Color texto (hex)',
+              value: (active['fgColor'] ?? '#FFFFFF').toString(),
+              onChanged: (v) => _updateElement(activeId!, {'fgColor': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorSlider(
+              label: 'Radio',
+              value: ((active['radius'] as num?)?.toDouble() ?? 12).clamp(0, 32),
+              min: 0,
+              max: 32,
+              divisions: 32,
+              valueLabel:
+                  '${((active['radius'] as num?)?.toDouble() ?? 12).toStringAsFixed(0)}px',
+              onChanged: (v) => _updateElement(activeId!, {'radius': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorToggle(
+              label: 'Sombra',
+              value: (active['shadow'] as bool?) ?? false,
+              onChanged: (v) => _updateElement(activeId!, {'shadow': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorToggle(
+              label: 'MAYÚSCULAS',
+              value: (active['uppercase'] as bool?) ?? false,
+              onChanged: (v) => _updateElement(activeId!, {'uppercase': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorSlider(
+              label: 'Letter spacing',
+              value:
+                  ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0).clamp(0, 6),
+              min: 0,
+              max: 6,
+              divisions: 12,
+              valueLabel:
+                  '${((active['letterSpacing'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}',
+              onChanged: (v) => _updateElement(activeId!, {'letterSpacing': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Animación',
+              value: (active['anim'] ?? 'none').toString(),
+              options: const [
+                ('none', 'Ninguna'),
+                ('fade', 'Fade'),
+                ('fadeUp', 'Fade up'),
+              ],
+              onChanged: (v) => _updateElement(activeId!, {'anim': v}),
+            ),
+          ] else if (activeType == 'image') ...[
+            _ImagePicker(
+              currentUrl: (active['imageUrl'] ?? '').toString(),
+              onChanged: (url) => _updateElement(activeId!, {'imageUrl': url}),
+            ),
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Fit',
+              value: (active['fit'] ?? 'cover').toString(),
+              options: const [
+                ('cover', 'Cover'),
+                ('contain', 'Contain'),
+              ],
+              onChanged: (v) => _updateElement(activeId!, {'fit': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorSlider(
+              label: 'Radio',
+              value: ((active['radius'] as num?)?.toDouble() ?? 12).clamp(0, 32),
+              min: 0,
+              max: 32,
+              divisions: 32,
+              valueLabel:
+                  '${((active['radius'] as num?)?.toDouble() ?? 12).toStringAsFixed(0)}px',
+              onChanged: (v) => _updateElement(activeId!, {'radius': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Animación',
+              value: (active['anim'] ?? 'none').toString(),
+              options: const [
+                ('none', 'Ninguna'),
+                ('fade', 'Fade'),
+                ('fadeUp', 'Fade up'),
+              ],
+              onChanged: (v) => _updateElement(activeId!, {'anim': v}),
+            ),
+          ] else if (activeType == 'product') ...[
+            _CanvasProductSelector(
+              currentProductId: (active['productId'] ?? '').toString(),
+              onChanged: (id) => _updateElement(activeId!, {'productId': id}),
+            ),
+            const SizedBox(height: 12),
+            _EditorToggle(
+              label: 'Mostrar precio',
+              value: (active['showPrice'] as bool?) ?? true,
+              onChanged: (v) => _updateElement(activeId!, {'showPrice': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Animación',
+              value: (active['anim'] ?? 'none').toString(),
+              options: const [
+                ('none', 'Ninguna'),
+                ('fade', 'Fade'),
+                ('fadeUp', 'Fade up'),
+              ],
+              onChanged: (v) => _updateElement(activeId!, {'anim': v}),
+            ),
+          ] else if (activeType == 'productsGallery') ...[
+            _EditorDropdown(
+              label: 'Modo',
+              value: (active['mode'] ?? 'latest').toString(),
+              options: const [
+                ('latest', 'Últimos publicados'),
+                ('manual', 'Manual (IDs)'),
+              ],
+              onChanged: (v) => _updateElement(activeId!, {'mode': v}),
+            ),
+            const SizedBox(height: 12),
+            _EditorSlider(
+              label: 'Máx productos',
+              value: ((active['maxProducts'] as num?)?.toDouble() ?? 6).clamp(1, 24),
+              min: 1,
+              max: 24,
+              divisions: 23,
+              valueLabel: '${(active['maxProducts'] ?? 6)}',
+              onChanged: (v) => _updateElement(activeId!, {'maxProducts': v.round()}),
+            ),
+            const SizedBox(height: 12),
+            _EditorSlider(
+              label: 'Columnas',
+              value: ((active['columns'] as num?)?.toDouble() ?? 3).clamp(1, 4),
+              min: 1,
+              max: 4,
+              divisions: 3,
+              valueLabel: '${(active['columns'] ?? 3)}',
+              onChanged: (v) => _updateElement(activeId!, {'columns': v.round()}),
+            ),
+            const SizedBox(height: 12),
+            if ((active['mode'] ?? 'latest').toString() == 'manual') ...[
+              _CanvasProductsMultiSelector(
+                selectedIds: ((active['productIds'] as List?) ?? const [])
+                    .map((e) => e.toString())
+                    .where((e) => e.isNotEmpty)
+                    .toList(),
+                onConfirm: (ids) => _updateElement(activeId!, {'productIds': ids}),
+              ),
+            ],
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Animación',
+              value: (active['anim'] ?? 'none').toString(),
+              options: const [
+                ('none', 'Ninguna'),
+                ('fade', 'Fade'),
+                ('fadeUp', 'Fade up'),
+              ],
+              onChanged: (v) => _updateElement(activeId!, {'anim': v}),
+            ),
+          ],
+          const SizedBox(height: 12),
+          _SectionHeader('Capas'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _moveElement(activeId!, -1),
+                  icon: const Icon(Icons.arrow_downward_rounded, size: 18),
+                  label: const Text('Enviar atrás'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _moveElement(activeId!, 1),
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+                  label: const Text('Traer adelante'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _SectionHeader('Tamaño / Posición'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _EditorTextField(
+                  label: 'X',
+                  value: ((active['x'] as num?)?.toDouble() ?? 0).toStringAsFixed(0),
+                  onChanged: (v) {
+                    final parsed = double.tryParse(v);
+                    if (parsed == null) return;
+                    _updateElement(activeId!, {'x': parsed});
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _EditorTextField(
+                  label: 'Y',
+                  value: ((active['y'] as num?)?.toDouble() ?? 0).toStringAsFixed(0),
+                  onChanged: (v) {
+                    final parsed = double.tryParse(v);
+                    if (parsed == null) return;
+                    _updateElement(activeId!, {'y': parsed});
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _EditorTextField(
+                  label: 'W',
+                  value: ((active['w'] as num?)?.toDouble() ?? 200).toStringAsFixed(0),
+                  onChanged: (v) {
+                    final parsed = double.tryParse(v);
+                    if (parsed == null) return;
+                    _updateElement(activeId!, {'w': parsed.clamp(40, 2000)});
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _EditorTextField(
+                  label: 'H',
+                  value: ((active['h'] as num?)?.toDouble() ?? 56).toStringAsFixed(0),
+                  onChanged: (v) {
+                    final parsed = double.tryParse(v);
+                    if (parsed == null) return;
+                    _updateElement(activeId!, {'h': parsed.clamp(30, 2000)});
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => _setActive(null),
+            icon: const Icon(Icons.close_rounded, size: 18),
+            label: const Text('Deseleccionar elemento'),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _CanvasProductSelector extends StatefulWidget {
+  final String currentProductId;
+  final ValueChanged<String> onChanged;
+
+  const _CanvasProductSelector({
+    required this.currentProductId,
+    required this.onChanged,
+  });
+
+  @override
+  State<_CanvasProductSelector> createState() => _CanvasProductSelectorState();
+}
+
+class _CanvasProductsMultiSelector extends StatefulWidget {
+  final List<String> selectedIds;
+  final ValueChanged<List<String>> onConfirm;
+
+  const _CanvasProductsMultiSelector({
+    required this.selectedIds,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_CanvasProductsMultiSelector> createState() =>
+      _CanvasProductsMultiSelectorState();
+}
+
+class _CanvasProductsMultiSelectorState extends State<_CanvasProductsMultiSelector> {
+  bool _isLoadingProducts = true;
+  List<Map<String, dynamic>> _availableProducts = const [];
+
+  Future<String?> _resolveTenantId() async {
+    try {
+      final service = context.read<TenantService>();
+      return await service.getTenantId();
+    } catch (_) {
+      return await TenantService().getTenantId();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    setState(() => _isLoadingProducts = true);
+    try {
+      final tenantId = await _resolveTenantId();
+      if (tenantId == null) {
+        _availableProducts = const [];
+        return;
+      }
+      final supabase = Supabase.instance.client;
+      final productsResponse = await supabase
+          .from('products')
+          .select(
+              'id, name, sku, price, image_url, is_active, is_published, stock_quantity, inventory_qty')
+          .eq('tenant_id', tenantId)
+          .order('name', ascending: true)
+          .limit(400);
+      _availableProducts = List<Map<String, dynamic>>.from(productsResponse);
+    } catch (_) {
+      _availableProducts = const [];
+    } finally {
+      if (mounted) setState(() => _isLoadingProducts = false);
+    }
+  }
+
+  Future<void> _openPicker() async {
+    if (_isLoadingProducts) return;
+    if (_availableProducts.isEmpty) {
+      await _loadProducts();
+      if (!mounted) return;
+      if (_availableProducts.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudieron cargar los productos')),
+        );
+        return;
+      }
+    }
+
+    // ignore: use_build_context_synchronously
+    await showDialog(
+      context: context,
+      builder: (ctx) => _ProductPickerDialog(
+        availableProducts: _availableProducts,
+        selectedIds: widget.selectedIds,
+        onConfirm: (selectedIds) => widget.onConfirm(selectedIds),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedProducts = widget.selectedIds
+        .map((id) => _availableProducts.firstWhere(
+              (p) => p['id']?.toString() == id,
+              orElse: () => <String, dynamic>{},
+            ))
+        .where((p) => p.isNotEmpty)
+        .map((p) => Map<String, dynamic>.from(p))
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Productos seleccionados (${widget.selectedIds.length})',
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            OutlinedButton.icon(
+              onPressed: _isLoadingProducts ? null : _openPicker,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Agregar'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (widget.selectedIds.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: const Center(
+              child: Text(
+                'No hay productos seleccionados\nToca "Agregar" para elegir productos',
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          )
+        else
+          ...selectedProducts.map((p) {
+            final id = p['id']?.toString() ?? '';
+            return _SelectedProductRow(
+              product: p,
+              onRemove: () {
+                final next = List<String>.from(widget.selectedIds)..remove(id);
+                widget.onConfirm(next);
+              },
+            );
+          }),
+      ],
+    );
+  }
+}
+
+class _CanvasProductSelectorState extends State<_CanvasProductSelector> {
+  final _skuController = TextEditingController();
+  bool _isSearchingSku = false;
+  bool _isLoadingProducts = true;
+  List<Map<String, dynamic>> _availableProducts = const [];
+  bool _showAdvanced = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  @override
+  void dispose() {
+    _skuController.dispose();
+    super.dispose();
+  }
+
+  Future<String?> _resolveTenantId() async {
+    try {
+      final service = context.read<TenantService>();
+      return await service.getTenantId();
+    } catch (_) {
+      return await TenantService().getTenantId();
+    }
+  }
+
+  Future<void> _loadProducts() async {
+    setState(() => _isLoadingProducts = true);
+    try {
+      final tenantId = await _resolveTenantId();
+      if (tenantId == null) {
+        _availableProducts = const [];
+        return;
+      }
+      final supabase = Supabase.instance.client;
+
+      // Load active products for picker (and also load currently selected, even if inactive)
+      final productsResponse = await supabase
+          .from('products')
+          .select(
+              'id, name, sku, price, image_url, is_active, is_published, stock_quantity, inventory_qty')
+          .eq('tenant_id', tenantId)
+          .order('name', ascending: true)
+          .limit(400);
+
+      var allProducts = List<Map<String, dynamic>>.from(productsResponse);
+
+      final selectedId = widget.currentProductId.trim();
+      if (selectedId.isNotEmpty) {
+        final exists =
+            allProducts.any((p) => p['id']?.toString() == selectedId);
+        if (!exists) {
+          final selectedResponse = await supabase
+              .from('products')
+              .select(
+                  'id, name, sku, price, image_url, is_active, is_published, stock_quantity, inventory_qty')
+              .eq('tenant_id', tenantId)
+              .inFilter('id', [selectedId]);
+          for (final selected in selectedResponse) {
+            allProducts.add(Map<String, dynamic>.from(selected));
+          }
+        }
+      }
+
+      _availableProducts = allProducts;
+    } catch (_) {
+      _availableProducts = const [];
+    } finally {
+      if (mounted) setState(() => _isLoadingProducts = false);
+    }
+  }
+
+  Future<void> _pickProduct() async {
+    if (_isLoadingProducts) return;
+    if (_availableProducts.isEmpty) {
+      await _loadProducts();
+      if (!mounted) return;
+      if (_availableProducts.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudieron cargar los productos')),
+        );
+        return;
+      }
+    }
+
+    final current = widget.currentProductId.trim();
+    final initial = current.isEmpty ? const <String>[] : <String>[current];
+
+    // Reuse the exact same picker dialog used by the Products banner.
+    // It is multi-select by design; for single product we just take the first selection.
+    // ignore: use_build_context_synchronously
+    await showDialog(
+      context: context,
+      builder: (ctx) => _ProductPickerDialog(
+        availableProducts: _availableProducts,
+        selectedIds: initial,
+        onConfirm: (selectedIds) {
+          final next = selectedIds.isNotEmpty ? selectedIds.first : '';
+          widget.onChanged(next);
+        },
+      ),
+    );
+  }
+
+  Future<void> _findBySku() async {
+    final sku = _skuController.text.trim();
+    if (sku.isEmpty) return;
+
+    setState(() => _isSearchingSku = true);
+    try {
+      final tenantId = await _resolveTenantId();
+      if (tenantId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo identificar el tenant')),
+          );
+        }
+        return;
+      }
+
+      final response = await Supabase.instance.client
+          .from('products')
+          .select('id, sku, name')
+          .eq('tenant_id', tenantId)
+          .eq('sku', sku)
+          .maybeSingle();
+
+      final id = response?['id']?.toString();
+      if (id == null || id.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No se encontró producto con SKU "$sku"')),
+          );
+        }
+        return;
+      }
+
+      widget.onChanged(id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text('Producto seleccionado: ${response?['name'] ?? sku}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSearchingSku = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedId = widget.currentProductId.trim();
+    final selected = selectedId.isEmpty
+        ? null
+        : _availableProducts.firstWhere(
+            (p) => p['id']?.toString() == selectedId,
+            orElse: () => <String, dynamic>{},
+          );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader('Producto'),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Text(
+              selectedId.isEmpty ? 'Ninguno seleccionado' : 'Seleccionado',
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: _isLoadingProducts ? null : _pickProduct,
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF00A09D),
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                selectedId.isEmpty ? 'Elegir' : 'Cambiar',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (selectedId.isEmpty ||
+            (selected is Map<String, dynamic> && selected.isEmpty))
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: const Center(
+              child: Text(
+                'No hay producto seleccionado\nToca "Elegir" para seleccionar uno',
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          )
+        else
+          _SelectedProductRow(
+            product: Map<String, dynamic>.from(selected as Map),
+            onRemove: () => widget.onChanged(''),
+          ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            TextButton.icon(
+              onPressed: _isSearchingSku
+                  ? null
+                  : () async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) {
+                          final controller = TextEditingController();
+                          return AlertDialog(
+                            title: const Text('Buscar por SKU'),
+                            content: TextField(
+                              controller: controller,
+                              decoration: const InputDecoration(
+                                labelText: 'SKU',
+                                prefixIcon: Icon(Icons.search),
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancelar'),
+                              ),
+                              FilledButton(
+                                onPressed: () {
+                                  _skuController.text = controller.text;
+                                  Navigator.pop(ctx, true);
+                                },
+                                child: const Text('Buscar'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                      if (ok == true) {
+                        // ignore: use_build_context_synchronously
+                        await _findBySku();
+                      }
+                    },
+              icon: _isSearchingSku
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.search, size: 18),
+              label: const Text('Buscar SKU'),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => setState(() => _showAdvanced = !_showAdvanced),
+              child: Text(_showAdvanced ? 'Ocultar avanzado' : 'Avanzado'),
+            ),
+          ],
+        ),
+        if (_showAdvanced) ...[
+          const SizedBox(height: 8),
+          _EditorTextField(
+            label: 'Product ID (interno)',
+            value: widget.currentProductId,
+            onChanged: (v) => widget.onChanged(v.trim()),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Tip: este campo usa Product ID (UUID). Normalmente selecciona desde “Elegir”.',
+            style:
+                TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// (removed) Canvas-specific picker dialog; Canvas reuses `_ProductPickerDialog` for consistency.
 
 /// Theme tab for global site-wide settings (colors, typography, button styles)
 /// Header and Footer are edited via the "Editar" tab when selected
@@ -4190,6 +6020,7 @@ class _EditorSlider extends StatelessWidget {
   final double min;
   final double max;
   final int? divisions;
+  final String? valueLabel;
   final Function(double) onChanged;
 
   const _EditorSlider({
@@ -4199,6 +6030,7 @@ class _EditorSlider extends StatelessWidget {
     required this.max,
     required this.onChanged,
     this.divisions,
+    this.valueLabel,
   });
 
   @override
@@ -4218,7 +6050,7 @@ class _EditorSlider extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                value.toInt().toString(),
+                valueLabel ?? value.toInt().toString(),
                 style: const TextStyle(color: Color(0xFF00A09D), fontSize: 12),
               ),
             ),
@@ -4251,7 +6083,6 @@ class _EditorDropdown extends StatelessWidget {
   final Function(String) onChanged;
 
   const _EditorDropdown({
-    super.key,
     required this.label,
     required this.value,
     required this.options,
@@ -4367,7 +6198,6 @@ class _ImagePicker extends StatefulWidget {
 
 class _ImagePickerState extends State<_ImagePicker> {
   bool _isUploading = false;
-  double _uploadProgress = 0;
 
   Future<void> _pickAndUploadImage() async {
     try {
@@ -4383,7 +6213,6 @@ class _ImagePickerState extends State<_ImagePicker> {
 
       setState(() {
         _isUploading = true;
-        _uploadProgress = 0;
       });
 
       // Read file bytes
@@ -4405,8 +6234,6 @@ class _ImagePickerState extends State<_ImagePicker> {
             ),
           );
 
-      setState(() => _uploadProgress = 0.8);
-
       // Get public URL
       final publicUrl = supabase.storage
           .from(StorageConfig.defaultBucket)
@@ -4414,7 +6241,6 @@ class _ImagePickerState extends State<_ImagePicker> {
 
       setState(() {
         _isUploading = false;
-        _uploadProgress = 1;
       });
 
       widget.onChanged(publicUrl);

@@ -6,6 +6,7 @@ import '../widgets/inline_editable_text_v2.dart';
 import '../widgets/inline_editable_image.dart';
 import '../widgets/block_resize_handle.dart';
 import '../widgets/text_formatting_toolbar.dart';
+import '../widgets/canvas_block.dart';
 import 'website_block_renderer.dart';
 import '../../../shared/models/product.dart';
 
@@ -577,6 +578,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       case 'hero':
       case 'carousel':
         return 200;
+      case 'canvas':
+        return 260;
       case 'products':
         return 250;
       case 'services':
@@ -601,6 +604,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         return 1000;
       case 'products':
         return 900;
+      case 'canvas':
+        return 1600;
       default:
         return 800;
     }
@@ -614,6 +619,14 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         return _buildEditableHero(context);
       case 'carousel':
         return _buildEditableCarousel(context);
+      case 'canvas':
+        return _buildEditableCanvas(context);
+      case 'text':
+        return _buildEditableText(context);
+      case 'button':
+        return _buildEditableButton(context);
+      case 'divider':
+        return _buildEditableDivider(context);
       case 'about':
         return _buildEditableAbout(context);
       case 'cta':
@@ -651,6 +664,198 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           onNavigate: widget.onNavigate,
           tenantId: widget.tenantId,
         );
+    }
+  }
+
+  Widget _buildEditableCanvas(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final currentElements = (() {
+      final raw = widget.data['elements'];
+      if (raw is List) {
+        return raw
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+      return <Map<String, dynamic>>[];
+    })();
+
+    return CanvasBlock(
+      data: widget.data,
+      editable: true,
+      accentColor: widget.accentColor,
+      onNavigate: widget.onNavigate,
+      tenantId: widget.tenantId,
+      bodyFont: widget.bodyFont,
+      onActiveElementChanged: (id) {
+        editProvider.updateBlockData(widget.blockId, 'activeElementId', id);
+      },
+      onElementsChanged: (elements) {
+        // Avoid needless writes
+        if (elements.length == currentElements.length) {
+          // still update (positions changed), this is ok.
+        }
+        editProvider.updateBlockData(widget.blockId, 'elements', elements);
+      },
+    );
+  }
+
+  Widget _buildEditableText(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final text = (widget.data['text'] ?? '').toString();
+    final preset = (widget.data['preset'] ?? 'paragraph').toString();
+    final maxWidth = (widget.data['maxWidth'] as num?)?.toDouble();
+    final formatting =
+        TextFormatting.fromJson(widget.data['formatting'] as Map<String, dynamic>?);
+
+    TextStyle base;
+    switch (preset) {
+      case 'heading':
+        base = TextStyle(
+          fontSize: widget.headingSize ?? 40,
+          fontWeight: FontWeight.w700,
+          fontFamily: widget.headingFont,
+          color: Colors.black87,
+        );
+        break;
+      case 'subheading':
+        base = TextStyle(
+          fontSize: (widget.bodySize ?? 16) * 1.25,
+          fontWeight: FontWeight.w600,
+          fontFamily: widget.headingFont ?? widget.bodyFont,
+          color: Colors.black87,
+        );
+        break;
+      case 'caption':
+        base = TextStyle(
+          fontSize: (widget.bodySize ?? 16) * 0.9,
+          fontWeight: FontWeight.w400,
+          fontFamily: widget.bodyFont,
+          color: Colors.black54,
+        );
+        break;
+      default:
+        base = TextStyle(
+          fontSize: widget.bodySize ?? 16,
+          fontWeight: FontWeight.w400,
+          fontFamily: widget.bodyFont,
+          color: Colors.black87,
+        );
+    }
+
+    Widget content = InlineEditableTextV2(
+      text: text,
+      baseStyle: base,
+      textAlign: formatting.textAlign,
+      maxLines: null,
+      isEditMode: true,
+      placeholder: 'Haz clic para escribir',
+      formatting: formatting,
+      maxWidth: maxWidth,
+      onTextChanged: (value) =>
+          editProvider.updateBlockData(widget.blockId, 'text', value),
+      onFormattingChanged: (fmt) => editProvider.updateBlockData(
+        widget.blockId,
+        'formatting',
+        fmt.toJson(),
+      ),
+      onWidthChanged: (w) =>
+          editProvider.updateBlockData(widget.blockId, 'maxWidth', w),
+    );
+
+    if (maxWidth != null) {
+      content = Center(child: content);
+    }
+
+    return content;
+  }
+
+  Widget _buildEditableButton(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final label = (widget.data['label'] ?? 'Botón').toString();
+    final link = (widget.data['link'] ?? '').toString().trim();
+    final style = (widget.data['style'] ?? 'filled').toString();
+
+    VoidCallback? onPressed;
+    if (link.isNotEmpty && widget.onNavigate != null) {
+      onPressed = () => widget.onNavigate!(link);
+    }
+
+    final child = SimpleInlineEditableText(
+      text: label,
+      isEditMode: true,
+      style: const TextStyle(fontWeight: FontWeight.w600),
+      onChanged: (v) => editProvider.updateBlockData(widget.blockId, 'label', v),
+      placeholder: 'Botón',
+    );
+
+    switch (style) {
+      case 'outline':
+        return OutlinedButton(
+          onPressed: onPressed,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: widget.accentColor,
+            side: BorderSide(color: widget.accentColor),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          ),
+          child: child,
+        );
+      case 'text':
+        return TextButton(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(
+            foregroundColor: widget.accentColor,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+          child: child,
+        );
+      default:
+        return ElevatedButton(
+          onPressed: onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: widget.accentColor,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+          ),
+          child: DefaultTextStyle.merge(
+            style: const TextStyle(color: Colors.white),
+            child: child,
+          ),
+        );
+    }
+  }
+
+  Widget _buildEditableDivider(BuildContext context) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final thickness = (widget.data['thickness'] as num?)?.toDouble() ?? 1.0;
+    final widthPct = (widget.data['widthPct'] as num?)?.toDouble() ?? 1.0;
+    final colorRaw = (widget.data['color'] ?? '#E0E0E0').toString();
+    final color = _parseHexColor(colorRaw) ?? Colors.grey.shade300;
+
+    return GestureDetector(
+      onTap: () => editProvider.selectBlock(widget.blockId),
+      child: Center(
+        child: FractionallySizedBox(
+          widthFactor: widthPct.clamp(0.1, 1.0),
+          child: Divider(
+            thickness: thickness.clamp(1, 12),
+            height: thickness.clamp(1, 12),
+            color: color,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color? _parseHexColor(String raw) {
+    try {
+      var hex = raw.trim().replaceAll('#', '');
+      if (hex.isEmpty) return null;
+      if (hex.length == 6) hex = 'FF$hex';
+      if (hex.length != 8) return null;
+      return Color(int.parse(hex, radix: 16));
+    } catch (_) {
+      return null;
     }
   }
 

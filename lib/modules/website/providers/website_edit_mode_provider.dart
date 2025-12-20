@@ -199,6 +199,105 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Convenience: add a Canvas element to the currently selected Canvas block.
+  /// Returns true if an element was added.
+  bool addCanvasElementToSelectedCanvas(String elementType) {
+    final selected = _selectedBlockId;
+    if (selected == null) return false;
+    return addCanvasElementToCanvasBlock(selected, elementType);
+  }
+
+  /// Add a Canvas element to a specific Canvas block by id.
+  /// Returns true if successful.
+  bool addCanvasElementToCanvasBlock(String canvasBlockId, String elementType) {
+    final blockIndex = _blocks.indexWhere((b) => b['id'] == canvasBlockId);
+    if (blockIndex == -1) return false;
+    final block = _blocks[blockIndex];
+    final blockType = (block['block_type'] ?? block['type'] ?? '').toString();
+    if (blockType != 'canvas') return false;
+
+    final data = Map<String, dynamic>.from(block['block_data'] ?? {});
+    final rawElements = data['elements'];
+    final elements = rawElements is List
+        ? rawElements
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList()
+        : <Map<String, dynamic>>[];
+
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final id = 'el_$now';
+    final next = <String, dynamic>{
+      'id': id,
+      'type': elementType,
+      'x': 24.0,
+      'y': 24.0,
+      'w': switch (elementType) {
+        'button' => 220.0,
+        'image' => 320.0,
+        'product' => 280.0,
+        'productsGallery' => 520.0,
+        _ => 360.0,
+      },
+      'h': switch (elementType) {
+        'button' => 56.0,
+        'image' => 200.0,
+        'product' => 320.0,
+        'productsGallery' => 360.0,
+        _ => 72.0,
+      },
+      'anim': 'none', // none | fade | fadeUp
+    };
+
+    if (elementType == 'button') {
+      next.addAll({
+        'label': 'Botón',
+        'style': 'filled', // filled|outline|text
+        'bgColor': '#00A09D',
+        'fgColor': '#FFFFFF',
+        'radius': 12.0,
+        'fontSize': 14.0,
+        'letterSpacing': 0.0,
+        'uppercase': false,
+        'shadow': false,
+        'link': '/',
+      });
+    } else if (elementType == 'image') {
+      next.addAll({
+        'imageUrl': '',
+        'fit': 'cover', // cover|contain
+        'radius': 12.0,
+      });
+    } else if (elementType == 'product') {
+      next.addAll({
+        'productId': '',
+        'showPrice': true,
+      });
+    } else if (elementType == 'productsGallery') {
+      next.addAll({
+        'mode': 'latest', // latest|manual
+        'productIds': <String>[],
+        'maxProducts': 6,
+        'columns': 3,
+        'showPrice': true,
+      });
+    } else {
+      // text
+      next.addAll({
+        'text': 'Texto',
+        'fontSize': 28.0,
+        'fontWeight': 'w700',
+        'color': '#111111',
+        'align': 'left',
+      });
+    }
+
+    elements.add(next);
+    updateBlockData(canvasBlockId, 'elements', elements);
+    updateBlockData(canvasBlockId, 'activeElementId', id);
+    return true;
+  }
+
   /// Save current state to history
   void _saveToHistory() {
     // Remove any future history if we're not at the end
@@ -296,6 +395,25 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     
     _hasUnsavedChanges = true;
     debugPrint('🔽 [EditProvider] Moved block from $index to ${index + 1}');
+    notifyListeners();
+  }
+
+  /// Reorder blocks via drag-and-drop (Structure panel).
+  void reorderBlocks(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _blocks.length) return;
+    if (newIndex < 0) return;
+    if (newIndex > _blocks.length) newIndex = _blocks.length;
+
+    // Flutter's ReorderableListView gives newIndex in the "post-removal" space.
+    if (newIndex > oldIndex) newIndex -= 1;
+    if (oldIndex == newIndex) return;
+
+    final item = _blocks.removeAt(oldIndex);
+    _blocks.insert(newIndex, item);
+
+    _updateSortOrders();
+    _hasUnsavedChanges = true;
+    _saveToHistory();
     notifyListeners();
   }
   
@@ -423,6 +541,74 @@ class WebsiteEditModeProvider extends ChangeNotifier {
           'subtitle': 'Los mejores productos para ti',
           'showPrice': true,
           'maxProducts': 8,
+        };
+      case 'text':
+        return {
+          'text': 'Haz clic para editar este texto',
+          'preset': 'paragraph', // heading | subheading | paragraph | caption
+          'maxWidth': 800,
+          'formatting': const <String, dynamic>{},
+        };
+      case 'canvas':
+        return {
+          'blockHeight': 420.0,
+          'heightMode': 'fixed', // fixed | viewport
+          'vhPct': 0.7, // viewport height percentage (0.2..1.0)
+          'fullBleed': false,
+          'backgroundColor': '#FFFFFF',
+          'backgroundImageUrl': '',
+          'backgroundVideoUrl': '',
+          'backgroundYoutubeId': '',
+          'overlayEnabled': false,
+          'overlayOpacity': 0.35,
+          'overlayColor': '#000000',
+          'backgroundFit': 'cover', // cover | contain
+          'showGrid': true,
+          'gridSize': 8.0,
+          'snap': true,
+          'snapDistance': 6.0,
+          'activeElementId': null,
+          'elements': [
+            {
+              'id': 'el_${DateTime.now().microsecondsSinceEpoch}',
+              'type': 'text',
+              'x': 24.0,
+              'y': 24.0,
+              'w': 360.0,
+              'h': 72.0,
+              'text': 'Arrástrame (Canvas)',
+              'fontSize': 28.0,
+              'fontWeight': 'w700',
+              'color': '#111111',
+              'align': 'left',
+            },
+            {
+              'id': 'el_${DateTime.now().microsecondsSinceEpoch + 1}',
+              'type': 'button',
+              'x': 24.0,
+              'y': 120.0,
+              'w': 220.0,
+              'h': 56.0,
+              'label': 'Botón',
+              'style': 'filled',
+              'bgColor': '#00A09D',
+              'fgColor': '#FFFFFF',
+              'radius': 12.0,
+              'link': '/',
+            },
+          ],
+        };
+      case 'button':
+        return {
+          'label': 'Botón',
+          'link': '/',
+          'style': 'filled', // filled | outline | text
+        };
+      case 'divider':
+        return {
+          'thickness': 1.0,
+          'color': '#E0E0E0',
+          'widthPct': 1.0,
         };
       case 'about':
         return {

@@ -7,8 +7,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 // import '../../../public_store/theme/public_store_theme.dart'; // Unused
 import '../../../shared/models/product.dart';
-import '../../../shared/utils/chilean_utils.dart';
 import '../models/website_block_type.dart';
+import 'canvas_block.dart';
+import 'premium_product_card.dart';
+import 'text_formatting_toolbar.dart';
 
 // Conditional import for web platform
 import 'video_banner_stub.dart' if (dart.library.html) 'video_banner_web.dart'
@@ -62,6 +64,40 @@ class WebsiteBlockRenderer {
           headingSize: headingSize,
           bodySize: bodySize,
           onNavigate: onNavigate,
+        );
+      case WebsiteBlockType.canvas:
+        return _buildCanvas(
+          context: context,
+          data: data,
+          accentColor: accentColor,
+          onNavigate: onNavigate,
+          tenantId: tenantId,
+          bodyFont: bodyFont,
+        );
+      case WebsiteBlockType.text:
+        return _buildText(
+          context: context,
+          data: data,
+          headingFont: headingFont,
+          bodyFont: bodyFont,
+          headingSize: headingSize,
+          bodySize: bodySize,
+          previewMode: previewMode,
+        );
+      case WebsiteBlockType.button:
+        return _buildButton(
+          context: context,
+          data: data,
+          primaryColor: primaryColor,
+          accentColor: accentColor,
+          bodyFont: bodyFont,
+          bodySize: bodySize,
+          onNavigate: onNavigate,
+        );
+      case WebsiteBlockType.divider:
+        return _buildDivider(
+          context: context,
+          data: data,
         );
       case WebsiteBlockType.products:
         return _buildProducts(
@@ -217,6 +253,196 @@ class WebsiteBlockRenderer {
           headingFont: headingFont,
           bodyFont: bodyFont,
         );
+    }
+  }
+
+  static Widget _buildCanvas({
+    required BuildContext context,
+    required Map<String, dynamic> data,
+    required Color accentColor,
+    void Function(String route)? onNavigate,
+    String? tenantId,
+    String? bodyFont,
+  }) {
+    return CanvasBlock(
+      data: data,
+      editable: false,
+      accentColor: accentColor,
+      onNavigate: onNavigate,
+      tenantId: tenantId,
+      bodyFont: bodyFont,
+    );
+  }
+
+  static Widget _buildText({
+    required BuildContext context,
+    required Map<String, dynamic> data,
+    required bool previewMode,
+    String? headingFont,
+    String? bodyFont,
+    double? headingSize,
+    double? bodySize,
+  }) {
+    final text = (data['text'] ?? '').toString();
+    final preset = (data['preset'] ?? 'paragraph').toString();
+    final maxWidth = (data['maxWidth'] as num?)?.toDouble();
+    final formatting =
+        TextFormatting.fromJson(data['formatting'] as Map<String, dynamic>?);
+
+    TextStyle base;
+    switch (preset) {
+      case 'heading':
+        base = Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              fontFamily: headingFont,
+              fontSize: headingSize,
+            ) ??
+            TextStyle(
+              fontSize: headingSize ?? 36,
+              fontWeight: FontWeight.w700,
+              fontFamily: headingFont,
+            );
+        break;
+      case 'subheading':
+        base = Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              fontFamily: headingFont,
+            ) ??
+            TextStyle(
+              fontSize: (bodySize ?? 16) * 1.25,
+              fontWeight: FontWeight.w600,
+              fontFamily: headingFont,
+            );
+        break;
+      case 'caption':
+        base = Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontFamily: bodyFont,
+              fontSize: (bodySize ?? 16) * 0.9,
+            ) ??
+            TextStyle(
+              fontSize: (bodySize ?? 16) * 0.9,
+              fontFamily: bodyFont,
+            );
+        break;
+      default:
+        base = Theme.of(context).textTheme.bodyLarge?.copyWith(
+              fontFamily: bodyFont,
+              fontSize: bodySize,
+            ) ??
+            TextStyle(
+              fontSize: bodySize ?? 16,
+              fontFamily: bodyFont,
+            );
+    }
+
+    final effectiveStyle = formatting.applyTo(base);
+    final align = formatting.textAlign;
+
+    Widget content = Text(
+      text.isEmpty && previewMode ? 'Texto' : text,
+      style: effectiveStyle,
+      textAlign: align,
+    );
+
+    if (maxWidth != null) {
+      content = Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth.clamp(200, 1600)),
+          child: content,
+        ),
+      );
+    }
+
+    return content;
+  }
+
+  static Widget _buildButton({
+    required BuildContext context,
+    required Map<String, dynamic> data,
+    required Color primaryColor,
+    required Color accentColor,
+    void Function(String route)? onNavigate,
+    String? bodyFont,
+    double? bodySize,
+  }) {
+    final label = (data['label'] ?? 'Botón').toString();
+    final link = (data['link'] ?? '').toString().trim();
+    final style = (data['style'] ?? 'filled').toString();
+
+    final textStyle = TextStyle(
+      fontFamily: bodyFont,
+      fontSize: bodySize ?? 16,
+      fontWeight: FontWeight.w600,
+    );
+
+    VoidCallback? onPressed;
+    if (link.isNotEmpty && onNavigate != null) {
+      onPressed = () => onNavigate(link);
+    }
+
+    switch (style) {
+      case 'outline':
+        return OutlinedButton(
+          onPressed: onPressed,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: accentColor,
+            side: BorderSide(color: accentColor),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          ),
+          child: Text(label, style: textStyle),
+        );
+      case 'text':
+        return TextButton(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(
+            foregroundColor: accentColor,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+          child: Text(label, style: textStyle),
+        );
+      default:
+        return ElevatedButton(
+          onPressed: onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: accentColor,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+          ),
+          child: Text(label, style: textStyle.copyWith(color: Colors.white)),
+        );
+    }
+  }
+
+  static Widget _buildDivider({
+    required BuildContext context,
+    required Map<String, dynamic> data,
+  }) {
+    final thickness = (data['thickness'] as num?)?.toDouble() ?? 1.0;
+    final widthPct = (data['widthPct'] as num?)?.toDouble() ?? 1.0;
+    final colorRaw = (data['color'] ?? '#E0E0E0').toString();
+    final color = _parseHexColor(colorRaw) ?? Colors.grey.shade300;
+
+    return Center(
+      child: FractionallySizedBox(
+        widthFactor: widthPct.clamp(0.1, 1.0),
+        child: Divider(
+          thickness: thickness.clamp(1, 12),
+          height: thickness.clamp(1, 12),
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  static Color? _parseHexColor(String raw) {
+    try {
+      var hex = raw.trim().replaceAll('#', '');
+      if (hex.isEmpty) return null;
+      if (hex.length == 6) hex = 'FF$hex';
+      if (hex.length != 8) return null;
+      return Color(int.parse(hex, radix: 16));
+    } catch (_) {
+      return null;
     }
   }
 
@@ -3529,160 +3755,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
 // ============================================================================
 // PREMIUM PRODUCT CARD - Commencal-style clean, minimal design
 // ============================================================================
-class _PremiumProductCard extends StatefulWidget {
-  final Product product;
-  final Color primaryColor;
-  final String? bodyFont;
-  final bool previewMode;
-  final void Function(String route)? onNavigate;
-
-  const _PremiumProductCard({
-    required this.product,
-    required this.primaryColor,
-    this.bodyFont,
-    required this.previewMode,
-    this.onNavigate,
-  });
-
-  @override
-  State<_PremiumProductCard> createState() => _PremiumProductCardState();
-}
-
-class _PremiumProductCardState extends State<_PremiumProductCard> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasImage =
-        widget.product.imageUrl != null && widget.product.imageUrl!.isNotEmpty;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: widget.previewMode
-            ? null
-            : () => widget.onNavigate
-                ?.call('/tienda/producto/${widget.product.id}'),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-          ),
-          transform: _isHovered
-              ? (Matrix4.identity()..translate(0.0, -2.0))
-              : Matrix4.identity(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Product image - takes most of the space
-              Expanded(
-                flex: 4,
-                child: Stack(
-                  children: [
-                    // Image container
-                    Container(
-                      width: double.infinity,
-                      color: Colors.white,
-                      padding: const EdgeInsets.all(16),
-                      child: hasImage
-                          ? Image.network(
-                              widget.product.imageUrl!,
-                              fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Center(
-                                  child: Icon(
-                                    Icons.pedal_bike_outlined,
-                                    size: 48,
-                                    color: Colors.grey.shade400,
-                                  ),
-                                );
-                              },
-                            )
-                          : Center(
-                              child: Icon(
-                                Icons.pedal_bike_outlined,
-                                size: 56,
-                                color: Colors.grey.shade400,
-                              ),
-                            ),
-                    ),
-                    // Quick view on hover
-                    if (_isHovered)
-                      Positioned(
-                        bottom: 12,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.black,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                            child: const Text(
-                              'VER DETALLES',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              // Product info - minimal, clean
-              Expanded(
-                flex: 2,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Product name
-                      Text(
-                        widget.product.name.toUpperCase(),
-                        style: TextStyle(
-                          fontFamily: widget.bodyFont,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.3,
-                          color: Colors.black87,
-                          height: 1.3,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      // Price
-                      Text(
-                        ChileanUtils.formatCurrency(widget.product.price),
-                        style: TextStyle(
-                          fontFamily: widget.bodyFont,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// (moved) Premium product card extracted to `premium_product_card.dart` for reuse (e.g. Canvas).
 
 /// Stateful Products block widget that fetches products based on block settings
 class _ProductsBlockWidget extends StatefulWidget {
@@ -4049,9 +4122,11 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                           return Container(
                             width: cardWidth,
                             margin: const EdgeInsets.only(right: 20),
-                            child: _PremiumProductCard(
-                              product: product,
-                              primaryColor: widget.primaryColor,
+                            child: PremiumProductCard(
+                              productId: product.id,
+                              name: product.name,
+                              price: product.price,
+                              imageUrl: product.imageUrl,
                               bodyFont: widget.bodyFont,
                               previewMode: widget.previewMode,
                               onNavigate: widget.onNavigate,
@@ -4072,9 +4147,11 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                       itemCount: displayProducts.length,
                       itemBuilder: (context, index) {
                         final product = displayProducts[index];
-                        return _PremiumProductCard(
-                          product: product,
-                          primaryColor: widget.primaryColor,
+                        return PremiumProductCard(
+                          productId: product.id,
+                          name: product.name,
+                          price: product.price,
+                          imageUrl: product.imageUrl,
                           bodyFont: widget.bodyFont,
                           previewMode: widget.previewMode,
                           onNavigate: widget.onNavigate,

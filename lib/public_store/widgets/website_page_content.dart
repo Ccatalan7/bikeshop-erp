@@ -185,6 +185,12 @@ class WebsitePageContent extends StatelessWidget {
   ) {
     return Column(
       children: [
+        // Drop zone before the first block (drag blocks from the Add tab)
+        if (isEditMode)
+          _InsertBlockDropZone(
+            insertIndex: 0,
+            onInsert: (type) => editProvider.addBlock(type, atIndex: 0),
+          ),
         for (int i = 0; i < visibleBlocks.length; i++) ...[
           KeyedSubtree(
             key: ValueKey('${visibleBlocks[i]['id']}_${visibleBlocks[i]['block_data']?.toString().hashCode ?? 0}_$tenantId'),
@@ -193,6 +199,7 @@ class WebsitePageContent extends StatelessWidget {
           // Add spacer between blocks (not after the last one)
           if (i < visibleBlocks.length - 1)
             _buildBlockSpacer(
+              insertIndex: i + 1,
               blockId: visibleBlocks[i]['id']?.toString() ?? '',
               blockData: Map<String, dynamic>.from(visibleBlocks[i]['block_data'] ?? {}),
               isEditMode: isEditMode,
@@ -228,8 +235,15 @@ class WebsitePageContent extends StatelessWidget {
     );
     
     // Full-width blocks get no horizontal padding
-    final isFullWidthBlock = const ['hero', 'carousel', 'videobanner', 'categorygrid', 'partnersbanner']
-        .contains(blockType.toLowerCase());
+    final fullBleed = _toBool(data['fullBleed']) ?? false;
+    final isFullWidthBlock = fullBleed ||
+        const [
+          'hero',
+          'carousel',
+          'videobanner',
+          'categorygrid',
+          'partnersbanner',
+        ].contains(blockType.toLowerCase());
     final horizontalPadding = isFullWidthBlock ? 0.0 : containerPadding.clamp(0.0, 200.0);
     
     // Build the block widget
@@ -287,6 +301,7 @@ class WebsitePageContent extends StatelessWidget {
   }
   
   Widget _buildBlockSpacer({
+    required int insertIndex,
     required String blockId,
     required Map<String, dynamic> blockData,
     required bool isEditMode,
@@ -295,16 +310,20 @@ class WebsitePageContent extends StatelessWidget {
     final spacingAfter = (blockData['spacingAfter'] as num?)?.toDouble() ?? sectionSpacing;
     
     if (isEditMode) {
-      return BlockSpacerHandle(
-        currentSpacing: spacingAfter,
-        minSpacing: 0,
-        maxSpacing: 200,
-        snapIncrement: 4,
-        isActive: true,
-        onSpacingChanged: (newSpacing) {
-          editProvider.updateBlockData(blockId, 'spacingAfter', newSpacing);
-        },
-        onSpacingChangeEnd: (finalSpacing) {},
+      return _InsertBlockDropZone(
+        insertIndex: insertIndex,
+        onInsert: (type) => editProvider.addBlock(type, atIndex: insertIndex),
+        child: BlockSpacerHandle(
+          currentSpacing: spacingAfter,
+          minSpacing: 0,
+          maxSpacing: 200,
+          snapIncrement: 4,
+          isActive: true,
+          onSpacingChanged: (newSpacing) {
+            editProvider.updateBlockData(blockId, 'spacingAfter', newSpacing);
+          },
+          onSpacingChangeEnd: (finalSpacing) {},
+        ),
       );
     } else {
       return SizedBox(height: spacingAfter);
@@ -362,6 +381,96 @@ class WebsitePageContent extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Drop target used to insert a new block at a specific index when dragging
+/// from the "Agregar" tab (which provides Draggable<String>).
+class _InsertBlockDropZone extends StatefulWidget {
+  final int insertIndex;
+  final void Function(String blockType) onInsert;
+  final Widget? child;
+
+  const _InsertBlockDropZone({
+    required this.insertIndex,
+    required this.onInsert,
+    this.child,
+  });
+
+  @override
+  State<_InsertBlockDropZone> createState() => _InsertBlockDropZoneState();
+}
+
+class _InsertBlockDropZoneState extends State<_InsertBlockDropZone> {
+  bool _isHovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (_) {
+        if (!_isHovering) setState(() => _isHovering = true);
+        return true;
+      },
+      onLeave: (_) {
+        if (_isHovering) setState(() => _isHovering = false);
+      },
+      onAcceptWithDetails: (details) {
+        setState(() => _isHovering = false);
+        widget.onInsert(details.data);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bloque "${details.data}" agregado'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      },
+      builder: (context, candidateData, rejectedData) {
+        final showHighlight = _isHovering || candidateData.isNotEmpty;
+        return Stack(
+          children: [
+            if (widget.child != null) widget.child!,
+            // Highlight overlay
+            if (showHighlight)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00A09D).withValues(alpha: 0.10),
+                      border: Border.all(
+                        color: const Color(0xFF00A09D).withValues(alpha: 0.6),
+                        width: 2,
+                      ),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.add_circle,
+                        color: Color(0xFF00A09D),
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // If no child, render a thin drop bar
+            if (widget.child == null)
+              Container(
+                height: 24,
+                alignment: Alignment.center,
+                child: Container(
+                  height: 3,
+                  width: 120,
+                  decoration: BoxDecoration(
+                    color: showHighlight
+                        ? const Color(0xFF00A09D)
+                        : const Color(0xFF00A09D).withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

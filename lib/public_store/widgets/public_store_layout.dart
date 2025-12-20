@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,6 +16,8 @@ import 'customer_account_menu.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/website/widgets/website_editor_panel.dart';
+import '../../modules/website/models/website_page_models.dart';
+import '../../shared/services/tenant_service.dart';
 
 class PublicStoreLayout extends StatefulWidget {
   final Widget child;
@@ -31,12 +34,42 @@ class PublicStoreLayout extends StatefulWidget {
 }
 
 class _PublicStoreLayoutState extends State<PublicStoreLayout> {
+  static const String _actionSitePages = 'site_pages';
+  static const String _actionSiteNavigation = 'site_navigation';
+  static const String _actionSiteContent = 'site_content';
+  static const String _actionSiteSettings = 'site_settings';
+  static const String _actionSiteOpenWebsiteHub = 'site_hub';
+
+  static const String _actionEcomProducts = 'ecom_products';
+  static const String _actionEcomCategories = 'ecom_categories';
+  static const String _actionEcomFeatured = 'ecom_featured';
+  static const String _actionEcomOrders = 'ecom_orders';
+  static const String _actionEcomGoogle = 'ecom_google';
+
+  static const String _actionReportsAnalytics = 'reports_analytics';
+  static const String _actionReportsOrders = 'reports_orders';
+
+  static const String _actionConfigDomain = 'config_domain';
+  static const String _actionConfigPaymentMethods = 'config_payment_methods';
+  static const String _actionConfigIntegrations = 'config_integrations';
+  static const String _actionConfigWebsiteSettings = 'config_website_settings';
+
+  static const String _actionStoreCopyUrl = 'store_copy_url';
+  static const String _actionStoreOpenPublic = 'store_open_public';
+  static const String _actionStoreOpenWebsite = 'store_open_website';
+
+  static const String _actionPageCopyLink = 'page_copy_link';
+  static const String _actionPageOpenNewTab = 'page_open_new_tab';
+  static const String _actionPageManagePages = 'page_manage_pages';
+
   @override
   void initState() {
     super.initState();
     // Settings are loaded in main.dart after tenant detection
     // No need to load here - just watch the service
   }
+
+  _DevicePreviewMode _devicePreviewMode = _DevicePreviewMode.desktop;
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +107,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final whatsappRaw = websiteService.getSetting('whatsapp', '');
     final whatsappNumber = _sanitizePhone(whatsappRaw);
     final hasWhatsApp = whatsappNumber.isNotEmpty;
+
+    // Site publish flag (stored in website_settings)
+    final sitePublished =
+        websiteService.getSetting('site_published', 'true') == 'true';
 
     final primaryColor = _resolveColor(
       websiteService.getSetting('theme_primary_color', ''),
@@ -148,6 +185,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
     final isPreviewMode = editProvider.isPreviewMode;
+    final isInEditorContext = editProvider.isInEditorContext;
+
+    // If the site is unpublished, show a holding page to visitors.
+    // Allow bypass when entering via ?preview=true or ?edit=true, even before provider updates.
+    final qp = GoRouterState.of(context).uri.queryParameters;
+    final bypassUnpublished =
+        isInEditorContext || qp['preview'] == 'true' || qp['edit'] == 'true';
+    if (!sitePublished && !bypassUnpublished) {
+      return _buildUnpublishedSiteScaffold(context, storeName);
+    }
 
     // Build footer (reused in all layouts)
     final footerWidget = _buildFooter(
@@ -298,26 +345,35 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     // In full edit mode, use Row layout with side panel
     if (isEditMode) {
+      final editorViewport = _buildEditorViewport(context, pageContent);
       return Scaffold(
         backgroundColor: backgroundColor,
-        body: Row(
+        body: Column(
           children: [
-            // Main content area
-            Expanded(child: pageContent),
-            // Side panel for editing
-            WebsiteEditorPanel(
-              onSave: () async {
-                // Actually save the changes to the database
-                await _saveChanges(context, editProvider, websiteService);
-                // After save, go back to preview mode
-                if (context.mounted) {
-                  editProvider.switchToPreviewMode();
-                }
-              },
-              onDiscard: () {
-                // After discard, go back to preview mode
-                editProvider.switchToPreviewMode();
-              },
+            // Keep the same "command center" top bar visible while editing.
+            _buildPreviewTopBar(context, editProvider, websiteService, storeName),
+            Expanded(
+              child: Row(
+                children: [
+                  // Main content area
+                  Expanded(child: editorViewport),
+                  // Side panel for editing
+                  WebsiteEditorPanel(
+                    onSave: () async {
+                      // Actually save the changes to the database
+                      await _saveChanges(context, editProvider, websiteService);
+                      // After save, go back to preview mode
+                      if (context.mounted) {
+                        editProvider.switchToPreviewMode();
+                      }
+                    },
+                    onDiscard: () {
+                      // After discard, go back to preview mode
+                      editProvider.switchToPreviewMode();
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -326,6 +382,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     // In preview mode, show top bar with "Editar" button
     if (isPreviewMode) {
+      final editorViewport = _buildEditorViewport(context, pageContent);
       return Scaffold(
         backgroundColor: backgroundColor,
         body: Column(
@@ -334,7 +391,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             _buildPreviewTopBar(
                 context, editProvider, websiteService, storeName),
             // Page content
-            Expanded(child: pageContent),
+            Expanded(child: editorViewport),
           ],
         ),
       );
@@ -413,6 +470,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     WebsiteService websiteService,
     String storeName,
   ) {
+    final isEditMode = editProvider.isEditMode;
+    final sitePublished =
+        websiteService.getSetting('site_published', 'true') == 'true';
     return Container(
       height: 48,
       color: const Color(0xFF1E1E1E),
@@ -437,32 +497,140 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           ),
           const SizedBox(width: 24),
           // Navigation items
-          _buildPreviewNavItem('Sitio', true),
-          _buildPreviewNavItem('Comercio electrónico', false),
-          _buildPreviewNavItem('Reportes', false),
-          _buildPreviewNavItem('Configuración', false),
+          _buildPreviewNavMenu(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+            label: 'Sitio',
+            isActive: true,
+            actions: const [
+              _PreviewNavAction(
+                id: _actionSitePages,
+                label: 'Páginas',
+                icon: Icons.description_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionSiteNavigation,
+                label: 'Navegación / Menú',
+                icon: Icons.menu,
+              ),
+              _PreviewNavAction(
+                id: _actionSiteContent,
+                label: 'Contenido (banners / textos)',
+                icon: Icons.collections_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionSiteSettings,
+                label: 'Ajustes del sitio (SEO / contacto)',
+                icon: Icons.tune,
+              ),
+              _PreviewNavAction.divider(),
+              _PreviewNavAction(
+                id: _actionSiteOpenWebsiteHub,
+                label: 'Centro del Sitio Web',
+                icon: Icons.dashboard_outlined,
+              ),
+            ],
+          ),
+          _buildPreviewNavMenu(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+            label: 'Comercio electrónico',
+            isActive: false,
+            actions: const [
+              _PreviewNavAction(
+                id: _actionEcomProducts,
+                label: 'Productos (publicar en web)',
+                icon: Icons.inventory_2_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionEcomCategories,
+                label: 'Categorías',
+                icon: Icons.category_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionEcomFeatured,
+                label: 'Productos destacados (home)',
+                icon: Icons.star_outline,
+              ),
+              _PreviewNavAction(
+                id: _actionEcomOrders,
+                label: 'Pedidos online',
+                icon: Icons.shopping_bag_outlined,
+              ),
+              _PreviewNavAction.divider(),
+              _PreviewNavAction(
+                id: _actionEcomGoogle,
+                label: 'Google Merchant / Analytics',
+                icon: Icons.public,
+              ),
+            ],
+          ),
+          _buildPreviewNavMenu(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+            label: 'Reportes',
+            isActive: false,
+            actions: const [
+              _PreviewNavAction(
+                id: _actionReportsAnalytics,
+                label: 'Analytics (Google)',
+                icon: Icons.analytics_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionReportsOrders,
+                label: 'Pedidos online',
+                icon: Icons.receipt_long_outlined,
+              ),
+            ],
+          ),
+          _buildPreviewNavMenu(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+            label: 'Configuración',
+            isActive: false,
+            actions: const [
+              _PreviewNavAction(
+                id: _actionConfigDomain,
+                label: 'Dominio y URL',
+                icon: Icons.link_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionConfigWebsiteSettings,
+                label: 'Ajustes del sitio (SEO / contacto)',
+                icon: Icons.settings_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionConfigIntegrations,
+                label: 'Integraciones (Google Merchant)',
+                icon: Icons.extension_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionConfigPaymentMethods,
+                label: 'Métodos de pago',
+                icon: Icons.payments_outlined,
+              ),
+            ],
+          ),
+
+          // Current page actions (copy link, open, manage)
+          _buildCurrentPageMenu(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+          ),
 
           const Spacer(),
 
           // Store name dropdown
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.white24),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  storeName.isNotEmpty ? storeName : 'Mi Tienda',
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_drop_down,
-                    color: Colors.white, size: 18),
-              ],
-            ),
+          _buildStoreMenu(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+            storeName: storeName,
           ),
           const SizedBox(width: 16),
 
@@ -476,8 +644,31 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               ),
               const SizedBox(width: 8),
               Switch(
-                value: true,
-                onChanged: (v) {},
+                value: sitePublished,
+                onChanged: (v) async {
+                  try {
+                    await websiteService.saveSetting('site_published', '$v');
+                    WebsiteService.clearPageCache();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            v ? 'Sitio publicado' : 'Sitio despublicado',
+                          ),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error guardando: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
                 activeColor: Colors.green,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
@@ -486,19 +677,54 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           const SizedBox(width: 16),
 
           // Mobile preview button
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.phone_android,
-                color: Colors.white70, size: 20),
-            tooltip: 'Vista móvil',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          PopupMenuButton<_DevicePreviewMode>(
+            tooltip: 'Vista (dispositivo)',
+            initialValue: _devicePreviewMode,
+            onSelected: (mode) => setState(() => _devicePreviewMode = mode),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: _DevicePreviewMode.desktop,
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.desktop_windows_outlined),
+                  title: Text('Desktop'),
+                ),
+              ),
+              PopupMenuItem(
+                value: _DevicePreviewMode.tablet,
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.tablet_mac_outlined),
+                  title: Text('Tablet'),
+                ),
+              ),
+              PopupMenuItem(
+                value: _DevicePreviewMode.mobile,
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.phone_android_outlined),
+                  title: Text('Móvil'),
+                ),
+              ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Icon(
+                _devicePreviewMode == _DevicePreviewMode.desktop
+                    ? Icons.desktop_windows
+                    : _devicePreviewMode == _DevicePreviewMode.tablet
+                        ? Icons.tablet_mac
+                        : Icons.phone_android,
+                color: Colors.white70,
+                size: 20,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
 
           // New page button
           TextButton(
-            onPressed: () {},
+            onPressed: () => _showQuickCreatePageDialog(context),
             style: TextButton.styleFrom(
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -507,10 +733,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           ),
           const SizedBox(width: 8),
 
-          // EDIT button (main action)
+          // Main mode button (Preview -> Edit, Edit -> Preview)
           ElevatedButton(
             onPressed: () {
-              editProvider.switchToEditMode();
+              if (isEditMode) {
+                editProvider.switchToPreviewMode();
+              } else {
+                editProvider.switchToEditMode();
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade600,
@@ -519,9 +749,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(4)),
             ),
-            child: const Text(
-              'Editar',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            child: Text(
+              isEditMode ? 'Vista previa' : 'Editar',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
           const SizedBox(width: 8),
@@ -542,18 +772,742 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
   }
 
-  Widget _buildPreviewNavItem(String label, bool isActive) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.6),
-          fontSize: 13,
-          fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
+  Widget _buildStoreMenu({
+    required BuildContext context,
+    required WebsiteEditModeProvider editProvider,
+    required WebsiteService websiteService,
+    required String storeName,
+  }) {
+    final label = storeName.isNotEmpty ? storeName : 'Mi Tienda';
+    return PopupMenuButton<String>(
+      tooltip: 'Acciones de tienda',
+      onSelected: (action) => _handleTopBarAction(
+        context: context,
+        editProvider: editProvider,
+        websiteService: websiteService,
+        actionId: action,
+      ),
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: _actionStoreOpenWebsite,
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.dashboard_outlined),
+            title: Text('Centro del Sitio Web'),
+          ),
+        ),
+        PopupMenuItem(
+          value: _actionConfigDomain,
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.link_outlined),
+            title: Text('Dominio y URL'),
+          ),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: _actionStoreOpenPublic,
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.open_in_new),
+            title: Text('Abrir tienda pública'),
+          ),
+        ),
+        PopupMenuItem(
+          value: _actionStoreCopyUrl,
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.copy),
+            title: Text('Copiar URL'),
+          ),
+        ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.white24),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down, color: Colors.white, size: 18),
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildPreviewNavMenu({
+    required BuildContext context,
+    required WebsiteEditModeProvider editProvider,
+    required WebsiteService websiteService,
+    required String label,
+    required bool isActive,
+    required List<_PreviewNavAction> actions,
+  }) {
+    final entries = <PopupMenuEntry<String>>[];
+    for (final a in actions) {
+      if (a.isDivider) {
+        entries.add(const PopupMenuDivider());
+        continue;
+      }
+      entries.add(
+        PopupMenuItem<String>(
+          value: a.id!,
+          child: ListTile(
+            dense: true,
+            leading: Icon(a.icon),
+            title: Text(a.label!),
+          ),
+        ),
+      );
+    }
+
+    return PopupMenuButton<String>(
+      tooltip: label,
+      onSelected: (action) => _handleTopBarAction(
+        context: context,
+        editProvider: editProvider,
+        websiteService: websiteService,
+        actionId: action,
+      ),
+      itemBuilder: (context) => entries,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color:
+                    isActive ? Colors.white : Colors.white.withValues(alpha: 0.6),
+                fontSize: 13,
+                fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(
+              Icons.arrow_drop_down,
+              size: 18,
+              color: isActive
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentPageMenu({
+    required BuildContext context,
+    required WebsiteEditModeProvider editProvider,
+    required WebsiteService websiteService,
+  }) {
+    String title;
+    if (editProvider.currentPageSlug == null || editProvider.currentPageSlug!.isEmpty) {
+      title = 'Página: Inicio';
+    } else {
+      title = 'Página: /pagina/${editProvider.currentPageSlug}';
+    }
+
+    return PopupMenuButton<String>(
+      tooltip: 'Acciones de página',
+      onSelected: (action) => _handleTopBarAction(
+        context: context,
+        editProvider: editProvider,
+        websiteService: websiteService,
+        actionId: action,
+      ),
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: _actionPageCopyLink,
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.copy),
+            title: Text('Copiar enlace'),
+          ),
+        ),
+        PopupMenuItem(
+          value: _actionPageOpenNewTab,
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.open_in_new),
+            title: Text('Abrir en nueva pestaña'),
+          ),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: _actionPageManagePages,
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.description_outlined),
+            title: Text('Administrar páginas'),
+          ),
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            Icon(Icons.article_outlined,
+                size: 18, color: Colors.white.withValues(alpha: 0.8)),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.arrow_drop_down,
+                size: 18, color: Colors.white.withValues(alpha: 0.8)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleTopBarAction({
+    required BuildContext context,
+    required WebsiteEditModeProvider editProvider,
+    required WebsiteService websiteService,
+    required String actionId,
+  }) async {
+    // For actions that go back into ERP pages, ensure we exit editor mode cleanly.
+    void goAdmin(String path) {
+      editProvider.exitEditMode();
+      context.go(path);
+    }
+
+    switch (actionId) {
+      // Site
+      case _actionSitePages:
+        goAdmin('/website/pages');
+        return;
+      case _actionSiteNavigation:
+        goAdmin('/website/navigation');
+        return;
+      case _actionSiteContent:
+        goAdmin('/website/content');
+        return;
+      case _actionSiteSettings:
+        goAdmin('/website/settings');
+        return;
+      case _actionSiteOpenWebsiteHub:
+        goAdmin('/website');
+        return;
+
+      // E-commerce
+      case _actionEcomProducts:
+        goAdmin('/inventory/products');
+        return;
+      case _actionEcomCategories:
+        goAdmin('/inventory/categories');
+        return;
+      case _actionEcomFeatured:
+        goAdmin('/website/featured');
+        return;
+      case _actionEcomOrders:
+        goAdmin('/website/orders');
+        return;
+      case _actionEcomGoogle:
+        goAdmin('/website/integrations');
+        return;
+
+      // Reports
+      case _actionReportsAnalytics:
+        goAdmin('/tools/analytics');
+        return;
+      case _actionReportsOrders:
+        goAdmin('/website/orders');
+        return;
+
+      // Config
+      case _actionConfigWebsiteSettings:
+        goAdmin('/website/settings');
+        return;
+      case _actionConfigIntegrations:
+        goAdmin('/website/integrations');
+        return;
+      case _actionConfigPaymentMethods:
+        goAdmin('/settings/payment-methods');
+        return;
+      case _actionConfigDomain:
+        await _showDomainAndUrlDialog(context);
+        return;
+
+      // Page actions
+      case _actionPageManagePages:
+        goAdmin('/website/pages');
+        return;
+      case _actionPageCopyLink:
+        await _copyCurrentPageUrl(context, editProvider, websiteService);
+        return;
+      case _actionPageOpenNewTab:
+        await _openCurrentPageUrl(context, editProvider, websiteService);
+        return;
+
+      // Store actions
+      case _actionStoreOpenWebsite:
+        goAdmin('/website');
+        return;
+      case _actionStoreCopyUrl:
+        await _copyPublicStoreUrl(context, websiteService);
+        return;
+      case _actionStoreOpenPublic:
+        await _openPublicStoreUrl(context, websiteService);
+        return;
+    }
+  }
+
+  Future<void> _openPublicStoreUrl(
+    BuildContext context,
+    WebsiteService websiteService,
+  ) async {
+    final url = _resolvePublicStoreUrl(websiteService);
+    if (url == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo determinar la URL pública')),
+        );
+      }
+      return;
+    }
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
+  String _currentPagePathForLink(WebsiteEditModeProvider editProvider) {
+    final slug = (editProvider.currentPageSlug ?? '').trim();
+    if (slug.isEmpty) {
+      return _isPublicStoreDomain() ? '/' : '/tienda';
+    }
+    if (_isPublicStoreDomain()) {
+      return '/pagina/$slug';
+    }
+    // ERP/legacy host where public store is mounted under /tienda
+    return '/tienda/pagina/$slug';
+  }
+
+  String? _buildUrlWithPath({
+    required WebsiteService websiteService,
+    required String path,
+  }) {
+    final base = _resolvePublicStoreUrl(websiteService);
+    if (base == null) return null;
+    final baseUri = Uri.tryParse(base);
+    if (baseUri == null) return null;
+
+    // Ensure path is appended cleanly (avoid double slashes).
+    final normalizedPath = path.startsWith('/') ? path : '/$path';
+    final next = baseUri.replace(
+      path: normalizedPath,
+      query: '',
+      fragment: '',
+    );
+    return next.toString();
+  }
+
+  Future<void> _openCurrentPageUrl(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+    WebsiteService websiteService,
+  ) async {
+    final path = _currentPagePathForLink(editProvider);
+    final url = _buildUrlWithPath(websiteService: websiteService, path: path);
+    if (url == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo determinar el enlace')),
+        );
+      }
+      return;
+    }
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _copyCurrentPageUrl(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+    WebsiteService websiteService,
+  ) async {
+    final path = _currentPagePathForLink(editProvider);
+    final url = _buildUrlWithPath(websiteService: websiteService, path: path);
+    if (url == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo determinar el enlace')),
+        );
+      }
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: url));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enlace copiado al portapapeles')),
+      );
+    }
+  }
+
+  Future<void> _copyPublicStoreUrl(
+    BuildContext context,
+    WebsiteService websiteService,
+  ) async {
+    final url = _resolvePublicStoreUrl(websiteService);
+    if (url == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo determinar la URL pública')),
+        );
+      }
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: url));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('URL copiada al portapapeles')),
+      );
+    }
+  }
+
+  String? _resolvePublicStoreUrl(WebsiteService websiteService) {
+    final explicit = websiteService.getSetting('store_url', '').trim();
+    if (explicit.isNotEmpty) return explicit;
+
+    if (!kIsWeb) return null;
+
+    // When running in ERP/admin host, we can't reliably derive the public domain here.
+    // But on the public store host, Uri.base already is the public store.
+    final host = Uri.base.host;
+    if (host.isEmpty) return null;
+    return '${Uri.base.scheme}://$host';
+  }
+
+  Future<void> _showDomainAndUrlDialog(BuildContext context) async {
+    final tenantId = await _resolveTenantIdForSave(context);
+
+    if (tenantId == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo identificar el tenant')),
+        );
+      }
+      return;
+    }
+
+    final supabase = Supabase.instance.client;
+    final tenant = await supabase
+        .from('tenants')
+        .select('subdomain, custom_domain')
+        .eq('id', tenantId)
+        .maybeSingle();
+
+    final subdomain = (tenant?['subdomain'] as String?)?.trim() ?? '';
+    final currentCustomDomain = (tenant?['custom_domain'] as String?)?.trim();
+
+    final controller = TextEditingController(text: currentCustomDomain ?? '');
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Dominio y URL'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Subdominio actual: ${subdomain.isEmpty ? "—" : "$subdomain.bikeshop-erp.app"}',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Dominio personalizado (opcional)',
+                  hintText: 'www.tutienda.cl',
+                  prefixIcon: Icon(Icons.link_outlined),
+                  helperText:
+                      'Si lo dejas vacío, tu tienda seguirá usando el subdominio.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'DNS (resumen):\n- CNAME: www -> tu-subdominio.bikeshop-erp.app\n- O A/ALIAS según tu proveedor',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              final next = controller.text.trim();
+              try {
+                await supabase.from('tenants').update({
+                  'custom_domain': next.isEmpty ? null : next,
+                }).eq('id', tenantId);
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext, true);
+                }
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('Error guardando dominio: $e')),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
+    if (saved == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dominio actualizado')),
+      );
+    }
+  }
+
+  Widget _buildUnpublishedSiteScaffold(BuildContext context, String storeName) {
+    final label = storeName.isNotEmpty ? storeName : 'Mi Tienda';
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.visibility_off_outlined,
+                    size: 56, color: Colors.grey),
+                const SizedBox(height: 12),
+                Text(
+                  '$label no está publicado',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Este sitio está en construcción. Vuelve pronto.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 16),
+                Builder(
+                  builder: (context) {
+                    final isLoggedIn =
+                        Supabase.instance.client.auth.currentUser != null;
+                    if (!isLoggedIn) return const SizedBox.shrink();
+                    return FilledButton.icon(
+                      onPressed: () => context.go('/tienda?preview=true'),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Entrar al editor'),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditorViewport(BuildContext context, Widget child) {
+    // Desktop mode is the default "no constraint" viewport.
+    if (_devicePreviewMode == _DevicePreviewMode.desktop) return child;
+
+    final screenSize = MediaQuery.sizeOf(context);
+    final targetWidth =
+        _devicePreviewMode == _DevicePreviewMode.tablet ? 820.0 : 390.0;
+    final targetHeight = screenSize.height;
+
+    return Container(
+      color: const Color(0xFFF3F3F3),
+      child: Center(
+        child: Container(
+          width: targetWidth,
+          height: targetHeight,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 18,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              size: Size(targetWidth, screenSize.height),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showQuickCreatePageDialog(BuildContext context) async {
+    final titleController = TextEditingController();
+    final slugController = TextEditingController();
+    var autoSlug = true;
+    PageTemplate template = PageTemplate.defaultTemplate;
+
+    String generateSlug(String title) {
+      return title
+          .toLowerCase()
+          .replaceAll(RegExp(r'[áàäâ]'), 'a')
+          .replaceAll(RegExp(r'[éèëê]'), 'e')
+          .replaceAll(RegExp(r'[íìïî]'), 'i')
+          .replaceAll(RegExp(r'[óòöô]'), 'o')
+          .replaceAll(RegExp(r'[úùüû]'), 'u')
+          .replaceAll('ñ', 'n')
+          .replaceAll(RegExp(r'[^a-z0-9\s-]'), '')
+          .replaceAll(RegExp(r'\s+'), '-')
+          .replaceAll(RegExp(r'-+'), '-')
+          .replaceAll(RegExp(r'^-|-$'), '');
+    }
+
+    titleController.addListener(() {
+      if (autoSlug) {
+        slugController.text = generateSlug(titleController.text);
+      }
+    });
+
+    final created = await showDialog<WebsitePage>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Nueva página'),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Título',
+                      prefixIcon: Icon(Icons.title),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: slugController,
+                    decoration: InputDecoration(
+                      labelText: 'Slug (URL)',
+                      prefixText: '/pagina/',
+                      prefixIcon: const Icon(Icons.link),
+                      helperText: autoSlug
+                          ? 'Auto-generado desde el título'
+                          : 'Puedes editarlo manualmente',
+                    ),
+                    onChanged: (_) => setState(() => autoSlug = false),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<PageTemplate>(
+                    value: template,
+                    decoration: const InputDecoration(
+                      labelText: 'Plantilla',
+                      prefixIcon: Icon(Icons.layers_outlined),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: PageTemplate.defaultTemplate,
+                        child: Text('Estándar (bloques)'),
+                      ),
+                      DropdownMenuItem(
+                        value: PageTemplate.landing,
+                        child: Text('Landing'),
+                      ),
+                      DropdownMenuItem(
+                        value: PageTemplate.blog,
+                        child: Text('Blog'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => template = value);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton.icon(
+                onPressed: () async {
+                  final title = titleController.text.trim();
+                  final slug = slugController.text.trim();
+                  if (title.isEmpty || slug.isEmpty) return;
+
+                  try {
+                    final websiteService = context.read<WebsiteService>();
+                    final page = WebsitePage(
+                      id: '',
+                      tenantId: '',
+                      slug: slug,
+                      title: title,
+                      template: template,
+                      isPublished: true,
+                      createdAt: DateTime.now(),
+                      updatedAt: DateTime.now(),
+                    );
+                    final created = await websiteService.createPage(page);
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext, created);
+                    }
+                  } catch (e) {
+                    if (dialogContext.mounted) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        SnackBar(content: Text('Error creando página: $e')),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Crear y editar'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    titleController.dispose();
+    slugController.dispose();
+
+    if (created == null || !context.mounted) return;
+
+    // Jump directly into edit mode on the new page.
+    context.go('/tienda/pagina/${created.slug}?edit=true');
   }
 
   /// Check if we're on the public store domain (customer-facing)
@@ -573,9 +1527,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     WebsiteService websiteService,
   ) async {
     try {
-      // Get tenant ID
-      final tenantProvider = context.read<PublicStoreTenantProvider>();
-      final tenantId = tenantProvider.tenantId;
+      final tenantId = await _resolveTenantIdForSave(context);
 
       if (tenantId == null) {
         if (context.mounted) {
@@ -684,6 +1636,38 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         );
       }
     }
+  }
+
+  Future<String?> _resolveTenantIdForSave(BuildContext context) async {
+    // 1) Public store host (anonymous tenant detection) via provider
+    try {
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      final tenantId = tenantProvider.tenantId;
+      if (tenantId != null && tenantId.isNotEmpty) {
+        return tenantId;
+      }
+    } catch (_) {
+      // Provider not available in this tree (ERP host) - fall back below.
+    }
+
+    // 2) Authenticated ERP host via TenantService
+    try {
+      final tenantService = context.read<TenantService>();
+      final tenantId = await tenantService.getTenantId();
+      if (tenantId != null && tenantId.isNotEmpty) {
+        return tenantId;
+      }
+    } catch (_) {
+      // TenantService not provided - fall back to direct instantiation
+    }
+
+    final fallbackService = TenantService();
+    final tenantId = await fallbackService.getTenantId();
+    if (tenantId != null && tenantId.isNotEmpty) {
+      return tenantId;
+    }
+
+    return null;
   }
 
   Widget _buildHeader({
@@ -1559,6 +2543,27 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     return parsed ?? fallback;
   }
 }
+
+class _PreviewNavAction {
+  final String? id;
+  final String? label;
+  final IconData? icon;
+  final bool isDivider;
+
+  const _PreviewNavAction({
+    required this.id,
+    required this.label,
+    required this.icon,
+  }) : isDivider = false;
+
+  const _PreviewNavAction.divider()
+      : id = null,
+        label = null,
+        icon = null,
+        isDivider = true;
+}
+
+enum _DevicePreviewMode { desktop, tablet, mobile }
 
 /// A stateful widget that manages the sticky header that stays fixed at top while scrolling
 class _StickyHeaderScaffold extends StatefulWidget {

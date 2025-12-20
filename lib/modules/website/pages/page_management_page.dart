@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
 import '../models/website_page_models.dart';
@@ -576,24 +577,10 @@ class _PageManagementPageState extends State<PageManagementPage> {
   }
 
   void _openPageEditor(WebsitePage page) {
-    // Dec 2025: Multi-page editing not yet supported in inline editor
-    // For now, show a message directing users to edit via public store
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          page.isHome 
-            ? 'Para editar la página de inicio, ve a la tienda y haz clic en "Editar Sitio"'
-            : 'La edición de páginas secundarias aún no está disponible. Próximamente.',
-        ),
-        duration: const Duration(seconds: 4),
-        action: page.isHome ? SnackBarAction(
-          label: 'Ir a Tienda',
-          onPressed: () {
-            Navigator.pushNamed(context, '/tienda');
-          },
-        ) : null,
-      ),
-    );
+    // Dec 2025+: Multi-page inline editing supported via DynamicWebsitePage + query params.
+    // Use legacy /tienda/* routes on ERP host (root '/' is reserved for ERP).
+    final path = page.isHome ? '/tienda' : '/tienda/pagina/${page.slug}';
+    context.go('$path?edit=true');
   }
 
   void _confirmDelete(WebsitePage page) {

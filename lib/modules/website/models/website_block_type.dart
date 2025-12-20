@@ -6,6 +6,14 @@ import 'package:flutter/material.dart';
 enum WebsiteBlockType {
   hero,
   carousel,
+  /// Free-position canvas section (Wix-like)
+  canvas,
+  /// Simple text element (freeform text section)
+  text,
+  /// Button element (CTA button with link)
+  button,
+  /// Horizontal divider/separator
+  divider,
   products,
   services,
   about,
@@ -32,6 +40,10 @@ extension WebsiteBlockTypeX on WebsiteBlockType {
   IconData get icon => switch (this) {
         WebsiteBlockType.hero => Icons.view_carousel,
         WebsiteBlockType.carousel => Icons.slideshow,
+        WebsiteBlockType.canvas => Icons.dashboard_customize_outlined,
+        WebsiteBlockType.text => Icons.text_fields,
+        WebsiteBlockType.button => Icons.smart_button,
+        WebsiteBlockType.divider => Icons.horizontal_rule,
         WebsiteBlockType.products => Icons.shopping_bag,
         WebsiteBlockType.services => Icons.room_service,
         WebsiteBlockType.about => Icons.info_outline,
