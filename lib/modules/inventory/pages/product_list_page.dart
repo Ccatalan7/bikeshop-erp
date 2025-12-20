@@ -140,9 +140,6 @@ class _ProductListPageState extends State<ProductListPage> {
   final Set<String> _selectedProductIds = {};
   bool get _isMultiSelectMode => _selectedProductIds.isNotEmpty;
 
-  // 🔽 Resizing State
-  bool _isResizing = false;
-
   @override
   void didUpdateWidget(ProductListPage oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -1195,7 +1192,6 @@ class _ProductListPageState extends State<ProductListPage> {
                         behavior: HitTestBehavior.translucent,
                         onHorizontalDragUpdate: (details) {
                           setState(() {
-                            _isResizing = true;
                             _detailPaneWidth -= details.delta.dx;
                             // Clamp width between reasonable limits
                             if (_detailPaneWidth < 300) _detailPaneWidth = 300;
@@ -1203,8 +1199,6 @@ class _ProductListPageState extends State<ProductListPage> {
                               _detailPaneWidth = constraints.maxWidth * 0.6;
                           });
                         },
-                        onHorizontalDragEnd: (_) =>
-                            setState(() => _isResizing = false),
                         child: Container(
                           color: Colors.transparent,
                         ),

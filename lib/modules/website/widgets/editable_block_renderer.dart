@@ -198,9 +198,12 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     // Build the editable content based on block type
     Widget blockContent = _buildEditableBlock(context);
 
+    // Apply style decoration (border, shadow, gradient, padding)
+    blockContent = _applyStyleDecoration(blockContent);
+
     // Wrap with selection and action bar
     // Resize handles are INSIDE the Stack so they don't add extra space
-    
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque, // Capture taps on empty space too
       onTap: () => editProvider.selectBlock(widget.blockId),
@@ -348,6 +351,226 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     );
   }
 
+  /// Apply style decoration from block's style data
+  Widget _applyStyleDecoration(Widget child) {
+    final style = Map<String, dynamic>.from(widget.data['style'] ?? {});
+
+    // Check if there's any styling to apply
+    final hasBackground = style['backgroundColor'] != null ||
+        style['backgroundType'] == 'gradient';
+    final hasBorder = (style['borderWidth'] as num?)?.toDouble() != null &&
+        (style['borderWidth'] as num).toDouble() > 0;
+    final hasShadow = style['shadowEnabled'] == true;
+    final hasBorderRadius =
+        (style['borderRadius'] as num?)?.toDouble() != null &&
+            (style['borderRadius'] as num).toDouble() > 0;
+    final hasPadding = style['paddingTop'] != null ||
+        style['paddingRight'] != null ||
+        style['paddingBottom'] != null ||
+        style['paddingLeft'] != null;
+
+    // Return child as-is if no styling
+    if (!hasBackground &&
+        !hasBorder &&
+        !hasShadow &&
+        !hasBorderRadius &&
+        !hasPadding) {
+      return child;
+    }
+
+    // Parse padding
+    final paddingTop = (style['paddingTop'] as num?)?.toDouble() ?? 0.0;
+    final paddingRight = (style['paddingRight'] as num?)?.toDouble() ?? 0.0;
+    final paddingBottom = (style['paddingBottom'] as num?)?.toDouble() ?? 0.0;
+    final paddingLeft = (style['paddingLeft'] as num?)?.toDouble() ?? 0.0;
+
+    // Parse border
+    final borderWidth = (style['borderWidth'] as num?)?.toDouble() ?? 0.0;
+    final borderColor =
+        _parseColor(style['borderColor']?.toString()) ?? Colors.grey;
+    final borderRadius = (style['borderRadius'] as num?)?.toDouble() ?? 0.0;
+    final borderStyle = style['borderStyle']?.toString() ?? 'solid';
+
+    // Parse shadow
+    final shadowOffsetX = (style['shadowOffsetX'] as num?)?.toDouble() ?? 0.0;
+    final shadowOffsetY = (style['shadowOffsetY'] as num?)?.toDouble() ?? 4.0;
+    final shadowBlur = (style['shadowBlur'] as num?)?.toDouble() ?? 12.0;
+    final shadowSpread = (style['shadowSpread'] as num?)?.toDouble() ?? 0.0;
+    final shadowColor =
+        _parseRgbaColor(style['shadowColor']?.toString()) ?? Colors.black26;
+
+    // Parse background
+    final backgroundType = style['backgroundType']?.toString() ?? 'solid';
+    Decoration? decoration;
+
+    if (backgroundType == 'gradient') {
+      final gradientColor1 =
+          _parseColor(style['gradientColor1']?.toString()) ?? Colors.white;
+      final gradientColor2 = _parseColor(style['gradientColor2']?.toString()) ??
+          Colors.grey.shade100;
+      final gradientDirection =
+          style['gradientDirection']?.toString() ?? 'to-bottom';
+
+      decoration = BoxDecoration(
+        gradient: LinearGradient(
+          begin: _getGradientBegin(gradientDirection),
+          end: _getGradientEnd(gradientDirection),
+          colors: [gradientColor1, gradientColor2],
+        ),
+        border: hasBorder
+            ? Border.all(
+                color: borderColor,
+                width: borderWidth,
+                style: borderStyle == 'dotted' || borderStyle == 'dashed'
+                    ? BorderStyle.none
+                    : BorderStyle.solid,
+              )
+            : null,
+        borderRadius:
+            hasBorderRadius ? BorderRadius.circular(borderRadius) : null,
+        boxShadow: hasShadow
+            ? [
+                BoxShadow(
+                  offset: Offset(shadowOffsetX, shadowOffsetY),
+                  blurRadius: shadowBlur,
+                  spreadRadius: shadowSpread,
+                  color: shadowColor,
+                ),
+              ]
+            : null,
+      );
+    } else {
+      final backgroundColor = _parseColor(style['backgroundColor']?.toString());
+
+      decoration = BoxDecoration(
+        color: backgroundColor,
+        border: hasBorder
+            ? Border.all(
+                color: borderColor,
+                width: borderWidth,
+              )
+            : null,
+        borderRadius:
+            hasBorderRadius ? BorderRadius.circular(borderRadius) : null,
+        boxShadow: hasShadow
+            ? [
+                BoxShadow(
+                  offset: Offset(shadowOffsetX, shadowOffsetY),
+                  blurRadius: shadowBlur,
+                  spreadRadius: shadowSpread,
+                  color: shadowColor,
+                ),
+              ]
+            : null,
+      );
+    }
+
+    // Apply ClipRRect for border radius to clip child content
+    Widget result = Container(
+      decoration: decoration,
+      padding: hasPadding
+          ? EdgeInsets.only(
+              top: paddingTop,
+              right: paddingRight,
+              bottom: paddingBottom,
+              left: paddingLeft,
+            )
+          : null,
+      child: hasBorderRadius
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(borderRadius),
+              child: child,
+            )
+          : child,
+    );
+
+    return result;
+  }
+
+  /// Parse hex color string to Color
+  Color? _parseColor(String? hex) {
+    if (hex == null || hex.isEmpty) return null;
+    try {
+      final buffer = StringBuffer();
+      if (hex.length == 6 || hex.length == 7) buffer.write('ff');
+      buffer.write(hex.replaceFirst('#', ''));
+      return Color(int.parse(buffer.toString(), radix: 16));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Parse rgba color string to Color
+  Color? _parseRgbaColor(String? rgba) {
+    if (rgba == null || rgba.isEmpty) return null;
+    try {
+      // Handle hex colors
+      if (rgba.startsWith('#')) return _parseColor(rgba);
+
+      // Handle rgba(r,g,b,a) format
+      final match = RegExp(r'rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)')
+          .firstMatch(rgba);
+      if (match != null) {
+        final r = int.parse(match.group(1)!);
+        final g = int.parse(match.group(2)!);
+        final b = int.parse(match.group(3)!);
+        final a = match.group(4) != null ? double.parse(match.group(4)!) : 1.0;
+        return Color.fromRGBO(r, g, b, a);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Get gradient start alignment from direction string
+  Alignment _getGradientBegin(String direction) {
+    switch (direction) {
+      case 'to-top':
+        return Alignment.bottomCenter;
+      case 'to-top-right':
+        return Alignment.bottomLeft;
+      case 'to-right':
+        return Alignment.centerLeft;
+      case 'to-bottom-right':
+        return Alignment.topLeft;
+      case 'to-bottom':
+        return Alignment.topCenter;
+      case 'to-bottom-left':
+        return Alignment.topRight;
+      case 'to-left':
+        return Alignment.centerRight;
+      case 'to-top-left':
+        return Alignment.bottomRight;
+      default:
+        return Alignment.topCenter;
+    }
+  }
+
+  /// Get gradient end alignment from direction string
+  Alignment _getGradientEnd(String direction) {
+    switch (direction) {
+      case 'to-top':
+        return Alignment.topCenter;
+      case 'to-top-right':
+        return Alignment.topRight;
+      case 'to-right':
+        return Alignment.centerRight;
+      case 'to-bottom-right':
+        return Alignment.bottomRight;
+      case 'to-bottom':
+        return Alignment.bottomCenter;
+      case 'to-bottom-left':
+        return Alignment.bottomLeft;
+      case 'to-left':
+        return Alignment.centerLeft;
+      case 'to-top-left':
+        return Alignment.topLeft;
+      default:
+        return Alignment.bottomCenter;
+    }
+  }
+
   /// Get minimum height for block type
   double _getMinHeight(String type) {
     switch (type) {
@@ -463,10 +686,11 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     // Use LayoutBuilder to get live height from parent constraints (for smooth resize)
     return LayoutBuilder(
       builder: (context, constraints) {
-        final constraintHeight = constraints.maxHeight.isFinite ? constraints.maxHeight : null;
+        final constraintHeight =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : null;
         final dataHeight = (widget.data['blockHeight'] as num?)?.toDouble();
         final blockHeight = constraintHeight ?? dataHeight;
-        
+
         return _EditableCarouselWidget(
           slides: slides,
           showIndicators: showIndicators,
@@ -486,7 +710,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
               updatedSlides[index] =
                   Map<String, dynamic>.from(updatedSlides[index]);
               updatedSlides[index][field] = value;
-              editProvider.updateBlockData(widget.blockId, 'slides', updatedSlides);
+              editProvider.updateBlockData(
+                  widget.blockId, 'slides', updatedSlides);
             }
           },
           onNavigate: widget.onNavigate,
@@ -533,10 +758,11 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     // Fall back to widget.data['blockHeight'] or default 480 if no constraints
     return LayoutBuilder(
       builder: (context, constraints) {
-        final constraintHeight = constraints.maxHeight.isFinite ? constraints.maxHeight : null;
+        final constraintHeight =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : null;
         final dataHeight = (widget.data['blockHeight'] as num?)?.toDouble();
         final blockHeight = constraintHeight ?? dataHeight ?? 480.0;
-        
+
         return Container(
           height: blockHeight,
           width: double.infinity,
@@ -562,91 +788,91 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 ),
               ),
 
-          // Overlay
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withValues(alpha: 0.4),
-                  Colors.black.withValues(alpha: 0.6),
-                ],
+              // Overlay
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.4),
+                      Colors.black.withValues(alpha: 0.6),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
 
-          // Content
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Editable title with formatting toolbar
-                  InlineEditableTextV2(
-                    text: title,
-                    baseStyle: headingStyle,
-                    textAlign: TextAlign.center,
-                    isEditMode: true,
-                    placeholder: 'Título Principal',
-                    formatting: titleFormatting,
-                    fieldKey: '${widget.blockId}_title',
-                    onTextChanged: (value) => editProvider.updateBlockData(
-                        widget.blockId, 'title', value),
-                    onFormattingChanged: (formatting) =>
-                        editProvider.updateBlockData(
-                      widget.blockId,
-                      'titleFormatting',
-                      formatting.toJson(),
-                    ),
+              // Content
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Editable title with formatting toolbar
+                      InlineEditableTextV2(
+                        text: title,
+                        baseStyle: headingStyle,
+                        textAlign: TextAlign.center,
+                        isEditMode: true,
+                        placeholder: 'Título Principal',
+                        formatting: titleFormatting,
+                        fieldKey: '${widget.blockId}_title',
+                        onTextChanged: (value) => editProvider.updateBlockData(
+                            widget.blockId, 'title', value),
+                        onFormattingChanged: (formatting) =>
+                            editProvider.updateBlockData(
+                          widget.blockId,
+                          'titleFormatting',
+                          formatting.toJson(),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Editable subtitle with formatting toolbar
+                      InlineEditableTextV2(
+                        text: subtitle,
+                        baseStyle: subtitleStyle,
+                        textAlign: TextAlign.center,
+                        isEditMode: true,
+                        placeholder: 'Subtítulo descriptivo',
+                        formatting: subtitleFormatting,
+                        fieldKey: '${widget.blockId}_subtitle',
+                        onTextChanged: (value) => editProvider.updateBlockData(
+                            widget.blockId, 'subtitle', value),
+                        onFormattingChanged: (formatting) =>
+                            editProvider.updateBlockData(
+                          widget.blockId,
+                          'subtitleFormatting',
+                          formatting.toJson(),
+                        ),
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // Editable button with click handler
+                      _EditableButton(
+                        text: ctaText.isEmpty ? 'Ver más' : ctaText,
+                        link: ctaLink,
+                        backgroundColor: widget.accentColor,
+                        onTextChanged: (value) => editProvider.updateBlockData(
+                            widget.blockId, 'buttonText', value),
+                        onLinkChanged: (value) => editProvider.updateBlockData(
+                            widget.blockId, 'buttonLink', value),
+                        onNavigate: ctaLink.isNotEmpty
+                            ? () {
+                                widget.onNavigate?.call(ctaLink);
+                              }
+                            : null,
+                      ),
+                    ],
                   ),
-
-                  const SizedBox(height: 16),
-
-                  // Editable subtitle with formatting toolbar
-                  InlineEditableTextV2(
-                    text: subtitle,
-                    baseStyle: subtitleStyle,
-                    textAlign: TextAlign.center,
-                    isEditMode: true,
-                    placeholder: 'Subtítulo descriptivo',
-                    formatting: subtitleFormatting,
-                    fieldKey: '${widget.blockId}_subtitle',
-                    onTextChanged: (value) => editProvider.updateBlockData(
-                        widget.blockId, 'subtitle', value),
-                    onFormattingChanged: (formatting) =>
-                        editProvider.updateBlockData(
-                      widget.blockId,
-                      'subtitleFormatting',
-                      formatting.toJson(),
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Editable button with click handler
-                  _EditableButton(
-                    text: ctaText.isEmpty ? 'Ver más' : ctaText,
-                    link: ctaLink,
-                    backgroundColor: widget.accentColor,
-                    onTextChanged: (value) => editProvider.updateBlockData(
-                        widget.blockId, 'buttonText', value),
-                    onLinkChanged: (value) => editProvider.updateBlockData(
-                        widget.blockId, 'buttonLink', value),
-                    onNavigate: ctaLink.isNotEmpty
-                        ? () {
-                            widget.onNavigate?.call(ctaLink);
-                          }
-                        : null,
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
-    );
+        );
       },
     );
   }
@@ -709,8 +935,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 placeholder: 'Sobre Nosotros',
                 formatting: titleFormatting,
                 fieldKey: '${widget.blockId}_about_title',
-                onTextChanged: (value) =>
-                    editProvider.updateBlockData(widget.blockId, 'title', value),
+                onTextChanged: (value) => editProvider.updateBlockData(
+                    widget.blockId, 'title', value),
                 onFormattingChanged: (formatting) =>
                     editProvider.updateBlockData(
                   widget.blockId,
@@ -801,46 +1027,46 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           placeholder: 'Llamado a la Acción',
           formatting: titleFormatting,
           fieldKey: '${widget.blockId}_cta_title',
-            onTextChanged: (value) =>
-                editProvider.updateBlockData(widget.blockId, 'title', value),
-            onFormattingChanged: (formatting) => editProvider.updateBlockData(
-              widget.blockId,
-              'titleFormatting',
-              formatting.toJson(),
-            ),
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'title', value),
+          onFormattingChanged: (formatting) => editProvider.updateBlockData(
+            widget.blockId,
+            'titleFormatting',
+            formatting.toJson(),
           ),
-          const SizedBox(height: 16),
-          InlineEditableTextV2(
-            text: description,
-            baseStyle: bodyStyle,
-            textAlign: TextAlign.center,
-            isEditMode: true,
-            placeholder: 'Descripción del llamado a la acción',
-            formatting: descriptionFormatting,
-            fieldKey: '${widget.blockId}_cta_description',
-            onTextChanged: (value) => editProvider.updateBlockData(
-                widget.blockId, 'description', value),
-            onFormattingChanged: (formatting) => editProvider.updateBlockData(
-              widget.blockId,
-              'descriptionFormatting',
-              formatting.toJson(),
-            ),
+        ),
+        const SizedBox(height: 16),
+        InlineEditableTextV2(
+          text: description,
+          baseStyle: bodyStyle,
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Descripción del llamado a la acción',
+          formatting: descriptionFormatting,
+          fieldKey: '${widget.blockId}_cta_description',
+          onTextChanged: (value) => editProvider.updateBlockData(
+              widget.blockId, 'description', value),
+          onFormattingChanged: (formatting) => editProvider.updateBlockData(
+            widget.blockId,
+            'descriptionFormatting',
+            formatting.toJson(),
           ),
-          const SizedBox(height: 32),
-          _EditableButton(
-            text: buttonText.isEmpty ? 'Contactar' : buttonText,
-            link: buttonLink,
-            backgroundColor: Colors.white,
-            foregroundColor:
-                widget.primaryColor, // Text matches CTA gradient color
-            onTextChanged: (value) => editProvider.updateBlockData(
-                widget.blockId, 'buttonText', value),
-            onLinkChanged: (value) => editProvider.updateBlockData(
-                widget.blockId, 'buttonLink', value),
-            onNavigate: buttonLink.isNotEmpty
-                ? () {
-                    widget.onNavigate?.call(buttonLink);
-                  }
+        ),
+        const SizedBox(height: 32),
+        _EditableButton(
+          text: buttonText.isEmpty ? 'Contactar' : buttonText,
+          link: buttonLink,
+          backgroundColor: Colors.white,
+          foregroundColor:
+              widget.primaryColor, // Text matches CTA gradient color
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'buttonText', value),
+          onLinkChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'buttonLink', value),
+          onNavigate: buttonLink.isNotEmpty
+              ? () {
+                  widget.onNavigate?.call(buttonLink);
+                }
               : null,
         ),
       ],
@@ -923,50 +1149,50 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           isEditMode: true,
           placeholder: 'Título de características',
           fieldKey: '${widget.blockId}_features_title',
-                onTextChanged: (value) => editProvider.updateBlockData(
-                    widget.blockId, 'title', value),
-              ),
-              const SizedBox(height: 12),
-              InlineEditableTextV2(
-                text: subtitle,
-                baseStyle: bodyStyle,
-                textAlign: TextAlign.center,
-                isEditMode: true,
-                placeholder: 'Subtítulo opcional',
-                fieldKey: '${widget.blockId}_features_subtitle',
-                onTextChanged: (value) => editProvider.updateBlockData(
-                    widget.blockId, 'subtitle', value),
-              ),
-              const SizedBox(height: 48),
-              Wrap(
-                spacing: 32,
-                runSpacing: 32,
-                alignment: WrapAlignment.center,
-                children: features.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final feature = entry.value;
-                  return _buildEditableFeatureCard(
-                    context,
-                    feature,
-                    index,
-                    features,
-                    editProvider,
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              TextButton.icon(
-                onPressed: () {
-                  final newFeatures = List<Map<String, dynamic>>.from(features);
-                  newFeatures.add({
-                    'icon': 'check_circle',
-                    'title': 'Nueva Característica',
-                    'description': 'Descripción de la característica',
-                  });
-                  editProvider.updateBlockData(
-                      widget.blockId, 'features', newFeatures);
-                },
-                icon: const Icon(Icons.add),
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'title', value),
+        ),
+        const SizedBox(height: 12),
+        InlineEditableTextV2(
+          text: subtitle,
+          baseStyle: bodyStyle,
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Subtítulo opcional',
+          fieldKey: '${widget.blockId}_features_subtitle',
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'subtitle', value),
+        ),
+        const SizedBox(height: 48),
+        Wrap(
+          spacing: 32,
+          runSpacing: 32,
+          alignment: WrapAlignment.center,
+          children: features.asMap().entries.map((entry) {
+            final index = entry.key;
+            final feature = entry.value;
+            return _buildEditableFeatureCard(
+              context,
+              feature,
+              index,
+              features,
+              editProvider,
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 24),
+        TextButton.icon(
+          onPressed: () {
+            final newFeatures = List<Map<String, dynamic>>.from(features);
+            newFeatures.add({
+              'icon': 'check_circle',
+              'title': 'Nueva Característica',
+              'description': 'Descripción de la característica',
+            });
+            editProvider.updateBlockData(
+                widget.blockId, 'features', newFeatures);
+          },
+          icon: const Icon(Icons.add),
           label: const Text('Agregar característica'),
         ),
       ],
@@ -1124,8 +1350,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           isEditMode: true,
           placeholder: 'Título de FAQ',
           fieldKey: '${widget.blockId}_faq_title',
-          onTextChanged: (value) => editProvider.updateBlockData(
-              widget.blockId, 'title', value),
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'title', value),
         ),
         const SizedBox(height: 12),
         InlineEditableTextV2(
@@ -1137,8 +1363,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           isEditMode: true,
           placeholder: 'Subtítulo opcional',
           fieldKey: '${widget.blockId}_faq_subtitle',
-          onTextChanged: (value) => editProvider.updateBlockData(
-              widget.blockId, 'subtitle', value),
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'subtitle', value),
         ),
         const SizedBox(height: 32),
         ...items.asMap().entries.map((entry) {
@@ -1155,8 +1381,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
               'question': 'Nueva pregunta',
               'answer': 'Respuesta a la pregunta',
             });
-            editProvider.updateBlockData(
-                widget.blockId, 'items', newItems);
+            editProvider.updateBlockData(widget.blockId, 'items', newItems);
           },
           icon: const Icon(Icons.add),
           label: const Text('Agregar pregunta'),
@@ -1441,8 +1666,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           isEditMode: true,
           placeholder: 'Título de servicios',
           fieldKey: '${widget.blockId}_services_title',
-          onTextChanged: (value) => editProvider.updateBlockData(
-              widget.blockId, 'title', value),
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'title', value),
         ),
         const SizedBox(height: 12),
         InlineEditableTextV2(
@@ -1454,8 +1679,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           isEditMode: true,
           placeholder: 'Subtítulo opcional',
           fieldKey: '${widget.blockId}_services_subtitle',
-          onTextChanged: (value) => editProvider.updateBlockData(
-              widget.blockId, 'subtitle', value),
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'subtitle', value),
         ),
         const SizedBox(height: 48),
         Wrap(
@@ -1491,12 +1716,12 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
-        
+
         return Container(
           width: double.infinity,
           height: hasFixedHeight ? constraints.maxHeight : null,
-          padding: hasFixedHeight 
-              ? const EdgeInsets.symmetric(horizontal: 24) 
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 24)
               : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
           child: Center(
             child: ConstrainedBox(
@@ -2446,6 +2671,155 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
   }
 }
 
+/// Inline link picker for button editor - light theme matching modal design
+class _InlineLinkPicker extends StatefulWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final ValueChanged<String> onChanged;
+
+  const _InlineLinkPicker({
+    required this.controller,
+    required this.focusNode,
+    required this.onChanged,
+  });
+
+  @override
+  State<_InlineLinkPicker> createState() => _InlineLinkPickerState();
+}
+
+class _InlineLinkPickerState extends State<_InlineLinkPicker> {
+  bool _isExpanded = false;
+
+  static const _quickLinks = [
+    ('/tienda/productos', 'Productos', Icons.inventory_2_outlined),
+    ('/tienda/categorias', 'Categorías', Icons.category_outlined),
+    ('/contacto', 'Contacto', Icons.email_outlined),
+    ('/', 'Inicio', Icons.home_outlined),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Text field with integrated dropdown chevron
+        TextField(
+          controller: widget.controller,
+          focusNode: widget.focusNode,
+          style: const TextStyle(fontSize: 14, color: Colors.black87),
+          decoration: InputDecoration(
+            labelText: 'Enlace (URL o ruta)',
+            labelStyle: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            isDense: true,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            prefixIcon: Icon(_getLinkIcon(widget.controller.text),
+                size: 18, color: Colors.blue),
+            suffixIcon: InkWell(
+              onTap: () => setState(() => _isExpanded = !_isExpanded),
+              borderRadius: BorderRadius.circular(4),
+              child: Icon(
+                _isExpanded ? Icons.expand_less : Icons.expand_more,
+                size: 20,
+                color: Colors.grey[600],
+              ),
+            ),
+            hintText: '/tienda/productos',
+            hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+          ),
+          onChanged: widget.onChanged,
+        ),
+
+        // Quick links dropdown when expanded
+        if (_isExpanded) ...[
+          const SizedBox(height: 4),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: _quickLinks.map((link) {
+                final isSelected = widget.controller.text == link.$1;
+                return InkWell(
+                  onTap: () {
+                    widget.controller.text = link.$1;
+                    widget.onChanged(link.$1);
+                    setState(() => _isExpanded = false);
+                  },
+                  borderRadius: BorderRadius.circular(4),
+                  child: Container(
+                    width: double.infinity,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    decoration: BoxDecoration(
+                      color:
+                          isSelected ? Colors.blue.shade50 : Colors.transparent,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          link.$3,
+                          size: 16,
+                          color:
+                              isSelected ? Colors.blue : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            link.$2,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isSelected ? Colors.blue : Colors.black87,
+                              fontWeight: isSelected
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          link.$1,
+                          style: TextStyle(
+                              fontSize: 11, color: Colors.grey.shade400),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  IconData _getLinkIcon(String link) {
+    if (link.isEmpty) return Icons.link;
+    if (link.startsWith('#')) return Icons.tag;
+    if (link.startsWith('http')) return Icons.open_in_new;
+    if (link.contains('producto')) return Icons.inventory_2_outlined;
+    if (link.contains('categori')) return Icons.category_outlined;
+    if (link.contains('contacto')) return Icons.email_outlined;
+    if (link == '/') return Icons.home_outlined;
+    return Icons.link;
+  }
+}
+
 /// Editable button widget with "first click edits, second click navigates" behavior
 class _EditableButton extends StatefulWidget {
   final String text;
@@ -2479,6 +2853,10 @@ class _EditableButtonState extends State<_EditableButton> {
   final FocusNode _textFocus = FocusNode();
   final FocusNode _linkFocus = FocusNode();
 
+  // Overlay support
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+
   Color get _textColor {
     // If foreground color specified, use it; otherwise, compute based on background brightness
     if (widget.foregroundColor != null) return widget.foregroundColor!;
@@ -2494,9 +2872,6 @@ class _EditableButtonState extends State<_EditableButton> {
     super.initState();
     _textController = TextEditingController(text: widget.text);
     _linkController = TextEditingController(text: widget.link);
-
-    _textFocus.addListener(_onFocusChange);
-    _linkFocus.addListener(_onFocusChange);
   }
 
   @override
@@ -2510,8 +2885,18 @@ class _EditableButtonState extends State<_EditableButton> {
     }
   }
 
-  void _onFocusChange() {
-    if (!_textFocus.hasFocus && !_linkFocus.hasFocus) {
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  void _closeEditing([bool save = false]) {
+    if (save) {
+      widget.onTextChanged(_textController.text);
+      widget.onLinkChanged(_linkController.text);
+    }
+    _removeOverlay();
+    if (mounted) {
       setState(() {
         _isEditing = false;
         _isSelected = false;
@@ -2521,6 +2906,7 @@ class _EditableButtonState extends State<_EditableButton> {
 
   @override
   void dispose() {
+    _removeOverlay();
     _textController.dispose();
     _linkController.dispose();
     _textFocus.dispose();
@@ -2530,19 +2916,60 @@ class _EditableButtonState extends State<_EditableButton> {
 
   void _handleTap() {
     if (!_isSelected) {
-      // First click: select and show editing UI
+      // First click: select
       setState(() {
         _isSelected = true;
       });
     } else if (_isSelected && !_isEditing) {
-      // Second click while selected: start editing
+      // Second click: start editing overlay
       setState(() {
         _isEditing = true;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _textFocus.requestFocus();
-      });
+      _showEditorOverlay();
     }
+  }
+
+  void _showEditorOverlay() {
+    _removeOverlay();
+    final overlay = Overlay.of(context);
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          // Modal barrier to close on outside click
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => _closeEditing(true), // Save on outside click
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          // Floating editor
+          Positioned(
+            width: 320,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              // Center the modal relative to the button
+              offset: Offset(size.width / 2 - 160, size.height + 10),
+              child: Material(
+                color: Colors.transparent,
+                child: _buildEditingUI(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    overlay.insert(_overlayEntry!);
+
+    // Auto-focus text field
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _textFocus.requestFocus();
+    });
   }
 
   void _handleNavigate() {
@@ -2553,112 +2980,114 @@ class _EditableButtonState extends State<_EditableButton> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isEditing) {
-      return _buildEditingUI();
-    }
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovering = true),
-      onExit: (_) => setState(() => _isHovering = false),
-      child: GestureDetector(
-        onTap: _handleTap,
-        onDoubleTap: _handleNavigate,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          decoration: BoxDecoration(
-            color:
-                _isOutlineStyle ? Colors.transparent : widget.backgroundColor,
-            borderRadius:
-                _isOutlineStyle ? BorderRadius.zero : BorderRadius.circular(8),
-            border: _isSelected
-                ? Border.all(color: Colors.blue, width: 2)
-                : _isHovering
-                    ? Border.all(
-                        color: Colors.blue.withValues(alpha: 0.5), width: 2)
-                    : _isOutlineStyle
-                        ? Border.all(color: _textColor, width: 1)
-                        : null,
-            boxShadow: _isSelected
-                ? [
-                    BoxShadow(
-                        color: Colors.blue.withValues(alpha: 0.3),
-                        blurRadius: 8)
-                  ]
-                : null,
-          ),
-          child: Stack(
-            children: [
-              Padding(
-                padding: _isOutlineStyle
-                    ? const EdgeInsets.symmetric(horizontal: 40, vertical: 16)
-                    : const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      widget.text.isEmpty
-                          ? 'Botón'
-                          : (_isOutlineStyle
-                              ? widget.text.toUpperCase()
-                              : widget.text),
-                      style: TextStyle(
-                        color: _textColor,
-                        fontWeight: FontWeight.w600,
-                        fontSize: _isOutlineStyle ? 13 : 16,
-                        letterSpacing: _isOutlineStyle ? 1.5 : 0,
+    // Always render the button visuals so layout doesn't jump
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovering = true),
+        onExit: (_) => setState(() => _isHovering = false),
+        child: GestureDetector(
+          onTap: _handleTap,
+          onDoubleTap: _handleNavigate,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            decoration: BoxDecoration(
+              color:
+                  _isOutlineStyle ? Colors.transparent : widget.backgroundColor,
+              borderRadius: _isOutlineStyle
+                  ? BorderRadius.zero
+                  : BorderRadius.circular(8),
+              border: _isSelected
+                  ? Border.all(color: Colors.blue, width: 2)
+                  : _isHovering
+                      ? Border.all(
+                          color: Colors.blue.withValues(alpha: 0.5), width: 2)
+                      : _isOutlineStyle
+                          ? Border.all(color: _textColor, width: 1)
+                          : null,
+              boxShadow: _isSelected
+                  ? [
+                      BoxShadow(
+                          color: Colors.blue.withValues(alpha: 0.3),
+                          blurRadius: 8)
+                    ]
+                  : null,
+            ),
+            child: Stack(
+              children: [
+                Padding(
+                  padding: _isOutlineStyle
+                      ? const EdgeInsets.symmetric(horizontal: 40, vertical: 16)
+                      : const EdgeInsets.symmetric(
+                          horizontal: 48, vertical: 20),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.text.isEmpty
+                            ? 'Botón'
+                            : (_isOutlineStyle
+                                ? widget.text.toUpperCase()
+                                : widget.text),
+                        style: TextStyle(
+                          color: _textColor,
+                          fontWeight: FontWeight.w600,
+                          fontSize: _isOutlineStyle ? 13 : 16,
+                          letterSpacing: _isOutlineStyle ? 1.5 : 0,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      _isSelected ? Icons.edit : Icons.touch_app,
-                      size: 16,
-                      color: _textColor.withValues(alpha: 0.7),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Icon(
+                        _isSelected ? Icons.edit : Icons.touch_app,
+                        size: 16,
+                        color: _textColor.withValues(alpha: 0.7),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              // Hint text
-              if (_isHovering && !_isSelected)
-                Positioned(
-                  top: -24,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'Clic para editar',
-                        style: TextStyle(color: Colors.white, fontSize: 11),
+                // Hint text
+                if (_isHovering && !_isSelected)
+                  Positioned(
+                    top: -24,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'Clic para editar',
+                          style: TextStyle(color: Colors.white, fontSize: 11),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              if (_isSelected && !_isEditing)
-                Positioned(
-                  top: -24,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'Clic de nuevo para editar • Doble clic para navegar',
-                        style: TextStyle(color: Colors.white, fontSize: 11),
+                if (_isSelected && !_isEditing)
+                  Positioned(
+                    top: -24,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'Clic de nuevo para editar • Doble clic para navegar',
+                          style: TextStyle(color: Colors.white, fontSize: 11),
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2666,18 +3095,22 @@ class _EditableButtonState extends State<_EditableButton> {
   }
 
   Widget _buildEditingUI() {
+    const tealAccent = Color(0xFF00A09D);
+    const darkBg = Color(0xFF1E1E1E);
+    const darkSurface = Color(0xFF2D2D2D);
+
     return Container(
-      constraints: const BoxConstraints(maxWidth: 400),
+      constraints: const BoxConstraints(maxWidth: 360),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: darkBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue, width: 2),
+        border: Border.all(color: tealAccent, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.4),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -2688,83 +3121,92 @@ class _EditableButtonState extends State<_EditableButton> {
           // Header
           Row(
             children: [
-              Icon(Icons.smart_button, color: Colors.blue[600], size: 20),
+              const Icon(Icons.smart_button, color: tealAccent, size: 18),
               const SizedBox(width: 8),
               const Text(
                 'Editar Botón',
                 style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: Colors.black87,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: Colors.white,
                 ),
               ),
               const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.close, size: 18),
-                onPressed: () {
-                  setState(() {
-                    _isEditing = false;
-                    _isSelected = false;
-                  });
-                },
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              InkWell(
+                onTap: () => _closeEditing(true), // Save and close
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.close, size: 16, color: Colors.white54),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
-          // Text field
+          // Text field label
+          const Text(
+            'Texto del botón',
+            style: TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
           TextField(
             controller: _textController,
             focusNode: _textFocus,
-            style: const TextStyle(fontSize: 14, color: Colors.black87),
+            cursorColor: tealAccent,
+            style: const TextStyle(fontSize: 13, color: Colors.white),
             decoration: InputDecoration(
-              labelText: 'Texto del botón',
-              labelStyle: TextStyle(fontSize: 12, color: Colors.grey[600]),
               isDense: true,
+              filled: true,
+              fillColor: darkSurface,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              prefixIcon: const Icon(Icons.text_fields, size: 18),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide:
+                    BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide:
+                    BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: const BorderSide(color: tealAccent),
+              ),
+              hintText: 'Ej: Ver catálogo',
+              hintStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.3), fontSize: 13),
             ),
-            onChanged: widget.onTextChanged,
+            // Update preview locally, sync on close
+            onChanged: (_) => setState(() {}),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
-          // Link field
-          TextField(
+          // Link section
+          const Text(
+            'Enlace del botón',
+            style: TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          _DarkLinkPicker(
             controller: _linkController,
-            focusNode: _linkFocus,
-            style: const TextStyle(fontSize: 14, color: Colors.black87),
-            decoration: InputDecoration(
-              labelText: 'Enlace (URL o ruta)',
-              labelStyle: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              prefixIcon: const Icon(Icons.link, size: 18),
-              hintText: '/tienda/productos',
-              hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
-            ),
-            onChanged: widget.onLinkChanged,
+            onChanged: (_) => setState(() {}), // Local update only
           ),
           const SizedBox(height: 16),
 
-          // Preview and save
+          // Preview and save row
           Row(
             children: [
               // Preview
               Expanded(
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: widget.backgroundColor,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     _textController.text.isEmpty
@@ -2774,33 +3216,239 @@ class _EditableButtonState extends State<_EditableButton> {
                     style: TextStyle(
                       color: _textColor,
                       fontWeight: FontWeight.w600,
-                      fontSize: 14,
+                      fontSize: 13,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               // Done button
-              ElevatedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _isEditing = false;
-                    _isSelected = false;
-                  });
-                },
-                icon: const Icon(Icons.check, size: 18),
-                label: const Text('Listo'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
+              GestureDetector(
+                onTap: () => _closeEditing(true), // Save and close
+                child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: tealAccent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check, size: 16, color: Colors.white),
+                      SizedBox(width: 6),
+                      Text(
+                        'Listo',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Dark-themed link picker matching side panel style
+class _DarkLinkPicker extends StatefulWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  const _DarkLinkPicker({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  @override
+  State<_DarkLinkPicker> createState() => _DarkLinkPickerState();
+}
+
+class _DarkLinkPickerState extends State<_DarkLinkPicker> {
+  bool _isExpanded = false;
+
+  static const _quickLinks = [
+    ('/tienda/productos', 'Productos', Icons.inventory_2_outlined),
+    ('/tienda/categorias', 'Categorías', Icons.category_outlined),
+    ('/contacto', 'Contacto', Icons.email_outlined),
+    ('/', 'Inicio', Icons.home_outlined),
+  ];
+
+  IconData _getLinkIcon(String link) {
+    if (link.isEmpty) return Icons.link;
+    if (link.startsWith('#')) return Icons.tag;
+    if (link.startsWith('http')) return Icons.open_in_new;
+    if (link.contains('producto')) return Icons.inventory_2_outlined;
+    if (link.contains('categori')) return Icons.category_outlined;
+    if (link.contains('contacto')) return Icons.email_outlined;
+    if (link == '/') return Icons.home_outlined;
+    return Icons.link;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const tealAccent = Color(0xFF00A09D);
+    const darkSurface = Color(0xFF2D2D2D);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Current link display - clickable to expand
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _isExpanded = !_isExpanded),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: darkSurface,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: _isExpanded ? tealAccent : Colors.white12,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _getLinkIcon(widget.controller.text),
+                  size: 16,
+                  color: tealAccent,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    widget.controller.text.isEmpty
+                        ? 'Sin enlace'
+                        : widget.controller.text,
+                    style: TextStyle(
+                      color: widget.controller.text.isEmpty
+                          ? Colors.white38
+                          : Colors.white,
+                      fontSize: 13,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Icon(
+                  _isExpanded ? Icons.expand_less : Icons.expand_more,
+                  color: Colors.white54,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Expanded options
+        if (_isExpanded) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF252525),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Quick links
+                ..._quickLinks.map((link) {
+                  final isSelected = widget.controller.text == link.$1;
+                  return InkWell(
+                    onTap: () {
+                      widget.controller.text = link.$1;
+                      widget.onChanged(link.$1);
+                      setState(() => _isExpanded = false);
+                    },
+                    borderRadius: BorderRadius.circular(4),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? tealAccent.withValues(alpha: 0.15)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            link.$3,
+                            size: 14,
+                            color: isSelected ? tealAccent : Colors.white54,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              link.$2,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isSelected ? tealAccent : Colors.white,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            link.$1,
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.white38),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 8),
+                // Custom URL input
+                TextField(
+                  controller: widget.controller,
+                  style: const TextStyle(fontSize: 12, color: Colors.white),
+                  cursorColor: tealAccent,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    filled: true,
+                    fillColor: darkSurface,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.1)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: const BorderSide(color: tealAccent),
+                    ),
+                    hintText: 'URL personalizada...',
+                    hintStyle: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        fontSize: 12),
+                    prefixIcon: const Padding(
+                      padding: EdgeInsets.only(left: 8, right: 4),
+                      child: Icon(Icons.edit, size: 14, color: Colors.white38),
+                    ),
+                    prefixIconConstraints:
+                        const BoxConstraints(minWidth: 0, minHeight: 0),
+                  ),
+                  onChanged: widget.onChanged,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -2872,7 +3520,7 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
 
     // Use custom height if set, otherwise default to 520
     final height = widget.blockHeight ?? 520.0;
-    
+
     return SizedBox(
       height: height,
       width: double.infinity,

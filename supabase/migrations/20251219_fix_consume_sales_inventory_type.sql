@@ -1,8 +1,11 @@
 -- ============================================================================
--- FIX: Update consume_sales_invoice_inventory to handle Product Sets
+-- FIX: Invalid input syntax for type json in consume_sales_invoice_inventory
 -- ============================================================================
--- Problem: Currently, selling a "Set" deducts inventory from the Set ID itself.
--- Solution: Detect if it's a Set, and if so, deduct from its COMPONENTS instead.
+-- Problem: v_item was declared as JSONB but the FOR loop assigns a RECORD to it.
+--          When trying to iterate, PostgreSQL attempts to convert the record
+--          (containing UUID fields) to JSONB, causing the parse error.
+-- Solution: Change v_item declaration from JSONB to RECORD.
+-- ============================================================================
 
 CREATE OR REPLACE FUNCTION public.consume_sales_invoice_inventory(p_invoice public.sales_invoices)
 RETURNS void
@@ -11,7 +14,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_item record;  -- FIX: Changed from jsonb to record (the FOR loop assigns a record, not jsonb)
+  v_item record;  -- FIX: Changed from jsonb to record
   v_resolved_product_id uuid;
   v_quantity_int integer;
   v_status text;
@@ -143,7 +146,6 @@ BEGIN
        END LOOP;
 
        -- Do NOT deduct stock from the parent SET itself, as it is virtual.
-       -- Or optionally, you could deduct it if you track virtual stock, but usually Sets = 0.
        RAISE NOTICE 'consume_sales_invoice_inventory: Finished processing set %', v_resolved_product_id;
 
     ELSE

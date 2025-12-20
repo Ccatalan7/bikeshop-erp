@@ -6,7 +6,8 @@ import 'package:flutter/material.dart';
 class WindowZoomService extends ChangeNotifier {
   WindowZoomService();
 
-  static const double _defaultScale = 1.0;
+  // User requested default zoom to be 0.8 (equivalent to pressing Cmd- twice)
+  static const double _defaultScale = 0.8;
   static const double _minScale = 0.5;
   static const double _maxScale = 3.0;
   static const double _step = 0.1;
@@ -18,10 +19,10 @@ class WindowZoomService extends ChangeNotifier {
 
   /// Supported on Windows and macOS desktop platforms
   static bool get isSupportedPlatform =>
-      !kIsWeb && 
+      !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.windows ||
-       defaultTargetPlatform == TargetPlatform.macOS);
-  
+          defaultTargetPlatform == TargetPlatform.macOS);
+
   /// Check if running on macOS (for keyboard shortcut modifier)
   static bool get isMacOS =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;

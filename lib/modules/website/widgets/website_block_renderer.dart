@@ -11,7 +11,8 @@ import '../../../shared/utils/chilean_utils.dart';
 import '../models/website_block_type.dart';
 
 // Conditional import for web platform
-import 'video_banner_stub.dart' if (dart.library.html) 'video_banner_web.dart' as video_platform;
+import 'video_banner_stub.dart' if (dart.library.html) 'video_banner_web.dart'
+    as video_platform;
 
 /// Renders website blocks using the same widgets as the public store so the
 /// editor preview can stay in sync with the live site.
@@ -219,6 +220,32 @@ class WebsiteBlockRenderer {
     }
   }
 
+  static Color? _parseColor(dynamic value) {
+    if (value == null) return null;
+    final hex = value.toString();
+    if (hex.isEmpty) return null;
+    final buffer = StringBuffer();
+    if (hex.length == 6 || hex.length == 7) buffer.write('ff');
+    buffer.write(hex.replaceFirst('#', ''));
+    try {
+      return Color(int.parse(buffer.toString(), radix: 16));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static EdgeInsets _parsePadding(Map<String, dynamic> data,
+      {double defaultVertical = 64}) {
+    final style = data['style'] as Map<String, dynamic>?;
+    if (style == null)
+      return EdgeInsets.symmetric(vertical: defaultVertical, horizontal: 24);
+
+    final top = (style['paddingTop'] as num?)?.toDouble() ?? defaultVertical;
+    final bottom =
+        (style['paddingBottom'] as num?)?.toDouble() ?? defaultVertical;
+    return EdgeInsets.only(top: top, bottom: bottom, left: 24, right: 24);
+  }
+
   static Widget _buildHero({
     required BuildContext context,
     required Map<String, dynamic> data,
@@ -247,6 +274,15 @@ class WebsiteBlockRenderer {
         ((data['overlayOpacity'] ?? 0.5) as num).clamp(0.0, 1.0).toDouble();
     final hasImage = imageUrl != null && imageUrl.toString().isNotEmpty;
 
+    // Use style background if no image
+    final bgColor = _parseColor(data['style']?['backgroundColor']) ??
+        const Color(0xFF1a1a1a);
+
+    // New Props for Alignment and Full Screen
+    final isFullScreen = data['isFullScreen'] == true;
+    final alignment =
+        data['alignment']?.toString() ?? 'center'; // center, left, right
+
     final resolvedHeading =
         (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
       fontFamily: headingFont?.isNotEmpty == true ? headingFont : null,
@@ -261,11 +297,33 @@ class WebsiteBlockRenderer {
       color: Colors.white70,
     );
 
+    // Resolve alignment logic
+    CrossAxisAlignment crossAlign;
+    TextAlign textAlign;
+    Alignment geometryAlign;
+
+    switch (alignment) {
+      case 'left':
+        crossAlign = CrossAxisAlignment.start;
+        textAlign = TextAlign.left;
+        geometryAlign = Alignment.centerLeft;
+        break;
+      case 'right':
+        crossAlign = CrossAxisAlignment.end;
+        textAlign = TextAlign.right;
+        geometryAlign = Alignment.centerRight;
+        break;
+      default:
+        crossAlign = CrossAxisAlignment.center;
+        textAlign = TextAlign.center;
+        geometryAlign = Alignment.center;
+    }
+
     return Container(
-      height: 520,
+      height: isFullScreen ? MediaQuery.of(context).size.height : 520,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFF1a1a1a),
+        color: bgColor,
         image: hasImage
             ? DecorationImage(
                 image: NetworkImage(imageUrl.toString()),
@@ -277,8 +335,8 @@ class WebsiteBlockRenderer {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF1a1a1a),
-                  const Color(0xFF2a2a2a),
+                  bgColor,
+                  Color.lerp(bgColor, Colors.black, 0.2)!,
                 ],
               )
             : null,
@@ -296,11 +354,13 @@ class WebsiteBlockRenderer {
                 ),
               )
             : null,
-        child: Center(
+        child: Align(
+          alignment: geometryAlign,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: crossAlign,
               children: [
                 Text(
                   (title.isEmpty ? 'Título' : title).toUpperCase(),
@@ -308,21 +368,20 @@ class WebsiteBlockRenderer {
                     letterSpacing: 3,
                     fontWeight: FontWeight.w900,
                   ),
-                  textAlign: TextAlign.center,
+                  textAlign: textAlign,
                 ),
                 if (subtitle.isNotEmpty) ...[
                   const SizedBox(height: 20),
-                  Text(subtitle,
-                      style: resolvedSubtitle, textAlign: TextAlign.center),
+                  Text(subtitle, style: resolvedSubtitle, textAlign: textAlign),
                 ],
                 const SizedBox(height: 40),
-                // Commencal-style squared button
                 OutlinedButton(
                   onPressed: previewMode
                       ? () {}
                       : () {
-                          final route =
-                              ctaLink.isNotEmpty ? ctaLink : '/tienda/productos';
+                          final route = ctaLink.isNotEmpty
+                              ? ctaLink
+                              : '/tienda/productos';
                           if (onNavigate != null) {
                             onNavigate(route);
                           }
@@ -330,8 +389,8 @@ class WebsiteBlockRenderer {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white,
                     side: const BorderSide(color: Colors.white, width: 1),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 40, vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(0),
                     ),
@@ -368,7 +427,7 @@ class WebsiteBlockRenderer {
     // Generate a key based on slides data to force rebuild when slides change
     final slides = data['slides'];
     final slidesHash = slides != null ? slides.toString().hashCode : 0;
-    
+
     return _CarouselBanner(
       key: ValueKey('carousel_$slidesHash'),
       data: data,
@@ -416,7 +475,8 @@ class WebsiteBlockRenderer {
     String? bodyFont,
   }) {
     final rawTitle = (data['title'] ?? 'Nuestros Servicios').toString().trim();
-    final title = rawTitle.isEmpty ? 'NUESTROS SERVICIOS' : rawTitle.toUpperCase();
+    final title =
+        rawTitle.isEmpty ? 'NUESTROS SERVICIOS' : rawTitle.toUpperCase();
     final rawServices = data['services'];
 
     List<Map<String, dynamic>> services = [];
@@ -451,12 +511,17 @@ class WebsiteBlockRenderer {
     return LayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
-        
+        final bgColor = _parseColor(data['style']?['backgroundColor']) ??
+            const Color(0xFFFAFAFA);
+        final padding = hasFixedHeight
+            ? const EdgeInsets.symmetric(horizontal: 24)
+            : _parsePadding(data, defaultVertical: 56);
+
         return Container(
-          color: const Color(0xFFFAFAFA),
+          color: bgColor,
           width: double.infinity,
           height: hasFixedHeight ? constraints.maxHeight : null,
-          padding: hasFixedHeight ? const EdgeInsets.symmetric(horizontal: 24) : const EdgeInsets.symmetric(vertical: 56, horizontal: 24),
+          padding: padding,
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1000),
@@ -477,16 +542,20 @@ class WebsiteBlockRenderer {
                   Row(
                     children: services.take(3).map((service) {
                       final iconName = service['icon']?.toString();
-                      final serviceTitle = (service['title'] ?? 'Servicio').toString();
-                      final description = (service['description'] ?? '').toString().trim();
+                      final serviceTitle =
+                          (service['title'] ?? 'Servicio').toString();
+                      final description =
+                          (service['description'] ?? '').toString().trim();
 
                       return Expanded(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 24),
                           decoration: BoxDecoration(
                             border: Border(
                               left: services.indexOf(service) > 0
-                                  ? BorderSide(color: Colors.grey.shade300, width: 1)
+                                  ? BorderSide(
+                                      color: Colors.grey.shade300, width: 1)
                                   : BorderSide.none,
                             ),
                           ),
@@ -583,7 +652,6 @@ class WebsiteBlockRenderer {
     String? bodyFont,
     void Function(String route)? onNavigate,
   }) {
-    final theme = Theme.of(context);
     final title = (data['title'] ?? 'Visita nuestra tienda').toString().trim();
     final buttonText =
         (data['buttonText'] ?? data['ctaText'] ?? 'Ver productos')
@@ -626,7 +694,8 @@ class WebsiteBlockRenderer {
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 side: const BorderSide(color: Colors.white, width: 1),
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(0),
                 ),
@@ -663,8 +732,14 @@ class WebsiteBlockRenderer {
             .toList()
         : <Map<String, dynamic>>[];
 
+    final layout = data['layout']?.toString() ?? 'grid'; // grid or list
+    final bgColor = _parseColor(
+        data['style']?['backgroundColor']); // Default transparent/theme
+    final padding = _parsePadding(data, defaultVertical: 64);
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64),
+      padding: padding,
+      color: bgColor,
       child: Column(
         children: [
           Text(
@@ -676,39 +751,55 @@ class WebsiteBlockRenderer {
           ),
           const SizedBox(height: 48),
           if (features.isEmpty)
-            Wrap(
-              spacing: 24,
-              runSpacing: 24,
-              alignment: WrapAlignment.center,
-              children: [
-                _buildFeatureCard(
-                  context,
-                  icon: Icons.verified,
-                  title: 'Servicio certificado',
-                  description: 'Técnicos con amplia experiencia en bicicletas.',
-                  primaryColor: primaryColor,
-                  headingFont: headingFont,
-                  bodyFont: bodyFont,
-                ),
-                _buildFeatureCard(
-                  context,
-                  icon: Icons.pedal_bike,
-                  title: 'Variedad de productos',
-                  description: 'Catálogo actualizado con las mejores marcas.',
-                  primaryColor: primaryColor,
-                  headingFont: headingFont,
-                  bodyFont: bodyFont,
-                ),
-                _buildFeatureCard(
-                  context,
-                  icon: Icons.support_agent,
-                  title: 'Acompañamiento experto',
-                  description: 'Te ayudamos a elegir la bicicleta perfecta.',
-                  primaryColor: primaryColor,
-                  headingFont: headingFont,
-                  bodyFont: bodyFont,
-                ),
-              ],
+            _buildDefaultFeatures(context, primaryColor, headingFont, bodyFont)
+          else if (layout == 'list')
+            Column(
+              children: features.map((item) {
+                final rawIcon = item['icon']?.toString();
+                final icon = _getIconFromString(rawIcon);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 32),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(icon, size: 28, color: primaryColor),
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item['title']?.toString() ?? 'Título',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: headingFont,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              item['description']?.toString() ?? 'Descripción',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.grey.shade600,
+                                height: 1.5,
+                                fontFamily: bodyFont,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             )
           else
             Wrap(
@@ -731,6 +822,44 @@ class WebsiteBlockRenderer {
             ),
         ],
       ),
+    );
+  }
+
+  static Widget _buildDefaultFeatures(BuildContext context, Color primaryColor,
+      String? headingFont, String? bodyFont) {
+    return Wrap(
+      spacing: 24,
+      runSpacing: 24,
+      alignment: WrapAlignment.center,
+      children: [
+        _buildFeatureCard(
+          context,
+          icon: Icons.verified,
+          title: 'Servicio certificado',
+          description: 'Técnicos con amplia experiencia en bicicletas.',
+          primaryColor: primaryColor,
+          headingFont: headingFont,
+          bodyFont: bodyFont,
+        ),
+        _buildFeatureCard(
+          context,
+          icon: Icons.pedal_bike,
+          title: 'Variedad de productos',
+          description: 'Catálogo actualizado con las mejores marcas.',
+          primaryColor: primaryColor,
+          headingFont: headingFont,
+          bodyFont: bodyFont,
+        ),
+        _buildFeatureCard(
+          context,
+          icon: Icons.support_agent,
+          title: 'Acompañamiento experto',
+          description: 'Te ayudamos a elegir la bicicleta perfecta.',
+          primaryColor: primaryColor,
+          headingFont: headingFont,
+          bodyFont: bodyFont,
+        ),
+      ],
     );
   }
 
@@ -1995,23 +2124,7 @@ class WebsiteBlockRenderer {
     );
   }
 
-  static Widget _buildProductCard({
-    required BuildContext context,
-    required Product product,
-    required Color primaryColor,
-    required Color accentColor,
-    String? bodyFont,
-    bool previewMode = false,
-    void Function(String route)? onNavigate,
-  }) {
-    return _PremiumProductCard(
-      product: product,
-      primaryColor: primaryColor,
-      bodyFont: bodyFont,
-      previewMode: previewMode,
-      onNavigate: onNavigate,
-    );
-  }  static Widget _buildFeatureCard(
+  static Widget _buildFeatureCard(
     BuildContext context, {
     required IconData icon,
     required String title,
@@ -2049,37 +2162,6 @@ class WebsiteBlockRenderer {
         ),
       ),
     );
-  }
-
-  static List<Product> _buildSampleProducts(int count) {
-    return List.generate(count, (index) {
-      final now = DateTime.now();
-      return Product(
-        id: 'preview-product-$index',
-        name: 'Producto ${index + 1}',
-        sku: 'PREVIEW-${index + 1}',
-        price: 99990,
-        cost: 65000,
-        stockQuantity: index.isEven ? 8 : 0,
-        imageUrl: null,
-        imageUrls: const [],
-        description: 'Producto de demostración',
-        category: ProductCategory.other,
-        categoryId: null,
-        categoryName: 'Demo',
-        brand: 'Vinabike',
-        model: 'Preview',
-        specifications: const {},
-        tags: const [],
-        unit: ProductUnit.unit,
-        weight: 0,
-        trackStock: true,
-        isActive: true,
-        productType: ProductType.product,
-        createdAt: now,
-        updatedAt: now,
-      );
-    });
   }
 
   static IconData _getIconFromString(String? iconName) {
@@ -2136,7 +2218,7 @@ class WebsiteBlockRenderer {
     final theme = Theme.of(context);
     final title = (data['title'] ?? '').toString().trim();
     final subtitle = (data['subtitle'] ?? '').toString().trim();
-    
+
     // Parse categories
     List<Map<String, dynamic>> categories = [];
     final rawCategories = data['categories'];
@@ -2252,21 +2334,22 @@ class WebsiteBlockRenderer {
     final ctaText = (data['ctaText'] ?? 'Ver más').toString().trim();
     final ctaLink = (data['ctaLink'] ?? '/tienda/productos').toString().trim();
     final showCta = data['showCta'] != false;
-    
+
     double overlayOpacity = 0.5;
     final rawOpacity = data['overlayOpacity'];
-    if (rawOpacity is num) overlayOpacity = rawOpacity.toDouble().clamp(0.0, 1.0);
-    
+    if (rawOpacity is num)
+      overlayOpacity = rawOpacity.toDouble().clamp(0.0, 1.0);
+
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
     final hasVideoUrl = videoUrl != null && videoUrl.isNotEmpty;
     final hasVideoFile = videoFileUrl != null && videoFileUrl.isNotEmpty;
-    
+
     // Check if it's a YouTube URL
     String? youtubeVideoId;
     if (hasVideoUrl) {
       youtubeVideoId = _extractYouTubeVideoId(videoUrl);
     }
-    
+
     // Determine what background to show
     final hasPlayableVideo = youtubeVideoId != null || hasVideoFile;
 
@@ -2288,7 +2371,7 @@ class WebsiteBlockRenderer {
       hasPlayableVideo: hasPlayableVideo,
     );
   }
-  
+
   /// Extract YouTube video ID from various URL formats
   static String? _extractYouTubeVideoId(String url) {
     // Handle various YouTube URL formats:
@@ -2296,15 +2379,15 @@ class WebsiteBlockRenderer {
     // - https://youtu.be/VIDEO_ID
     // - https://www.youtube.com/embed/VIDEO_ID
     // - https://www.youtube.com/v/VIDEO_ID
-    
+
     final uri = Uri.tryParse(url);
     if (uri == null) return null;
-    
+
     // youtube.com/watch?v=VIDEO_ID
     if (uri.host.contains('youtube.com')) {
       final videoId = uri.queryParameters['v'];
       if (videoId != null && videoId.isNotEmpty) return videoId;
-      
+
       // youtube.com/embed/VIDEO_ID or youtube.com/v/VIDEO_ID
       final pathSegments = uri.pathSegments;
       if (pathSegments.isNotEmpty) {
@@ -2318,7 +2401,7 @@ class WebsiteBlockRenderer {
         }
       }
     }
-    
+
     // youtu.be/VIDEO_ID
     if (uri.host.contains('youtu.be')) {
       final pathSegments = uri.pathSegments;
@@ -2326,7 +2409,7 @@ class WebsiteBlockRenderer {
         return pathSegments.first;
       }
     }
-    
+
     return null;
   }
 
@@ -2344,7 +2427,7 @@ class WebsiteBlockRenderer {
     final theme = Theme.of(context);
     final title = (data['title'] ?? '').toString().trim();
     final imageUrl = data['imageUrl']?.toString();
-    
+
     // Parse items (list of text lines)
     List<String> items = [];
     final rawItems = data['items'];
@@ -2366,7 +2449,7 @@ class WebsiteBlockRenderer {
     return LayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
-        
+
         return Container(
           width: double.infinity,
           height: hasFixedHeight ? constraints.maxHeight : null,
@@ -2383,10 +2466,14 @@ class WebsiteBlockRenderer {
                   )
                 : null,
           ),
-          padding: hasFixedHeight ? null : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          padding: hasFixedHeight
+              ? null
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
           child: Center(
             child: Padding(
-              padding: hasFixedHeight ? const EdgeInsets.symmetric(horizontal: 24) : EdgeInsets.zero,
+              padding: hasFixedHeight
+                  ? const EdgeInsets.symmetric(horizontal: 24)
+                  : EdgeInsets.zero,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 800),
                 child: Column(
@@ -2441,8 +2528,7 @@ class WebsiteBlockRenderer {
     String? bodyFont,
   }) {
     final title = (data['title'] ?? 'MARCAS').toString().trim();
-    final accentColor = _parseColor(data['accentColor']?.toString()) ?? primaryColor;
-    
+
     // Logo height only - width will be calculated to fill available space
     final logoSizeStr = (data['logoSize'] ?? 'medium').toString();
     double logoHeight;
@@ -2461,7 +2547,7 @@ class WebsiteBlockRenderer {
         logoHeight = 80;
         break;
     }
-    
+
     // Parse brand logos list
     List<Map<String, dynamic>> brands = [];
     final rawBrands = data['brands'];
@@ -2489,12 +2575,14 @@ class WebsiteBlockRenderer {
     return LayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
-        
+
         return Container(
           width: double.infinity,
           height: hasFixedHeight ? constraints.maxHeight : null,
           color: Colors.white,
-          padding: hasFixedHeight ? const EdgeInsets.symmetric(horizontal: 16) : const EdgeInsets.symmetric(vertical: 48),
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 16)
+              : const EdgeInsets.symmetric(vertical: 48),
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2509,18 +2597,11 @@ class WebsiteBlockRenderer {
                     letterSpacing: 2,
                     color: Colors.black87,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  width: 40,
-                  height: 3,
-                  color: accentColor,
-                ),
-                const SizedBox(height: 32),
-                // Brand logos - full width carousel
                 Padding(
-                  padding: hasFixedHeight ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 16),
+                  padding: hasFixedHeight
+                      ? EdgeInsets.zero
+                      : const EdgeInsets.symmetric(horizontal: 16),
                   child: _BrandLogosCarousel(
                     brands: brands,
                     bodyFont: bodyFont,
@@ -2534,16 +2615,6 @@ class WebsiteBlockRenderer {
         );
       },
     );
-  }
-
-  static Color? _parseColor(String? raw) {
-    if (raw == null || raw.isEmpty) return null;
-    final cleaned = raw.replaceAll('#', '').replaceAll('0x', '');
-    final intValue = int.tryParse(cleaned, radix: 16);
-    if (intValue != null) {
-      return Color(intValue | 0xFF000000);
-    }
-    return null;
   }
 }
 
@@ -2588,12 +2659,13 @@ class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
-        
+
         // Items per page = total brands (show all on one page, like reference site)
         // Only paginate if we truly can't fit them all
         final minLogoWidth = 100.0; // Minimum width per logo
-        final maxItemsPerPage = ((availableWidth) / (minLogoWidth + widget.gap)).floor();
-        
+        final maxItemsPerPage =
+            ((availableWidth) / (minLogoWidth + widget.gap)).floor();
+
         // Show as many as we can fit, up to all brands
         final itemsPerPage = maxItemsPerPage.clamp(1, brandCount);
         final totalPages = (brandCount / itemsPerPage).ceil();
@@ -2610,7 +2682,7 @@ class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
                   final start = page * itemsPerPage;
                   final end = (start + itemsPerPage).clamp(0, brandCount);
                   final items = widget.brands.sublist(start, end);
-                  
+
                   // Use Expanded to fill all available width evenly
                   return Row(
                     children: [
@@ -2650,7 +2722,9 @@ class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
                       height: 10,
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       decoration: BoxDecoration(
-                        color: active ? const Color(0xFF00A09D) : Colors.grey.shade300,
+                        color: active
+                            ? const Color(0xFF00A09D)
+                            : Colors.grey.shade300,
                         borderRadius: BorderRadius.circular(5),
                       ),
                     ),
@@ -2869,7 +2943,8 @@ class _CategoryCardState extends State<_CategoryCard> {
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: widget.previewMode ? null : () => widget.onNavigate?.call(ctaLink),
+        onTap:
+            widget.previewMode ? null : () => widget.onNavigate?.call(ctaLink),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           height: widget.height,
@@ -2958,7 +3033,8 @@ class _CategoryCardState extends State<_CategoryCard> {
                       ),
                       decoration: BoxDecoration(
                         color: Colors.black,
-                        border: Border.all(color: Colors.white.withOpacity(0.3)),
+                        border:
+                            Border.all(color: Colors.white.withOpacity(0.3)),
                       ),
                       child: Text(
                         ctaText.toUpperCase(),
@@ -3068,7 +3144,8 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     // Use LayoutBuilder to fill available height, default to 520 if unconstrained
     return LayoutBuilder(
       builder: (context, constraints) {
-        final height = constraints.maxHeight.isFinite ? constraints.maxHeight : 520.0;
+        final height =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 520.0;
         return SizedBox(
           height: height,
           width: double.infinity,
@@ -3078,64 +3155,65 @@ class _CarouselBannerState extends State<_CarouselBanner> {
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 600),
                 switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: _buildTransition,
-            child: _buildSlide(context, _slides[_currentIndex], _currentIndex),
-          ),
-          if (_showIndicators && _slides.length > 1)
-            Positioned(
-              bottom: 32,
-              left: 0,
-              right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(_slides.length, (index) {
-                  final isActive = index == _currentIndex;
-                  return GestureDetector(
-                    onTap: () => _goToSlide(index),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      margin: const EdgeInsets.symmetric(horizontal: 5),
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: isActive
-                            ? Colors.white
-                            : Colors.white.withOpacity(0.4),
-                        shape: BoxShape.circle,
-                      ),
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: _buildTransition,
+                child:
+                    _buildSlide(context, _slides[_currentIndex], _currentIndex),
+              ),
+              if (_showIndicators && _slides.length > 1)
+                Positioned(
+                  bottom: 32,
+                  left: 0,
+                  right: 0,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(_slides.length, (index) {
+                      final isActive = index == _currentIndex;
+                      return GestureDetector(
+                        onTap: () => _goToSlide(index),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          margin: const EdgeInsets.symmetric(horizontal: 5),
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? Colors.white
+                                : Colors.white.withOpacity(0.4),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              if (_showArrows && _slides.length > 1) ...[
+                Positioned(
+                  left: 24,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _buildArrowButton(
+                      icon: Icons.chevron_left,
+                      onTap: _previousSlide,
                     ),
-                  );
-                }),
-              ),
-            ),
-          if (_showArrows && _slides.length > 1) ...[
-            Positioned(
-              left: 24,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: _buildArrowButton(
-                  icon: Icons.chevron_left,
-                  onTap: _previousSlide,
+                  ),
                 ),
-              ),
-            ),
-            Positioned(
-              right: 24,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: _buildArrowButton(
-                  icon: Icons.chevron_right,
-                  onTap: _nextSlide,
+                Positioned(
+                  right: 24,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _buildArrowButton(
+                      icon: Icons.chevron_right,
+                      onTap: _nextSlide,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
+              ],
+            ],
+          ),
+        );
       },
     );
   }
@@ -3165,10 +3243,12 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     overlayOpacity = overlayOpacity.clamp(0.0, 1.0);
 
     final hasImage = imageUrl != null && imageUrl.toString().isNotEmpty;
-    
+
     // Check for video - prefer file upload over YouTube
     final hasVideoFile = videoFileUrl.isNotEmpty;
-    final youtubeId = videoUrl.isNotEmpty ? WebsiteBlockRenderer._extractYouTubeVideoId(videoUrl) : null;
+    final youtubeId = videoUrl.isNotEmpty
+        ? WebsiteBlockRenderer._extractYouTubeVideoId(videoUrl)
+        : null;
     final hasYoutubeVideo = youtubeId != null;
     final hasVideo = hasVideoFile || hasYoutubeVideo;
 
@@ -3473,8 +3553,9 @@ class _PremiumProductCardState extends State<_PremiumProductCard> {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = widget.product.imageUrl != null && widget.product.imageUrl!.isNotEmpty;
-    
+    final hasImage =
+        widget.product.imageUrl != null && widget.product.imageUrl!.isNotEmpty;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -3482,7 +3563,8 @@ class _PremiumProductCardState extends State<_PremiumProductCard> {
       child: GestureDetector(
         onTap: widget.previewMode
             ? null
-            : () => widget.onNavigate?.call('/tienda/producto/${widget.product.id}'),
+            : () => widget.onNavigate
+                ?.call('/tienda/producto/${widget.product.id}'),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: const BoxDecoration(
@@ -3534,7 +3616,8 @@ class _PremiumProductCardState extends State<_PremiumProductCard> {
                         right: 0,
                         child: Center(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
                             decoration: BoxDecoration(
                               color: Colors.black,
                               borderRadius: BorderRadius.circular(2),
@@ -3630,7 +3713,6 @@ class _ProductsBlockWidget extends StatefulWidget {
 class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   List<Product> _products = [];
   bool _isLoading = true;
-  bool _hasError = false;
 
   @override
   void initState() {
@@ -3642,43 +3724,45 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   void didUpdateWidget(_ProductsBlockWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Reload if source, selected products, OR tenantId changed
-    final shouldReload = oldWidget.data['productSource'] != widget.data['productSource'] ||
-        oldWidget.data['selectedProducts']?.toString() != widget.data['selectedProducts']?.toString() ||
-        oldWidget.data['categoryId'] != widget.data['categoryId'] ||
-        oldWidget.data['maxProducts'] != widget.data['maxProducts'] ||
-        oldWidget.tenantId != widget.tenantId;
-        
+    final shouldReload =
+        oldWidget.data['productSource'] != widget.data['productSource'] ||
+            oldWidget.data['selectedProducts']?.toString() !=
+                widget.data['selectedProducts']?.toString() ||
+            oldWidget.data['categoryId'] != widget.data['categoryId'] ||
+            oldWidget.data['maxProducts'] != widget.data['maxProducts'] ||
+            oldWidget.tenantId != widget.tenantId;
+
     if (shouldReload) {
       _loadProducts();
     }
   }
 
-  String get _productSource => widget.data['productSource']?.toString() ?? 'featured';
-  
+  String get _productSource =>
+      widget.data['productSource']?.toString() ?? 'featured';
+
   List<String> get _selectedProductIds {
     final raw = widget.data['selectedProducts'];
     if (raw is List) return raw.map((e) => e.toString()).toList();
     return [];
   }
-  
+
   String? get _categoryId => widget.data['categoryId']?.toString();
   int get _maxProducts => (widget.data['maxProducts'] as num?)?.toInt() ?? 8;
 
   Future<void> _loadProducts() async {
     if (!mounted) return;
-    
+
     final tenantId = widget.tenantId;
-    
+
     // If no tenantId yet, stay in loading state and wait for didUpdateWidget
     if (tenantId == null || tenantId.isEmpty) {
       // Keep _isLoading = true to show loading placeholders
       // Don't set error state - tenant detection may still be in progress
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
-      _hasError = false;
     });
 
     try {
@@ -3696,68 +3780,73 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                 .eq('tenant_id', tenantId)
                 .inFilter('id', _selectedProductIds)
                 .eq('is_active', true);
-            
+
             products = _parseProducts(response);
-            
+
             // Sort by the order in selectedProductIds
-            final idOrder = {for (int i = 0; i < _selectedProductIds.length; i++) _selectedProductIds[i]: i};
-              products.sort((a, b) => (idOrder[a.id] ?? 999).compareTo(idOrder[b.id] ?? 999));
-            }
-            break;
+            final idOrder = {
+              for (int i = 0; i < _selectedProductIds.length; i++)
+                _selectedProductIds[i]: i
+            };
+            products.sort((a, b) =>
+                (idOrder[a.id] ?? 999).compareTo(idOrder[b.id] ?? 999));
+          }
+          break;
 
-          case 'category':
-            // Fetch products from a specific category
-            if (_categoryId != null && _categoryId!.isNotEmpty) {
-              final response = await supabase
-                  .from('products')
-                  .select()
-                  .eq('tenant_id', tenantId)
-                  .eq('category_id', _categoryId!)
-                  .eq('is_active', true)
-                  .eq('show_on_website', true)
-                  .order('name')
-                  .limit(_maxProducts);
-              
-              products = _parseProducts(response);
-            }
-            break;
+        case 'category':
+          // Fetch products from a specific category
+          if (_categoryId != null && _categoryId!.isNotEmpty) {
+            final response = await supabase
+                .from('products')
+                .select()
+                .eq('tenant_id', tenantId)
+                .eq('category_id', _categoryId!)
+                .eq('is_active', true)
+                .eq('show_on_website', true)
+                .order('name')
+                .limit(_maxProducts);
 
-          case 'newest':
-            // Fetch newest products
+            products = _parseProducts(response);
+          }
+          break;
+
+        case 'newest':
+          // Fetch newest products
+          final response = await supabase
+              .from('products')
+              .select()
+              .eq('tenant_id', tenantId)
+              .eq('is_active', true)
+              .eq('show_on_website', true)
+              .order('created_at', ascending: false)
+              .limit(_maxProducts);
+
+          products = _parseProducts(response);
+          break;
+
+        case 'featured':
+        default:
+          // Use the passed featured products or fetch from featured_products table
+          if (widget.featuredProducts != null &&
+              widget.featuredProducts!.isNotEmpty) {
+            products = widget.featuredProducts!
+                .where((p) => p.isActive)
+                .take(_maxProducts)
+                .toList();
+          } else {
+            // Fallback: fetch products marked as show_on_website
             final response = await supabase
                 .from('products')
                 .select()
                 .eq('tenant_id', tenantId)
                 .eq('is_active', true)
                 .eq('show_on_website', true)
-                .order('created_at', ascending: false)
+                .order('name')
                 .limit(_maxProducts);
-            
-            products = _parseProducts(response);
-            break;
 
-          case 'featured':
-          default:
-            // Use the passed featured products or fetch from featured_products table
-            if (widget.featuredProducts != null && widget.featuredProducts!.isNotEmpty) {
-              products = widget.featuredProducts!
-                  .where((p) => p.isActive)
-                  .take(_maxProducts)
-                  .toList();
-            } else {
-              // Fallback: fetch products marked as show_on_website
-              final response = await supabase
-                  .from('products')
-                  .select()
-                  .eq('tenant_id', tenantId)
-                  .eq('is_active', true)
-                  .eq('show_on_website', true)
-                  .order('name')
-                  .limit(_maxProducts);
-              
-              products = _parseProducts(response);
-            }
-            break;
+            products = _parseProducts(response);
+          }
+          break;
       }
 
       // Filter out out-of-stock products unless in preview mode (admin editing)
@@ -3775,7 +3864,6 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
       debugPrint('[ProductsBlock] Error: $e');
       if (mounted) {
         setState(() {
-          _hasError = true;
           _isLoading = false;
         });
       }
@@ -3784,47 +3872,58 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
 
   List<Product> _parseProducts(dynamic response) {
     if (response is! List) return [];
-    
-    return response.map((row) {
-      try {
-        final map = Map<String, dynamic>.from(row as Map);
-        return Product(
-          id: map['id']?.toString() ?? '',
-          name: map['name']?.toString() ?? 'Producto',
-          sku: map['sku']?.toString() ?? '',
-          price: (map['price'] as num?)?.toDouble() ?? 0,
-          cost: (map['cost'] as num?)?.toDouble() ?? 0,
-          stockQuantity: (map['inventory_qty'] as num?)?.toInt() ?? (map['stock_quantity'] as num?)?.toInt() ?? 0,
-          imageUrl: map['image_url']?.toString(),
-          imageUrls: (map['image_urls'] as List?)?.cast<String>() ?? [],
-          description: map['description']?.toString() ?? '',
-          category: ProductCategory.other,
-          categoryId: map['category_id']?.toString(),
-          categoryName: map['category_name']?.toString(),
-          brand: map['brand']?.toString() ?? '',
-          model: map['model']?.toString() ?? '',
-          specifications: _parseSpecifications(map['specifications']),
-          tags: (map['tags'] as List?)?.cast<String>() ?? [],
-          unit: ProductUnit.unit,
-          weight: (map['weight'] as num?)?.toDouble() ?? 0,
-          trackStock: map['track_stock'] as bool? ?? true,
-          isActive: map['is_active'] as bool? ?? true,
-          productType: ProductType.product,
-          createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
-          updatedAt: DateTime.tryParse(map['updated_at']?.toString() ?? '') ?? DateTime.now(),
-        );
-      } catch (e) {
-        debugPrint('[ProductsBlock] Error parsing product: $e');
-        return null;
-      }
-    }).whereType<Product>().toList();
+
+    return response
+        .map((row) {
+          try {
+            final map = Map<String, dynamic>.from(row as Map);
+            return Product(
+              id: map['id']?.toString() ?? '',
+              name: map['name']?.toString() ?? 'Producto',
+              sku: map['sku']?.toString() ?? '',
+              price: (map['price'] as num?)?.toDouble() ?? 0,
+              cost: (map['cost'] as num?)?.toDouble() ?? 0,
+              stockQuantity: (map['inventory_qty'] as num?)?.toInt() ??
+                  (map['stock_quantity'] as num?)?.toInt() ??
+                  0,
+              imageUrl: map['image_url']?.toString(),
+              imageUrls: (map['image_urls'] as List?)?.cast<String>() ?? [],
+              description: map['description']?.toString() ?? '',
+              category: ProductCategory.other,
+              categoryId: map['category_id']?.toString(),
+              categoryName: map['category_name']?.toString(),
+              brand: map['brand']?.toString() ?? '',
+              model: map['model']?.toString() ?? '',
+              specifications: _parseSpecifications(map['specifications']),
+              tags: (map['tags'] as List?)?.cast<String>() ?? [],
+              unit: ProductUnit.unit,
+              weight: (map['weight'] as num?)?.toDouble() ?? 0,
+              trackStock: map['track_stock'] as bool? ?? true,
+              isActive: map['is_active'] as bool? ?? true,
+              productType: ProductType.product,
+              createdAt:
+                  DateTime.tryParse(map['created_at']?.toString() ?? '') ??
+                      DateTime.now(),
+              updatedAt:
+                  DateTime.tryParse(map['updated_at']?.toString() ?? '') ??
+                      DateTime.now(),
+            );
+          } catch (e) {
+            debugPrint('[ProductsBlock] Error parsing product: $e');
+            return null;
+          }
+        })
+        .whereType<Product>()
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final rawTitle = (widget.data['title'] ?? 'Productos Destacados').toString().trim();
+    final rawTitle =
+        (widget.data['title'] ?? 'Productos Destacados').toString().trim();
     final title = rawTitle.isEmpty ? 'DESTACADOS' : rawTitle.toUpperCase();
     final showViewAll = widget.data['showViewAll'] ?? true;
+    final layout = widget.data['layout']?.toString() ?? 'grid';
 
     int itemsPerRow = 3;
     final rawItemsPerRow = widget.data['itemsPerRow'];
@@ -3929,27 +4028,59 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                 ],
               ),
               const SizedBox(height: 32),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: itemsPerRow,
-                  childAspectRatio: 0.75,
-                  crossAxisSpacing: 20,
-                  mainAxisSpacing: 20,
-                ),
-                itemCount: displayProducts.length,
-                itemBuilder: (context, index) {
-                  final product = displayProducts[index];
-                  return _PremiumProductCard(
-                    product: product,
-                    primaryColor: widget.primaryColor,
-                    bodyFont: widget.bodyFont,
-                    previewMode: widget.previewMode,
-                    onNavigate: widget.onNavigate,
-                  );
-                },
-              ),
+              layout == 'carousel'
+                  ? SizedBox(
+                      height: 480,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.only(bottom: 20),
+                        itemCount: displayProducts.length,
+                        itemBuilder: (context, index) {
+                          final product = displayProducts[index];
+                          double cardWidth;
+                          if (itemsPerRow <= 2) {
+                            cardWidth = 350;
+                          } else if (itemsPerRow == 3) {
+                            cardWidth = 300;
+                          } else {
+                            cardWidth = 260;
+                          }
+
+                          return Container(
+                            width: cardWidth,
+                            margin: const EdgeInsets.only(right: 20),
+                            child: _PremiumProductCard(
+                              product: product,
+                              primaryColor: widget.primaryColor,
+                              bodyFont: widget.bodyFont,
+                              previewMode: widget.previewMode,
+                              onNavigate: widget.onNavigate,
+                            ),
+                          );
+                        },
+                      ),
+                    )
+                  : GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: itemsPerRow,
+                        childAspectRatio: 0.75,
+                        crossAxisSpacing: 20,
+                        mainAxisSpacing: 20,
+                      ),
+                      itemCount: displayProducts.length,
+                      itemBuilder: (context, index) {
+                        final product = displayProducts[index];
+                        return _PremiumProductCard(
+                          product: product,
+                          primaryColor: widget.primaryColor,
+                          bodyFont: widget.bodyFont,
+                          previewMode: widget.previewMode,
+                          onNavigate: widget.onNavigate,
+                        );
+                      },
+                    ),
               if (showViewAll) ...[
                 const SizedBox(height: 40),
                 Center(
@@ -3964,7 +4095,8 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.black,
                       side: const BorderSide(color: Colors.black, width: 1),
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 32, vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(0),
                       ),
@@ -4021,7 +4153,8 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   Map<String, String> _parseSpecifications(dynamic raw) {
     if (raw == null) return {};
     if (raw is Map) {
-      return raw.map((key, value) => MapEntry(key.toString(), value.toString()));
+      return raw
+          .map((key, value) => MapEntry(key.toString(), value.toString()));
     }
     return {};
   }
@@ -4075,14 +4208,17 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
     final theme = Theme.of(context);
     final hasImage = widget.imageUrl != null && widget.imageUrl!.isNotEmpty;
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     // Check if we can play video (web platform only)
-    final canPlayVideo = kIsWeb && widget.hasPlayableVideo && video_platform.VideoBannerPlatform.isSupported;
+    final canPlayVideo = kIsWeb &&
+        widget.hasPlayableVideo &&
+        video_platform.VideoBannerPlatform.isSupported;
 
     // Use LayoutBuilder to fill available height, default to 500 if unconstrained
     return LayoutBuilder(
       builder: (context, constraints) {
-        final height = constraints.maxHeight.isFinite ? constraints.maxHeight : 500.0;
+        final height =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 500.0;
         return Container(
           width: double.infinity,
           height: height,
@@ -4101,14 +4237,15 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
               // Video background (web only)
               if (canPlayVideo)
                 Positioned.fill(
-                  child: video_platform.VideoBannerPlatform.buildVideoBackground(
+                  child:
+                      video_platform.VideoBannerPlatform.buildVideoBackground(
                     youtubeVideoId: widget.youtubeVideoId,
                     videoFileUrl: widget.videoFileUrl,
                     width: screenWidth,
                     height: height,
                   ),
                 ),
-              
+
               // Overlay gradient
               Container(
                 decoration: BoxDecoration(
@@ -4122,7 +4259,7 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
                   ),
                 ),
               ),
-              
+
               // Content
               Center(
                 child: ConstrainedBox(
@@ -4140,67 +4277,67 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                               letterSpacing: 2,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    if (widget.subtitle.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Text(
-                          widget.subtitle,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontFamily: widget.bodyFont,
-                            color: Colors.white70,
-                            fontStyle: FontStyle.italic,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    if (widget.showCta && widget.ctaText.isNotEmpty) ...[
-                      const SizedBox(height: 32),
-                      ElevatedButton(
-                        onPressed: widget.previewMode
-                            ? null
-                            : () => widget.onNavigate?.call(widget.ctaLink),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: widget.accentColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 16,
+                        if (widget.subtitle.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: Text(
+                              widget.subtitle,
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontFamily: widget.bodyFont,
+                                color: Colors.white70,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
+                        if (widget.showCta && widget.ctaText.isNotEmpty) ...[
+                          const SizedBox(height: 32),
+                          ElevatedButton(
+                            onPressed: widget.previewMode
+                                ? null
+                                : () => widget.onNavigate?.call(widget.ctaLink),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: widget.accentColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 32,
+                                vertical: 16,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            child: Text(widget.ctaText),
                           ),
-                        ),
-                        child: Text(widget.ctaText),
-                      ),
-                    ],
-                  ],
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
+
+              // Play button overlay for non-web platforms when video is configured
+              if (!kIsWeb && widget.hasPlayableVideo)
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      size: 48,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          
-          // Play button overlay for non-web platforms when video is configured
-          if (!kIsWeb && widget.hasPlayableVideo)
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.play_arrow_rounded,
-                  size: 48,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
+        );
       },
     );
   }

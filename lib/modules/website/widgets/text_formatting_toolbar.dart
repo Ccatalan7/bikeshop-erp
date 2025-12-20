@@ -83,12 +83,13 @@ class TextFormatting {
       isUnderline: json['underline'] ?? false,
       fontSize: (json['fontSize'] as num?)?.toDouble(),
       textAlign: _parseTextAlign(json['textAlign']),
-      textColor: json['textColor'] != null ? Color(json['textColor'] as int) : null,
+      textColor:
+          json['textColor'] != null ? Color(json['textColor'] as int) : null,
       linkUrl: json['linkUrl'] as String?,
       letterSpacing: (json['letterSpacing'] as num?)?.toDouble(),
       lineHeight: (json['lineHeight'] as num?)?.toDouble(),
-      fontWeight: json['fontWeight'] != null 
-          ? FontWeight.values[json['fontWeight'] as int] 
+      fontWeight: json['fontWeight'] != null
+          ? FontWeight.values[json['fontWeight'] as int]
           : null,
       fontFamily: json['fontFamily'] as String?,
     );
@@ -96,18 +97,24 @@ class TextFormatting {
 
   static TextAlign _parseTextAlign(String? value) {
     switch (value) {
-      case 'center': return TextAlign.center;
-      case 'end': return TextAlign.end;
-      case 'right': return TextAlign.right;
-      case 'justify': return TextAlign.justify;
-      default: return TextAlign.start;
+      case 'center':
+        return TextAlign.center;
+      case 'end':
+        return TextAlign.end;
+      case 'right':
+        return TextAlign.right;
+      case 'justify':
+        return TextAlign.justify;
+      default:
+        return TextAlign.start;
     }
   }
 
   /// Apply formatting to a TextStyle
   TextStyle applyTo(TextStyle baseStyle) {
     return baseStyle.copyWith(
-      fontWeight: isBold ? FontWeight.bold : (fontWeight ?? baseStyle.fontWeight),
+      fontWeight:
+          isBold ? FontWeight.bold : (fontWeight ?? baseStyle.fontWeight),
       fontStyle: isItalic ? FontStyle.italic : baseStyle.fontStyle,
       decoration: isUnderline ? TextDecoration.underline : baseStyle.decoration,
       fontSize: fontSize ?? baseStyle.fontSize,
@@ -171,7 +178,7 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                   isActive: widget.currentFormatting.isBold,
                   onPressed: () => _toggleBold(),
                 ),
-                
+
                 // Italic
                 _ToolbarButton(
                   icon: Icons.format_italic,
@@ -179,7 +186,7 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                   isActive: widget.currentFormatting.isItalic,
                   onPressed: () => _toggleItalic(),
                 ),
-                
+
                 // Underline
                 _ToolbarButton(
                   icon: Icons.format_underlined,
@@ -187,22 +194,23 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                   isActive: widget.currentFormatting.isUnderline,
                   onPressed: () => _toggleUnderline(),
                 ),
-                
+
                 _ToolbarDivider(),
-                
+
                 // Text alignment
                 _ToolbarButton(
                   icon: _getAlignIcon(widget.currentFormatting.textAlign),
                   tooltip: 'Alineación',
                   onPressed: () => _cycleAlignment(),
                 ),
-                
+
                 _ToolbarDivider(),
-                
+
                 // Font size
                 _FontSizeButton(
-                  currentSize: widget.currentFormatting.fontSize ?? 
-                      widget.baseStyle?.fontSize ?? 16,
+                  currentSize: widget.currentFormatting.fontSize ??
+                      widget.baseStyle?.fontSize ??
+                      16,
                   onSizeChanged: (size) => _setFontSize(size),
                   isExpanded: _showFontSizePicker,
                   onToggleExpanded: () => setState(() {
@@ -211,13 +219,14 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                     _showMoreOptions = false;
                   }),
                 ),
-                
+
                 _ToolbarDivider(),
-                
+
                 // Text color
                 _ColorPickerButton(
-                  currentColor: widget.currentFormatting.textColor ?? 
-                      widget.baseStyle?.color ?? Colors.white,
+                  currentColor: widget.currentFormatting.textColor ??
+                      widget.baseStyle?.color ??
+                      Colors.white,
                   onColorChanged: (color) => _setTextColor(color),
                   isExpanded: _showColorPicker,
                   onToggleExpanded: () => setState(() {
@@ -226,9 +235,9 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                     _showMoreOptions = false;
                   }),
                 ),
-                
+
                 _ToolbarDivider(),
-                
+
                 // Link
                 _ToolbarButton(
                   icon: Icons.link,
@@ -236,13 +245,14 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                   isActive: widget.currentFormatting.linkUrl != null,
                   onPressed: () => _showLinkDialog(),
                 ),
-                
+
                 if (widget.showAdvancedOptions) ...[
                   _ToolbarDivider(),
-                  
+
                   // More options
                   _ToolbarButton(
-                    icon: _showMoreOptions ? Icons.expand_less : Icons.more_horiz,
+                    icon:
+                        _showMoreOptions ? Icons.expand_less : Icons.more_horiz,
                     tooltip: 'Más opciones',
                     onPressed: () => setState(() {
                       _showMoreOptions = !_showMoreOptions;
@@ -253,29 +263,31 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                 ],
               ],
             ),
-            
+
             // Font size picker dropdown
             if (_showFontSizePicker)
               _FontSizePickerPanel(
-                currentSize: widget.currentFormatting.fontSize ?? 
-                    widget.baseStyle?.fontSize ?? 16,
+                currentSize: widget.currentFormatting.fontSize ??
+                    widget.baseStyle?.fontSize ??
+                    16,
                 onSizeSelected: (size) {
                   _setFontSize(size);
                   setState(() => _showFontSizePicker = false);
                 },
               ),
-            
+
             // Color picker dropdown
             if (_showColorPicker)
               _ColorPickerPanel(
-                currentColor: widget.currentFormatting.textColor ?? 
-                    widget.baseStyle?.color ?? Colors.white,
+                currentColor: widget.currentFormatting.textColor ??
+                    widget.baseStyle?.color ??
+                    Colors.white,
                 onColorSelected: (color) {
                   _setTextColor(color);
                   setState(() => _showColorPicker = false);
                 },
               ),
-            
+
             // Advanced options panel
             if (_showMoreOptions)
               _AdvancedOptionsPanel(
@@ -290,37 +302,49 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
 
   IconData _getAlignIcon(TextAlign align) {
     switch (align) {
-      case TextAlign.center: return Icons.format_align_center;
+      case TextAlign.center:
+        return Icons.format_align_center;
       case TextAlign.right:
-      case TextAlign.end: return Icons.format_align_right;
-      case TextAlign.justify: return Icons.format_align_justify;
-      default: return Icons.format_align_left;
+      case TextAlign.end:
+        return Icons.format_align_right;
+      case TextAlign.justify:
+        return Icons.format_align_justify;
+      default:
+        return Icons.format_align_left;
     }
   }
 
   void _toggleBold() {
     widget.onFormattingChanged(
-      widget.currentFormatting.copyWith(isBold: !widget.currentFormatting.isBold),
+      widget.currentFormatting
+          .copyWith(isBold: !widget.currentFormatting.isBold),
     );
     HapticFeedback.selectionClick();
   }
 
   void _toggleItalic() {
     widget.onFormattingChanged(
-      widget.currentFormatting.copyWith(isItalic: !widget.currentFormatting.isItalic),
+      widget.currentFormatting
+          .copyWith(isItalic: !widget.currentFormatting.isItalic),
     );
     HapticFeedback.selectionClick();
   }
 
   void _toggleUnderline() {
     widget.onFormattingChanged(
-      widget.currentFormatting.copyWith(isUnderline: !widget.currentFormatting.isUnderline),
+      widget.currentFormatting
+          .copyWith(isUnderline: !widget.currentFormatting.isUnderline),
     );
     HapticFeedback.selectionClick();
   }
 
   void _cycleAlignment() {
-    final alignments = [TextAlign.left, TextAlign.center, TextAlign.right, TextAlign.justify];
+    final alignments = [
+      TextAlign.left,
+      TextAlign.center,
+      TextAlign.right,
+      TextAlign.justify
+    ];
     final currentIndex = alignments.indexOf(widget.currentFormatting.textAlign);
     final nextIndex = (currentIndex + 1) % alignments.length;
     widget.onFormattingChanged(
@@ -342,8 +366,9 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
   }
 
   void _showLinkDialog() {
-    final controller = TextEditingController(text: widget.currentFormatting.linkUrl ?? '');
-    
+    final controller =
+        TextEditingController(text: widget.currentFormatting.linkUrl ?? '');
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -367,7 +392,8 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                 );
                 Navigator.pop(context);
               },
-              child: const Text('Eliminar enlace', style: TextStyle(color: Colors.red)),
+              child: const Text('Eliminar enlace',
+                  style: TextStyle(color: Colors.red)),
             ),
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -413,6 +439,7 @@ class _ToolbarButton extends StatelessWidget {
         color: isActive ? Colors.blue : Colors.transparent,
         borderRadius: BorderRadius.circular(4),
         child: InkWell(
+          canRequestFocus: false,
           onTap: onPressed,
           borderRadius: BorderRadius.circular(4),
           child: Container(
@@ -463,9 +490,12 @@ class _FontSizeButton extends StatelessWidget {
     return Tooltip(
       message: 'Tamaño de fuente',
       child: Material(
-        color: isExpanded ? Colors.blue.withValues(alpha: 0.3) : Colors.transparent,
+        color: isExpanded
+            ? Colors.blue.withValues(alpha: 0.3)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(4),
         child: InkWell(
+          canRequestFocus: false,
           onTap: onToggleExpanded,
           borderRadius: BorderRadius.circular(4),
           child: Container(
@@ -509,7 +539,22 @@ class _FontSizePickerPanel extends StatelessWidget {
   });
 
   static const List<double> presetSizes = [
-    10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 56, 64, 72, 96
+    10,
+    12,
+    14,
+    16,
+    18,
+    20,
+    24,
+    28,
+    32,
+    36,
+    42,
+    48,
+    56,
+    64,
+    72,
+    96
   ];
 
   @override
@@ -531,6 +576,7 @@ class _FontSizePickerPanel extends StatelessWidget {
             children: presetSizes.map((size) {
               final isSelected = (currentSize - size).abs() < 0.5;
               return InkWell(
+                canRequestFocus: false,
                 onTap: () => onSizeSelected(size),
                 borderRadius: BorderRadius.circular(4),
                 child: Container(
@@ -555,9 +601,9 @@ class _FontSizePickerPanel extends StatelessWidget {
               );
             }).toList(),
           ),
-          
+
           const SizedBox(height: 8),
-          
+
           // Custom size slider
           Row(
             children: [
@@ -567,7 +613,8 @@ class _FontSizePickerPanel extends StatelessWidget {
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     trackHeight: 2,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 6),
                   ),
                   child: Slider(
                     value: currentSize.clamp(8, 120),
@@ -612,9 +659,12 @@ class _ColorPickerButton extends StatelessWidget {
     return Tooltip(
       message: 'Color de texto',
       child: Material(
-        color: isExpanded ? Colors.blue.withValues(alpha: 0.3) : Colors.transparent,
+        color: isExpanded
+            ? Colors.blue.withValues(alpha: 0.3)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(4),
         child: InkWell(
+          canRequestFocus: false,
           onTap: onToggleExpanded,
           borderRadius: BorderRadius.circular(4),
           child: Container(
@@ -664,7 +714,7 @@ class _ColorPickerPanel extends StatelessWidget {
     Color(0xFF616161),
     Color(0xFF212121),
     Colors.black,
-    
+
     Color(0xFFEF5350), // Red
     Color(0xFFEC407A), // Pink
     Color(0xFFAB47BC), // Purple
@@ -672,7 +722,7 @@ class _ColorPickerPanel extends StatelessWidget {
     Color(0xFF5C6BC0), // Indigo
     Color(0xFF42A5F5), // Blue
     Color(0xFF29B6F6), // Light Blue
-    
+
     Color(0xFF26C6DA), // Cyan
     Color(0xFF26A69A), // Teal
     Color(0xFF66BB6A), // Green
@@ -680,7 +730,7 @@ class _ColorPickerPanel extends StatelessWidget {
     Color(0xFFD4E157), // Lime
     Color(0xFFFFEE58), // Yellow
     Color(0xFFFFCA28), // Amber
-    
+
     Color(0xFFFFA726), // Orange
     Color(0xFFFF7043), // Deep Orange
     Color(0xFF8D6E63), // Brown
@@ -706,6 +756,7 @@ class _ColorPickerPanel extends StatelessWidget {
             children: presetColors.map((color) {
               final isSelected = currentColor.value == color.value;
               return InkWell(
+                canRequestFocus: false,
                 onTap: () => onColorSelected(color),
                 borderRadius: BorderRadius.circular(4),
                 child: Container(
@@ -719,20 +770,22 @@ class _ColorPickerPanel extends StatelessWidget {
                       width: isSelected ? 2 : 1,
                     ),
                   ),
-                  child: isSelected 
+                  child: isSelected
                       ? Icon(
                           Icons.check,
                           size: 14,
-                          color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+                          color: color.computeLuminance() > 0.5
+                              ? Colors.black
+                              : Colors.white,
                         )
                       : null,
                 ),
               );
             }).toList(),
           ),
-          
+
           const SizedBox(height: 8),
-          
+
           // Custom color input
           Row(
             children: [
@@ -876,11 +929,12 @@ class _AdvancedOptionsPanel extends StatelessWidget {
             onChanged: (value) => onFormattingChanged(
               formatting.copyWith(letterSpacing: value),
             ),
-            valueLabel: '${(formatting.letterSpacing ?? 0).toStringAsFixed(1)}px',
+            valueLabel:
+                '${(formatting.letterSpacing ?? 0).toStringAsFixed(1)}px',
           ),
-          
+
           const SizedBox(height: 8),
-          
+
           // Line height
           _SliderOption(
             label: 'Altura de línea',
@@ -893,9 +947,9 @@ class _AdvancedOptionsPanel extends StatelessWidget {
             ),
             valueLabel: (formatting.lineHeight ?? 1.2).toStringAsFixed(1),
           ),
-          
+
           const SizedBox(height: 8),
-          
+
           // Font weight
           _FontWeightSelector(
             currentWeight: formatting.fontWeight,
@@ -946,7 +1000,8 @@ class _SliderOption extends StatelessWidget {
               SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 2,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                  thumbShape:
+                      const RoundSliderThumbShape(enabledThumbRadius: 5),
                 ),
                 child: Slider(
                   value: value.clamp(min, max),
@@ -1012,7 +1067,8 @@ class _FontWeightSelector extends StatelessWidget {
           ),
           child: DropdownButton<FontWeight?>(
             value: currentWeight,
-            hint: const Text('Normal', style: TextStyle(color: Colors.white70, fontSize: 12)),
+            hint: const Text('Normal',
+                style: TextStyle(color: Colors.white70, fontSize: 12)),
             dropdownColor: Colors.grey.shade700,
             underline: const SizedBox(),
             isDense: true,
@@ -1023,9 +1079,9 @@ class _FontWeightSelector extends StatelessWidget {
                 child: Text('Normal'),
               ),
               ...weights.entries.map((entry) => DropdownMenuItem(
-                value: entry.key,
-                child: Text(entry.value),
-              )),
+                    value: entry.key,
+                    child: Text(entry.value),
+                  )),
             ],
             onChanged: onWeightChanged,
           ),

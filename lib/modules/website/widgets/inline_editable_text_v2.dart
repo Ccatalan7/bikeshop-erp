@@ -46,8 +46,10 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
   double? _currentWidth;
   late TextEditingController _controller;
   late FocusNode _focusNode;
-  OverlayEntry? _toolbarOverlay;
-  final LayerLink _layerLink = LayerLink();
+  OverlayPortalController _overlayController = OverlayPortalController();
+  final GlobalKey _targetKey = GlobalKey(); // Key to get position
+  final GlobalKey _toolbarKey = GlobalKey(); // Key to check toolbar hits
+  Offset? _toolbarPosition; // Calculated position for toolbar
   late TextFormatting _currentFormatting;
   final Object? _editingGroupId = Object(); // Unique group ID for this editor
 
@@ -67,7 +69,8 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
     if (oldWidget.text != widget.text && !_isEditing) {
       _controller.text = widget.text;
     }
-    if (oldWidget.formatting != widget.formatting && widget.formatting != null) {
+    if (oldWidget.formatting != widget.formatting &&
+        widget.formatting != null) {
       _currentFormatting = widget.formatting!;
     }
     if (oldWidget.maxWidth != widget.maxWidth && _currentWidth == null) {
@@ -77,7 +80,6 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
 
   @override
   void dispose() {
-    _removeToolbar();
     _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
     _controller.dispose();
@@ -90,8 +92,9 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
 
   void _startEditing() {
     if (!widget.isEditMode) return;
+    debugPrint('📝 [InlineText] Starting edit mode');
     setState(() => _isEditing = true);
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
       // Select all text for easy replacement
@@ -99,67 +102,59 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
         baseOffset: 0,
         extentOffset: _controller.text.length,
       );
+      _calculateToolbarPosition();
       _showToolbar();
     });
-    
+
     HapticFeedback.selectionClick();
   }
 
+  void _calculateToolbarPosition() {
+    final RenderBox? renderBox =
+        _targetKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox != null) {
+      final position = renderBox.localToGlobal(Offset.zero);
+      final size = renderBox.size;
+      // Position toolbar centered above the text box
+      final toolbarLeft =
+          position.dx + (size.width / 2) - 210; // 420/2 = 210 (center toolbar)
+      final toolbarTop =
+          position.dy - 60; // 60px above (toolbar height ~44 + margin)
+      _toolbarPosition = Offset(
+        toolbarLeft.clamp(
+            10.0, MediaQuery.of(context).size.width - 430), // Keep on screen
+        toolbarTop.clamp(10.0, double.infinity), // Don't go above screen
+      );
+      debugPrint(
+          '📝 [InlineText] Toolbar position: $_toolbarPosition (target at: $position, size: $size)');
+    } else {
+      debugPrint(
+          '📝 [InlineText] Could not get RenderBox for position calculation');
+      _toolbarPosition = const Offset(50, 50); // Fallback
+    }
+  }
+
   void _finishEditing() {
-    _removeToolbar();
-    
+    debugPrint('📝 [InlineText] Finishing edit');
+    _hideToolbar();
+
     if (!mounted) return;
-    
+
     setState(() => _isEditing = false);
-    
+
     if (_controller.text != widget.text) {
       widget.onTextChanged?.call(_controller.text);
     }
   }
 
   void _showToolbar() {
-    _removeToolbar();
-    
-    _toolbarOverlay = OverlayEntry(
-      builder: (context) => Positioned(
-        width: 420,
-        child: CompositedTransformFollower(
-          link: _layerLink,
-          showWhenUnlinked: false,
-          offset: const Offset(0, -52), // Position above the text
-          targetAnchor: Alignment.topCenter,
-          followerAnchor: Alignment.bottomCenter,
-          child: TapRegion(
-            groupId: _editingGroupId,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {}, // Consume taps to prevent onTapOutside
-              child: TextFormattingToolbar(
-                currentFormatting: _currentFormatting,
-                baseStyle: widget.baseStyle,
-                onFormattingChanged: (formatting) {
-                  setState(() => _currentFormatting = formatting);
-                  widget.onFormattingChanged?.call(formatting);
-                  _updateToolbar();
-                },
-                onClose: _finishEditing,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    
-    Overlay.of(context).insert(_toolbarOverlay!);
+    debugPrint(
+        '📝 [InlineText] Showing toolbar at position: $_toolbarPosition');
+    _overlayController.show();
   }
 
-  void _updateToolbar() {
-    _toolbarOverlay?.markNeedsBuild();
-  }
-
-  void _removeToolbar() {
-    _toolbarOverlay?.remove();
-    _toolbarOverlay = null;
+  void _hideToolbar() {
+    _overlayController.hide();
   }
 
   TextStyle get _effectiveStyle {
@@ -169,6 +164,41 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
 
   @override
   Widget build(BuildContext context) {
+    // We wrap the entire widget in OverlayPortal to ensure it's always mounted and connected.
+    return OverlayPortal(
+      controller: _overlayController,
+      overlayChildBuilder: (context) {
+        final pos = _toolbarPosition ?? const Offset(50, 50);
+        return Positioned(
+          top: pos.dy,
+          left: pos.dx,
+          child: SizedBox(
+            key: _toolbarKey,
+            width: 420,
+            child: TapRegion(
+              groupId: _editingGroupId,
+              child: TextFormattingToolbar(
+                currentFormatting: _currentFormatting,
+                baseStyle: widget.baseStyle,
+                onFormattingChanged: (formatting) {
+                  setState(() => _currentFormatting = formatting);
+                  widget.onFormattingChanged?.call(formatting);
+                  // Return focus to text field so user can keep typing
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _focusNode.requestFocus();
+                  });
+                },
+                onClose: _finishEditing,
+              ),
+            ),
+          ),
+        );
+      },
+      child: _buildContent(),
+    );
+  }
+
+  Widget _buildContent() {
     if (!widget.isEditMode) {
       // Normal display mode - just show the text
       return Text(
@@ -187,10 +217,12 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
 
     // Edit mode - transparent background, preserve text color
     // Wrap in Stack for resize handles when editing
-    Widget textContainer = CompositedTransformTarget(
-      link: _layerLink,
+    Widget textContainer = Container(
+      key: _targetKey, // Key for position calculation
       child: MouseRegion(
-        cursor: _isResizing ? SystemMouseCursors.resizeColumn : SystemMouseCursors.text,
+        cursor: _isResizing
+            ? SystemMouseCursors.resizeColumn
+            : SystemMouseCursors.text,
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
         child: GestureDetector(
@@ -199,9 +231,9 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
             duration: const Duration(milliseconds: 150),
             decoration: BoxDecoration(
               border: Border.all(
-                color: _isEditing 
+                color: _isEditing
                     ? const Color(0xFF00A09D)
-                    : _isHovered 
+                    : _isHovered
                         ? const Color(0xFF00A09D).withValues(alpha: 0.5)
                         : Colors.transparent,
                 width: _isEditing ? 2 : 1,
@@ -210,9 +242,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
               // NO background color - keep transparent
             ),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: _isEditing 
-                ? _buildEditField()
-                : _buildDisplayText(),
+            child: _isEditing ? _buildEditField() : _buildDisplayText(),
           ),
         ),
       ),
@@ -247,12 +277,22 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
           ),
         ),
       );
-      
+
       // Wrap with TapRegion when editing to detect outside clicks
       if (_isEditing) {
         return TapRegion(
           groupId: _editingGroupId,
-          onTapOutside: (_) {
+          onTapOutside: (event) {
+            // Check if tap was on toolbar
+            final toolbarBox =
+                _toolbarKey.currentContext?.findRenderObject() as RenderBox?;
+            if (toolbarBox != null) {
+              final local = toolbarBox.globalToLocal(event.position);
+              if (toolbarBox.paintBounds.contains(local)) {
+                return; // Tap was on toolbar, ignore
+              }
+            }
+
             if (!_isResizing) {
               _finishEditing();
             }
@@ -260,7 +300,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
           child: content,
         );
       }
-      
+
       return content;
     }
 
@@ -268,7 +308,17 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
     if (_isEditing) {
       return TapRegion(
         groupId: _editingGroupId,
-        onTapOutside: (_) {
+        onTapOutside: (event) {
+          // Check if tap was on toolbar
+          final toolbarBox =
+              _toolbarKey.currentContext?.findRenderObject() as RenderBox?;
+          if (toolbarBox != null) {
+            final local = toolbarBox.globalToLocal(event.position);
+            if (toolbarBox.paintBounds.contains(local)) {
+              return; // Tap was on toolbar, ignore
+            }
+          }
+
           if (!_isResizing) {
             _finishEditing();
           }
@@ -342,7 +392,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
       ),
     );
   }
-  
+
   void _handleResizeEnd() {
     setState(() => _isResizing = false);
     if (_currentWidth != null) {
@@ -356,9 +406,9 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
       onKeyEvent: (event) {
         // Handle keyboard shortcuts
         if (event is KeyDownEvent) {
-          final isCtrlOrCmd = HardwareKeyboard.instance.isControlPressed || 
-                              HardwareKeyboard.instance.isMetaPressed;
-          
+          final isCtrlOrCmd = HardwareKeyboard.instance.isControlPressed ||
+              HardwareKeyboard.instance.isMetaPressed;
+
           if (isCtrlOrCmd) {
             if (event.logicalKey == LogicalKeyboardKey.keyB) {
               _toggleBold();
@@ -368,12 +418,13 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
               _toggleUnderline();
             }
           }
-          
+
           // Enter to finish (unless multiline)
-          if (event.logicalKey == LogicalKeyboardKey.enter && widget.maxLines == 1) {
+          if (event.logicalKey == LogicalKeyboardKey.enter &&
+              widget.maxLines == 1) {
             _finishEditing();
           }
-          
+
           // Escape to cancel
           if (event.logicalKey == LogicalKeyboardKey.escape) {
             _controller.text = widget.text; // Revert
@@ -398,10 +449,10 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
   }
 
   Widget _buildDisplayText() {
-    final displayText = widget.text.isEmpty 
-        ? (widget.placeholder ?? 'Haz clic para editar') 
+    final displayText = widget.text.isEmpty
+        ? (widget.placeholder ?? 'Haz clic para editar')
         : widget.text;
-    
+
     return Stack(
       children: [
         Text(
@@ -441,7 +492,6 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
       );
     });
     widget.onFormattingChanged?.call(_currentFormatting);
-    _updateToolbar();
   }
 
   void _toggleItalic() {
@@ -451,7 +501,6 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
       );
     });
     widget.onFormattingChanged?.call(_currentFormatting);
-    _updateToolbar();
   }
 
   void _toggleUnderline() {
@@ -461,7 +510,6 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
       );
     });
     widget.onFormattingChanged?.call(_currentFormatting);
-    _updateToolbar();
   }
 }
 
@@ -484,7 +532,8 @@ class SimpleInlineEditableText extends StatefulWidget {
   });
 
   @override
-  State<SimpleInlineEditableText> createState() => _SimpleInlineEditableTextState();
+  State<SimpleInlineEditableText> createState() =>
+      _SimpleInlineEditableTextState();
 }
 
 class _SimpleInlineEditableTextState extends State<SimpleInlineEditableText> {
@@ -583,7 +632,9 @@ class _SimpleInlineEditableTextState extends State<SimpleInlineEditableText> {
                   ),
                 )
               : Text(
-                  widget.text.isEmpty ? (widget.placeholder ?? 'Editar') : widget.text,
+                  widget.text.isEmpty
+                      ? (widget.placeholder ?? 'Editar')
+                      : widget.text,
                   style: widget.text.isEmpty
                       ? widget.style?.copyWith(
                           color: Colors.grey,

@@ -185,6 +185,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
         children: [
           _buildTab('add', '+ Agregar', Icons.add_box_outlined),
           _buildTab('edit', 'Editar', Icons.edit_outlined),
+          _buildTab('style', 'Estilo', Icons.brush_outlined),
           _buildTab('theme', 'Tema', Icons.palette_outlined),
         ],
       ),
@@ -236,6 +237,8 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
         return _AddBlocksTab(editProvider: editProvider);
       case 'edit':
         return _EditBlockTab(editProvider: editProvider);
+      case 'style':
+        return _StyleBlockTab(editProvider: editProvider);
       case 'theme':
         return _ThemeTab();
       default:
@@ -1071,11 +1074,28 @@ class _HeroBlockControls extends StatelessWidget {
           onChanged: (v) => provider.updateBlockData(blockId, 'buttonText', v),
         ),
         const SizedBox(height: 16),
-        _EditorTextField(
+        _LinkPicker(
           label: 'Enlace del botón',
-          value: data['buttonLink']?.toString() ?? '',
+          currentLink: data['buttonLink']?.toString() ?? '',
           onChanged: (v) => provider.updateBlockData(blockId, 'buttonLink', v),
-          hint: '/tienda/productos',
+        ),
+        const SizedBox(height: 16),
+        _EditorToggle(
+          label: 'Pantalla Completa',
+          value: data['isFullScreen'] == true,
+          onChanged: (v) =>
+              provider.updateBlockData(blockId, 'isFullScreen', v),
+        ),
+        const SizedBox(height: 16),
+        _EditorDropdown(
+          label: 'Alineación',
+          value: data['alignment']?.toString() ?? 'center',
+          options: const [
+            ('left', 'Izquierda'),
+            ('center', 'Centro'),
+            ('right', 'Derecha'),
+          ],
+          onChanged: (v) => provider.updateBlockData(blockId, 'alignment', v),
         ),
         const SizedBox(height: 20),
         _SectionHeader('Imagen de fondo'),
@@ -2013,7 +2033,18 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
         if (_productSource == 'manual') _buildProductSelector(),
 
         const SizedBox(height: 20),
+        const SizedBox(height: 20),
         _SectionHeader('DISEÑO'),
+        const SizedBox(height: 12),
+        _EditorDropdown(
+          label: 'Diseño',
+          value: widget.data['layout']?.toString() ?? 'grid',
+          options: const [
+            ('grid', 'Cuadrícula'),
+            ('carousel', 'Carrusel'),
+          ],
+          onChanged: (v) => _updateField('layout', v),
+        ),
         const SizedBox(height: 12),
 
         // Items per row
@@ -2183,31 +2214,78 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
             color: const Color(0xFF2D2D2D),
             borderRadius: BorderRadius.circular(4),
           ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _selectedCategoryId,
-              hint: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text('Seleccionar...',
-                    style: TextStyle(color: Colors.white54, fontSize: 13)),
-              ),
-              isExpanded: true,
-              dropdownColor: const Color(0xFF2D2D2D),
-              icon: const Icon(Icons.expand_more, color: Colors.white54),
-              items: _availableCategories.map((cat) {
-                return DropdownMenuItem<String>(
-                  value: cat['id'].toString(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      cat['name']?.toString() ?? 'Sin nombre',
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                    ),
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) => _updateField('categoryId', value),
+          child: MenuAnchor(
+            style: MenuStyle(
+              backgroundColor: WidgetStateProperty.all(const Color(0xFF2D2D2D)),
+              surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
+              padding: WidgetStateProperty.all(EdgeInsets.zero),
             ),
+            menuChildren: _availableCategories.map((cat) {
+              final catId = cat['id'].toString();
+              return MenuItemButton(
+                onPressed: () => _updateField('categoryId', catId),
+                style: ButtonStyle(
+                  backgroundColor: _selectedCategoryId == catId
+                      ? WidgetStateProperty.all(
+                          Colors.white.withValues(alpha: 0.1))
+                      : null,
+                  foregroundColor: WidgetStateProperty.all(Colors.white),
+                  padding: WidgetStateProperty.all(
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 120),
+                  child: Text(
+                    cat['name']?.toString() ?? 'Sin nombre',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              );
+            }).toList(),
+            builder: (context, controller, child) {
+              final selectedName = _availableCategories
+                      .firstWhere(
+                        (c) => c['id'].toString() == _selectedCategoryId,
+                        orElse: () => {},
+                      )['name']
+                      ?.toString() ??
+                  'Seleccionar...';
+
+              return InkWell(
+                onTap: () {
+                  if (controller.isOpen) {
+                    controller.close();
+                  } else {
+                    controller.open();
+                  }
+                },
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          selectedName,
+                          style: TextStyle(
+                            color: _selectedCategoryId == null
+                                ? Colors.white54
+                                : Colors.white,
+                            fontSize: 13,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const Icon(Icons.expand_more,
+                          color: Colors.white54, size: 20),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -2738,9 +2816,9 @@ class _CtaBlockControls extends StatelessWidget {
           onChanged: (v) => provider.updateBlockData(blockId, 'buttonText', v),
         ),
         const SizedBox(height: 16),
-        _EditorTextField(
+        _LinkPicker(
           label: 'Enlace',
-          value: data['buttonLink']?.toString() ?? '',
+          currentLink: data['buttonLink']?.toString() ?? '',
           onChanged: (v) => provider.updateBlockData(blockId, 'buttonLink', v),
         ),
       ],
@@ -2772,6 +2850,16 @@ class _FeaturesBlockControls extends StatelessWidget {
           label: 'Título',
           value: data['title']?.toString() ?? '',
           onChanged: (v) => provider.updateBlockData(blockId, 'title', v),
+        ),
+        const SizedBox(height: 20),
+        _EditorDropdown(
+          label: 'Diseño',
+          value: data['layout']?.toString() ?? 'grid',
+          options: const [
+            ('grid', 'Cuadrícula'),
+            ('list', 'Lista'),
+          ],
+          onChanged: (v) => provider.updateBlockData(blockId, 'layout', v),
         ),
         const SizedBox(height: 20),
         _SectionHeader('Características (${features.length})'),
@@ -3196,28 +3284,79 @@ class _ThemeTabState extends State<_ThemeTab> {
           style: const TextStyle(color: Colors.white70, fontSize: 12),
         ),
         const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF2D2D2D),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: value,
-              isExpanded: true,
-              dropdownColor: const Color(0xFF2D2D2D),
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              items: items.map((item) {
-                return DropdownMenuItem(
-                  value: item,
-                  child: Text(labels?[item] ?? item),
-                );
-              }).toList(),
-              onChanged: onChanged,
+        MenuAnchor(
+          style: MenuStyle(
+            backgroundColor: WidgetStateProperty.all(const Color(0xFF2D2D2D)),
+            surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
+            padding: WidgetStateProperty.all(EdgeInsets.zero),
+            shape: WidgetStateProperty.all(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
             ),
           ),
+          menuChildren: items.map((item) {
+            final itemLabel = labels?[item] ?? item;
+            return MenuItemButton(
+              onPressed: () => onChanged(item),
+              style: ButtonStyle(
+                backgroundColor: item == value
+                    ? WidgetStateProperty.all(
+                        Colors.white.withValues(alpha: 0.1))
+                    : null,
+                foregroundColor: WidgetStateProperty.all(Colors.white),
+                padding: WidgetStateProperty.all(
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 120),
+                child: Text(
+                  itemLabel,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            );
+          }).toList(),
+          builder: (context, controller, child) {
+            final selectedLabel = labels?[value] ?? value;
+            return InkWell(
+              onTap: () {
+                if (controller.isOpen) {
+                  controller.close();
+                } else {
+                  controller.open();
+                }
+              },
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D2D2D),
+                  borderRadius: BorderRadius.circular(6),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        selectedLabel,
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(Icons.expand_more,
+                        color: Colors.white54, size: 20),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -3473,6 +3612,386 @@ class _SectionHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Smart link picker with pages, products, anchors, and external URLs
+class _LinkPicker extends StatefulWidget {
+  final String label;
+  final String currentLink;
+  final Function(String) onChanged;
+
+  const _LinkPicker({
+    required this.label,
+    required this.currentLink,
+    required this.onChanged,
+  });
+
+  @override
+  State<_LinkPicker> createState() => _LinkPickerState();
+}
+
+class _LinkPickerState extends State<_LinkPicker> {
+  bool _isExpanded = false;
+  int _selectedTab = 0; // 0=Pages, 1=Products, 2=Anchor, 3=External
+
+  @override
+  Widget build(BuildContext context) {
+    final displayText = _getDisplayText(widget.currentLink);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+        const SizedBox(height: 6),
+        // Current link display with edit button
+        InkWell(
+          onTap: () => setState(() => _isExpanded = !_isExpanded),
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: _isExpanded ? const Color(0xFF00A09D) : Colors.white12,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _getLinkIcon(widget.currentLink),
+                  size: 16,
+                  color: const Color(0xFF00A09D),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    displayText.isEmpty ? 'Sin enlace' : displayText,
+                    style: TextStyle(
+                      color:
+                          displayText.isEmpty ? Colors.white38 : Colors.white,
+                      fontSize: 13,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Icon(
+                  _isExpanded ? Icons.expand_less : Icons.expand_more,
+                  color: Colors.white54,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Expanded picker
+        if (_isExpanded) ...[
+          const SizedBox(height: 8),
+          // Tab buttons
+          Row(
+            children: [
+              _buildTabButton(0, 'Páginas', Icons.article_outlined),
+              const SizedBox(width: 4),
+              _buildTabButton(1, 'Tienda', Icons.shopping_bag_outlined),
+              const SizedBox(width: 4),
+              _buildTabButton(2, 'Ancla', Icons.tag),
+              const SizedBox(width: 4),
+              _buildTabButton(3, 'URL', Icons.link),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Tab content
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: _buildTabContent(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTabButton(int index, String label, IconData icon) {
+    final isSelected = _selectedTab == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedTab = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF00A09D).withValues(alpha: 0.2)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF00A09D) : Colors.transparent,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  size: 14,
+                  color: isSelected ? const Color(0xFF00A09D) : Colors.white54),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 9,
+                  color: isSelected ? const Color(0xFF00A09D) : Colors.white54,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabContent() {
+    switch (_selectedTab) {
+      case 0:
+        return _buildPagesTab();
+      case 1:
+        return _buildProductsTab();
+      case 2:
+        return _buildAnchorTab();
+      case 3:
+        return _buildExternalTab();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildPagesTab() {
+    return FutureBuilder<List<_PageInfo>>(
+      future: _loadPages(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 60,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+
+        final pages = snapshot.data ?? [];
+        if (pages.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(8),
+            child: Text('No hay páginas',
+                style: TextStyle(color: Colors.white54, fontSize: 12)),
+          );
+        }
+
+        return Column(
+          children: pages.map((page) {
+            final isSelected = widget.currentLink == page.path;
+            return InkWell(
+              onTap: () {
+                widget.onChanged(page.path);
+                setState(() => _isExpanded = false);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? const Color(0xFF00A09D).withValues(alpha: 0.15)
+                      : null,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      page.isHome
+                          ? Icons.home_outlined
+                          : Icons.article_outlined,
+                      size: 14,
+                      color:
+                          isSelected ? const Color(0xFF00A09D) : Colors.white54,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        page.title,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isSelected
+                              ? const Color(0xFF00A09D)
+                              : Colors.white,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      page.path,
+                      style:
+                          const TextStyle(fontSize: 10, color: Colors.white38),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildProductsTab() {
+    final links = [
+      ('/tienda/productos', 'Todos los productos', Icons.inventory_2_outlined),
+      (
+        '/tienda/productos?destacados=true',
+        'Productos destacados',
+        Icons.star_outline
+      ),
+      ('/tienda/productos?ofertas=true', 'Ofertas', Icons.local_offer_outlined),
+      ('/tienda/categorias', 'Categorías', Icons.category_outlined),
+      ('/carrito', 'Carrito', Icons.shopping_cart_outlined),
+    ];
+
+    return Column(
+      children: links.map((item) {
+        final isSelected = widget.currentLink == item.$1;
+        return InkWell(
+          onTap: () {
+            widget.onChanged(item.$1);
+            setState(() => _isExpanded = false);
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? const Color(0xFF00A09D).withValues(alpha: 0.15)
+                  : null,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              children: [
+                Icon(item.$3,
+                    size: 14,
+                    color:
+                        isSelected ? const Color(0xFF00A09D) : Colors.white54),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    item.$2,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color:
+                          isSelected ? const Color(0xFF00A09D) : Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildAnchorTab() {
+    return TextFormField(
+      initialValue:
+          widget.currentLink.startsWith('#') ? widget.currentLink : '',
+      style: const TextStyle(color: Colors.white, fontSize: 12),
+      decoration: InputDecoration(
+        hintText: '#seccion-contacto',
+        hintStyle:
+            TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
+        prefixIcon: const Icon(Icons.tag, size: 16, color: Colors.white54),
+        filled: true,
+        fillColor: const Color(0xFF2D2D2D),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      onFieldSubmitted: (value) {
+        final anchor = value.startsWith('#') ? value : '#$value';
+        widget.onChanged(anchor);
+        setState(() => _isExpanded = false);
+      },
+    );
+  }
+
+  Widget _buildExternalTab() {
+    return TextFormField(
+      initialValue:
+          widget.currentLink.startsWith('http') ? widget.currentLink : '',
+      style: const TextStyle(color: Colors.white, fontSize: 12),
+      decoration: InputDecoration(
+        hintText: 'https://ejemplo.com',
+        hintStyle:
+            TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
+        prefixIcon: const Icon(Icons.link, size: 16, color: Colors.white54),
+        filled: true,
+        fillColor: const Color(0xFF2D2D2D),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      onFieldSubmitted: (value) {
+        widget.onChanged(value);
+        setState(() => _isExpanded = false);
+      },
+    );
+  }
+
+  Future<List<_PageInfo>> _loadPages() async {
+    try {
+      final service = context.read<WebsiteService>();
+      await service.loadPages();
+      return service.pages
+          .map((p) => _PageInfo(
+                title: p.title,
+                path: p.fullPath,
+                isHome: p.isHome,
+              ))
+          .toList();
+    } catch (e) {
+      debugPrint('Error loading pages: $e');
+      return [];
+    }
+  }
+
+  String _getDisplayText(String link) {
+    if (link.isEmpty) return '';
+    if (link.startsWith('#')) return 'Ancla: $link';
+    if (link.startsWith('http')) return link;
+    if (link.startsWith('/tienda')) return 'Tienda: ${link.split('/').last}';
+    if (link == '/') return 'Inicio';
+    return link;
+  }
+
+  IconData _getLinkIcon(String link) {
+    if (link.isEmpty) return Icons.link_off;
+    if (link.startsWith('#')) return Icons.tag;
+    if (link.startsWith('http')) return Icons.open_in_new;
+    if (link.startsWith('/tienda')) return Icons.shopping_bag_outlined;
+    return Icons.article_outlined;
+  }
+}
+
+class _PageInfo {
+  final String title;
+  final String path;
+  final bool isHome;
+
+  _PageInfo({required this.title, required this.path, required this.isHome});
 }
 
 class _EditorTextField extends StatefulWidget {
@@ -3732,6 +4251,7 @@ class _EditorDropdown extends StatelessWidget {
   final Function(String) onChanged;
 
   const _EditorDropdown({
+    super.key,
     required this.label,
     required this.value,
     required this.options,
@@ -3740,36 +4260,92 @@ class _EditorDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final selectedLabel = options
+        .firstWhere(
+          (opt) => opt.$1 == value,
+          orElse: () => (value, value),
+        )
+        .$2;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
             style: const TextStyle(color: Colors.white70, fontSize: 12)),
         const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF2D2D2D),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: value,
-              isExpanded: true,
-              dropdownColor: const Color(0xFF2D2D2D),
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              icon: const Icon(Icons.expand_more,
-                  color: Colors.white54, size: 18),
-              items: options
-                  .map((opt) => DropdownMenuItem(
-                        value: opt.$1,
-                        child: Text(opt.$2),
-                      ))
-                  .toList(),
-              onChanged: (v) => onChanged(v ?? value),
+        MenuAnchor(
+          style: MenuStyle(
+            backgroundColor: WidgetStateProperty.all(const Color(0xFF2D2D2D)),
+            surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
+            padding: WidgetStateProperty.all(EdgeInsets.zero),
+            shape: WidgetStateProperty.all(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
             ),
           ),
+          menuChildren: options.map((opt) {
+            final isSelected = opt.$1 == value;
+            return MenuItemButton(
+              onPressed: () => onChanged(opt.$1),
+              style: ButtonStyle(
+                backgroundColor: isSelected
+                    ? WidgetStateProperty.all(
+                        Colors.white.withValues(alpha: 0.1))
+                    : null,
+                foregroundColor: WidgetStateProperty.all(Colors.white),
+                padding: WidgetStateProperty.all(
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 120),
+                child: Text(
+                  opt.$2,
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+            );
+          }).toList(),
+          builder:
+              (BuildContext context, MenuController controller, Widget? child) {
+            return InkWell(
+              onTap: () {
+                if (controller.isOpen) {
+                  controller.close();
+                } else {
+                  controller.open();
+                }
+              },
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D2D2D),
+                  borderRadius: BorderRadius.circular(6),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        selectedLabel,
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(Icons.expand_more,
+                        color: Colors.white54, size: 18),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -6051,28 +6627,79 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
         Text(label,
             style: const TextStyle(color: Colors.white70, fontSize: 12)),
         const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF2D2D2D),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: value,
-              isExpanded: true,
-              dropdownColor: const Color(0xFF2D2D2D),
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              items: items
-                  .map((item) => DropdownMenuItem(
-                        value: item,
-                        child: Text(labels?[item] ?? item),
-                      ))
-                  .toList(),
-              onChanged: onChanged,
+        MenuAnchor(
+          style: MenuStyle(
+            backgroundColor: WidgetStateProperty.all(const Color(0xFF2D2D2D)),
+            surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
+            padding: WidgetStateProperty.all(EdgeInsets.zero),
+            shape: WidgetStateProperty.all(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
             ),
           ),
+          menuChildren: items.map((item) {
+            final itemLabel = labels?[item] ?? item;
+            return MenuItemButton(
+              onPressed: () => onChanged(item),
+              style: ButtonStyle(
+                backgroundColor: item == value
+                    ? WidgetStateProperty.all(
+                        Colors.white.withValues(alpha: 0.1))
+                    : null,
+                foregroundColor: WidgetStateProperty.all(Colors.white),
+                padding: WidgetStateProperty.all(
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 120),
+                child: Text(
+                  itemLabel,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            );
+          }).toList(),
+          builder: (context, controller, child) {
+            final selectedLabel = labels?[value] ?? value;
+            return InkWell(
+              onTap: () {
+                if (controller.isOpen) {
+                  controller.close();
+                } else {
+                  controller.open();
+                }
+              },
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D2D2D),
+                  borderRadius: BorderRadius.circular(6),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        selectedLabel,
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(Icons.expand_more,
+                        color: Colors.white54, size: 20),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -6968,3 +7595,965 @@ class _BackupListItem extends StatelessWidget {
   }
 }
 
+/// Tab for generic block styling (Background, Spacing, etc.)
+class _StyleBlockTab extends StatefulWidget {
+  final WebsiteEditModeProvider editProvider;
+
+  const _StyleBlockTab({required this.editProvider});
+
+  @override
+  State<_StyleBlockTab> createState() => _StyleBlockTabState();
+}
+
+class _StyleBlockTabState extends State<_StyleBlockTab> {
+  bool _paddingLinked = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedId = widget.editProvider.selectedBlockId;
+
+    if (selectedId == null) {
+      return _buildNoSelection();
+    }
+
+    if (selectedId == 'header' || selectedId == 'footer') {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'El estilo de ${selectedId == 'header' ? 'Cabecera' : 'Pie de página'} se gestiona en la pestaña "Editar".',
+            style: TextStyle(color: Colors.white54, fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    final block = widget.editProvider.getBlock(selectedId);
+    if (block == null) return _buildNoSelection();
+
+    final blockData = Map<String, dynamic>.from(block['block_data'] ?? {});
+    final style = Map<String, dynamic>.from(blockData['style'] ?? {});
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ===== BACKGROUND =====
+          _buildSectionHeader('Fondo'),
+          const SizedBox(height: 12),
+          _BackgroundTypeControl(
+            style: style,
+            onChanged: (key, value) => _updateStyle(selectedId, key, value),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ===== PADDING =====
+          _buildSectionHeader('Espaciado Interior'),
+          const SizedBox(height: 12),
+          _FullPaddingControl(
+            paddingTop: (style['paddingTop'] as num?)?.toDouble() ?? 64.0,
+            paddingRight: (style['paddingRight'] as num?)?.toDouble() ?? 24.0,
+            paddingBottom: (style['paddingBottom'] as num?)?.toDouble() ?? 64.0,
+            paddingLeft: (style['paddingLeft'] as num?)?.toDouble() ?? 24.0,
+            linked: _paddingLinked,
+            onLinkedChanged: (v) => setState(() => _paddingLinked = v),
+            onChanged: (top, right, bottom, left) {
+              _updateStyle(selectedId, 'paddingTop', top);
+              _updateStyle(selectedId, 'paddingRight', right);
+              _updateStyle(selectedId, 'paddingBottom', bottom);
+              _updateStyle(selectedId, 'paddingLeft', left);
+            },
+          ),
+
+          const SizedBox(height: 24),
+
+          // ===== BORDER =====
+          _buildSectionHeader('Borde'),
+          const SizedBox(height: 12),
+          _BorderControl(
+            borderWidth: (style['borderWidth'] as num?)?.toDouble() ?? 0.0,
+            borderColor: style['borderColor']?.toString() ?? '#E0E0E0',
+            borderStyle: style['borderStyle']?.toString() ?? 'solid',
+            borderRadius: (style['borderRadius'] as num?)?.toDouble() ?? 0.0,
+            onChanged: (width, color, borderStyle, radius) {
+              _updateStyle(selectedId, 'borderWidth', width);
+              _updateStyle(selectedId, 'borderColor', color);
+              _updateStyle(selectedId, 'borderStyle', borderStyle);
+              _updateStyle(selectedId, 'borderRadius', radius);
+            },
+          ),
+
+          const SizedBox(height: 24),
+
+          // ===== SHADOW =====
+          _buildSectionHeader('Sombra'),
+          const SizedBox(height: 12),
+          _BoxShadowControl(
+            enabled: style['shadowEnabled'] == true,
+            offsetX: (style['shadowOffsetX'] as num?)?.toDouble() ?? 0.0,
+            offsetY: (style['shadowOffsetY'] as num?)?.toDouble() ?? 4.0,
+            blur: (style['shadowBlur'] as num?)?.toDouble() ?? 12.0,
+            spread: (style['shadowSpread'] as num?)?.toDouble() ?? 0.0,
+            color: style['shadowColor']?.toString() ?? 'rgba(0,0,0,0.15)',
+            onChanged: (enabled, offsetX, offsetY, blur, spread, color) {
+              _updateStyle(selectedId, 'shadowEnabled', enabled);
+              _updateStyle(selectedId, 'shadowOffsetX', offsetX);
+              _updateStyle(selectedId, 'shadowOffsetY', offsetY);
+              _updateStyle(selectedId, 'shadowBlur', blur);
+              _updateStyle(selectedId, 'shadowSpread', spread);
+              _updateStyle(selectedId, 'shadowColor', color);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _updateStyle(String blockId, String key, dynamic value) {
+    final block = widget.editProvider.getBlock(blockId);
+    if (block == null) return;
+
+    final currentData = Map<String, dynamic>.from(block['block_data'] ?? {});
+    final currentStyle = Map<String, dynamic>.from(currentData['style'] ?? {});
+
+    currentStyle[key] = value;
+    widget.editProvider.updateBlockData(blockId, 'style', currentStyle);
+  }
+
+  Widget _buildNoSelection() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.brush_outlined,
+              size: 48,
+              color: Colors.white.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Selecciona un bloque',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Text(
+      title.toUpperCase(),
+      style: const TextStyle(
+        color: Colors.white54,
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 1,
+      ),
+    );
+  }
+}
+
+/// Background control with solid color or gradient option
+class _BackgroundTypeControl extends StatelessWidget {
+  final Map<String, dynamic> style;
+  final Function(String key, dynamic value) onChanged;
+
+  const _BackgroundTypeControl({
+    required this.style,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundType = style['backgroundType']?.toString() ?? 'solid';
+    final isSolid = backgroundType != 'gradient';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Toggle between solid and gradient
+        Row(
+          children: [
+            _buildTypeButton(
+                'Sólido', isSolid, () => onChanged('backgroundType', 'solid')),
+            const SizedBox(width: 8),
+            _buildTypeButton('Degradado', !isSolid,
+                () => onChanged('backgroundType', 'gradient')),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        if (isSolid) ...[
+          _BackgroundColorControl(
+            currentValue: style['backgroundColor'],
+            onChanged: (val) => onChanged('backgroundColor', val),
+          ),
+        ] else ...[
+          // Gradient controls
+          const Text('Color inicial',
+              style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const SizedBox(height: 8),
+          _BackgroundColorControl(
+            currentValue: style['gradientColor1'] ?? '#FFFFFF',
+            onChanged: (val) => onChanged('gradientColor1', val),
+          ),
+          const SizedBox(height: 16),
+          const Text('Color final',
+              style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const SizedBox(height: 8),
+          _BackgroundColorControl(
+            currentValue: style['gradientColor2'] ?? '#F0F0F0',
+            onChanged: (val) => onChanged('gradientColor2', val),
+          ),
+          const SizedBox(height: 16),
+          const Text('Dirección',
+              style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const SizedBox(height: 8),
+          _GradientDirectionPicker(
+            currentDirection:
+                style['gradientDirection']?.toString() ?? 'to-bottom',
+            onChanged: (dir) => onChanged('gradientDirection', dir),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTypeButton(String label, bool isSelected, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF00A09D).withValues(alpha: 0.2)
+                : const Color(0xFF2D2D2D),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF00A09D) : Colors.white54,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Gradient direction picker with 8 direction options
+class _GradientDirectionPicker extends StatelessWidget {
+  final String currentDirection;
+  final Function(String) onChanged;
+
+  const _GradientDirectionPicker({
+    required this.currentDirection,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final directions = [
+      ('to-top', Icons.arrow_upward, 'Arriba'),
+      ('to-top-right', Icons.north_east, 'Arriba Der.'),
+      ('to-right', Icons.arrow_forward, 'Derecha'),
+      ('to-bottom-right', Icons.south_east, 'Abajo Der.'),
+      ('to-bottom', Icons.arrow_downward, 'Abajo'),
+      ('to-bottom-left', Icons.south_west, 'Abajo Izq.'),
+      ('to-left', Icons.arrow_back, 'Izquierda'),
+      ('to-top-left', Icons.north_west, 'Arriba Izq.'),
+    ];
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: directions.map((d) {
+        final isSelected = d.$1 == currentDirection;
+        return Tooltip(
+          message: d.$3,
+          child: GestureDetector(
+            onTap: () => onChanged(d.$1),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? const Color(0xFF00A09D)
+                    : const Color(0xFF2D2D2D),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+                ),
+              ),
+              child: Icon(
+                d.$2,
+                size: 16,
+                color: isSelected ? Colors.white : Colors.white54,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// Full padding control with all 4 sides and linked toggle
+class _FullPaddingControl extends StatelessWidget {
+  final double paddingTop;
+  final double paddingRight;
+  final double paddingBottom;
+  final double paddingLeft;
+  final bool linked;
+  final Function(bool) onLinkedChanged;
+  final Function(double, double, double, double) onChanged;
+
+  const _FullPaddingControl({
+    required this.paddingTop,
+    required this.paddingRight,
+    required this.paddingBottom,
+    required this.paddingLeft,
+    required this.linked,
+    required this.onLinkedChanged,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Linked toggle
+        Row(
+          children: [
+            Icon(
+              linked ? Icons.link : Icons.link_off,
+              size: 16,
+              color: linked ? const Color(0xFF00A09D) : Colors.white38,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              linked ? 'Valores vinculados' : 'Valores independientes',
+              style: TextStyle(
+                color: linked ? const Color(0xFF00A09D) : Colors.white38,
+                fontSize: 11,
+              ),
+            ),
+            const Spacer(),
+            Switch(
+              value: linked,
+              onChanged: onLinkedChanged,
+              activeColor: Colors.white,
+              activeTrackColor: const Color(0xFF00A09D),
+              inactiveThumbColor: Colors.grey.shade400,
+              inactiveTrackColor: Colors.grey.shade700,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        if (linked) ...[
+          // Single slider that affects all sides proportionally
+          _paddingSlider('Vertical', paddingTop, (val) {
+            onChanged(val, paddingRight, val, paddingLeft);
+          }),
+          const SizedBox(height: 12),
+          _paddingSlider('Horizontal', paddingLeft, (val) {
+            onChanged(paddingTop, val, paddingBottom, val);
+          }),
+        ] else ...[
+          // Individual sliders for each side
+          _paddingSlider('Arriba', paddingTop, (val) {
+            onChanged(val, paddingRight, paddingBottom, paddingLeft);
+          }),
+          const SizedBox(height: 8),
+          _paddingSlider('Derecha', paddingRight, (val) {
+            onChanged(paddingTop, val, paddingBottom, paddingLeft);
+          }),
+          const SizedBox(height: 8),
+          _paddingSlider('Abajo', paddingBottom, (val) {
+            onChanged(paddingTop, paddingRight, val, paddingLeft);
+          }),
+          const SizedBox(height: 8),
+          _paddingSlider('Izquierda', paddingLeft, (val) {
+            onChanged(paddingTop, paddingRight, paddingBottom, val);
+          }),
+        ],
+      ],
+    );
+  }
+
+  Widget _paddingSlider(String label, double value, Function(double) onChange) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 70,
+          child: Text(label,
+              style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderThemeData(
+              activeTrackColor: const Color(0xFF00A09D),
+              inactiveTrackColor: Colors.white10,
+              thumbColor: Colors.white,
+              trackHeight: 2,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            ),
+            child: Slider(
+              value: value.clamp(0.0, 200.0),
+              min: 0,
+              max: 200,
+              divisions: 40,
+              onChanged: onChange,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 40,
+          child: Text(
+            '${value.round()}',
+            style: const TextStyle(color: Color(0xFF00A09D), fontSize: 11),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Border control with width, color, style, and radius
+class _BorderControl extends StatelessWidget {
+  final double borderWidth;
+  final String borderColor;
+  final String borderStyle;
+  final double borderRadius;
+  final Function(double, String, String, double) onChanged;
+
+  const _BorderControl({
+    required this.borderWidth,
+    required this.borderColor,
+    required this.borderStyle,
+    required this.borderRadius,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasBorder = borderWidth > 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Quick presets
+        Row(
+          children: [
+            _buildPreset('Ninguno', borderWidth == 0,
+                () => onChanged(0, borderColor, borderStyle, borderRadius)),
+            const SizedBox(width: 6),
+            _buildPreset('Sutil', borderWidth == 1,
+                () => onChanged(1, borderColor, 'solid', borderRadius)),
+            const SizedBox(width: 6),
+            _buildPreset('Medio', borderWidth == 2,
+                () => onChanged(2, borderColor, 'solid', borderRadius)),
+            const SizedBox(width: 6),
+            _buildPreset('Grueso', borderWidth >= 4,
+                () => onChanged(4, borderColor, 'solid', borderRadius)),
+          ],
+        ),
+
+        if (hasBorder) ...[
+          const SizedBox(height: 16),
+          // Width slider
+          _buildSliderRow('Grosor', borderWidth, 0, 20, (val) {
+            onChanged(val, borderColor, borderStyle, borderRadius);
+          }),
+          const SizedBox(height: 12),
+          // Style dropdown
+          Row(
+            children: [
+              const SizedBox(
+                width: 70,
+                child: Text('Estilo',
+                    style: TextStyle(color: Colors.white54, fontSize: 11)),
+              ),
+              Expanded(
+                child: Row(
+                  children: [
+                    _buildStyleButton(
+                        'solid', 'Sólido', borderStyle == 'solid'),
+                    const SizedBox(width: 6),
+                    _buildStyleButton(
+                        'dashed', 'Rayado', borderStyle == 'dashed'),
+                    const SizedBox(width: 6),
+                    _buildStyleButton(
+                        'dotted', 'Puntos', borderStyle == 'dotted'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Color
+          const Text('Color',
+              style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const SizedBox(height: 8),
+          _BorderColorPicker(
+            currentColor: borderColor,
+            onChanged: (color) =>
+                onChanged(borderWidth, color, borderStyle, borderRadius),
+          ),
+        ],
+
+        const SizedBox(height: 16),
+        // Border radius (always show)
+        const Text('Esquinas',
+            style: TextStyle(color: Colors.white54, fontSize: 11)),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _buildRadiusPreset('Ninguna', 0, borderRadius),
+            const SizedBox(width: 6),
+            _buildRadiusPreset('Sutil', 4, borderRadius),
+            const SizedBox(width: 6),
+            _buildRadiusPreset('Redondeada', 12, borderRadius),
+            const SizedBox(width: 6),
+            _buildRadiusPreset('Píldora', 50, borderRadius),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _buildSliderRow('Radio', borderRadius, 0, 50, (val) {
+          onChanged(borderWidth, borderColor, borderStyle, val);
+        }),
+      ],
+    );
+  }
+
+  Widget _buildPreset(String label, bool isSelected, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF00A09D).withValues(alpha: 0.2)
+                : const Color(0xFF2D2D2D),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF00A09D) : Colors.white54,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStyleButton(String value, String label, bool isSelected) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onChanged(borderWidth, borderColor, value, borderRadius),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF00A09D).withValues(alpha: 0.2)
+                : const Color(0xFF2D2D2D),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF00A09D) : Colors.white54,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRadiusPreset(String label, double value, double current) {
+    final isSelected = (current - value).abs() < 2;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onChanged(borderWidth, borderColor, borderStyle, value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF00A09D).withValues(alpha: 0.2)
+                : const Color(0xFF2D2D2D),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF00A09D) : Colors.white54,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSliderRow(String label, double value, double min, double max,
+      Function(double) onChange) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 50,
+          child: Text(label,
+              style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderThemeData(
+              activeTrackColor: const Color(0xFF00A09D),
+              inactiveTrackColor: Colors.white10,
+              thumbColor: Colors.white,
+              trackHeight: 2,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            ),
+            child: Slider(
+              value: value.clamp(min, max),
+              min: min,
+              max: max,
+              divisions: (max - min).toInt(),
+              onChanged: onChange,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 30,
+          child: Text(
+            '${value.round()}',
+            style: const TextStyle(color: Color(0xFF00A09D), fontSize: 11),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Border color picker
+class _BorderColorPicker extends StatelessWidget {
+  final String currentColor;
+  final Function(String) onChanged;
+
+  const _BorderColorPicker({
+    required this.currentColor,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = [
+      '#E0E0E0', // Light gray
+      '#9E9E9E', // Gray
+      '#424242', // Dark gray
+      '#000000', // Black
+      '#00A09D', // Brand teal
+      '#FF6D00', // Orange
+      '#1976D2', // Blue
+      '#D32F2F', // Red
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: colors.map((color) {
+        final isSelected = color.toLowerCase() == currentColor.toLowerCase();
+        return GestureDetector(
+          onTap: () => onChanged(color),
+          child: Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: _hexToColor(color),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isSelected ? Colors.white : Colors.white24,
+                width: isSelected ? 2 : 1,
+              ),
+            ),
+            child: isSelected
+                ? Icon(Icons.check,
+                    size: 14,
+                    color: _hexToColor(color).computeLuminance() > 0.5
+                        ? Colors.black
+                        : Colors.white)
+                : null,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Color _hexToColor(String hex) {
+    final buffer = StringBuffer();
+    if (hex.length == 6 || hex.length == 7) buffer.write('ff');
+    buffer.write(hex.replaceFirst('#', ''));
+    return Color(int.parse(buffer.toString(), radix: 16));
+  }
+}
+
+/// Box shadow control
+class _BoxShadowControl extends StatelessWidget {
+  final bool enabled;
+  final double offsetX;
+  final double offsetY;
+  final double blur;
+  final double spread;
+  final String color;
+  final Function(bool, double, double, double, double, String) onChanged;
+
+  const _BoxShadowControl({
+    required this.enabled,
+    required this.offsetX,
+    required this.offsetY,
+    required this.blur,
+    required this.spread,
+    required this.color,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Quick presets
+        Row(
+          children: [
+            _buildPreset(
+                'Ninguna', !enabled, () => onChanged(false, 0, 0, 0, 0, color)),
+            const SizedBox(width: 6),
+            _buildPreset('Sutil', enabled && blur <= 8,
+                () => onChanged(true, 0, 2, 6, 0, 'rgba(0,0,0,0.1)')),
+            const SizedBox(width: 6),
+            _buildPreset('Media', enabled && blur > 8 && blur <= 16,
+                () => onChanged(true, 0, 4, 12, 0, 'rgba(0,0,0,0.15)')),
+            const SizedBox(width: 6),
+            _buildPreset('Fuerte', enabled && blur > 16,
+                () => onChanged(true, 0, 8, 24, 0, 'rgba(0,0,0,0.2)')),
+          ],
+        ),
+
+        if (enabled) ...[
+          const SizedBox(height: 16),
+          _buildSlider('Despl. X', offsetX, -30, 30,
+              (val) => onChanged(enabled, val, offsetY, blur, spread, color)),
+          const SizedBox(height: 8),
+          _buildSlider('Despl. Y', offsetY, -30, 30,
+              (val) => onChanged(enabled, offsetX, val, blur, spread, color)),
+          const SizedBox(height: 8),
+          _buildSlider(
+              'Difuminado',
+              blur,
+              0,
+              50,
+              (val) =>
+                  onChanged(enabled, offsetX, offsetY, val, spread, color)),
+          const SizedBox(height: 8),
+          _buildSlider('Extensión', spread, -20, 20,
+              (val) => onChanged(enabled, offsetX, offsetY, blur, val, color)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPreset(String label, bool isSelected, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF00A09D).withValues(alpha: 0.2)
+                : const Color(0xFF2D2D2D),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF00A09D) : Colors.white54,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlider(String label, double value, double min, double max,
+      Function(double) onChange) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 70,
+          child: Text(label,
+              style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderThemeData(
+              activeTrackColor: const Color(0xFF00A09D),
+              inactiveTrackColor: Colors.white10,
+              thumbColor: Colors.white,
+              trackHeight: 2,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            ),
+            child: Slider(
+              value: value.clamp(min, max),
+              min: min,
+              max: max,
+              divisions: (max - min).toInt(),
+              onChanged: onChange,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 30,
+          child: Text(
+            '${value.round()}',
+            style: const TextStyle(color: Color(0xFF00A09D), fontSize: 11),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BackgroundColorControl extends StatelessWidget {
+  final String? currentValue;
+  final Function(String?) onChanged;
+
+  const _BackgroundColorControl({this.currentValue, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    // Preset colors maintaining the dark/professional vibe
+    final presets = [
+      null, // Transparent/None
+      '#FFFFFF', // White
+      '#F8F9FA', // Light Gray
+      '#1A1A1A', // Dark
+      '#00A09D', // Brand Primary
+      '#2D2D2D', // UI Dark
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: presets.map((color) {
+        final isSelected = color == currentValue ||
+            (color == null && (currentValue == null || currentValue!.isEmpty));
+
+        if (color == null) {
+          return _buildColorOption(
+            context,
+            color: Colors.transparent,
+            isSelected: isSelected,
+            isNone: true,
+            onTap: () => onChanged(null),
+          );
+        }
+
+        return _buildColorOption(
+          context,
+          color: _hexToColor(color),
+          isSelected: isSelected,
+          onTap: () => onChanged(color),
+        );
+      }).toList(),
+    );
+  }
+
+  Color _hexToColor(String hex) {
+    final buffer = StringBuffer();
+    if (hex.length == 6 || hex.length == 7) buffer.write('ff');
+    buffer.write(hex.replaceFirst('#', ''));
+    return Color(int.parse(buffer.toString(), radix: 16));
+  }
+
+  Widget _buildColorOption(
+    BuildContext context, {
+    required Color color,
+    required bool isSelected,
+    required VoidCallback onTap,
+    bool isNone = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: isNone
+            ? const Icon(Icons.block, size: 16, color: Colors.white54)
+            : (isSelected
+                ? Icon(
+                    Icons.check,
+                    size: 16,
+                    color: color.computeLuminance() > 0.5
+                        ? Colors.black
+                        : Colors.white,
+                  )
+                : null),
+      ),
+    );
+  }
+}
