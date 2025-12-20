@@ -304,7 +304,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
           'mode': 'latest', // latest|manual
           'productIds': <String>[],
           'maxProducts': 6,
+          'layout': 'grid', // grid|carousel
           'columns': 3,
+          'cardWidth': 300,
           'showPrice': true,
         };
       case 'text':
@@ -919,7 +921,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
       case 'productsGallery':
         final mode = (el['mode'] ?? 'latest').toString();
         final maxProducts = (el['maxProducts'] as num?)?.toInt() ?? 6;
+        final layout = (el['layout'] ?? 'grid').toString();
         final columns = (el['columns'] as num?)?.toInt() ?? 3;
+        final cardWidth = (el['cardWidth'] as num?)?.toDouble() ?? 300.0;
         final rawIds = el['productIds'];
         final ids = rawIds is List
             ? rawIds.map((e) => e.toString()).where((e) => e.isNotEmpty).toList()
@@ -949,6 +953,41 @@ class _CanvasBlockState extends State<CanvasBlock> {
                 ),
               );
             }
+            if (layout == 'carousel') {
+              final items = products.take(maxProducts).toList(growable: false);
+              return ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: widget.editable
+                    ? const NeverScrollableScrollPhysics()
+                    : const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                itemCount: items.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 20),
+                itemBuilder: (context, index) {
+                  final p = items[index];
+                  final id = p['id']?.toString() ?? '';
+                  final name = p['name']?.toString() ?? 'Producto';
+                  final priceRaw = p['price'];
+                  final price = priceRaw is num
+                      ? priceRaw.toDouble()
+                      : double.tryParse('$priceRaw') ?? 0.0;
+                  final imageUrl = p['image_url']?.toString();
+                  return SizedBox(
+                    width: cardWidth.clamp(220, 380),
+                    child: PremiumProductCard(
+                      productId: id,
+                      name: name,
+                      price: price,
+                      imageUrl: imageUrl,
+                      bodyFont: widget.bodyFont,
+                      previewMode: widget.editable,
+                      onNavigate: widget.onNavigate,
+                    ),
+                  );
+                },
+              );
+            }
+
             final cols = columns.clamp(1, 4);
             return GridView.builder(
               physics: const NeverScrollableScrollPhysics(),

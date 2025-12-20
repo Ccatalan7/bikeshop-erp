@@ -278,7 +278,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         'mode': 'latest', // latest|manual
         'productIds': <String>[],
         'maxProducts': 6,
+        'layout': 'grid', // grid|carousel
         'columns': 3,
+        'cardWidth': 300,
         'showPrice': true,
       });
     } else {

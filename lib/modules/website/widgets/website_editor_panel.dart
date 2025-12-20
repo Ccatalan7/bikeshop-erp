@@ -4263,6 +4263,16 @@ class _CanvasBlockControls extends StatelessWidget {
               onChanged: (v) => _updateElement(activeId!, {'mode': v}),
             ),
             const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Diseño',
+              value: (active['layout'] ?? 'grid').toString(),
+              options: const [
+                ('grid', 'Cuadrícula'),
+                ('carousel', 'Carrusel'),
+              ],
+              onChanged: (v) => _updateElement(activeId!, {'layout': v}),
+            ),
+            const SizedBox(height: 12),
             _EditorSlider(
               label: 'Máx productos',
               value: ((active['maxProducts'] as num?)?.toDouble() ?? 6).clamp(1, 24),
@@ -4273,15 +4283,26 @@ class _CanvasBlockControls extends StatelessWidget {
               onChanged: (v) => _updateElement(activeId!, {'maxProducts': v.round()}),
             ),
             const SizedBox(height: 12),
-            _EditorSlider(
-              label: 'Columnas',
-              value: ((active['columns'] as num?)?.toDouble() ?? 3).clamp(1, 4),
-              min: 1,
-              max: 4,
-              divisions: 3,
-              valueLabel: '${(active['columns'] ?? 3)}',
-              onChanged: (v) => _updateElement(activeId!, {'columns': v.round()}),
-            ),
+            if ((active['layout'] ?? 'grid').toString() == 'grid')
+              _EditorSlider(
+                label: 'Columnas',
+                value: ((active['columns'] as num?)?.toDouble() ?? 3).clamp(1, 4),
+                min: 1,
+                max: 4,
+                divisions: 3,
+                valueLabel: '${(active['columns'] ?? 3)}',
+                onChanged: (v) => _updateElement(activeId!, {'columns': v.round()}),
+              )
+            else
+              _EditorSlider(
+                label: 'Ancho tarjeta',
+                value: ((active['cardWidth'] as num?)?.toDouble() ?? 300).clamp(220, 380),
+                min: 220,
+                max: 380,
+                divisions: 32,
+                valueLabel: '${((active['cardWidth'] as num?)?.toDouble() ?? 300).toStringAsFixed(0)}px',
+                onChanged: (v) => _updateElement(activeId!, {'cardWidth': v}),
+              ),
             const SizedBox(height: 12),
             if ((active['mode'] ?? 'latest').toString() == 'manual') ...[
               _CanvasProductsMultiSelector(
