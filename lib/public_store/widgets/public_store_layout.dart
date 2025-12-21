@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -252,30 +253,35 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     if (headerStyle == 'transparent' && isHomePage) {
       // TRANSPARENT: Header floats over hero ONLY ON HOMEPAGE
-      pageContent = SingleChildScrollView(
-        child: Stack(
-          children: [
-            // Content starts from top (behind header)
-            Column(
-              children: [
-                widget.child,
-                footerWidget,
-              ],
-            ),
-            // Header floats on top (positioned at top, scrolls with content)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: buildHeaderWidget(
-                isOverlay: true,
-                overrideBgColor: Colors.transparent,
-                overrideColorMode:
-                    headerColorMode, // Use configured color mode (dark = white text)
-                overrideShadow: false,
+      pageContent = ScrollConfiguration(
+        behavior: isEditMode
+            ? const _NoDragScrollBehavior()
+            : const MaterialScrollBehavior(),
+        child: SingleChildScrollView(
+          child: Stack(
+            children: [
+              // Content starts from top (behind header)
+              Column(
+                children: [
+                  widget.child,
+                  footerWidget,
+                ],
               ),
-            ),
-          ],
+              // Header floats on top (positioned at top, scrolls with content)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: buildHeaderWidget(
+                  isOverlay: true,
+                  overrideBgColor: Colors.transparent,
+                  overrideColorMode:
+                      headerColorMode, // Use configured color mode (dark = white text)
+                  overrideShadow: false,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     } else if (headerStyle == 'transparent' && !isHomePage) {
@@ -291,12 +297,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           ),
           // Main content area - scrollable
           Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  widget.child,
-                  footerWidget,
-                ],
+            child: ScrollConfiguration(
+              behavior: isEditMode
+                  ? const _NoDragScrollBehavior()
+                  : const MaterialScrollBehavior(),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    widget.child,
+                    footerWidget,
+                  ],
+                ),
               ),
             ),
           ),
@@ -330,12 +341,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           buildHeaderWidget(),
           // Main content area - scrollable
           Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  widget.child,
-                  footerWidget,
-                ],
+            child: ScrollConfiguration(
+              behavior: isEditMode
+                  ? const _NoDragScrollBehavior()
+                  : const MaterialScrollBehavior(),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    widget.child,
+                    footerWidget,
+                  ],
+                ),
               ),
             ),
           ),
@@ -351,7 +367,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         body: Column(
           children: [
             // Keep the same "command center" top bar visible while editing.
-            _buildPreviewTopBar(context, editProvider, websiteService, storeName),
+            _buildPreviewTopBar(
+                context, editProvider, websiteService, storeName),
             Expanded(
               child: Row(
                 children: [
@@ -885,8 +902,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             Text(
               label,
               style: TextStyle(
-                color:
-                    isActive ? Colors.white : Colors.white.withValues(alpha: 0.6),
+                color: isActive
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.6),
                 fontSize: 13,
                 fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
               ),
@@ -895,9 +913,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             Icon(
               Icons.arrow_drop_down,
               size: 18,
-              color: isActive
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.6),
+              color:
+                  isActive ? Colors.white : Colors.white.withValues(alpha: 0.6),
             ),
           ],
         ),
@@ -911,7 +928,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required WebsiteService websiteService,
   }) {
     String title;
-    if (editProvider.currentPageSlug == null || editProvider.currentPageSlug!.isEmpty) {
+    if (editProvider.currentPageSlug == null ||
+        editProvider.currentPageSlug!.isEmpty) {
       title = 'Página: Inicio';
     } else {
       title = 'Página: /pagina/${editProvider.currentPageSlug}';
@@ -2667,15 +2685,21 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
     return Stack(
       children: [
         // Main scrollable content
-        SingleChildScrollView(
-          controller: _scrollController,
-          child: Column(
-            children: [
-              // Add padding at top for the header space (only if not in edit mode)
-              if (!widget.isEditMode) const SizedBox(height: 0),
-              widget.child,
-              widget.footer,
-            ],
+        // Main scrollable content
+        ScrollConfiguration(
+          behavior: widget.isEditMode
+              ? const _NoDragScrollBehavior()
+              : const MaterialScrollBehavior(),
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            child: Column(
+              children: [
+                // Add padding at top for the header space (only if not in edit mode)
+                if (!widget.isEditMode) const SizedBox(height: 0),
+                widget.child,
+                widget.footer,
+              ],
+            ),
           ),
         ),
         // Floating header
@@ -2706,4 +2730,17 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
       ],
     );
   }
+}
+
+class _NoDragScrollBehavior extends MaterialScrollBehavior {
+  const _NoDragScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.unknown,
+      };
 }

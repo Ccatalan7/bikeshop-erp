@@ -196,6 +196,24 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     final minHeight = _getMinHeight(widget.blockType);
     final maxHeight = _getMaxHeight(widget.blockType);
 
+    // Blocks with dynamic content should NOT have maxHeight constrained
+    // (their content needs to grow naturally)
+    final dynamicContentBlocks = {
+      'products',
+      'services',
+      'features',
+      'testimonials',
+      'faq',
+      'team',
+      'pricing',
+      'stats',
+      'gallery',
+      'categoryGrid',
+      'brandLogos',
+      'partnersBanner',
+    };
+    final isDynamicContent = dynamicContentBlocks.contains(widget.blockType);
+
     // Build the editable content based on block type
     Widget blockContent = _buildEditableBlock(context);
 
@@ -212,8 +230,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         clipBehavior: Clip.none,
         children: [
           // The block content with visibility opacity and height constraint
-          // All blocks use ConstrainedBox when there's a custom height (during drag or saved)
-          // Blocks use LayoutBuilder internally to read the constraint for live resize
+          // Fixed-height blocks (hero, carousel, canvas) use both min and max height
+          // Dynamic content blocks (products, services, etc.) only use minHeight so content can grow
           Opacity(
             opacity: widget.isVisible ? 1.0 : 0.5,
             child: KeyedSubtree(
@@ -222,7 +240,9 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                   ? ConstrainedBox(
                       constraints: BoxConstraints(
                         minHeight: displayHeight,
-                        maxHeight: displayHeight,
+                        // Only apply maxHeight for fixed-height blocks, not dynamic content
+                        maxHeight:
+                            isDynamicContent ? double.infinity : displayHeight,
                         minWidth: double.infinity,
                       ),
                       child: blockContent,
@@ -687,6 +707,11 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       onNavigate: widget.onNavigate,
       tenantId: widget.tenantId,
       bodyFont: widget.bodyFont,
+      // Don't auto-set designWidth from viewport - use fixed reference width for WYSIWYG consistency
+      onBackgroundTap: () {
+        // Select this block when tapping the canvas background
+        editProvider.selectBlock(widget.blockId);
+      },
       onActiveElementChanged: (id) {
         editProvider.updateBlockData(widget.blockId, 'activeElementId', id);
       },
@@ -705,8 +730,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     final text = (widget.data['text'] ?? '').toString();
     final preset = (widget.data['preset'] ?? 'paragraph').toString();
     final maxWidth = (widget.data['maxWidth'] as num?)?.toDouble();
-    final formatting =
-        TextFormatting.fromJson(widget.data['formatting'] as Map<String, dynamic>?);
+    final formatting = TextFormatting.fromJson(
+        widget.data['formatting'] as Map<String, dynamic>?);
 
     TextStyle base;
     switch (preset) {
@@ -785,7 +810,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       text: label,
       isEditMode: true,
       style: const TextStyle(fontWeight: FontWeight.w600),
-      onChanged: (v) => editProvider.updateBlockData(widget.blockId, 'label', v),
+      onChanged: (v) =>
+          editProvider.updateBlockData(widget.blockId, 'label', v),
       placeholder: 'Botón',
     );
 

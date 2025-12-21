@@ -9,7 +9,8 @@ import '../../modules/website/models/website_models.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../modules/website/widgets/editable_block_renderer.dart';
-import '../../modules/website/widgets/inline_edit_toolbar.dart' show AddBlockDialog;
+import '../../modules/website/widgets/inline_edit_toolbar.dart'
+    show AddBlockDialog;
 import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/models/product.dart';
@@ -26,7 +27,8 @@ class PublicHomePage extends StatefulWidget {
 
 class _PublicHomePageState extends State<PublicHomePage> {
   List<Product> _featuredProducts = [];
-  bool _editModeChecked = false; // Track if we've checked edit mode for this navigation
+  bool _editModeChecked =
+      false; // Track if we've checked edit mode for this navigation
   bool _featuredProductsLoaded = false; // Load featured products once
   String? _resolvedTenantId;
   bool _isResolvingTenantId = false;
@@ -93,19 +95,20 @@ class _PublicHomePageState extends State<PublicHomePage> {
     }
     return null;
   }
-  
+
   Future<void> _loadFeaturedProductsOnce() async {
     if (_featuredProductsLoaded || !mounted) return;
 
     final tenantId = await _effectiveTenantId();
     if (tenantId == null || tenantId.isEmpty) return;
     _featuredProductsLoaded = true;
-    
+
     if (!mounted) return;
     final websiteService = context.read<WebsiteService>();
-    final featuredEntries = await websiteService.loadFeaturedProductsForTenant(tenantId);
+    final featuredEntries =
+        await websiteService.loadFeaturedProductsForTenant(tenantId);
     final activeFeatured = featuredEntries.where((fp) => fp.active).toList();
-    
+
     if (activeFeatured.isNotEmpty && mounted) {
       final products = await _fetchFeaturedProducts(activeFeatured);
       if (mounted) {
@@ -113,19 +116,19 @@ class _PublicHomePageState extends State<PublicHomePage> {
       }
     }
   }
-  
+
   // ignore: unused_element
   void _checkAutoEditMode() {
     if (!mounted || _editModeChecked) return;
     _editModeChecked = true;
-    
+
     // Check URL for edit=true or preview=true parameters
     // Handle both regular URLs and hash-based routing (/#/path?edit=true)
     final uri = Uri.base;
-    
+
     var shouldEdit = uri.queryParameters['edit'] == 'true';
     var shouldPreview = uri.queryParameters['preview'] == 'true';
-    
+
     // For hash-based routing, the query params are in the fragment
     // URL format: http://localhost:64749/#/tienda?edit=true
     // The fragment would be: /tienda?edit=true
@@ -134,22 +137,22 @@ class _PublicHomePageState extends State<PublicHomePage> {
       // We need to parse it as a URI to extract query params
       final fragmentWithScheme = 'http://x${uri.fragment}';
       final fragmentUri = Uri.tryParse(fragmentWithScheme);
-      
+
       if (fragmentUri != null) {
         shouldEdit = fragmentUri.queryParameters['edit'] == 'true';
         shouldPreview = fragmentUri.queryParameters['preview'] == 'true';
       }
     }
-    
+
     if (shouldEdit || shouldPreview) {
       final editProvider = context.read<WebsiteEditModeProvider>();
       final websiteService = context.read<WebsiteService>();
-      
+
       // If not already in editor context, enter the appropriate mode
       if (!editProvider.isInEditorContext) {
         final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
         final settings = Map<String, dynamic>.from(websiteService.settings);
-        
+
         if (shouldEdit) {
           // Go directly to edit mode (with side panel)
           editProvider.enterEditMode(blocks, settings);
@@ -162,34 +165,34 @@ class _PublicHomePageState extends State<PublicHomePage> {
       }
     }
   }
-  
+
   /// Check edit mode using GoRouter state (called from build method)
   void _checkEditModeFromRouter(BuildContext context) {
     // Get query parameters from GoRouter
     final goRouterState = GoRouterState.of(context);
     final queryParams = goRouterState.uri.queryParameters;
-    
+
     final shouldEdit = queryParams['edit'] == 'true';
     final shouldPreview = queryParams['preview'] == 'true';
-    
+
     // Only process once per navigation (avoid infinite rebuilds)
     if (_editModeChecked) return;
-    
+
     if (shouldEdit || shouldPreview) {
       _editModeChecked = true;
-      
+
       final editProvider = context.read<WebsiteEditModeProvider>();
       final websiteService = context.read<WebsiteService>();
-      
+
       // If not already in editor context, enter the appropriate mode
       if (!editProvider.isInEditorContext) {
         // Schedule for next frame to avoid calling during build
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          
+
           final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
           final settings = Map<String, dynamic>.from(websiteService.settings);
-          
+
           if (shouldEdit) {
             editProvider.enterEditMode(blocks, settings);
           } else {
@@ -199,7 +202,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
       }
     }
   }
-  
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -212,26 +215,29 @@ class _PublicHomePageState extends State<PublicHomePage> {
   // ignore: unused_element
   void _updateEditProviderIfNeeded() {
     if (!mounted) return;
-    
+
     final editProvider = context.read<WebsiteEditModeProvider>();
-    
+
     // If we're already in edit mode (or preview mode), update the blocks for home page
     if (editProvider.isEditMode || editProvider.isPreviewMode) {
       // Check if we're coming from a different page (not home)
-      if (editProvider.currentPageSlug != null && editProvider.currentPageSlug!.isNotEmpty) {
+      if (editProvider.currentPageSlug != null &&
+          editProvider.currentPageSlug!.isNotEmpty) {
         final websiteService = context.read<WebsiteService>();
         final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
         final settings = Map<String, dynamic>.from(websiteService.settings);
-        
-        debugPrint('🔄 [HomePage] Page changed while in edit mode: ${editProvider.currentPageSlug} → home');
-        debugPrint('📄 [HomePage] Updating provider with ${blocks.length} blocks for home page');
-        
+
+        debugPrint(
+            '🔄 [HomePage] Page changed while in edit mode: ${editProvider.currentPageSlug} → home');
+        debugPrint(
+            '📄 [HomePage] Updating provider with ${blocks.length} blocks for home page');
+
         if (editProvider.isEditMode) {
           editProvider.enterEditMode(blocks, settings);
         } else {
           editProvider.enterPreviewMode(blocks, settings);
         }
-        
+
         _editModeChecked = true;
       }
     }
@@ -350,12 +356,12 @@ class _PublicHomePageState extends State<PublicHomePage> {
       // Filter out out-of-stock products unless in edit mode (admin editing website)
       final editProvider = context.read<WebsiteEditModeProvider>();
       final isEditMode = editProvider.isEditMode || editProvider.isPreviewMode;
-      
+
       var result = orderedProducts.take(8).toList();
       if (!isEditMode) {
         result = result.where((p) => p.stockQuantity > 0).toList();
       }
-      
+
       return result;
     } catch (error) {
       return const [];
@@ -437,16 +443,17 @@ class _PublicHomePageState extends State<PublicHomePage> {
   Widget build(BuildContext context) {
     // Check for edit/preview mode from URL query parameters (using GoRouter)
     _checkEditModeFromRouter(context);
-    
+
     // Read data from providers - WATCH WebsiteService to rebuild when blocks load
     final tenantProvider = context.read<PublicStoreTenantProvider>();
-    final websiteService = context.watch<WebsiteService>(); // Changed to watch() for progressive loading
+    final websiteService = context
+        .watch<WebsiteService>(); // Changed to watch() for progressive loading
     if (tenantProvider.tenantId == null &&
         (_resolvedTenantId == null || _resolvedTenantId!.isEmpty)) {
       // ERP/editor host: resolve tenant via TenantService so product blocks can load.
       _ensureTenantId();
     }
-    
+
     final primaryColor = _resolveColor(
       websiteService.getSetting('theme_primary_color', ''),
       PublicStoreTheme.primaryBlue,
@@ -489,7 +496,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
     // Use blocks from WebsiteService (loaded by main.dart progressively)
     final blocksToRender = websiteService.blocks;
     final isDataLoading = !websiteService.hasLoadedForTenant;
-    
+
     // Show loading skeleton if data is still loading (and we don't have blocks yet)
     if (isDataLoading && blocksToRender.isEmpty) {
       return const Center(
@@ -499,11 +506,13 @@ class _PublicHomePageState extends State<PublicHomePage> {
         ),
       );
     }
-    
+
     // Show empty state ONLY if:
     // 1. No tenant detected AND no blocks loaded (true public store failure)
     // 2. NOT when blocks ARE loaded (ERP preview mode - blocks loaded via authenticated user)
-    if (tenantProvider.tenantId == null && blocksToRender.isEmpty && !websiteService.hasLoadedForTenant) {
+    if (tenantProvider.tenantId == null &&
+        blocksToRender.isEmpty &&
+        !websiteService.hasLoadedForTenant) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -525,21 +534,22 @@ class _PublicHomePageState extends State<PublicHomePage> {
     }
 
     final currentBreakpoint = _currentBreakpoint(context);
-    
+
     // Check if we're in editor context (preview or edit mode)
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
     final isInEditorContext = editProvider.isInEditorContext;
 
     // Use edit provider blocks if in editor context, otherwise use the blocks we have
-    final finalBlocks = isInEditorContext ? editProvider.blocks : blocksToRender;
+    final finalBlocks =
+        isInEditorContext ? editProvider.blocks : blocksToRender;
 
     // In editor context, show all blocks (even hidden ones, with opacity)
     // In normal mode, filter by visibility
     final visibleBlocks = List<Map<String, dynamic>>.from(
       finalBlocks.where((block) {
         if (isInEditorContext) return true; // Show all blocks in editor context
-        
+
         final isGloballyVisible = block['is_visible'] ?? true;
         if (!isGloballyVisible) {
           return false;
@@ -550,7 +560,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
         return visibility[currentBreakpoint] ?? true;
       }),
     )..sort(
-        (a, b) => (a['sort_order'] ?? a['order_index'] ?? 0).compareTo(b['sort_order'] ?? b['order_index'] ?? 0),
+        (a, b) => (a['sort_order'] ?? a['order_index'] ?? 0)
+            .compareTo(b['sort_order'] ?? b['order_index'] ?? 0),
       );
 
     // Build the page content (blocks)
@@ -600,7 +611,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
     if (isInitialLoading && visibleBlocks.isEmpty) {
       return const SizedBox.shrink();
     }
-    
+
     if (visibleBlocks.isNotEmpty) {
       return SingleChildScrollView(
         child: Column(
@@ -608,7 +619,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
             for (int i = 0; i < visibleBlocks.length; i++) ...[
               KeyedSubtree(
                 // Use hash of block_data + tenantId to force rebuild when content or tenant changes
-                key: ValueKey('${visibleBlocks[i]['id']}_${visibleBlocks[i]['block_data']?.toString().hashCode ?? 0}_$tenantId'),
+                key: ValueKey(
+                    '${visibleBlocks[i]['id']}_${visibleBlocks[i]['block_data']?.toString().hashCode ?? 0}_$tenantId'),
                 child: _buildBlockFromData(
                   visibleBlocks[i],
                   primaryColor,
@@ -628,14 +640,15 @@ class _PublicHomePageState extends State<PublicHomePage> {
               if (i < visibleBlocks.length - 1)
                 _buildBlockSpacer(
                   blockId: visibleBlocks[i]['id']?.toString() ?? '',
-                  blockData: Map<String, dynamic>.from(visibleBlocks[i]['block_data'] ?? {}),
+                  blockData: Map<String, dynamic>.from(
+                      visibleBlocks[i]['block_data'] ?? {}),
                   defaultSpacing: sectionSpacing,
                   isEditMode: isEditMode,
                   editProvider: editProvider,
                 ),
             ],
             SizedBox(height: sectionSpacing),
-            
+
             // Add block button at the end in edit mode
             if (isEditMode)
               Padding(
@@ -666,15 +679,15 @@ class _PublicHomePageState extends State<PublicHomePage> {
                   Text(
                     'Tu sitio web está vacío',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      color: Colors.grey[600],
-                    ),
+                          color: Colors.grey[600],
+                        ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'Agrega bloques para construir tu página',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.grey[500],
-                    ),
+                          color: Colors.grey[500],
+                        ),
                   ),
                   const SizedBox(height: 32),
                   _AddBlockButtonLarge(
@@ -705,16 +718,16 @@ class _PublicHomePageState extends State<PublicHomePage> {
                 Text(
                   'Próximamente',
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    color: primaryColor,
-                    fontWeight: FontWeight.bold,
-                  ),
+                        color: primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 16),
                 Text(
                   'Estamos preparando algo increíble para ti',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+                        color: Colors.grey[600],
+                      ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -734,8 +747,9 @@ class _PublicHomePageState extends State<PublicHomePage> {
     required WebsiteEditModeProvider editProvider,
   }) {
     // Get spacing from block data, default to theme setting
-    final spacingAfter = (blockData['spacingAfter'] as num?)?.toDouble() ?? defaultSpacing;
-    
+    final spacingAfter =
+        (blockData['spacingAfter'] as num?)?.toDouble() ?? defaultSpacing;
+
     if (isEditMode) {
       return BlockSpacerHandle(
         currentSpacing: spacingAfter,
@@ -775,7 +789,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
     final blockType = (blockData['block_type'] ?? '').toString();
     final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
     final isVisible = blockData['is_visible'] ?? true;
-    
+
     data.remove('visibility');
     final resolvedHeadingFont = headingFont.isNotEmpty ? headingFont : null;
     final resolvedBodyFont = bodyFont.isNotEmpty ? bodyFont : null;
@@ -791,18 +805,19 @@ class _PublicHomePageState extends State<PublicHomePage> {
     final fullBleed = _toBool(data['fullBleed']) ?? false;
     final isFullWidthBlock = fullBleed ||
         const [
-      'hero',
-      'carousel',
-      'videobanner',
-      'categorygrid',
-      'partnersbanner',
-    ].contains(blockTypeNormalized);
-    
-    final horizontalPadding = isFullWidthBlock ? 0.0 : containerPadding.clamp(0.0, 200.0).toDouble();
+          'hero',
+          'carousel',
+          'videobanner',
+          'categorygrid',
+          'partnersbanner',
+        ].contains(blockTypeNormalized);
+
+    final horizontalPadding =
+        isFullWidthBlock ? 0.0 : containerPadding.clamp(0.0, 200.0).toDouble();
 
     // Use editable renderer if in edit mode
     final blockHeight = (data['blockHeight'] as num?)?.toDouble();
-    
+
     Widget content = isEditMode
         ? EditableBlockRenderer.build(
             context: context,
@@ -811,7 +826,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
             data: data,
             primaryColor: primaryColor,
             accentColor: accentColor,
-            featuredProducts: blockType == 'products' ? _featuredProducts : null,
+            featuredProducts:
+                blockType == 'products' ? _featuredProducts : null,
             headingFont: resolvedHeadingFont,
             bodyFont: resolvedBodyFont,
             headingSize: headingSize,
@@ -826,7 +842,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
             data: data,
             primaryColor: primaryColor,
             accentColor: accentColor,
-            featuredProducts: blockType == 'products' ? _featuredProducts : null,
+            featuredProducts:
+                blockType == 'products' ? _featuredProducts : null,
             previewMode: false,
             headingFont: resolvedHeadingFont,
             bodyFont: resolvedBodyFont,
@@ -835,15 +852,38 @@ class _PublicHomePageState extends State<PublicHomePage> {
             onNavigate: (route) => context.go(route),
             tenantId: tenantId,
           );
-    
+
     // Apply custom block height if set (for non-edit mode - edit mode handles it in EditableBlockRenderer)
     // Blocks use LayoutBuilder internally to fill/center within this height
+    // Dynamic content blocks should NOT have fixed height - they need to grow with content
     if (!isEditMode && blockHeight != null) {
-      content = SizedBox(
-        height: blockHeight,
-        width: double.infinity,
-        child: content,
-      );
+      // Blocks with dynamic content should NOT have fixed height (clips content)
+      const dynamicContentBlocks = {
+        'products',
+        'services',
+        'features',
+        'testimonials',
+        'faq',
+        'team',
+        'pricing',
+        'stats',
+        'gallery',
+        'categorygrid',
+        'brandlogos',
+        'partnersbanner',
+      };
+      final isDynamicContent =
+          dynamicContentBlocks.contains(blockTypeNormalized);
+
+      if (!isDynamicContent) {
+        // Only apply fixed height for blocks that support it (hero, carousel, canvas, etc.)
+        content = SizedBox(
+          height: blockHeight,
+          width: double.infinity,
+          child: content,
+        );
+      }
+      // Dynamic content blocks: don't wrap - let them size naturally
     }
 
     // Only apply horizontal padding - vertical spacing is now handled by BlockSpacerHandle
