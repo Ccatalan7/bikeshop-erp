@@ -46,6 +46,7 @@ import 'modules/website/providers/website_edit_mode_provider.dart';
 import 'shared/services/job_role_service.dart';
 import 'public_store/providers/cart_provider.dart';
 import 'public_store/providers/public_store_tenant_provider.dart';
+import 'modules/messaging/providers/chat_provider.dart';
 import 'public_store/services/customer_account_service.dart';
 import 'public_store/services/address_autocomplete_service.dart';
 import 'public_store/services/public_inventory_service.dart';
@@ -289,8 +290,20 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => MercadoPagoService()),
         ChangeNotifierProvider(create: (_) => BackupService()),
 
+        // User Management
+        Provider(
+          create: (context) =>
+              UserManagementService(context.read<TenantService>()),
+        ),
+
         // Public store services
         ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProxyProvider<UserManagementService, ChatProvider>(
+          create: (context) =>
+              ChatProvider(context.read<UserManagementService>()),
+          update: (context, userService, previous) =>
+              previous ?? ChatProvider(userService),
+        ),
         ChangeNotifierProvider(create: (_) => AddressAutocompleteService()),
         ChangeNotifierProvider(create: (_) => CustomerAccountService()),
 
@@ -378,8 +391,10 @@ class VinabikeApp extends StatelessWidget {
                 !tenantProvider.isLoading &&
                 !tenantProvider.hasError) {
               WidgetsBinding.instance.addPostFrameCallback((_) async {
+                if (!context.mounted) return;
                 _logTiming('TENANT_DETECT_START');
                 await tenantProvider.detectTenant();
+                if (!context.mounted) return;
                 _logTiming('TENANT_DETECTED', tenantProvider.tenantId);
 
                 // Load data in background

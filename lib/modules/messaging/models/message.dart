@@ -1,0 +1,34 @@
+class Message {
+  final String id;
+  final String conversationId;
+  final String? senderId;
+  final String content;
+  final String type; // 'text', 'image', 'file', 'system'
+  final Map<String, dynamic> metadata;
+  final DateTime createdAt;
+  final bool isMe; // Helper for UI
+
+  Message({
+    required this.id,
+    required this.conversationId,
+    this.senderId,
+    required this.content,
+    required this.type,
+    required this.metadata,
+    required this.createdAt,
+    this.isMe = false,
+  });
+
+  factory Message.fromJson(Map<String, dynamic> json, {String? currentUserId}) {
+    return Message(
+      id: json['id'],
+      conversationId: json['conversation_id'],
+      senderId: json['sender_id'],
+      content: json['content'] ?? '',
+      type: json['type'] ?? 'text',
+      metadata: json['metadata'] ?? {},
+      createdAt: DateTime.parse(json['created_at']),
+      isMe: currentUserId != null && json['sender_id'] == currentUserId,
+    );
+  }
+}

@@ -353,6 +353,16 @@ const List<MenuSubItem> _hrMenuItems = [
 
 const String _hrSectionKey = 'hr';
 
+const List<MenuSubItem> _chatMenuItems = [
+  MenuSubItem(
+    icon: Icons.chat_bubble_outline,
+    title: 'Meson de ayuda',
+    route: '/chat',
+  ),
+];
+
+const String _chatSectionKey = 'chat';
+
 // Tools (WebView embedded websites)
 const List<MenuSubItem> _toolsMenuItems = [
   MenuSubItem(
@@ -787,6 +797,19 @@ class _AppSidebarState extends State<AppSidebar> {
           isExpanded: expandedSection == _taxReportsSectionKey,
           onExpansionChanged: (expand) =>
               _handleExpansionChange(_taxReportsSectionKey, expand, navService),
+        );
+      case 'chat':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.chat_outlined,
+          activeIcon: Icons.chat,
+          title: 'Mensajería',
+          currentLocation: currentLocation,
+          subItems: _chatMenuItems,
+          isExpanded: expandedSection == _chatSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_chatSectionKey, expand, navService),
+          isSingleItem: true,
         );
       case 'customers':
         return ExpandableMenuItem(

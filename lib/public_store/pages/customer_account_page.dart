@@ -23,7 +23,7 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
       // CRITICAL: Set tenant_id for multi-tenant queries
       final tenantProvider = context.read<PublicStoreTenantProvider>();
       accountService.setTenantId(tenantProvider.tenantId);
-      
+
       if (accountService.isAuthenticated) {
         accountService.loadBikes();
         accountService.loadServiceHistory();
@@ -221,16 +221,10 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                     onTap: () => context.go('/cuenta/perfil'),
                   ),
                   _QuickActionCard(
-                    icon: Icons.lock_outline,
-                    title: 'Seguridad',
-                    subtitle: 'Contraseña',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Funcionalidad próximamente'),
-                        ),
-                      );
-                    },
+                    icon: Icons.chat_bubble_outline,
+                    title: 'Ayuda',
+                    subtitle: 'Mensajes y Soporte',
+                    onTap: () => context.go('/cuenta/mensajes'),
                   ),
                 ],
               ),
@@ -294,7 +288,8 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                 ),
                 const SizedBox(height: 12),
                 ...accountService.serviceHistory
-                    .where((s) => !['ENTREGADO', 'CANCELADO'].contains(s['status']))
+                    .where((s) =>
+                        !['ENTREGADO', 'CANCELADO'].contains(s['status']))
                     .take(2)
                     .map((service) {
                   final bikeBrand = service['bike_brand'] ?? '';
@@ -303,7 +298,8 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                     margin: const EdgeInsets.only(bottom: 12),
                     child: ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: _getServiceStatusColor(service['status']),
+                        backgroundColor:
+                            _getServiceStatusColor(service['status']),
                         child: Icon(
                           _getServiceStatusIcon(service['status']),
                           color: Colors.white,
@@ -539,7 +535,8 @@ class _QuickActionCard extends StatelessWidget {
                 top: 8,
                 right: 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.red,
                     borderRadius: BorderRadius.circular(12),

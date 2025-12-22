@@ -106,6 +106,9 @@ import '../../public_store/pages/customer_bikes_page.dart';
 import '../../public_store/pages/customer_service_history_page.dart';
 import '../../public_store/pages/dynamic_website_page.dart';
 import '../../public_store/pages/static_policy_page.dart';
+import '../../public_store/pages/customer_chat_list_page.dart';
+import '../../public_store/pages/customer_chat_detail_page.dart';
+import '../../modules/messaging/pages/employee_chat_page.dart';
 import '../../public_store/widgets/public_store_layout.dart';
 
 // Helper wrapper for public store pages
@@ -600,6 +603,29 @@ class AppRouter {
           },
         ),
 
+        // Chat / Support
+        GoRoute(
+          path: '/cuenta/mensajes',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerChatListPage()),
+          ),
+        ),
+        GoRoute(
+          path: '/cuenta/mensajes/:id',
+          pageBuilder: (context, state) {
+            final conversationId = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(
+                  child:
+                      CustomerChatDetailPage(conversationId: conversationId)),
+            );
+          },
+        ),
+
         // Dynamic Pages (clean URL)
         GoRoute(
           path: '/pagina/:slug',
@@ -785,6 +811,29 @@ class AppRouter {
               state,
               PublicStoreWrapper(
                   child: CustomerServiceHistoryPage(bikeId: bikeId)),
+            );
+          },
+        ),
+
+        // Chat / Support (Legacy)
+        GoRoute(
+          path: '/tienda/cuenta/mensajes',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerChatListPage()),
+          ),
+        ),
+        GoRoute(
+          path: '/tienda/cuenta/mensajes/:id',
+          pageBuilder: (context, state) {
+            final conversationId = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(
+                  child:
+                      CustomerChatDetailPage(conversationId: conversationId)),
             );
           },
         ),
@@ -1407,6 +1456,16 @@ class AppRouter {
             context,
             state,
             const SalesByCustomerPage(),
+          ),
+        ),
+
+        // Messaging Module
+        GoRoute(
+          path: '/chat',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const MainLayout(child: EmployeeChatPage()),
           ),
         ),
 

@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DatabaseService extends ChangeNotifier {
   final SupabaseClient _client = Supabase.instance.client;
-  
+
   // Tables that should NOT have tenant_id auto-injected
   static const _excludedTables = {
     'tenants',
@@ -13,7 +13,8 @@ class DatabaseService extends ChangeNotifier {
   };
 
   /// Automatically injects tenant_id for multi-tenant tables
-  Future<void> _injectTenantId(String table, Map<String, dynamic> payload) async {
+  Future<void> _injectTenantId(
+      String table, Map<String, dynamic> payload) async {
     // Skip if table is excluded from multi-tenancy
     if (_excludedTables.contains(table)) {
       return;
@@ -21,10 +22,10 @@ class DatabaseService extends ChangeNotifier {
 
     // Check if tenant_id already exists and is valid (not placeholder)
     final existingTenantId = payload['tenant_id'];
-    final isPlaceholder = existingTenantId == null || 
-                          existingTenantId == '' || 
-                          existingTenantId == '00000000-0000-0000-0000-000000000000';
-    
+    final isPlaceholder = existingTenantId == null ||
+        existingTenantId == '' ||
+        existingTenantId == '00000000-0000-0000-0000-000000000000';
+
     // Skip injection if valid tenant_id already exists
     if (payload.containsKey('tenant_id') && !isPlaceholder) {
       return;
@@ -46,7 +47,8 @@ class DatabaseService extends ChangeNotifier {
 
       if (profileResponse != null && profileResponse['tenant_id'] != null) {
         payload['tenant_id'] = profileResponse['tenant_id'];
-        debugPrint('✅ Auto-injected tenant_id: ${payload['tenant_id']} into $table');
+        debugPrint(
+            '✅ Auto-injected tenant_id: ${payload['tenant_id']} into $table');
       } else {
         debugPrint('⚠️ User has no tenant_id in user_profiles');
       }
@@ -112,7 +114,12 @@ class DatabaseService extends ChangeNotifier {
       final data = await query;
 
       if (kDebugMode) {
-        debugPrint('✅ DB Result: ${(data as List).length} rows from $table');
+        debugPrint(
+            '✅ DB Result: ${data == null ? "NULL" : (data as List).length} rows from $table');
+      }
+
+      if (data == null) {
+        return [];
       }
 
       return (data as List)
@@ -137,9 +144,10 @@ class DatabaseService extends ChangeNotifier {
     const int batchSize = 1000;
     int offset = 0;
     List<Map<String, dynamic>> allRecords = [];
-    
+
     if (kDebugMode) {
-      debugPrint('📄 Starting paginated fetch for $table (batch size: $batchSize)');
+      debugPrint(
+          '📄 Starting paginated fetch for $table (batch size: $batchSize)');
     }
 
     while (true) {
@@ -165,13 +173,22 @@ class DatabaseService extends ChangeNotifier {
       // Apply pagination
       query = query.range(offset, offset + batchSize - 1);
 
-      final data = await query as List;
-      final batch = data.map((row) => Map<String, dynamic>.from(row as Map)).toList();
-      
+      final data = await query;
+      if (data == null) {
+        if (kDebugMode)
+          debugPrint('⚠️ DB returned null during pagination for $table');
+        break;
+      }
+
+      final listData = data as List;
+      final batch =
+          listData.map((row) => Map<String, dynamic>.from(row as Map)).toList();
+
       allRecords.addAll(batch);
 
       if (kDebugMode) {
-        debugPrint('📄 Fetched batch: ${batch.length} rows (total: ${allRecords.length})');
+        debugPrint(
+            '📄 Fetched batch: ${batch.length} rows (total: ${allRecords.length})');
       }
 
       // If we got less than batchSize, we've reached the end
@@ -183,7 +200,8 @@ class DatabaseService extends ChangeNotifier {
     }
 
     if (kDebugMode) {
-      debugPrint('✅ Completed paginated fetch for $table: ${allRecords.length} total rows');
+      debugPrint(
+          '✅ Completed paginated fetch for $table: ${allRecords.length} total rows');
     }
 
     return allRecords;
@@ -250,10 +268,10 @@ class DatabaseService extends ChangeNotifier {
       {bool applyTimestamps = true}) async {
     try {
       final payload = Map<String, dynamic>.from(data);
-      
+
       // ⚠️ CRITICAL: Auto-inject tenant_id for multi-tenant tables
       await _injectTenantId(table, payload);
-      
+
       if (applyTimestamps) {
         _applyTimestamps(payload, isInsert: true);
       }
@@ -421,10 +439,10 @@ class DatabaseService extends ChangeNotifier {
     String searchTerm,
   ) async {
     try {
-    final data = await _client
-      .from(table)
-      .select()
-      .ilike(searchColumn, '%${searchTerm.trim()}%');
+      final data = await _client
+          .from(table)
+          .select()
+          .ilike(searchColumn, '%${searchTerm.trim()}%');
       return List<Map<String, dynamic>>.from(data as List);
     } catch (e) {
       if (kDebugMode) {

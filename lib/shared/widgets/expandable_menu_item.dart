@@ -10,6 +10,7 @@ class ExpandableMenuItem extends StatelessWidget {
   final bool enabled;
   final bool isExpanded;
   final ValueChanged<bool>? onExpansionChanged;
+  final bool isSingleItem;
 
   const ExpandableMenuItem({
     super.key,
@@ -21,6 +22,7 @@ class ExpandableMenuItem extends StatelessWidget {
     this.enabled = true,
     this.isExpanded = false,
     this.onExpansionChanged,
+    this.isSingleItem = false,
   });
 
   MenuSubItem? _resolveSelectedSubItem(String location) {
@@ -47,7 +49,9 @@ class ExpandableMenuItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final selectedSubItem = _resolveSelectedSubItem(currentLocation);
-    final isAnySubItemSelected = selectedSubItem != null;
+    // For single item, the main item is selected if any subitem (usually just one) matches
+    final isSelected = selectedSubItem != null;
+    final isAnySubItemSelected = isSelected;
 
     return Column(
       children: [
@@ -60,8 +64,17 @@ class ExpandableMenuItem extends StatelessWidget {
               splashFactory: NoSplash.splashFactory,
               highlightColor: Colors.transparent,
               hoverColor: Colors.transparent,
-              onTap:
-                  enabled ? () => onExpansionChanged?.call(!isExpanded) : null,
+              onTap: enabled
+                  ? () {
+                      if (isSingleItem) {
+                        if (subItems.isNotEmpty && !isSelected) {
+                          context.go(subItems.first.route);
+                        }
+                      } else {
+                        onExpansionChanged?.call(!isExpanded);
+                      }
+                    }
+                  : null,
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -98,27 +111,28 @@ class ExpandableMenuItem extends StatelessWidget {
                         ),
                       ),
                     ),
-                    RotatedBox(
-                      quarterTurns: isExpanded ? 2 : 0,
-                      child: Icon(
-                        Icons.keyboard_arrow_down,
-                        size: 20,
-                        color: enabled
-                            ? theme.colorScheme.onSurface.withOpacity(0.5)
-                            : theme.disabledColor,
+                    if (!isSingleItem)
+                      RotatedBox(
+                        quarterTurns: isExpanded ? 2 : 0,
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 20,
+                          color: enabled
+                              ? theme.colorScheme.onSurface.withOpacity(0.5)
+                              : theme.disabledColor,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
             ),
           ),
         ),
-        if (isExpanded)
+        if (isExpanded && !isSingleItem)
           Column(
             children: subItems.map((subItem) {
               final isSelected = selectedSubItem?.route == subItem.route;
-              
+
               // Render as header (non-clickable)
               if (subItem.isHeader) {
                 return Container(
@@ -133,7 +147,7 @@ class ExpandableMenuItem extends StatelessWidget {
                   ),
                 );
               }
-              
+
               return Container(
                 margin: const EdgeInsets.only(left: 36, right: 8, bottom: 2),
                 child: Material(

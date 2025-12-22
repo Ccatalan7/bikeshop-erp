@@ -8,6 +8,7 @@ const List<String> defaultModuleOrder = [
   'accounting',
   'tax_reports',
   'customers',
+  'chat',
   'workshop',
   'smart_features',
   'inventory',
