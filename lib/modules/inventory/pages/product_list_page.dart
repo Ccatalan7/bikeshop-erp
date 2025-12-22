@@ -19,6 +19,7 @@ import '../models/category_models.dart';
 import '../models/inventory_models.dart';
 import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
+import '../widgets/product_movements_tab.dart';
 
 enum ProductViewMode { table, cards }
 
@@ -62,6 +63,7 @@ class _ProductListPageState extends State<ProductListPage> {
   // 🔍 Smart Filters State
   String? _selectedCategoryId;
   String? _selectedSupplierId;
+  ProductType? _selectedProductType;
   StockFilter _stockFilter = StockFilter.all;
   bool _filterWebPublished = false; // is_published = true
   bool _filterGoogleMerchant = false; // is_google_merchant = true
@@ -91,6 +93,7 @@ class _ProductListPageState extends State<ProductListPage> {
   bool get _hasActiveFilters =>
       _selectedCategoryId != null ||
       _selectedSupplierId != null ||
+      _selectedProductType != null ||
       _stockFilter != StockFilter.all ||
       _filterWebPublished ||
       _filterGoogleMerchant ||
@@ -317,6 +320,13 @@ class _ProductListPageState extends State<ProductListPage> {
     if (_selectedSupplierId != null && _selectedSupplierId!.isNotEmpty) {
       filtered = filtered
           .where((product) => product.supplierId == _selectedSupplierId)
+          .toList();
+    }
+
+    // 3.5 Product Type Filter
+    if (_selectedProductType != null) {
+      filtered = filtered
+          .where((product) => product.productType == _selectedProductType)
           .toList();
     }
 
@@ -675,6 +685,11 @@ class _ProductListPageState extends State<ProductListPage> {
                     });
                   },
                 ),
+
+                const SizedBox(width: 8),
+
+                // Product Type Filter
+                _buildProductTypeFilterDropdown(theme),
 
                 const SizedBox(width: 8),
 
@@ -1043,6 +1058,22 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
+  Widget _buildProductTypeFilterDropdown(ThemeData theme) {
+    return _buildCompactDropdown<ProductType>(
+      theme: theme,
+      hint: 'Tipo',
+      value: _selectedProductType,
+      items: ProductType.values,
+      labelBuilder: (type) => type.displayName,
+      onChanged: (val) {
+        setState(() {
+          _selectedProductType = val;
+          _applyFilters();
+        });
+      },
+    );
+  }
+
   Widget _buildSearchableMenu<T>({
     required ThemeData theme,
     required String hint,
@@ -1107,6 +1138,7 @@ class _ProductListPageState extends State<ProductListPage> {
     setState(() {
       _selectedCategoryId = null;
       _selectedSupplierId = null;
+      _selectedProductType = null;
       _stockFilter = StockFilter.all;
       _filterWebPublished = false;
       _filterGoogleMerchant = false;
@@ -1801,6 +1833,45 @@ class _ProductListPageState extends State<ProductListPage> {
       );
     }
 
+    // NEW: Partial Set Indicator (Set = 0 but has components)
+    // We calculate isPartial locally since DB column might be missing
+    final bool isPartialSet = product.isSet &&
+        product.inventoryQty == 0 &&
+        _products.any((p) =>
+            p.parentSetId == product.id &&
+            p.inventoryQty > 0); // Check if ANY component has stock
+
+    if (isPartialSet) {
+      return Center(
+        child: Tooltip(
+          message: 'Set incompleto: faltan componentes',
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange.withOpacity(0.5)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.warning_amber_rounded,
+                    size: 14, color: Colors.deepOrange),
+                const SizedBox(width: 4),
+                Text(
+                  '0', // Still 0 stock
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.deepOrange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     Color color = theme.colorScheme.primary;
     if (product.isOutOfStock)
       color = theme.colorScheme.error;
@@ -1990,85 +2061,177 @@ class _ProductListPageState extends State<ProductListPage> {
     if (_selectedProduct == null) return const SizedBox.shrink();
 
     return Container(
-      // width: _detailPaneWidth, // Controlled by parent Stack
       decoration: BoxDecoration(
         border:
             Border(left: BorderSide(color: theme.colorScheme.outlineVariant)),
         color: theme.colorScheme.surface,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Detalles', style: theme.textTheme.titleMedium),
-                IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => setState(() => _selectedProduct = null)),
-              ],
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: DefaultTabController(
+        length: 2,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with Tabs and Close Button
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+                ),
+              ),
+              child: Row(
                 children: [
-                  if (_selectedProduct!.imageUrl != null)
-                    AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          color: Colors.white,
-                          child: Image.network(_selectedProduct!.imageUrl!,
-                              fit: BoxFit.contain),
-                        ),
-                      ),
+                  Expanded(
+                    child: TabBar(
+                      labelColor: theme.colorScheme.primary,
+                      unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                      indicatorColor: theme.colorScheme.primary,
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      labelStyle: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                      tabs: const [
+                        Tab(text: 'Detalles'),
+                        Tab(text: 'Movimientos'),
+                      ],
                     ),
-                  const SizedBox(height: 16),
-                  Text(_selectedProduct!.name,
-                      style: theme.textTheme.titleLarge),
-                  const SizedBox(height: 8),
-                  SelectableText('SKU: ${_selectedProduct!.sku}',
-                      style: theme.textTheme.bodyMedium, onTap: () {
-                    Clipboard.setData(
-                        ClipboardData(text: _selectedProduct!.sku));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('SKU copiado')));
-                  }),
-                  const SizedBox(height: 24),
-                  _buildDetailSection(theme, title: 'Precios', children: [
-                    _buildDetailRow(theme, 'Precio',
-                        ChileanUtils.formatCurrency(_selectedProduct!.price)),
-                    _buildDetailRow(theme, 'Costo',
-                        ChileanUtils.formatCurrency(_selectedProduct!.cost)),
-                  ]),
-                  const SizedBox(height: 16),
-                  if (!_selectedProduct!.isService)
-                    _buildDetailSection(theme, title: 'Inventario', children: [
-                      _buildDetailRow(
-                          theme, 'Stock', '${_selectedProduct!.inventoryQty}'),
-                      if (_selectedProduct!.warehouseLocation != null)
-                        _buildDetailRow(theme, 'Ubicación',
-                            _selectedProduct!.warehouseLocation!),
-                    ]),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: AppButton(
-                      text: 'Editar Producto',
-                      icon: Icons.edit,
-                      onPressed: () => _openEditor(_selectedProduct!),
-                    ),
+                  ),
+                  const VerticalDivider(width: 1),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Cerrar panel',
+                    onPressed: () => setState(() => _selectedProduct = null),
                   ),
                 ],
               ),
             ),
-          ),
+
+            // Tab Content
+            Expanded(
+              child: TabBarView(
+                children: [
+                  // Tab 1: Details (Existing Content)
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_selectedProduct!.imageUrl != null)
+                          AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                color: Colors.white,
+                                child: Image.network(
+                                    _selectedProduct!.imageUrl!,
+                                    fit: BoxFit.contain),
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 24),
+
+                        // Header Info
+                        Text(_selectedProduct!.name,
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            )),
+                        const SizedBox(height: 8),
+                        InkWell(
+                          onTap: () {
+                            Clipboard.setData(
+                                ClipboardData(text: _selectedProduct!.sku));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('SKU copiado')));
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceVariant,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'SKU: ${_selectedProduct!.sku}',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontFamily: 'monospace',
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        _buildDetailSection(theme, title: 'Precios', children: [
+                          _buildDetailRow(
+                              theme,
+                              'Precio Venta',
+                              ChileanUtils.formatCurrency(
+                                  _selectedProduct!.price),
+                              isHighlight: true),
+                          _buildDetailRow(
+                              theme,
+                              'Costo',
+                              ChileanUtils.formatCurrency(
+                                  _selectedProduct!.cost)),
+                        ]),
+
+                        const SizedBox(height: 24),
+
+                        if (!_selectedProduct!.isService)
+                          _buildDetailSection(theme,
+                              title: 'Inventario',
+                              children: [
+                                _buildDetailRow(theme, 'Stock Actual',
+                                    '${_selectedProduct!.inventoryQty}',
+                                    isHighlight: true),
+                                if (_selectedProduct!.warehouseLocation != null)
+                                  _buildDetailRow(theme, 'Ubicación',
+                                      _selectedProduct!.warehouseLocation!),
+                              ]),
+
+                        const SizedBox(height: 32),
+
+                        SizedBox(
+                          width: double.infinity,
+                          child: AppButton(
+                            text: 'Editar Producto',
+                            icon: Icons.edit_outlined,
+                            onPressed: () => _openEditor(_selectedProduct!),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Tab 2: Stock Movements
+                  _selectedProduct!.id != null
+                      ? ProductMovementsTab(productId: _selectedProduct!.id!)
+                      : const Center(child: Text('Guarde el producto primero')),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(ThemeData theme, String label, String value,
+      {bool isHighlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          Text(value,
+              style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
+                  color: isHighlight
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface)),
         ],
       ),
     );
@@ -2085,23 +2248,6 @@ class _ProductListPageState extends State<ProductListPage> {
         const SizedBox(height: 8),
         ...children,
       ],
-    );
-  }
-
-  Widget _buildDetailRow(ThemeData theme, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          Text(value,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w500)),
-        ],
-      ),
     );
   }
 }

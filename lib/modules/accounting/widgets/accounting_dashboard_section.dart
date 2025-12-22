@@ -9,12 +9,12 @@ import '../models/dashboard_metrics.dart';
 import '../services/accounting_service.dart';
 import '../services/financial_reports_service.dart';
 
-enum _ChartSeriesMode { monthly, cumulative }
+enum _AccountingBasis { cash, accrual }
 
-enum _ExpenseBreakdownRange { 
+enum _ExpenseBreakdownRange {
   currentMonth,
-  previousMonth, 
-  last3Months, 
+  previousMonth,
+  last3Months,
   last6Months,
   last12Months,
 }
@@ -34,7 +34,6 @@ extension on _ExpenseBreakdownRange {
         return 'Últimos 12 meses';
     }
   }
-
 }
 
 class AccountingDashboardSection extends StatefulWidget {
@@ -47,16 +46,16 @@ class AccountingDashboardSection extends StatefulWidget {
 
 class _AccountingDashboardSectionState
     extends State<AccountingDashboardSection> {
-  static const List<String> _periodOptions = [
-    'Esta semana',
-    'Mes actual',
-    'Mes anterior',
-    'Últimos 6 meses',
-    'Últimos 12 meses',
-    'Últimos 18 meses',
-    'Últimos 24 meses',
-  ];
-  
+  // UI State
+  _AccountingBasis _basis = _AccountingBasis.cash;
+  String _selectedPeriod = 'Últimos 12 meses';
+  _ExpenseBreakdownRange _breakdownRange = _ExpenseBreakdownRange.last12Months;
+
+  // Data State
+  _DashboardPayload? _data;
+  bool _isLoading = true;
+  String? _error;
+
   static const Map<String, int> _periodToMonths = {
     'Esta semana': 1,
     'Mes actual': 1,
@@ -66,7 +65,7 @@ class _AccountingDashboardSectionState
     'Últimos 18 meses': 18,
     'Últimos 24 meses': 24,
   };
-  
+
   static const List<_ExpenseBreakdownRange> _breakdownOptions = [
     _ExpenseBreakdownRange.currentMonth,
     _ExpenseBreakdownRange.previousMonth,
@@ -75,113 +74,150 @@ class _AccountingDashboardSectionState
     _ExpenseBreakdownRange.last12Months,
   ];
 
-  late Future<_DashboardPayload> _loadFuture;
-  String _selectedPeriod = 'Últimos 12 meses';
-  _ChartSeriesMode _seriesMode = _ChartSeriesMode.monthly;
-  _ExpenseBreakdownRange _breakdownRange =
-      _ExpenseBreakdownRange.last12Months;
-
   @override
   void initState() {
     super.initState();
-    final months = _periodToMonths[_selectedPeriod] ?? 12;
-    _loadFuture = Future.value(_DashboardPayload(
-      series: [],
-      expenseBreakdown: [],
-      trailingLabel: '',
-      totalIncome: 0,
-      totalExpense: 0,
-      months: months,
-      rangeStart: DateTime.now(),
-      rangeEnd: DateTime.now(),
-      breakdownRange: _ExpenseBreakdownRange.last12Months,
-      breakdownStart: DateTime.now(),
-      breakdownEnd: DateTime.now(),
-      breakdownTotal: 0,
-    ));
-
-    Future.microtask(() async {
-      final accountingService = context.read<AccountingService>();
-      await accountingService.initialize();
-      if (mounted) {
-        setState(() {
-          _loadFuture = _fetchData();
-        });
-      }
+    // Schedule initialization to avoid "setState during build" if service notifies listeners
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadInitialData();
     });
   }
 
-  Future<_DashboardPayload> _fetchData({
-    int? months,
-    _ExpenseBreakdownRange? breakdownRange,
-  }) async {
-    final defaultMonths = _periodToMonths[_selectedPeriod] ?? 12;
-    final monthsToLoad = months ?? defaultMonths;
-    final selectedBreakdownRange = breakdownRange ?? _breakdownRange;
+  Future<void> _loadInitialData() async {
+    final accountingService = context.read<AccountingService>();
+    await accountingService.initialize();
+    if (mounted) {
+      _refreshData();
+    }
+  }
+
+  void _onBasisChanged(_AccountingBasis newValue) {
+    if (_basis != newValue) {
+      setState(() {
+        _basis = newValue;
+      });
+      _refreshData();
+    }
+  }
+
+  void _onPeriodChanged(String? newValue) {
+    if (newValue != null && _selectedPeriod != newValue) {
+      setState(() {
+        _selectedPeriod = newValue;
+      });
+      _refreshData();
+    }
+  }
+
+  void _onBreakdownRangeChanged(_ExpenseBreakdownRange newValue) {
+    if (_breakdownRange != newValue) {
+      setState(() {
+        _breakdownRange = newValue;
+      });
+      _refreshData();
+    }
+  }
+
+  Future<void> _refreshData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final newData = await _fetchData();
+      if (mounted) {
+        setState(() {
+          _data = newData;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<_DashboardPayload> _fetchData() async {
     final reportsService = context.read<FinancialReportsService>();
-    
+    final isCashFlow = _basis == _AccountingBasis.cash;
     final now = DateTime.now();
-    final isDailyView = _selectedPeriod == 'Esta semana' || 
-                        _selectedPeriod == 'Mes actual' || 
-                        _selectedPeriod == 'Mes anterior';
-    
+
+    final isDailyView = _selectedPeriod == 'Esta semana' ||
+        _selectedPeriod == 'Mes actual' ||
+        _selectedPeriod == 'Mes anterior';
+
     List<MonthlyIncomeExpensePoint> series;
-    
+
     if (isDailyView) {
-      // Calculate date range for daily views
       DateTime startDate;
-      DateTime endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
-      
+      DateTime endDate;
+
       if (_selectedPeriod == 'Esta semana') {
-        // Get start of week (Monday)
         final weekday = now.weekday;
-        startDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: weekday - 1));
+        startDate = DateTime(now.year, now.month, now.day)
+            .subtract(Duration(days: weekday - 1));
+        endDate =
+            startDate.add(const Duration(days: 6, hours: 23, minutes: 59));
       } else if (_selectedPeriod == 'Mes actual') {
         startDate = DateTime(now.year, now.month, 1);
-      } else { // Mes anterior
-        final previousMonth = DateTime(now.year, now.month - 1, 1);
-        startDate = previousMonth;
-        final lastDayOfPreviousMonth = DateTime(now.year, now.month, 0);
-        endDate = DateTime(lastDayOfPreviousMonth.year, lastDayOfPreviousMonth.month, lastDayOfPreviousMonth.day, 23, 59, 59);
+        final lastDay = DateTime(now.year, now.month + 1, 0);
+        endDate =
+            DateTime(lastDay.year, lastDay.month, lastDay.day, 23, 59, 59);
+      } else {
+        // Mes anterior
+        startDate = DateTime(now.year, now.month - 1, 1);
+        final lastDay = DateTime(now.year, now.month, 0);
+        endDate =
+            DateTime(lastDay.year, lastDay.month, lastDay.day, 23, 59, 59);
       }
-      
+
       series = await reportsService.getIncomeExpenseDailyTimeseries(
         startDate: startDate,
         endDate: endDate,
+        isCashFlow: isCashFlow,
       );
     } else {
-      // Monthly aggregation for longer periods
-      series = await reportsService.getIncomeExpenseTimeseries(months: monthsToLoad);
+      final months = _periodToMonths[_selectedPeriod] ?? 12;
+      series = await reportsService.getIncomeExpenseTimeseries(
+        months: months,
+        isCashFlow: isCashFlow,
+      );
     }
 
+    // Breakdown Logic
     final currentMonthStart = DateTime(now.year, now.month);
-    final previousMonthEnd = currentMonthStart.subtract(const Duration(days: 1));
+    final previousMonthEnd =
+        currentMonthStart.subtract(const Duration(days: 1));
 
     DateTime breakdownStart;
     DateTime breakdownEnd;
-    switch (selectedBreakdownRange) {
+    switch (_breakdownRange) {
       case _ExpenseBreakdownRange.currentMonth:
         breakdownStart = currentMonthStart;
-        breakdownEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
+        breakdownEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
         break;
       case _ExpenseBreakdownRange.previousMonth:
-        breakdownStart = DateTime(previousMonthEnd.year, previousMonthEnd.month);
+        breakdownStart =
+            DateTime(previousMonthEnd.year, previousMonthEnd.month);
         breakdownEnd = DateTime(previousMonthEnd.year, previousMonthEnd.month,
             previousMonthEnd.day, 23, 59, 59);
         break;
       case _ExpenseBreakdownRange.last3Months:
-        final startSeed = DateTime(now.year, now.month - 2, 1);
-        breakdownStart = startSeed;
+        breakdownStart = DateTime(now.year, now.month - 2, 1);
         breakdownEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
         break;
       case _ExpenseBreakdownRange.last6Months:
-        final startSeed = DateTime(now.year, now.month - 5, 1);
-        breakdownStart = startSeed;
+        breakdownStart = DateTime(now.year, now.month - 5, 1);
         breakdownEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
         break;
       case _ExpenseBreakdownRange.last12Months:
-        final startSeed = DateTime(now.year, now.month - 11, 1);
-        breakdownStart = startSeed;
+        breakdownStart = DateTime(now.year, now.month - 11, 1);
         breakdownEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
         break;
     }
@@ -196,25 +232,23 @@ class _AccountingDashboardSectionState
         series.fold<double>(0, (sum, point) => sum + point.income);
     final totalExpense =
         series.fold<double>(0, (sum, point) => sum + point.expense);
-
     final breakdownTotal =
         breakdown.fold<double>(0, (sum, item) => sum + item.displayAmount);
 
-    final monthLabel = selectedBreakdownRange.label;
-
+    final monthsCount = _periodToMonths[_selectedPeriod] ?? 12;
     final rangeStart = series.isNotEmpty ? series.first.periodStart : now;
     final rangeEnd = series.isNotEmpty ? series.last.periodEnd : now;
 
     return _DashboardPayload(
       series: series,
       expenseBreakdown: breakdown,
-      trailingLabel: monthLabel,
+      trailingLabel: _breakdownRange.label,
       totalIncome: totalIncome,
       totalExpense: totalExpense,
-      months: monthsToLoad,
+      months: monthsCount,
       rangeStart: rangeStart,
       rangeEnd: rangeEnd,
-      breakdownRange: selectedBreakdownRange,
+      breakdownRange: _breakdownRange,
       breakdownStart: breakdownStart,
       breakdownEnd: breakdownEnd,
       breakdownTotal: breakdownTotal,
@@ -223,64 +257,53 @@ class _AccountingDashboardSectionState
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_DashboardPayload>(
-      future: _loadFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _DashboardSkeleton();
-        }
+    // 1. Initial loading (no data yet)
+    if (_data == null) {
+      if (_isLoading) return const _DashboardSkeleton();
+      if (_error != null) {
+        return _DashboardError(
+          error: _error,
+          onRetry: _refreshData,
+        );
+      }
+    }
 
-        if (snapshot.hasError) {
-          return _DashboardError(
-            error: snapshot.error,
-            onRetry: () => setState(() {
-              _loadFuture = _fetchData();
-            }),
-          );
-        }
+    // 2. Data loaded but empty series (rare if data exists)
+    final data = _data;
+    if (data != null && data.series.isEmpty && !_isLoading) {
+      return _DashboardEmpty(onRetry: _refreshData);
+    }
 
-        final data = snapshot.data;
-        if (data == null || data.series.isEmpty) {
-          return _DashboardEmpty(
-              onRetry: () => setState(() {
-                    _loadFuture = _fetchData();
-                  }));
-        }
+    // 3. Show content (or loading overlay if refreshing)
+    // Safe because if _data is null here, we would have returned above unless error logic failed
+    if (data == null) return const SizedBox.shrink();
 
-        return _DashboardContent(
+    return Stack(
+      children: [
+        _DashboardContent(
           data: data,
+          basis: _basis,
+          onBasisChanged: _onBasisChanged,
           selectedPeriod: _selectedPeriod,
-          periodOptions: _periodOptions,
-          onPeriodChanged: (value) {
-            if (value == null || value == _selectedPeriod) {
-              return;
-            }
-            setState(() {
-              _selectedPeriod = value;
-              _loadFuture = _fetchData();
-            });
-          },
-          seriesMode: _seriesMode,
-          onSeriesModeChanged: (mode) {
-            if (mode == _seriesMode) return;
-            setState(() {
-              _seriesMode = mode;
-            });
-          },
-          onRefresh: () => setState(() {
-            _loadFuture = _fetchData();
-          }),
+          periodOptions: _periodToMonths.keys.toList(),
+          onPeriodChanged: _onPeriodChanged,
+          onRefresh: _refreshData,
           selectedBreakdownRange: _breakdownRange,
           breakdownOptions: _breakdownOptions,
-          onBreakdownRangeChanged: (range) {
-            if (range == _breakdownRange) return;
-            setState(() {
-              _breakdownRange = range;
-              _loadFuture = _fetchData(breakdownRange: range);
-            });
-          },
-        );
-      },
+          onBreakdownRangeChanged: _onBreakdownRangeChanged,
+        ),
+        if (_isLoading)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 4,
+            child: LinearProgressIndicator(
+              backgroundColor: Colors.transparent,
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -471,8 +494,8 @@ class _DashboardContent extends StatelessWidget {
   final String selectedPeriod;
   final List<String> periodOptions;
   final ValueChanged<String?> onPeriodChanged;
-  final _ChartSeriesMode seriesMode;
-  final ValueChanged<_ChartSeriesMode> onSeriesModeChanged;
+  final _AccountingBasis basis;
+  final ValueChanged<_AccountingBasis> onBasisChanged;
   final VoidCallback onRefresh;
   final _ExpenseBreakdownRange selectedBreakdownRange;
   final List<_ExpenseBreakdownRange> breakdownOptions;
@@ -483,8 +506,8 @@ class _DashboardContent extends StatelessWidget {
     required this.selectedPeriod,
     required this.periodOptions,
     required this.onPeriodChanged,
-    required this.seriesMode,
-    required this.onSeriesModeChanged,
+    required this.basis,
+    required this.onBasisChanged,
     required this.onRefresh,
     required this.selectedBreakdownRange,
     required this.breakdownOptions,
@@ -500,7 +523,8 @@ class _DashboardContent extends StatelessWidget {
         final chartHeight = 400.0;
 
         final charts = isWide
-            ? IntrinsicHeight( // This ensures both cards have the same height
+            ? IntrinsicHeight(
+                // This ensures both cards have the same height
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -509,8 +533,8 @@ class _DashboardContent extends StatelessWidget {
                       child: _IncomeExpenseCard(
                         data: data.series,
                         chartHeight: chartHeight,
-                        mode: seriesMode,
-                        onModeChanged: onSeriesModeChanged,
+                        basis: basis,
+                        onBasisChanged: onBasisChanged,
                         selectedPeriod: selectedPeriod,
                         periodOptions: periodOptions,
                         onPeriodChanged: onPeriodChanged,
@@ -542,8 +566,8 @@ class _DashboardContent extends StatelessWidget {
                   _IncomeExpenseCard(
                     data: data.series,
                     chartHeight: chartHeight,
-                    mode: seriesMode,
-                    onModeChanged: onSeriesModeChanged,
+                    basis: basis,
+                    onBasisChanged: onBasisChanged,
                     selectedPeriod: selectedPeriod,
                     periodOptions: periodOptions,
                     onPeriodChanged: onPeriodChanged,
@@ -739,8 +763,8 @@ class _StatChip extends StatelessWidget {
 class _IncomeExpenseCard extends StatelessWidget {
   final List<MonthlyIncomeExpensePoint> data;
   final double chartHeight;
-  final _ChartSeriesMode mode;
-  final ValueChanged<_ChartSeriesMode>? onModeChanged;
+  final _AccountingBasis basis;
+  final ValueChanged<_AccountingBasis>? onBasisChanged;
   final String selectedPeriod;
   final List<String> periodOptions;
   final ValueChanged<String?>? onPeriodChanged;
@@ -750,8 +774,8 @@ class _IncomeExpenseCard extends StatelessWidget {
   const _IncomeExpenseCard({
     required this.data,
     required this.chartHeight,
-    required this.mode,
-    this.onModeChanged,
+    required this.basis,
+    this.onBasisChanged,
     required this.selectedPeriod,
     required this.periodOptions,
     required this.onPeriodChanged,
@@ -765,13 +789,14 @@ class _IncomeExpenseCard extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final displayData =
-        mode == _ChartSeriesMode.monthly ? data : _buildCumulative(data);
+    // Data is already fetched in the correct mode (Cash or Accrual)
+    // No need for client-side accumulation logic anymore.
+    final displayData = data;
 
     final maxValue = displayData
         .map((point) => math.max(point.income.abs(), point.expense.abs()))
         .fold<double>(0, (previous, value) => math.max(previous, value));
-    
+
     // Better chart max calculation with proper rounding
     final chartMax = _calculateChartMax(maxValue);
     // Use nice round intervals
@@ -810,44 +835,44 @@ class _IncomeExpenseCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            if (onModeChanged != null)
+            if (onBasisChanged != null)
               Align(
                 alignment: Alignment.centerLeft,
-                child: SegmentedButton<_ChartSeriesMode>(
+                child: SegmentedButton<_AccountingBasis>(
                   segments: const [
-                    ButtonSegment<_ChartSeriesMode>(
-                      value: _ChartSeriesMode.monthly,
+                    ButtonSegment<_AccountingBasis>(
+                      value: _AccountingBasis.cash,
                       label: Text('Efectivo'),
-                      icon: Icon(Icons.ssid_chart_outlined),
+                      icon: Icon(Icons.money),
                     ),
-                    ButtonSegment<_ChartSeriesMode>(
-                      value: _ChartSeriesMode.cumulative,
-                      label: Text('Acumulación'),
-                      icon: Icon(Icons.timeline),
+                    ButtonSegment<_AccountingBasis>(
+                      value: _AccountingBasis.accrual,
+                      label: Text('Devengado'),
+                      icon: Icon(Icons.receipt_long),
                     ),
                   ],
-                  selected: {mode},
+                  selected: {basis},
                   showSelectedIcon: false,
                   style: const ButtonStyle(
-                    visualDensity:
-                        VisualDensity(horizontal: -3, vertical: -3),
+                    visualDensity: VisualDensity(horizontal: -3, vertical: -3),
                   ),
                   onSelectionChanged: (selection) {
                     if (selection.isEmpty) return;
                     final next = selection.first;
-                    if (next != mode) {
-                      onModeChanged?.call(next);
+                    if (next != basis) {
+                      onBasisChanged?.call(next);
                     }
                   },
                 ),
               ),
             const SizedBox(height: 8),
             Text(
-              mode == _ChartSeriesMode.monthly
-                  ? (data.length > 0 && data[0].periodStart.day == data[0].periodEnd.day
-                      ? 'Resultados efectivos por día'
-                      : 'Resultados efectivos por mes')
-                  : 'Comportamiento acumulado del período',
+              basis == _AccountingBasis.cash
+                  ? (data.length > 0 &&
+                          data[0].periodStart.day == data[0].periodEnd.day
+                      ? 'Flujo de efectivo real por día'
+                      : 'Flujo de efectivo real por mes')
+                  : 'Ingresos y gastos devengados (facturados)',
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
@@ -855,7 +880,8 @@ class _IncomeExpenseCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             SizedBox(
-              height: math.max(chartHeight * 0.6, 200.0), // Reduced to 60% of total card height
+              height: math.max(chartHeight * 0.6,
+                  200.0), // Reduced to 60% of total card height
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
@@ -920,15 +946,16 @@ class _IncomeExpenseCard extends StatelessWidget {
                           if (index < 0 || index >= displayData.length) {
                             return const SizedBox.shrink();
                           }
-                          
+
                           final date = displayData[index].periodStart;
-                          
+
                           // Check if this is a daily view (same start and end date)
-                          final isDailyView = displayData[index].periodStart.day == 
-                                              displayData[index].periodEnd.day &&
-                                              displayData[index].periodStart.month == 
-                                              displayData[index].periodEnd.month;
-                          
+                          final isDailyView =
+                              displayData[index].periodStart.day ==
+                                      displayData[index].periodEnd.day &&
+                                  displayData[index].periodStart.month ==
+                                      displayData[index].periodEnd.month;
+
                           if (isDailyView) {
                             // Daily view: show day number and weekday
                             // Show fewer labels if there are many days
@@ -938,9 +965,10 @@ class _IncomeExpenseCard extends StatelessWidget {
                             if (displayData.length > 21 && index % 3 != 0) {
                               return const SizedBox.shrink();
                             }
-                            
+
                             final day = DateFormat('d', 'es_CL').format(date);
-                            final weekday = DateFormat('EEE', 'es_CL').format(date);
+                            final weekday =
+                                DateFormat('EEE', 'es_CL').format(date);
                             return Padding(
                               padding: const EdgeInsets.only(top: 8),
                               child: Text(
@@ -964,7 +992,7 @@ class _IncomeExpenseCard extends StatelessWidget {
                             if (displayData.length > 18 && index % 3 != 0) {
                               return const SizedBox.shrink();
                             }
-                            
+
                             final month = DateFormat('MMM', 'es_CL')
                                 .format(date)
                                 .toUpperCase();
@@ -1058,10 +1086,7 @@ class _IncomeExpenseCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               '* Los valores de ingresos y gastos que se muestran no incluyen impuestos.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).hintColor,
                     fontStyle: FontStyle.italic,
                   ),
@@ -1072,36 +1097,17 @@ class _IncomeExpenseCard extends StatelessWidget {
     );
   }
 
-  List<MonthlyIncomeExpensePoint> _buildCumulative(
-    List<MonthlyIncomeExpensePoint> input,
-  ) {
-    var runningIncome = 0.0;
-    var runningExpense = 0.0;
-    return input.map(
-      (point) {
-        runningIncome += point.income;
-        runningExpense += point.expense;
-        return MonthlyIncomeExpensePoint(
-          periodStart: point.periodStart,
-          periodEnd: point.periodEnd,
-          income: runningIncome,
-          expense: runningExpense,
-        );
-      },
-    ).toList(growable: false);
-  }
-
   /// Calculate a nice round chart maximum
   double _calculateChartMax(double maxValue) {
     if (maxValue == 0) return 100000.0;
-    
+
     // Add 15% padding
     final paddedMax = maxValue * 1.15;
-    
+
     // Round to nice numbers
     final magnitude = math.pow(10, (math.log(paddedMax) / math.ln10).floor());
     final normalized = paddedMax / magnitude;
-    
+
     double rounded;
     if (normalized <= 1) {
       rounded = 1;
@@ -1112,21 +1118,21 @@ class _IncomeExpenseCard extends StatelessWidget {
     } else {
       rounded = 10;
     }
-    
+
     return rounded * magnitude;
   }
 
   /// Calculate nice axis intervals
   double _calculateAxisInterval(double chartMax) {
     if (chartMax <= 0) return 10000.0;
-    
+
     // Aim for 4-5 intervals
     final rawInterval = chartMax / 4;
-    
+
     // Round to nice numbers
     final magnitude = math.pow(10, (math.log(rawInterval) / math.ln10).floor());
     final normalized = rawInterval / magnitude;
-    
+
     double rounded;
     if (normalized <= 1) {
       rounded = 1;
@@ -1137,7 +1143,7 @@ class _IncomeExpenseCard extends StatelessWidget {
     } else {
       rounded = 10;
     }
-    
+
     return rounded * magnitude;
   }
 }
@@ -1303,7 +1309,8 @@ class _ExpenseBreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveHeight = chartHeight * 0.7; // Use 70% of total card height for content
+    final effectiveHeight =
+        chartHeight * 0.7; // Use 70% of total card height for content
     final currency = NumberFormat.currency(
       locale: 'es_CL',
       symbol: 'CLP',
@@ -1374,8 +1381,8 @@ class _ExpenseBreakdownCard extends StatelessWidget {
                       },
                       items: breakdownOptions
                           .map(
-                            (option) => DropdownMenuItem<
-                                _ExpenseBreakdownRange>(
+                            (option) =>
+                                DropdownMenuItem<_ExpenseBreakdownRange>(
                               value: option,
                               child: Text(option.label),
                             ),
@@ -1404,7 +1411,9 @@ class _ExpenseBreakdownCard extends StatelessWidget {
                       child: Center(
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            final size = math.min(constraints.maxWidth, constraints.maxHeight) * 0.85;
+                            final size = math.min(constraints.maxWidth,
+                                    constraints.maxHeight) *
+                                0.85;
                             return SizedBox(
                               width: size,
                               height: size,
@@ -1445,7 +1454,8 @@ class _ExpenseBreakdownCard extends StatelessWidget {
                                             .textTheme
                                             .bodySmall
                                             ?.copyWith(
-                                              color: Theme.of(context).hintColor,
+                                              color:
+                                                  Theme.of(context).hintColor,
                                               fontSize: 10,
                                             ),
                                       ),

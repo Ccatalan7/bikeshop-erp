@@ -23,6 +23,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
   IncomeStatement? _statement;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _isCashFlow = true; // Default to Cash Flow (Efectivo)
 
   late DateRange _dateRange;
   late ReportPeriod _selectedPeriod;
@@ -52,6 +53,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
       final statement = await service.generateIncomeStatement(
         startDate: _dateRange.start,
         endDate: _dateRange.end,
+        isCashFlow: _isCashFlow,
       );
 
       setState(() {
@@ -112,7 +114,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
                 const SizedBox(width: 24),
                 // Period dropdown (compact, inline)
                 SizedBox(
-                  width: 200,
+                  width: 160, // Reduced from 200
                   child: DropdownButtonFormField<ReportPeriod>(
                     value: _selectedPeriod,
                     isDense: true,
@@ -131,6 +133,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
                         child: Text(
                           period.displayName,
                           style: const TextStyle(fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       );
                     }).toList(),
@@ -143,13 +146,50 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Date range display
-                Text(
-                  '${_formatDate(_dateRange.start)} - ${_formatDate(_dateRange.end)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.secondary,
+                // Accounting Basis Toggle
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment<bool>(
+                      value: true,
+                      label: Text('Efectivo'),
+                      icon: Icon(Icons.payments, size: 16),
+                    ),
+                    ButtonSegment<bool>(
+                      value: false,
+                      label: Text('Devengado'),
+                      icon: Icon(Icons.receipt_long, size: 16),
+                    ),
+                  ],
+                  selected: {_isCashFlow},
+                  onSelectionChanged: (Set<bool> newSelection) {
+                    setState(() {
+                      _isCashFlow = newSelection.first;
+                    });
+                    _loadStatement();
+                  },
+                  showSelectedIcon: false,
+                  style: ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    side: MaterialStateProperty.all(
+                      BorderSide(
+                        color: Theme.of(context).colorScheme.outlineVariant,
                       ),
+                    ),
+                  ),
                 ),
+                const SizedBox(width: 12),
+                // Date range display
+                Flexible(
+                  child: Text(
+                    '${_formatDate(_dateRange.start)} - ${_formatDate(_dateRange.end)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.secondary,
+                        ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 const Spacer(),
                 // Refresh button
                 IconButton(

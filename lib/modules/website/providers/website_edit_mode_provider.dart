@@ -5,36 +5,39 @@ const _uuid = Uuid();
 
 /// Provider for website inline edit mode state.
 /// Tracks edit mode, selected block, and pending changes.
-/// 
+///
 /// Two modes:
 /// - Preview mode: Shows the site with a top "Editar" bar (isPreviewMode = true, isEditMode = false)
 /// - Edit mode: Shows the site with the side panel editor (isEditMode = true)
 class WebsiteEditModeProvider extends ChangeNotifier {
   bool _isPreviewMode = false; // Preview with top bar
-  bool _isEditMode = false;    // Full edit with side panel
+  bool _isEditMode = false; // Full edit with side panel
   String? _selectedBlockId;
+  int _selectionVersion = 0; // Tracks explicit selection events
   bool _hasUnsavedChanges = false;
   bool _hasHeaderChanges = false; // Track header-specific changes
   List<Map<String, dynamic>> _blocks = [];
   Map<String, dynamic> _settings = {};
-  
+
   // Multi-page editing support (Dec 2025)
   String? _currentPageId; // The page ID being edited (null = home page)
   String? _currentPageSlug; // The page slug for navigation
-  
+
   // Pending header settings (to be saved with main save button)
   Map<String, String> _pendingHeaderSettings = {};
-  
+
   // History for undo/redo
   final List<List<Map<String, dynamic>>> _history = [];
   int _historyIndex = -1;
   final int _maxHistory = 50;
-  
+
   // Getters
   bool get isPreviewMode => _isPreviewMode;
   bool get isEditMode => _isEditMode;
-  bool get isInEditorContext => _isPreviewMode || _isEditMode; // Either preview or edit
+  bool get isInEditorContext =>
+      _isPreviewMode || _isEditMode; // Either preview or edit
   String? get selectedBlockId => _selectedBlockId;
+  int get selectionVersion => _selectionVersion;
   bool get hasUnsavedChanges => _hasUnsavedChanges || _hasHeaderChanges;
   bool get hasHeaderChanges => _hasHeaderChanges;
   List<Map<String, dynamic>> get blocks => _blocks;
@@ -42,7 +45,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   Map<String, String> get pendingHeaderSettings => _pendingHeaderSettings;
   bool get canUndo => _historyIndex > 0;
   bool get canRedo => _historyIndex < _history.length - 1;
-  
+
   // Multi-page editing getters
   String? get currentPageId => _currentPageId;
   String? get currentPageSlug => _currentPageSlug;
@@ -53,15 +56,16 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _hasHeaderChanges = true;
     notifyListeners();
   }
-  
+
   /// Update pending header settings (will be saved with main save button)
   void updateHeaderSettings(Map<String, String> settings) {
     _pendingHeaderSettings = Map<String, String>.from(settings);
     _hasHeaderChanges = true;
-    debugPrint('📝 [EditProvider] Header settings updated: ${settings.keys.join(', ')}');
+    debugPrint(
+        '📝 [EditProvider] Header settings updated: ${settings.keys.join(', ')}');
     notifyListeners();
   }
-  
+
   /// Clear header changed flag (after save)
   void clearHeaderChanged() {
     _hasHeaderChanges = false;
@@ -73,7 +77,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// [pageId] - Optional page ID for multi-page editing (null = home page)
   /// [pageSlug] - Optional page slug for navigation
   void enterPreviewMode(
-    List<Map<String, dynamic>> blocks, 
+    List<Map<String, dynamic>> blocks,
     Map<String, dynamic> settings, {
     String? pageId,
     String? pageSlug,
@@ -87,7 +91,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _selectedBlockId = null;
     _currentPageId = pageId;
     _currentPageSlug = pageSlug;
-    debugPrint('👁️ [EditProvider] Entered preview mode for page: ${pageSlug ?? "home"} (id: $pageId)');
+    debugPrint(
+        '👁️ [EditProvider] Entered preview mode for page: ${pageSlug ?? "home"} (id: $pageId)');
     notifyListeners();
   }
 
@@ -95,7 +100,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// [pageId] - Optional page ID for multi-page editing (null = home page)
   /// [pageSlug] - Optional page slug for navigation
   void enterEditMode(
-    List<Map<String, dynamic>> blocks, 
+    List<Map<String, dynamic>> blocks,
     Map<String, dynamic> settings, {
     String? pageId,
     String? pageSlug,
@@ -109,13 +114,14 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _selectedBlockId = null;
     _currentPageId = pageId;
     _currentPageSlug = pageSlug;
-    
+
     // Initialize history with current state
     _history.clear();
     _history.add(_blocks.map((b) => Map<String, dynamic>.from(b)).toList());
     _historyIndex = 0;
-    
-    debugPrint('✏️ [EditProvider] Entered edit mode for page: ${pageSlug ?? "home"} (id: $pageId)');
+
+    debugPrint(
+        '✏️ [EditProvider] Entered edit mode for page: ${pageSlug ?? "home"} (id: $pageId)');
     notifyListeners();
   }
 
@@ -158,6 +164,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// Select a block for editing
   void selectBlock(String? blockId) {
     _selectedBlockId = blockId;
+    _selectionVersion++;
+    debugPrint(
+        '👉 [EditProvider] Block Selected: $blockId (v$_selectionVersion)');
     notifyListeners();
   }
 
@@ -195,7 +204,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     };
     _hasUnsavedChanges = true;
     _saveToHistory(); // Save to history after each change
-    debugPrint('✅ [EditProvider] updateBlockData: blockId=$blockId, key=$key, hasUnsavedChanges=$_hasUnsavedChanges');
+    debugPrint(
+        '✅ [EditProvider] updateBlockData: blockId=$blockId, key=$key, hasUnsavedChanges=$_hasUnsavedChanges');
     notifyListeners();
   }
 
@@ -317,16 +327,19 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       _history.removeAt(0);
       _historyIndex--;
     }
-    
-    debugPrint('💾 [EditProvider] Saved to history: index=$_historyIndex, total=${_history.length}, canUndo=$canUndo, canRedo=$canRedo');
+
+    debugPrint(
+        '💾 [EditProvider] Saved to history: index=$_historyIndex, total=${_history.length}, canUndo=$canUndo, canRedo=$canRedo');
   }
 
   /// Undo last change
   void undo() {
     if (!canUndo) return;
-    
+
     _historyIndex--;
-    _blocks = _history[_historyIndex].map((b) => Map<String, dynamic>.from(b)).toList();
+    _blocks = _history[_historyIndex]
+        .map((b) => Map<String, dynamic>.from(b))
+        .toList();
     _hasUnsavedChanges = true;
     debugPrint('⏪ [EditProvider] Undo: index=$_historyIndex');
     notifyListeners();
@@ -335,9 +348,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// Redo last undone change
   void redo() {
     if (!canRedo) return;
-    
+
     _historyIndex++;
-    _blocks = _history[_historyIndex].map((b) => Map<String, dynamic>.from(b)).toList();
+    _blocks = _history[_historyIndex]
+        .map((b) => Map<String, dynamic>.from(b))
+        .toList();
     _hasUnsavedChanges = true;
     debugPrint('⏩ [EditProvider] Redo: index=$_historyIndex');
     notifyListeners();
@@ -364,16 +379,17 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     final index = _blocks.indexWhere((b) => b['id'] == blockId);
     debugPrint('🔼 [EditProvider] Block index: $index');
     if (index <= 0) {
-      debugPrint('🔼 [EditProvider] Cannot move up - already at top or not found');
+      debugPrint(
+          '🔼 [EditProvider] Cannot move up - already at top or not found');
       return;
     }
-    
+
     final block = _blocks.removeAt(index);
     _blocks.insert(index - 1, block);
-    
+
     // Update sort_order for all blocks to match new positions
     _updateSortOrders();
-    
+
     _hasUnsavedChanges = true;
     debugPrint('🔼 [EditProvider] Moved block from $index to ${index - 1}');
     notifyListeners();
@@ -383,18 +399,20 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   void moveBlockDown(String blockId) {
     debugPrint('🔽 [EditProvider] moveBlockDown called for blockId: $blockId');
     final index = _blocks.indexWhere((b) => b['id'] == blockId);
-    debugPrint('🔽 [EditProvider] Block index: $index, total blocks: ${_blocks.length}');
+    debugPrint(
+        '🔽 [EditProvider] Block index: $index, total blocks: ${_blocks.length}');
     if (index == -1 || index >= _blocks.length - 1) {
-      debugPrint('🔽 [EditProvider] Cannot move down - already at bottom or not found');
+      debugPrint(
+          '🔽 [EditProvider] Cannot move down - already at bottom or not found');
       return;
     }
-    
+
     final block = _blocks.removeAt(index);
     _blocks.insert(index + 1, block);
-    
+
     // Update sort_order for all blocks to match new positions
     _updateSortOrders();
-    
+
     _hasUnsavedChanges = true;
     debugPrint('🔽 [EditProvider] Moved block from $index to ${index + 1}');
     notifyListeners();
@@ -418,7 +436,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _saveToHistory();
     notifyListeners();
   }
-  
+
   /// Update sort_order values to match current list positions
   void _updateSortOrders() {
     for (int i = 0; i < _blocks.length; i++) {
@@ -446,18 +464,20 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   void duplicateBlock(String blockId) {
     final index = _blocks.indexWhere((b) => b['id'] == blockId);
     if (index == -1) return;
-    
+
     final original = _blocks[index];
     final duplicate = Map<String, dynamic>.from(original);
-    duplicate['id'] = _uuid.v4();  // Use proper UUID for database compatibility
-    duplicate['block_data'] = Map<String, dynamic>.from(original['block_data'] ?? {});
-    
+    duplicate['id'] = _uuid.v4(); // Use proper UUID for database compatibility
+    duplicate['block_data'] =
+        Map<String, dynamic>.from(original['block_data'] ?? {});
+
     _blocks.insert(index + 1, duplicate);
-    _updateSortOrders();  // Update sort_order values after duplicate
+    _updateSortOrders(); // Update sort_order values after duplicate
     _selectedBlockId = duplicate['id'] as String?;
     _hasUnsavedChanges = true;
     notifyListeners();
-    debugPrint('📋 [EditProvider] Duplicated block at index $index with new ID: ${duplicate['id']}');
+    debugPrint(
+        '📋 [EditProvider] Duplicated block at index $index with new ID: ${duplicate['id']}');
   }
 
   /// Toggle block visibility
@@ -477,7 +497,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// Add a new block
   void addBlock(String blockType, {int? atIndex}) {
     final newBlock = {
-      'id': _uuid.v4(),  // Use proper UUID for database compatibility
+      'id': _uuid.v4(), // Use proper UUID for database compatibility
       'block_type': blockType,
       'block_data': _getDefaultDataForType(blockType),
       'is_visible': true,
@@ -492,8 +512,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
     // Update sort_order for all blocks
     _updateSortOrders();
-    
+
     _selectedBlockId = newBlock['id'] as String?;
+    _selectionVersion++;
     _hasUnsavedChanges = true;
     notifyListeners();
   }
@@ -615,32 +636,61 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       case 'about':
         return {
           'title': 'Sobre Nosotros',
-          'description': 'Somos una tienda especializada en bicicletas y accesorios. Contamos con años de experiencia brindando productos de calidad y el mejor servicio a nuestros clientes.',
+          'description':
+              'Somos una tienda especializada en bicicletas y accesorios. Contamos con años de experiencia brindando productos de calidad y el mejor servicio a nuestros clientes.',
           'image': '',
         };
       case 'services':
         return {
           'title': 'Nuestros Servicios',
           'services': [
-            {'icon': 'build', 'title': 'Reparación', 'description': 'Servicio técnico profesional'},
-            {'icon': 'tune', 'title': 'Mantención', 'description': 'Mantención preventiva y correctiva'},
-            {'icon': 'shopping_bag', 'title': 'Venta', 'description': 'Bicicletas y accesorios'},
+            {
+              'icon': 'build',
+              'title': 'Reparación',
+              'description': 'Servicio técnico profesional'
+            },
+            {
+              'icon': 'tune',
+              'title': 'Mantención',
+              'description': 'Mantención preventiva y correctiva'
+            },
+            {
+              'icon': 'shopping_bag',
+              'title': 'Venta',
+              'description': 'Bicicletas y accesorios'
+            },
           ],
         };
       case 'features':
         return {
           'title': '¿Por qué elegirnos?',
           'features': [
-            {'icon': 'local_shipping', 'title': 'Envío Rápido', 'description': 'Envíos a todo Chile en 24-48 horas'},
-            {'icon': 'verified', 'title': 'Productos Originales', 'description': 'Garantía de autenticidad'},
-            {'icon': 'support_agent', 'title': 'Atención Personalizada', 'description': 'Asesoramiento experto'},
+            {
+              'icon': 'local_shipping',
+              'title': 'Envío Rápido',
+              'description': 'Envíos a todo Chile en 24-48 horas'
+            },
+            {
+              'icon': 'verified',
+              'title': 'Productos Originales',
+              'description': 'Garantía de autenticidad'
+            },
+            {
+              'icon': 'support_agent',
+              'title': 'Atención Personalizada',
+              'description': 'Asesoramiento experto'
+            },
           ],
         };
       case 'testimonials':
         return {
           'title': 'Lo que dicen nuestros clientes',
           'testimonials': [
-            {'name': 'Cliente Satisfecho', 'text': 'Excelente servicio y productos de calidad.', 'rating': 5},
+            {
+              'name': 'Cliente Satisfecho',
+              'text': 'Excelente servicio y productos de calidad.',
+              'rating': 5
+            },
           ],
         };
       case 'stats':
@@ -663,16 +713,31 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         return {
           'title': 'Preguntas Frecuentes',
           'questions': [
-            {'question': '¿Cuál es el horario de atención?', 'answer': 'Lunes a Viernes de 9:00 a 18:00'},
-            {'question': '¿Hacen envíos a regiones?', 'answer': 'Sí, enviamos a todo Chile'},
+            {
+              'question': '¿Cuál es el horario de atención?',
+              'answer': 'Lunes a Viernes de 9:00 a 18:00'
+            },
+            {
+              'question': '¿Hacen envíos a regiones?',
+              'answer': 'Sí, enviamos a todo Chile'
+            },
           ],
         };
       case 'pricing':
         return {
           'title': 'Nuestros Planes',
           'plans': [
-            {'name': 'Básico', 'price': '9.990', 'features': ['Feature 1', 'Feature 2']},
-            {'name': 'Pro', 'price': '19.990', 'features': ['Feature 1', 'Feature 2', 'Feature 3'], 'highlighted': true},
+            {
+              'name': 'Básico',
+              'price': '9.990',
+              'features': ['Feature 1', 'Feature 2']
+            },
+            {
+              'name': 'Pro',
+              'price': '19.990',
+              'features': ['Feature 1', 'Feature 2', 'Feature 3'],
+              'highlighted': true
+            },
           ],
         };
       case 'contact':

@@ -12,6 +12,7 @@ import 'canvas_block_toolbar.dart';
 import 'video_banner_io.dart' if (dart.library.html) 'video_banner_web.dart'
     as video_platform;
 import 'premium_product_card.dart';
+import 'snap_result.dart';
 
 /// A free-position "canvas" section that can contain multiple elements (text/button/etc.)
 /// positioned absolutely within the block.
@@ -453,10 +454,12 @@ class _CanvasBlockState extends State<CanvasBlock> {
     // Place so cursor lands near top-left but keep within bounds.
     final x = (localPos.dx).clamp(0.0, math.max(0.0, canvasSize.width - w));
     final y = (localPos.dy).clamp(0.0, math.max(0.0, canvasSize.height - h));
-    final designW = _computeDesignWidth(canvasSize.width);
-    final scaleX = designW > 0 ? (canvasSize.width / designW) : 1.0;
-    el['x'] = (scaleX - 1.0).abs() < 0.05 ? x : (x / scaleX);
-    el['y'] = (scaleX - 1.0).abs() < 0.05 ? y : (y / scaleX);
+    // Use _calculateScale for consistency
+    final scaleX = _calculateScale(canvasSize.width);
+    final offsetX = _calculateOffsetX(canvasSize.width);
+
+    el['x'] = (x - offsetX) / scaleX;
+    el['y'] = y / scaleX;
 
     setState(() {
       _elements.add(el);
@@ -489,8 +492,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
     // NOTE: x/y are provided in *render space* (after any preview scaling).
     // We clamp/snap in render space, then store x back in design space.
-    final designW = _computeDesignWidth(maxW);
-    final scaleX = designW > 0 ? (maxW / designW) : 1.0;
+    // Use _calculateScale to match rendering logic (clamped to 1.0)
+    final scaleX = _calculateScale(maxW);
+    final offsetX = _calculateOffsetX(maxW);
 
     var nextX = x;
     var nextY = y;
@@ -499,14 +503,22 @@ class _CanvasBlockState extends State<CanvasBlock> {
       nextY = _snapToGrid(nextY);
     }
 
-    // Clamp to canvas bounds
-    nextX = nextX.clamp(0.0, math.max(0.0, maxW - w));
-    nextY = nextY.clamp(0.0, math.max(0.0, maxH - h));
+    // Clamp to canvas bounds (in render space, accounting for scaled element size)
+    final scaledW = w * scaleX;
+    final scaledH = h * scaleX;
+    // Allow dragging a bit outside if needed, but for now clamp to safe area (0..max)
+    // Note: offsetX is the visual start of the "centered" canvas.
+    nextX = nextX.clamp(0.0, math.max(0.0, maxW - scaledW));
+    nextY = nextY.clamp(0.0, math.max(0.0, maxH - scaledH));
+
+    // Convert back to design space: subtract offset, then divide by scale
+    final designX = (nextX - offsetX) / scaleX;
+    final designY = nextY / scaleX;
 
     _elements[idx] = {
       ..._elements[idx],
-      'x': (scaleX - 1.0).abs() < 0.05 ? nextX : (nextX / scaleX),
-      'y': (scaleX - 1.0).abs() < 0.05 ? nextY : (nextY / scaleX),
+      'x': designX,
+      'y': designY,
     };
   }
 
@@ -531,89 +543,24 @@ class _CanvasBlockState extends State<CanvasBlock> {
     final minW = type == 'button' ? 120.0 : 80.0;
     final minH = type == 'button' ? 44.0 : 40.0;
 
-    final designW = _computeDesignWidth(maxW);
-    final scaleX = designW > 0 ? (maxW / designW) : 1.0;
+    // Use _calculateScale to match rendering logic (clamped to 1.0)
+    final scaleX = _calculateScale(maxW);
 
     final xRender = _designToRenderX(x: x, canvasW: maxW);
-    // Use effective top for clamping height
-    final yRender = (scaleX - 1.0).abs() < 0.05 ? y : (y * scaleX);
+    // Use effective top for clamping height. yRender = y * scale
+    final yRender = y * scaleX;
 
     nextW = nextW.clamp(minW, math.max(minW, maxW - xRender));
     nextH = nextH.clamp(minH, math.max(minH, maxH - yRender));
 
     _elements[idx] = {
       ..._elements[idx],
-      'w': (scaleX - 1.0).abs() < 0.05 ? nextW : (nextW / scaleX),
-      'h': (scaleX - 1.0).abs() < 0.05 ? nextH : (nextH / scaleX),
+      'w': nextW / scaleX,
+      'h': nextH / scaleX,
     };
   }
 
-  (double?, double?) _nearestGuideForMove({
-    required String elementId,
-    required double x,
-    required double y,
-    required double w,
-    required double h,
-    required double canvasW,
-    required double canvasH,
-  }) {
-    final snapD = _snapDistance();
-    final centerX = x + w / 2;
-    final centerY = y + h / 2;
-
-    double? bestGX;
-    double bestDX = snapD + 1;
-    double? bestGY;
-    double bestDY = snapD + 1;
-
-    // Canvas edges/center
-    for (final c in <double>[0, canvasW / 2, canvasW]) {
-      final d = (centerX - c).abs();
-      if (d <= snapD && d < bestDX) {
-        bestDX = d;
-        bestGX = c;
-      }
-    }
-    for (final c in <double>[0, canvasH / 2, canvasH]) {
-      final d = (centerY - c).abs();
-      if (d <= snapD && d < bestDY) {
-        bestDY = d;
-        bestGY = c;
-      }
-    }
-
-    // Other elements (left/center/right, top/middle/bottom)
-    for (final e in _elements) {
-      final id = e['id']?.toString();
-      if (id == null || id == elementId) continue;
-      final ex = (e['x'] as num?)?.toDouble() ?? 0;
-      final ey = (e['y'] as num?)?.toDouble() ?? 0;
-      final ew = (e['w'] as num?)?.toDouble() ?? 0;
-      final eh = (e['h'] as num?)?.toDouble() ?? 0;
-
-      // Compare in render space so guides match what the user sees.
-      final exRender = _effectiveLeft(x: ex, w: ew, canvasW: canvasW);
-
-      for (final c in <double>[exRender, exRender + ew / 2, exRender + ew]) {
-        final d = (centerX - c).abs();
-        if (d <= snapD && d < bestDX) {
-          bestDX = d;
-          bestGX = c;
-        }
-      }
-      for (final c in <double>[ey, ey + eh / 2, ey + eh]) {
-        final d = (centerY - c).abs();
-        if (d <= snapD && d < bestDY) {
-          bestDY = d;
-          bestGY = c;
-        }
-      }
-    }
-
-    return (bestGX, bestGY);
-  }
-
-  Offset _snapOnDropPosition({
+  SnapResult _calculateSnappedPosition({
     required String elementId,
     required double x,
     required double y,
@@ -626,83 +573,169 @@ class _CanvasBlockState extends State<CanvasBlock> {
     var nextY = y;
     final snapD = _snapDistance();
 
-    final centerX = x + w / 2;
-    final centerY = y + h / 2;
+    // Priorities keys:
+    // 0: Center-Center
+    // 1: Edge-Edge (L-L, R-R, T-T, B-B)
+    // 2: Edge-Center or Cross-Edge (L-R, L-C, etc) - excluded for noise reduction if desired
 
-    double? bestTargetCX;
     double bestDX = snapD + 1;
-    double? bestTargetCY;
-    double bestDY = snapD + 1;
+    double? finalSnapX; // New top-left X
+    double? guideX;
 
-    final xTargets = <double>[0, canvasW / 2, canvasW];
-    final yTargets = <double>[0, canvasH / 2, canvasH];
+    // Collect Targets
+    final canvasTargetsX = [0.0, canvasW / 2, canvasW];
+    final xTargets = <double>[...canvasTargetsX];
+
     for (final e in _elements) {
       final id = e['id']?.toString();
       if (id == null || id == elementId) continue;
       final ex = (e['x'] as num?)?.toDouble() ?? 0;
-      final ey = (e['y'] as num?)?.toDouble() ?? 0;
       final ew = (e['w'] as num?)?.toDouble() ?? 0;
-      final eh = (e['h'] as num?)?.toDouble() ?? 0;
 
-      // Compare in render space so snapping matches what the user sees.
       final exRender = _effectiveLeft(x: ex, w: ew, canvasW: canvasW);
-      xTargets.addAll([exRender, exRender + ew / 2, exRender + ew]);
-      yTargets.addAll([ey, ey + eh / 2, ey + eh]);
+      final ewRender =
+          _effectiveWidth(type: e['type'].toString(), w: ew, canvasW: canvasW);
+
+      xTargets.addAll([exRender, exRender + ewRender / 2, exRender + ewRender]);
     }
 
+    // Check X Axis
+    // Drag Center -> Target Center/Edges
+    final centerX = x + w / 2;
     for (final t in xTargets) {
       final d = (centerX - t).abs();
       if (d <= snapD && d < bestDX) {
         bestDX = d;
-        bestTargetCX = t;
+        finalSnapX = t - w / 2;
+        guideX = t;
       }
     }
+
+    // Drag Left -> Target Left/Right/Center
+    for (final t in xTargets) {
+      final d = (x - t).abs();
+      if (d <= snapD && d < bestDX) {
+        bestDX = d;
+        finalSnapX = t;
+        guideX = t;
+      }
+    }
+
+    // Drag Right -> Target Left/Right/Center
+    for (final t in xTargets) {
+      final d = ((x + w) - t).abs();
+      if (d <= snapD && d < bestDX) {
+        bestDX = d;
+        finalSnapX = t - w;
+        guideX = t;
+      }
+    }
+
+    bool snappedX = false;
+    if (finalSnapX != null) {
+      nextX = finalSnapX;
+      snappedX = true;
+    }
+
+    // Y Axis
+    double bestDY = snapD + 1;
+    double? finalSnapY;
+    double? guideY;
+
+    final canvasTargetsY = [0.0, canvasH / 2, canvasH];
+    final yTargets = <double>[...canvasTargetsY];
+
+    for (final e in _elements) {
+      final id = e['id']?.toString();
+      if (id == null || id == elementId) continue;
+      final ey = (e['y'] as num?)?.toDouble() ?? 0;
+      final eh = (e['h'] as num?)?.toDouble() ?? 0;
+
+      final eyRender =
+          _effectiveTop(y: ey, h: eh, canvasW: canvasW, canvasH: canvasH);
+      final ehRender = _effectiveHeight(
+          type: e['type'].toString(),
+          h: eh,
+          canvasW: canvasW,
+          canvasH: canvasH);
+
+      yTargets.addAll([eyRender, eyRender + ehRender / 2, eyRender + ehRender]);
+    }
+
+    // Drag Center Y
+    final centerY = y + h / 2;
     for (final t in yTargets) {
       final d = (centerY - t).abs();
       if (d <= snapD && d < bestDY) {
         bestDY = d;
-        bestTargetCY = t;
+        finalSnapY = t - h / 2;
+        guideY = t;
       }
     }
 
-    if (bestTargetCX != null) nextX = bestTargetCX - w / 2;
-    if (bestTargetCY != null) nextY = bestTargetCY - h / 2;
+    // Drag Top
+    for (final t in yTargets) {
+      final d = (y - t).abs();
+      if (d <= snapD && d < bestDY) {
+        bestDY = d;
+        finalSnapY = t;
+        guideY = t;
+      }
+    }
 
-    // Secondary grid snap
+    // Drag Bottom
+    for (final t in yTargets) {
+      final d = ((y + h) - t).abs();
+      if (d <= snapD && d < bestDY) {
+        bestDY = d;
+        finalSnapY = t - h;
+        guideY = t;
+      }
+    }
+
+    bool snappedY = false;
+    if (finalSnapY != null) {
+      nextY = finalSnapY;
+      snappedY = true;
+    }
+
+    // Secondary grid snap (mutually exclusive)
     if (_snapEnabled()) {
-      nextX = _snapToGrid(nextX);
-      nextY = _snapToGrid(nextY);
+      if (!snappedX) {
+        final gx = _snapToGrid(nextX);
+        if (gx != nextX) {
+          nextX = gx;
+          snappedX = true; // Implicitly snapped
+        }
+      }
+      if (!snappedY) {
+        final gy = _snapToGrid(nextY);
+        if (gy != nextY) {
+          nextY = gy;
+          snappedY = true;
+        }
+      }
     }
 
     // Clamp
-    nextX = nextX.clamp(0.0, math.max(0.0, canvasW - w));
+    final offsetX = _calculateOffsetX(canvasW); // Render space offset
+    // Clamp needs to know Scaled Width if nextX is top-left
+    // But wait, w/h passed here are already scaled?
+    // Callers pass effectiveW/effectiveH.
+    nextX = nextX.clamp(offsetX, math.max(offsetX, canvasW - w - offsetX));
+    // wait, canvasW is usually full width. if offsetX > 0, right limit is canvasW - w - offsetX?
+    // Actually simpler: clamp within available centered column.
+    // Or just clamp to Safe Area?
+    // Let's stick to simple safe clamp:
+    nextX = nextX.clamp(offsetX, math.max(offsetX, canvasW - w));
     nextY = nextY.clamp(0.0, math.max(0.0, canvasH - h));
-    return Offset(nextX, nextY);
-  }
 
-  void _updateGuides({
-    required double x,
-    required double y,
-    required double w,
-    required double h,
-    required double canvasW,
-    required double canvasH,
-  }) {
-    final (gx, gy) = _nearestGuideForMove(
-      elementId: _draggingElementId ?? '',
-      x: x,
-      y: y,
-      w: w,
-      h: h,
-      canvasW: canvasW,
-      canvasH: canvasH,
+    return SnapResult(
+      x: nextX,
+      y: nextY,
+      guideX: guideX,
+      guideY: guideY,
     );
-
-    if (_guideX == gx && _guideY == gy) return;
-    setState(() {
-      _guideX = gx;
-      _guideY = gy;
-    });
   }
 
   Widget _buildToolbarOverlay(
@@ -1604,7 +1637,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
                       _draggingElementId = id;
                       _dragAnchorInElement = d.localPosition;
                       _pointerCanvasPos =
-                          Offset(effectiveX, y) + d.localPosition;
+                          Offset(effectiveX, effectiveY) + d.localPosition;
                       _axisLock = _AxisLock.none;
                     });
                     // DO NOT call _setActive(id) here.
@@ -1661,44 +1694,41 @@ class _CanvasBlockState extends State<CanvasBlock> {
                     final nextX = desiredTopLeft.dx;
                     final nextY = desiredTopLeft.dy;
 
-                    _updateGuides(
+                    // Live Snapping: calculate position AND guides
+                    final snapResult = _calculateSnappedPosition(
+                      elementId: id,
                       x: nextX,
                       y: nextY,
-                      w: w,
-                      h: h,
+                      w: effectiveW,
+                      h: resolvedHeight,
                       canvasW: canvasW,
                       canvasH: canvasH,
                     );
+
+                    if (_guideX == snapResult.guideX &&
+                        _guideY == snapResult.guideY) {
+                      // no guide change, but position might change if snapped
+                    } else {
+                      // Only update guides if changed
+                      // can't do setState here because we are in onPanUpdate which is a callback
+                      // actually onPanUpdate is called frequently.
+                      // We need to setState anyway to move the element.
+                    }
+
                     setState(() {
-                      // During drag, guides are visual only; snap on drop.
-                      _updateElementPosition(id, nextX, nextY, canvasW, canvasH,
-                          applySnap: false);
+                      // Move element to SNAPPED position immediately = Magnetic Feel
+                      _updateElementPosition(
+                          id, snapResult.x, snapResult.y, canvasW, canvasH,
+                          applySnap: false); // applied in calc!
+
+                      _guideX = snapResult.guideX;
+                      _guideY = snapResult.guideY;
                     });
                   },
                   onPanEnd: (_) {
                     // Commit selection now that drag is done
                     _setActive(id);
 
-                    // Snap-on-drop: final tidy alignment without affecting cursor feel.
-                    final current = _elements.firstWhere(
-                      (e) => e['id']?.toString() == id,
-                      orElse: () => el,
-                    );
-                    final cx = (current['x'] as num?)?.toDouble() ?? x;
-                    final cy = (current['y'] as num?)?.toDouble() ?? y;
-                    final cw = (current['w'] as num?)?.toDouble() ?? w;
-                    final ch = (current['h'] as num?)?.toDouble() ?? h;
-                    final cxRender =
-                        _effectiveLeft(x: cx, w: cw, canvasW: canvasW);
-                    final snapped = _snapOnDropPosition(
-                      elementId: id,
-                      x: cxRender,
-                      y: cy,
-                      w: cw,
-                      h: ch,
-                      canvasW: canvasW,
-                      canvasH: canvasH,
-                    );
                     setState(() {
                       _draggingElementId = null;
                       _dragAnchorInElement = null;
@@ -1706,14 +1736,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
                       _axisLock = _AxisLock.none;
                       _guideX = null;
                       _guideY = null;
-                      _updateElementPosition(
-                        id,
-                        snapped.dx,
-                        snapped.dy,
-                        canvasW,
-                        canvasH,
-                        applySnap: false,
-                      );
+                      // No need to update position here, it's already snapped by onPanUpdate
                     });
                     _commitElements();
                   },

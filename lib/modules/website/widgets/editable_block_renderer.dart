@@ -713,6 +713,9 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         editProvider.selectBlock(widget.blockId);
       },
       onActiveElementChanged: (id) {
+        if (id != null) {
+          editProvider.selectBlock(widget.blockId);
+        }
         editProvider.updateBlockData(widget.blockId, 'activeElementId', id);
       },
       onElementsChanged: (elements) {

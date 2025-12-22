@@ -47,6 +47,10 @@ import '../../modules/sales/pages/invoice_list_page.dart';
 import '../../modules/sales/pages/invoice_form_page.dart';
 import '../../modules/sales/pages/invoice_payment_page.dart';
 import '../../modules/sales/pages/payment_form_page.dart';
+import '../../modules/sales/pages/sales_reports_page.dart';
+import '../../modules/sales/pages/reports/sales_by_product_page.dart';
+import '../../modules/sales/pages/reports/sales_by_product_detail_page.dart';
+import '../../modules/sales/pages/reports/sales_by_customer_page.dart';
 import '../../modules/purchases/pages/supplier_list_page.dart';
 import '../../modules/purchases/pages/supplier_form_page.dart';
 import '../../modules/purchases/pages/purchase_invoice_list_page.dart';
@@ -1350,6 +1354,59 @@ class AppRouter {
             context,
             state,
             const PaymentsPage(),
+          ),
+        ),
+
+        // Sales Reports
+        GoRoute(
+          path: '/sales/reports',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const SalesReportsPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/sales/reports/by-product',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const SalesByProductPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/sales/reports/by-product/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            final name = state.uri.queryParameters['name'];
+            final startStr = state.uri.queryParameters['start'];
+            final endStr = state.uri.queryParameters['end'];
+
+            DateTime? start = startStr != null && startStr.isNotEmpty
+                ? DateTime.tryParse(startStr)
+                : null;
+            DateTime? end = endStr != null && endStr.isNotEmpty
+                ? DateTime.tryParse(endStr)
+                : null;
+
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              SalesByProductDetailPage(
+                productId: id,
+                productName: name,
+                startDate: start,
+                endDate: end,
+              ),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/sales/reports/by-customer',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const SalesByCustomerPage(),
           ),
         ),
 

@@ -25,9 +25,12 @@ class FinancialReportsService extends ChangeNotifier {
   Future<IncomeStatement> generateIncomeStatement({
     required DateTime startDate,
     required DateTime endDate,
+    bool isCashFlow = false,
   }) async {
     try {
-      debugPrint('📊 Generating Income Statement: $startDate to $endDate');
+      debugPrint(
+        '📊 Generating Income Statement (${isCashFlow ? "Cash Flow" : "Accrual"}): $startDate to $endDate',
+      );
 
       // Call SQL function to get income statement data
       final result = await _databaseService.rpc(
@@ -35,6 +38,7 @@ class FinancialReportsService extends ChangeNotifier {
         params: {
           'p_start_date': startDate.toIso8601String(),
           'p_end_date': endDate.toIso8601String(),
+          'p_is_cash_flow': isCashFlow,
         },
       );
 
@@ -368,13 +372,18 @@ class FinancialReportsService extends ChangeNotifier {
 
   Future<List<MonthlyIncomeExpensePoint>> getIncomeExpenseTimeseries({
     int months = 12,
+    bool isCashFlow = false,
   }) async {
     final safeMonths = months < 1 ? 1 : months;
-    debugPrint('📊 Fetching income/expense timeseries for $safeMonths months');
+    debugPrint(
+        '📊 Fetching income/expense timeseries for $safeMonths months (Cash Flow: $isCashFlow)');
 
     final result = await _databaseService.rpc(
       'get_income_expense_timeseries',
-      params: {'p_months': safeMonths},
+      params: {
+        'p_months': safeMonths,
+        'p_is_cash_flow': isCashFlow,
+      },
     );
 
     if (result is! List) {
@@ -398,14 +407,17 @@ class FinancialReportsService extends ChangeNotifier {
   Future<List<MonthlyIncomeExpensePoint>> getIncomeExpenseDailyTimeseries({
     required DateTime startDate,
     required DateTime endDate,
+    bool isCashFlow = false,
   }) async {
-    debugPrint('📊 Fetching daily income/expense timeseries from $startDate to $endDate');
+    debugPrint(
+        '📊 Fetching daily income/expense timeseries from $startDate to $endDate (Cash Flow: $isCashFlow)');
 
     final result = await _databaseService.rpc(
       'get_income_expense_daily_timeseries',
       params: {
         'p_start_date': startDate.toIso8601String(),
         'p_end_date': endDate.toIso8601String(),
+        'p_is_cash_flow': isCashFlow,
       },
     );
 

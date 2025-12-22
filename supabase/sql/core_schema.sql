@@ -6167,7 +6167,7 @@ drop view if exists stock_movements_view cascade;
 
 create view stock_movements_view as
 with all_movements as (
-  -- Purchase Invoice Items (increases stock)
+  -- 1. Purchase Invoices (IN)
   select 
     gen_random_uuid() as id,
     (item->>'product_id')::uuid as product_id,
@@ -6178,21 +6178,19 @@ with all_movements as (
     'manual_purchase' as source,
     pi.id as reference_id,
     pi.invoice_number as reference_number,
-    ((item->>'quantity')::numeric)::integer as quantity,
+    ((item->>'quantity')::numeric)::integer as quantity, -- Positive
     pi.notes,
     pi.created_by,
     pi.created_at,
-    pi.tenant_id,
-    null::integer as stock_before,  -- Will be calculated
-    null::integer as stock_after    -- Will be calculated
+    pi.tenant_id
   from purchase_invoices pi,
        jsonb_array_elements(pi.items) as item
   left join products p on (item->>'product_id')::uuid = p.id
   where pi.status in ('received', 'paid')
-  
+
   union all
-  
-  -- Sales Invoice Items (decreases stock)
+
+  -- 2. Sales Invoices (OUT)
   select 
     gen_random_uuid() as id,
     (item->>'product_id')::uuid as product_id,
@@ -6203,22 +6201,51 @@ with all_movements as (
     coalesce(si.source, 'manual_sale') as source,
     si.id as reference_id,
     si.invoice_number as reference_number,
-    -((item->>'quantity')::numeric)::integer as quantity, -- Negative for sales
+    -((item->>'quantity')::numeric)::integer as quantity, -- Negaive
     si.reference as notes,
     si.created_by,
     si.created_at,
-    si.tenant_id,
-    null::integer as stock_before,  -- Will be calculated
-    null::integer as stock_after    -- Will be calculated
+    si.tenant_id
   from sales_invoices si,
        jsonb_array_elements(si.items) as item
   left join products p on (item->>'product_id')::uuid = p.id
-  where si.status in ('sent', 'paid')
-  
+  where si.status in ('confirmed', 'paid')
+
   union all
-  
-  -- Stock Adjustments (manual changes, corrections, etc.)
-  -- NOTE: Adjustments already have stock_before/stock_after stored, so we include them
+
+  -- 3. Mechanic Jobs (OUT) - UNINVOICED OR PENDING INVOICE
+  -- Include Job if:
+  --   a) No invoice linked (mj.invoice_id IS NULL)
+  --   b) Invoice linked but NOT confirmed/paid (gap filling)
+  select 
+    mji.id,
+    mji.product_id,
+    coalesce(mji.product_name, p.name) as product_name,
+    coalesce(mji.product_sku, p.sku) as product_sku,
+    mj.created_at as transaction_date,
+    'mechanic_job' as movement_type,
+    'workshop' as source,
+    mj.id as reference_id,
+    mj.job_number as reference_number,
+    -(mji.quantity)::integer as quantity, -- Negative
+    mj.notes,
+    null::uuid as created_by,
+    mji.created_at,
+    mj.tenant_id
+  from mechanic_job_items mji
+  join mechanic_jobs mj on mji.job_id = mj.id
+  left join products p on mji.product_id = p.id
+  left join sales_invoices si on mj.invoice_id = si.id -- Check invoice status
+  where 
+    -- Include if invoice not present OR present but filtered out of Sales block above
+    (mj.invoice_id is null OR si.status not in ('confirmed', 'paid') OR si.id is null)
+    and mj.status not in ('borrador', 'draft', 'cancelado', 'cancelled')
+    and (mji.item_type = 'product' or mji.item_type is null)
+    and mji.product_id is not null
+
+  union all
+
+  -- 4. Stock Adjustments (IN/OUT)
   select 
     sa.id,
     sa.product_id,
@@ -6229,47 +6256,29 @@ with all_movements as (
     sa.adjustment_type as source,
     sa.id as reference_id,
     'ADJ-' || to_char(sa.created_at, 'YYYYMMDD-HH24MISS') as reference_number,
-    sa.quantity,
+    sa.quantity, 
     sa.reason as notes,
     sa.created_by,
     sa.created_at,
-    sa.tenant_id,
-    sa.stock_before,  -- Already stored in table
-    sa.stock_after    -- Already stored in table
+    sa.tenant_id
   from stock_adjustments sa
   left join products p on sa.product_id = p.id
 ),
 movements_with_running_stock as (
   select 
-    m.id,
-    m.product_id,
-    m.product_name,
-    m.product_sku,
-    m.transaction_date,
-    m.movement_type,
-    m.source,
-    m.reference_id,
-    m.reference_number,
-    m.quantity,
-    m.notes,
-    m.created_by,
-    m.created_at,
-    m.tenant_id,
-    m.stock_before as stored_stock_before,  -- From adjustments only
-    m.stock_after as stored_stock_after,    -- From adjustments only
+    m.*,
     p.stock_quantity as current_stock,
     -- Calculate stock_after by working backwards from current stock
-    -- Subtract all changes that happened AFTER this transaction (newer transactions)
     p.stock_quantity - coalesce(
       sum(m.quantity) over (
         partition by m.product_id, m.tenant_id 
         order by m.created_at desc, m.id desc
         rows between unbounded preceding and 1 preceding
-      ),
+      ), 
       0
     )::integer as calculated_stock_after
   from all_movements m
-  left join products p on m.product_id = p.id and m.tenant_id = p.tenant_id
+  left join products p on m.product_id = p.id
 )
 select 
   id,
@@ -6282,10 +6291,8 @@ select
   reference_id,
   reference_number,
   quantity,
-  -- For adjustments: use stored_stock_before, for sales/purchases: calculate it
-  coalesce(stored_stock_before, (calculated_stock_after - quantity)::integer) as stock_before,
-  -- For adjustments: use stored_stock_after, for sales/purchases: use calculated
-  coalesce(stored_stock_after, calculated_stock_after) as stock_after,
+  (calculated_stock_after - quantity)::integer as stock_before,
+  calculated_stock_after as stock_after,
   notes,
   created_by,
   created_at,
@@ -9497,8 +9504,10 @@ end;
 $$;
 
 -- Function 10.1: Income vs Expense time series for dashboards (last N months)
+-- Function 10.1: Get income/expense time series (Monthly)
 create or replace function public.get_income_expense_timeseries(
-  p_months integer default 12
+  p_months integer default 12,
+  p_is_cash_flow boolean default false
 )
 returns table (
   period_start date,
@@ -9518,52 +9527,82 @@ as $$
   select
     mw.period_start::date,
     (mw.period_start + interval '1 month' - interval '1 day')::date as period_end,
+    
+    -- INCOME CALCULATION
     coalesce(
-      (
-        select
-          sum(coalesce(jl.credit_amount, 0) - coalesce(jl.debit_amount, 0))
-        from journal_lines jl
-        join journal_entries je on je.id = jl.entry_id
-        join accounts a on a.id = jl.account_id
-        where je.status = 'posted'
-          and a.type = 'income'
-          and je.entry_date >= mw.period_start
-          and je.entry_date < mw.period_start + interval '1 month'
-          and je.tenant_id = user_tenant_id()
-          and jl.tenant_id = user_tenant_id()
-          and a.tenant_id = user_tenant_id()
-      ),
+      case when p_is_cash_flow then
+        -- Cash Flow: Sum of Sales Payments received in this period
+        (
+          select sum(amount)
+          from sales_payments sp
+          where sp.date >= mw.period_start
+            and sp.date < mw.period_start + interval '1 month'
+            and sp.tenant_id = user_tenant_id()
+        )
+      else
+        -- Accrual: Sum of Income Journal Entries (posted)
+        (
+          select
+            sum(coalesce(jl.credit_amount, 0) - coalesce(jl.debit_amount, 0))
+          from journal_lines jl
+          join journal_entries je on je.id = jl.entry_id
+          join accounts a on a.id = jl.account_id
+          where je.status = 'posted'
+            and a.type = 'income'
+            and je.entry_date >= mw.period_start
+            and je.entry_date < mw.period_start + interval '1 month'
+            and je.tenant_id = user_tenant_id()
+            and jl.tenant_id = user_tenant_id()
+            and a.tenant_id = user_tenant_id()
+        )
+      end,
       0
     )::numeric(14,2) as income,
+
+    -- EXPENSE CALCULATION
     coalesce(
-      (
-        select
-          sum(coalesce(jl.debit_amount, 0) - coalesce(jl.credit_amount, 0))
-        from journal_lines jl
-        join journal_entries je on je.id = jl.entry_id
-        join accounts a on a.id = jl.account_id
-        where je.status = 'posted'
-          and a.type = 'expense'
-          and je.entry_date >= mw.period_start
-          and je.entry_date < mw.period_start + interval '1 month'
-          and je.tenant_id = user_tenant_id()
-          and jl.tenant_id = user_tenant_id()
-          and a.tenant_id = user_tenant_id()
-      ),
+      case when p_is_cash_flow then
+        -- Cash Flow: Sum of Purchase Payments made in this period
+        (
+          select sum(amount)
+          from purchase_payments pp
+          where pp.date >= mw.period_start
+            and pp.date < mw.period_start + interval '1 month'
+            and pp.tenant_id = user_tenant_id()
+        )
+      else
+        -- Accrual: Sum of Expense Journal Entries (posted)
+        (
+          select
+            sum(coalesce(jl.debit_amount, 0) - coalesce(jl.credit_amount, 0))
+          from journal_lines jl
+          join journal_entries je on je.id = jl.entry_id
+          join accounts a on a.id = jl.account_id
+          where je.status = 'posted'
+            and a.type = 'expense'
+            and je.entry_date >= mw.period_start
+            and je.entry_date < mw.period_start + interval '1 month'
+            and je.tenant_id = user_tenant_id()
+            and jl.tenant_id = user_tenant_id()
+            and a.tenant_id = user_tenant_id()
+        )
+      end,
       0
     )::numeric(14,2) as expense
+
   from month_windows mw
   order by mw.period_start;
 $$;
 
 -- Grant execute permissions to authenticated users
-grant execute on function public.get_income_expense_timeseries(integer) to authenticated;
+grant execute on function public.get_income_expense_timeseries(integer, boolean) to authenticated;
+
 
 -- Function 10.1b: Get income/expense time series aggregated by day
--- Used for daily views (current week, current month, previous month)
 create or replace function public.get_income_expense_daily_timeseries(
   p_start_date timestamp with time zone,
-  p_end_date timestamp with time zone
+  p_end_date timestamp with time zone,
+  p_is_cash_flow boolean default false
 )
 returns table (
   period_start date,
@@ -9583,46 +9622,75 @@ as $$
   select
     dw.period_start::date,
     dw.period_start::date as period_end,
+
+    -- INCOME CALCULATION
     coalesce(
-      (
-        select
-          sum(coalesce(jl.credit_amount, 0) - coalesce(jl.debit_amount, 0))
-        from journal_lines jl
-        join journal_entries je on je.id = jl.entry_id
-        join accounts a on a.id = jl.account_id
-        where je.status = 'posted'
-          and a.type = 'income'
-          and je.entry_date >= dw.period_start
-          and je.entry_date < dw.period_start + interval '1 day'
-          and je.tenant_id = user_tenant_id()
-          and jl.tenant_id = user_tenant_id()
-          and a.tenant_id = user_tenant_id()
-      ),
+      case when p_is_cash_flow then
+        -- Cash Flow: Sales Payments
+        (
+          select sum(amount)
+          from sales_payments sp
+          where sp.date >= dw.period_start
+            and sp.date < dw.period_start + interval '1 day'
+            and sp.tenant_id = user_tenant_id()
+        )
+      else
+        -- Accrual: Income Journal Entries
+        (
+          select
+            sum(coalesce(jl.credit_amount, 0) - coalesce(jl.debit_amount, 0))
+          from journal_lines jl
+          join journal_entries je on je.id = jl.entry_id
+          join accounts a on a.id = jl.account_id
+          where je.status = 'posted'
+            and a.type = 'income'
+            and je.entry_date >= dw.period_start
+            and je.entry_date < dw.period_start + interval '1 day'
+            and je.tenant_id = user_tenant_id()
+            and jl.tenant_id = user_tenant_id()
+            and a.tenant_id = user_tenant_id()
+        )
+      end,
       0
     )::numeric(14,2) as income,
+
+    -- EXPENSE CALCULATION
     coalesce(
-      (
-        select
-          sum(coalesce(jl.debit_amount, 0) - coalesce(jl.credit_amount, 0))
-        from journal_lines jl
-        join journal_entries je on je.id = jl.entry_id
-        join accounts a on a.id = jl.account_id
-        where je.status = 'posted'
-          and a.type = 'expense'
-          and je.entry_date >= dw.period_start
-          and je.entry_date < dw.period_start + interval '1 day'
-          and je.tenant_id = user_tenant_id()
-          and jl.tenant_id = user_tenant_id()
-          and a.tenant_id = user_tenant_id()
-      ),
+      case when p_is_cash_flow then
+        -- Cash Flow: Purchase Payments
+        (
+          select sum(amount)
+          from purchase_payments pp
+          where pp.date >= dw.period_start
+            and pp.date < dw.period_start + interval '1 day'
+            and pp.tenant_id = user_tenant_id()
+        )
+      else
+        -- Accrual: Expense Journal Entries
+        (
+          select
+            sum(coalesce(jl.debit_amount, 0) - coalesce(jl.credit_amount, 0))
+          from journal_lines jl
+          join journal_entries je on je.id = jl.entry_id
+          join accounts a on a.id = jl.account_id
+          where je.status = 'posted'
+            and a.type = 'expense'
+            and je.entry_date >= dw.period_start
+            and je.entry_date < dw.period_start + interval '1 day'
+            and je.tenant_id = user_tenant_id()
+            and jl.tenant_id = user_tenant_id()
+            and a.tenant_id = user_tenant_id()
+        )
+      end,
       0
     )::numeric(14,2) as expense
+
   from day_windows dw
   order by dw.period_start;
 $$;
 
 -- Grant execute permissions to authenticated users
-grant execute on function public.get_income_expense_daily_timeseries(timestamp with time zone, timestamp with time zone) to authenticated;
+grant execute on function public.get_income_expense_daily_timeseries(timestamp with time zone, timestamp with time zone, boolean) to authenticated;
 
 -- Function 10.2: Top expense accounts for a period (for donut charts)
 create or replace function public.get_expense_breakdown(

@@ -37,6 +37,8 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
   String _activeTab = 'edit'; // 'add', 'edit', 'theme'
   String? _previousSelectedBlockId;
   String? _previousActiveElementId;
+  int _previousSelectionVersion = -1;
+  bool _ignoreNextSelection = false;
 
   @override
   void initState() {
@@ -44,39 +46,42 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
     _tabController = TabController(length: 3, vsync: this);
   }
 
-  @override
-  void didUpdateWidget(WebsiteEditorPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Auto-switch to Editar tab when a block is selected or canvas element changes
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final editProvider = context.read<WebsiteEditModeProvider>();
-      final currentSelection = editProvider.selectedBlockId;
+  void _checkSelection(WebsiteEditModeProvider editProvider) {
+    if (!mounted) return;
+    final currentSelection = editProvider.selectedBlockId;
 
-      // Check for Canvas element selection changes
-      String? currentActiveElementId;
-      if (currentSelection != null) {
+    // Check for Canvas element selection changes
+    String? currentActiveElementId;
+    if (currentSelection != null) {
+      try {
         final blockData = editProvider.blocks.firstWhere(
           (b) => b['id'] == currentSelection,
-          orElse: () => <String, dynamic>{},
         );
         currentActiveElementId =
-            blockData['data']?['activeElementId']?.toString();
-      }
+            (blockData['block_data'] ?? blockData['data'])?['activeElementId']
+                ?.toString();
+      } catch (_) {}
+    }
 
-      final blockChanged = currentSelection != null &&
-          currentSelection != _previousSelectedBlockId;
-      final elementChanged = currentActiveElementId != null &&
-          currentActiveElementId != _previousActiveElementId;
+    final blockChanged = currentSelection != null &&
+        (currentSelection != _previousSelectedBlockId ||
+            editProvider.selectionVersion != _previousSelectionVersion);
 
-      if (blockChanged || elementChanged) {
+    final elementChanged = currentActiveElementId != null &&
+        currentActiveElementId != _previousActiveElementId;
+
+    if (blockChanged || elementChanged) {
+      if (!_ignoreNextSelection) {
         setState(() {
           _activeTab = 'edit';
         });
       }
+      // Only reset the flag after processing the change
+      _ignoreNextSelection = false;
       _previousSelectedBlockId = currentSelection;
       _previousActiveElementId = currentActiveElementId;
-    });
+      _previousSelectionVersion = editProvider.selectionVersion;
+    }
   }
 
   @override
@@ -88,6 +93,11 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
   @override
   Widget build(BuildContext context) {
     final editProvider = context.watch<WebsiteEditModeProvider>();
+
+    // Check selection changes after build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkSelection(editProvider);
+    });
 
     if (!editProvider.isEditMode) {
       return const SizedBox.shrink();
@@ -224,7 +234,6 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
         children: [
           _buildTab('add', '+ Agregar', Icons.add_box_outlined),
           _buildTab('edit', 'Editar', Icons.edit_outlined),
-          _buildTab('style', 'Estilo', Icons.brush_outlined),
           _buildTab('theme', 'Tema', Icons.palette_outlined),
         ],
       ),
@@ -273,11 +282,14 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
   Widget _buildTabContent(WebsiteEditModeProvider editProvider) {
     switch (_activeTab) {
       case 'add':
-        return _AddBlocksTab(editProvider: editProvider);
+        return _AddBlocksTab(
+          editProvider: editProvider,
+          onBlockAdded: () {
+            _ignoreNextSelection = true;
+          },
+        );
       case 'edit':
         return _EditBlockTab(editProvider: editProvider);
-      case 'style':
-        return _StyleBlockTab(editProvider: editProvider);
       case 'theme':
         return _ThemeTab();
       default:
@@ -289,8 +301,12 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
 /// Tab for adding new blocks - shows available block types in a grid
 class _AddBlocksTab extends StatelessWidget {
   final WebsiteEditModeProvider editProvider;
+  final VoidCallback onBlockAdded;
 
-  const _AddBlocksTab({required this.editProvider});
+  const _AddBlocksTab({
+    required this.editProvider,
+    required this.onBlockAdded,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -551,6 +567,7 @@ class _AddBlocksTab extends StatelessWidget {
               return;
             }
 
+            onBlockAdded();
             editProvider.addBlock(option.type);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -756,6 +773,14 @@ class _EditBlockTab extends StatelessWidget {
               data: blockData, blockId: selectedId, provider: editProvider),
           const SizedBox(height: 20),
           _buildBlockControls(blockType, blockData, selectedId),
+          const SizedBox(height: 24),
+          const Divider(color: Colors.white12),
+          const SizedBox(height: 16),
+          _BlockStyleControls(
+            blockId: selectedId,
+            provider: editProvider,
+            blockData: block,
+          ),
         ],
       ),
     );
@@ -2246,7 +2271,8 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
           .select(
               'id, name, sku, price, image_url, category_id, is_active, is_published, stock_quantity')
           .eq('is_active', true)
-          .order('name', ascending: true);
+          .order('name', ascending: true)
+          .limit(2000);
 
       var allProducts = List<Map<String, dynamic>>.from(productsResponse);
 
@@ -2905,6 +2931,7 @@ class _ProductPickerDialog extends StatefulWidget {
 class _ProductPickerDialogState extends State<_ProductPickerDialog> {
   late Set<String> _selected;
   String _searchQuery = '';
+  bool _filterInStock = false;
 
   @override
   void initState() {
@@ -2913,12 +2940,27 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
   }
 
   List<Map<String, dynamic>> get _filteredProducts {
-    if (_searchQuery.isEmpty) return widget.availableProducts;
+    var list = widget.availableProducts;
+
+    // Filter by stock
+    if (_filterInStock) {
+      list = list.where((p) {
+        final stockQty = (p['inventory_qty'] as num?)?.toInt() ??
+            (p['stock_quantity'] as num?)?.toInt() ??
+            0;
+        return stockQty > 0;
+      }).toList();
+    }
+
+    if (_searchQuery.isEmpty) return list;
+
     final query = _searchQuery.toLowerCase();
-    return widget.availableProducts.where((p) {
+    return list.where((p) {
       final name = (p['name']?.toString() ?? '').toLowerCase();
       final sku = (p['sku']?.toString() ?? '').toLowerCase();
-      return name.contains(query) || sku.contains(query);
+      // Allow searching by exact ID too
+      final id = (p['id']?.toString() ?? '').toLowerCase();
+      return name.contains(query) || sku.contains(query) || id == query;
     }).toList();
   }
 
@@ -2928,8 +2970,8 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
       backgroundColor: const Color(0xFF1E1E1E),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Container(
-        width: 400,
-        height: 500,
+        width: 420,
+        height: 560,
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2971,6 +3013,8 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
               onChanged: (v) => setState(() => _searchQuery = v),
             ),
             const SizedBox(height: 12),
+
+            // Filters and counts
             Row(
               children: [
                 Text(
@@ -2978,6 +3022,37 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                   style: const TextStyle(color: Colors.white54, fontSize: 11),
                 ),
                 const Spacer(),
+
+                // Minimalistic filter
+                InkWell(
+                  onTap: () => setState(() => _filterInStock = !_filterInStock),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _filterInStock
+                          ? const Color(0xFF00A09D)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: _filterInStock
+                            ? const Color(0xFF00A09D)
+                            : Colors.white24,
+                      ),
+                    ),
+                    child: Text(
+                      'Solo con stock',
+                      style: TextStyle(
+                          color: _filterInStock ? Colors.white : Colors.white54,
+                          fontSize: 11,
+                          fontWeight: _filterInStock
+                              ? FontWeight.w600
+                              : FontWeight.normal),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Text(
                   '${_filteredProducts.length} productos',
                   style: const TextStyle(color: Colors.white38, fontSize: 11),
@@ -4622,7 +4697,7 @@ class _CanvasProductsMultiSelectorState
               'id, name, sku, price, image_url, is_active, is_published, stock_quantity, inventory_qty')
           .eq('tenant_id', tenantId)
           .order('name', ascending: true)
-          .limit(400);
+          .limit(2000);
       _availableProducts = List<Map<String, dynamic>>.from(productsResponse);
     } catch (_) {
       _availableProducts = const [];
@@ -4765,7 +4840,7 @@ class _CanvasProductSelectorState extends State<_CanvasProductSelector> {
               'id, name, sku, price, image_url, is_active, is_published, stock_quantity, inventory_qty')
           .eq('tenant_id', tenantId)
           .order('name', ascending: true)
-          .limit(400);
+          .limit(2000);
 
       var allProducts = List<Map<String, dynamic>>.from(productsResponse);
 
@@ -5022,6 +5097,9 @@ class _ThemeTab extends StatefulWidget {
 }
 
 class _ThemeTabState extends State<_ThemeTab> {
+  // Navigation state
+  String? _activeCategory; // null = main menu
+
   // Colors
   final _primaryColorController = TextEditingController();
   final _accentColorController = TextEditingController();
@@ -5033,13 +5111,14 @@ class _ThemeTabState extends State<_ThemeTab> {
   String _bodySize = 'normal';
 
   // Button styles
-  String _buttonStyle = 'rounded';
-  String _buttonSize = 'medium';
+  String _buttonStyle = 'rounded'; // rounded, sharp, pill
+  String _buttonSize = 'medium'; // small, medium, large
 
-  // Background
-  String _pageBackground = 'white';
+  // Page Background
+  String _pageBackground = '#FFFFFF';
 
   bool _loaded = false;
+  bool _isSaving = false;
 
   final _fonts = [
     'Inter',
@@ -5049,70 +5128,91 @@ class _ThemeTabState extends State<_ThemeTab> {
     'Poppins',
     'Lato',
     'Oswald',
-    'Playfair Display'
+    'Raleway',
+    'Playfair Display',
+    'Merriweather',
   ];
-  final _sizes = {'small': 'Pequeño', 'normal': 'Normal', 'large': 'Grande'};
-  final _buttonStyles = {
-    'rounded': 'Redondeado',
-    'square': 'Cuadrado',
-    'pill': 'Pill'
+
+  final _sizes = {
+    'small': 'Pequeño',
+    'normal': 'Normal',
+    'large': 'Grande',
+    'xlarge': 'Extra Grande',
   };
+
   final _buttonSizes = {
     'small': 'Pequeño',
     'medium': 'Mediano',
-    'large': 'Grande'
-  };
-  final _backgrounds = {
-    'white': 'Blanco',
-    'light': 'Gris claro',
-    'dark': 'Oscuro'
+    'large': 'Grande',
   };
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_loaded) {
-      _loadSettings();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadSettings();
+      });
       _loaded = true;
     }
   }
 
-  void _loadSettings() {
-    final service = context.read<WebsiteService>();
-    _primaryColorController.text =
-        service.getSetting('theme_primary_color', '#1B5E20');
-    _accentColorController.text =
-        service.getSetting('theme_accent_color', '#FF6D00');
-    _headingFont = service.getSetting('heading_font', 'Inter');
-    _bodyFont = service.getSetting('body_font', 'Inter');
-    _headingSize = service.getSetting('heading_size', 'normal');
-    _bodySize = service.getSetting('body_size', 'normal');
-    _buttonStyle = service.getSetting('button_style', 'rounded');
-    _buttonSize = service.getSetting('button_size', 'medium');
-    _pageBackground = service.getSetting('page_background', 'white');
+  Future<void> _loadSettings() async {
+    try {
+      final service = context.read<WebsiteService>();
+      await service.loadSettings();
+
+      if (mounted) {
+        setState(() {
+          _primaryColorController.text =
+              service.getSetting('theme_primary_color', '#00A09D');
+          _accentColorController.text =
+              service.getSetting('theme_accent_color', '#FF6D00');
+          _headingFont = service.getSetting('heading_font', 'Inter');
+          _bodyFont = service.getSetting('body_font', 'Inter');
+          _headingSize = service.getSetting('heading_size', 'normal');
+          _bodySize = service.getSetting('body_size', 'normal');
+          _buttonStyle = service.getSetting('button_style', 'rounded');
+          _buttonSize = service.getSetting('button_size', 'medium');
+          _pageBackground = service.getSetting('page_background', '#FFFFFF');
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading theme: $e');
+    }
   }
 
   Future<void> _saveSettings() async {
-    final service = context.read<WebsiteService>();
-    await service.saveSettings({
-      'theme_primary_color': _primaryColorController.text,
-      'theme_accent_color': _accentColorController.text,
-      'heading_font': _headingFont,
-      'body_font': _bodyFont,
-      'heading_size': _headingSize,
-      'body_size': _bodySize,
-      'button_style': _buttonStyle,
-      'button_size': _buttonSize,
-      'page_background': _pageBackground,
-    });
+    setState(() => _isSaving = true);
+    try {
+      await context.read<WebsiteService>().saveSettings({
+        'theme_primary_color': _primaryColorController.text,
+        'theme_accent_color': _accentColorController.text,
+        'heading_font': _headingFont,
+        'body_font': _bodyFont,
+        'heading_size': _headingSize,
+        'body_size': _bodySize,
+        'button_style': _buttonStyle,
+        'button_size': _buttonSize,
+        'page_background': _pageBackground,
+      });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Tema guardado'),
-          backgroundColor: Color(0xFF00A09D),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tema guardado correctamente'),
+            backgroundColor: Color(0xFF00A09D),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -5125,141 +5225,375 @@ class _ThemeTabState extends State<_ThemeTab> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    if (_activeCategory != null) {
+      return Column(
         children: [
-          // Info banner
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+          _buildCategoryHeader(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: _buildCategoryContent(),
             ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.blue.shade300, size: 20),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Para editar el header o footer, haz clic directamente sobre ellos en la página.',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
+          ),
+          _buildSaveFooter(),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'DISEÑO DEL SITIO',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1,
                 ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ========== COLORS SECTION ==========
-          _SectionHeader('Colores'),
-          const SizedBox(height: 12),
-          _ColorField(
-            label: 'Color primario',
-            controller: _primaryColorController,
-          ),
-          const SizedBox(height: 12),
-          _ColorField(
-            label: 'Color de acento',
-            controller: _accentColorController,
-          ),
-
-          const SizedBox(height: 24),
-
-          // ========== TYPOGRAPHY SECTION ==========
-          _SectionHeader('Tipografía'),
-          const SizedBox(height: 12),
-
-          _buildDropdown(
-            label: 'Fuente de títulos',
-            value: _headingFont,
-            items: _fonts,
-            onChanged: (v) => setState(() => _headingFont = v!),
-          ),
-          const SizedBox(height: 12),
-
-          _buildDropdown(
-            label: 'Tamaño de títulos',
-            value: _headingSize,
-            items: _sizes.keys.toList(),
-            labels: _sizes,
-            onChanged: (v) => setState(() => _headingSize = v!),
-          ),
-          const SizedBox(height: 16),
-
-          _buildDropdown(
-            label: 'Fuente de texto',
-            value: _bodyFont,
-            items: _fonts,
-            onChanged: (v) => setState(() => _bodyFont = v!),
-          ),
-          const SizedBox(height: 12),
-
-          _buildDropdown(
-            label: 'Tamaño de texto',
-            value: _bodySize,
-            items: _sizes.keys.toList(),
-            labels: _sizes,
-            onChanged: (v) => setState(() => _bodySize = v!),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ========== BUTTON STYLES SECTION ==========
-          _SectionHeader('Estilo de botones'),
-          const SizedBox(height: 12),
-
-          _buildDropdown(
-            label: 'Forma',
-            value: _buttonStyle,
-            items: _buttonStyles.keys.toList(),
-            labels: _buttonStyles,
-            onChanged: (v) => setState(() => _buttonStyle = v!),
-          ),
-          const SizedBox(height: 12),
-
-          _buildDropdown(
-            label: 'Tamaño',
-            value: _buttonSize,
-            items: _buttonSizes.keys.toList(),
-            labels: _buttonSizes,
-            onChanged: (v) => setState(() => _buttonSize = v!),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ========== BACKGROUND SECTION ==========
-          _SectionHeader('Fondo de página'),
-          const SizedBox(height: 12),
-
-          _buildDropdown(
-            label: 'Color de fondo',
-            value: _pageBackground,
-            items: _backgrounds.keys.toList(),
-            labels: _backgrounds,
-            onChanged: (v) => setState(() => _pageBackground = v!),
-          ),
-
-          const SizedBox(height: 32),
-
-          // Save button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _saveSettings,
-              icon: const Icon(Icons.save, size: 18),
-              label: const Text('Guardar tema'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00A09D),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
+              const SizedBox(height: 8),
+              const Text(
+                'Personaliza la apariencia global de tu sitio web.',
+                style: TextStyle(color: Colors.white38, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+        const Divider(color: Colors.white10),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            children: [
+              _buildMenuItem(
+                'Colores',
+                'Paleta de colores principal',
+                Icons.palette_outlined,
+                'colors',
+              ),
+              _buildMenuItem(
+                'Textos',
+                'Tipografía y tamaños',
+                Icons.text_fields,
+                'text',
+              ),
+              _buildMenuItem(
+                'Botones',
+                'Estilo de botones',
+                Icons.smart_button,
+                'buttons',
+              ),
+              _buildMenuItem(
+                'Fondo de página',
+                'Color base del sitio',
+                Icons.wallpaper,
+                'background',
+              ),
+              _buildMenuItem(
+                'Transiciones',
+                'Animaciones de página',
+                Icons.animation,
+                'transitions',
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMenuItem(
+      String title, String subtitle, IconData icon, String category) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D2D2D),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: const Color(0xFF00A09D)),
+        title: Text(title, style: const TextStyle(color: Colors.white)),
+        subtitle: Text(subtitle,
+            style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        trailing: const Icon(Icons.chevron_right, color: Colors.white24),
+        onTap: () => setState(() => _activeCategory = category),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  Widget _buildCategoryHeader() {
+    String title = '';
+    switch (_activeCategory) {
+      case 'colors':
+        title = 'Colores';
+        break;
+      case 'text':
+        title = 'Textos';
+        break;
+      case 'buttons':
+        title = 'Botones';
+        break;
+      case 'background':
+        title = 'Fondo';
+        break;
+      case 'transitions':
+        title = 'Transiciones';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.white10)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => setState(() => _activeCategory = null),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryContent() {
+    switch (_activeCategory) {
+      case 'colors':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionHeader('COLOR PRINCIPAL'),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              label: 'Color Hex',
+              controller: _primaryColorController,
+              onChanged: (val) => _primaryColorController.text = val,
+              value: _primaryColorController.text,
+              hint: '#00A09D',
+            ),
+            const SizedBox(height: 12),
+            _BackgroundColorControl(
+              currentValue: _primaryColorController.text,
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _primaryColorController.text = val);
+                }
+              },
+            ),
+            const SizedBox(height: 24),
+            _SectionHeader('COLOR DE ACENTO'),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              label: 'Color Hex',
+              controller: _accentColorController,
+              onChanged: (val) => _accentColorController.text = val,
+              value: _accentColorController.text,
+              hint: '#FF6D00',
+            ),
+            const SizedBox(height: 12),
+            _BackgroundColorControl(
+              currentValue: _accentColorController.text,
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _accentColorController.text = val);
+                }
+              },
+            ),
+          ],
+        );
+
+      case 'text':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionHeader('TÍTULOS'),
+            const SizedBox(height: 12),
+            _buildDropdown(
+              label: 'Fuente',
+              value: _headingFont,
+              items: _fonts,
+              onChanged: (v) => setState(() => _headingFont = v!),
+            ),
+            const SizedBox(height: 12),
+            _buildDropdown(
+              label: 'Tamaño Base',
+              value: _headingSize,
+              items: _sizes.keys.toList(),
+              labels: _sizes,
+              onChanged: (v) => setState(() => _headingSize = v!),
+            ),
+            const SizedBox(height: 24),
+            _SectionHeader('PARRAFOS'),
+            const SizedBox(height: 12),
+            _buildDropdown(
+              label: 'Fuente',
+              value: _bodyFont,
+              items: _fonts,
+              onChanged: (v) => setState(() => _bodyFont = v!),
+            ),
+            const SizedBox(height: 12),
+            _buildDropdown(
+              label: 'Tamaño Base',
+              value: _bodySize,
+              items: _sizes.keys.toList(),
+              labels: _sizes,
+              onChanged: (v) => setState(() => _bodySize = v!),
+            ),
+          ],
+        );
+
+      case 'buttons':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionHeader('FORMA'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _buildStyleOption('Cuadrado', 'sharp', _buttonStyle == 'sharp'),
+                const SizedBox(width: 8),
+                _buildStyleOption(
+                    'Redondeado', 'rounded', _buttonStyle == 'rounded'),
+                const SizedBox(width: 8),
+                _buildStyleOption('Píldora', 'pill', _buttonStyle == 'pill'),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _SectionHeader('TAMAÑO'),
+            const SizedBox(height: 12),
+            _buildDropdown(
+              label: 'Tamaño predeterminado',
+              value: _buttonSize,
+              items: _buttonSizes.keys.toList(),
+              labels: _buttonSizes,
+              onChanged: (v) => setState(() => _buttonSize = v!),
+            ),
+          ],
+        );
+
+      case 'background':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionHeader('FONDO DEL SITIO'),
+            const SizedBox(height: 8),
+            const Text(
+              'Este color se aplicará al fondo de todas las páginas.',
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            _BackgroundColorControl(
+              currentValue: _pageBackground,
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _pageBackground = val);
+                }
+              },
+            ),
+          ],
+        );
+
+      case 'transitions':
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.construction, color: Colors.white24, size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                'Próximamente',
+                style: TextStyle(color: Colors.white54),
+              ),
+              const Text(
+                'Configuración de transiciones entre páginas',
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        );
+
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildSaveFooter() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: Color(0xFF2D2D2D),
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: _isSaving ? null : _saveSettings,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF00A09D),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: _isSaving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Guardar cambios'),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStyleOption(String label, String value, bool isSelected) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _buttonStyle = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF00A09D).withValues(alpha: 0.2)
+                : const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(
+                value == 'pill' ? 20 : (value == 'rounded' ? 8 : 0)),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF00A09D) : Colors.white70,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -5269,89 +5603,38 @@ class _ThemeTabState extends State<_ThemeTab> {
     required String value,
     required List<String> items,
     Map<String, String>? labels,
-    required void Function(String?) onChanged,
+    required Function(String?) onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white70, fontSize: 12),
-        ),
+        Text(label,
+            style: const TextStyle(color: Colors.white54, fontSize: 12)),
         const SizedBox(height: 6),
-        MenuAnchor(
-          style: MenuStyle(
-            backgroundColor: WidgetStateProperty.all(const Color(0xFF2D2D2D)),
-            surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
-            padding: WidgetStateProperty.all(EdgeInsets.zero),
-            shape: WidgetStateProperty.all(
-              RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-              ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: items.contains(value) ? value : null,
+              isExpanded: true,
+              dropdownColor: const Color(0xFF2D2D2D),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              icon: const Icon(Icons.keyboard_arrow_down,
+                  color: Colors.white54, size: 20),
+              items: items.map((item) {
+                return DropdownMenuItem(
+                  value: item,
+                  child: Text(labels?[item] ?? item),
+                );
+              }).toList(),
+              onChanged: onChanged,
             ),
           ),
-          menuChildren: items.map((item) {
-            final itemLabel = labels?[item] ?? item;
-            return MenuItemButton(
-              onPressed: () => onChanged(item),
-              style: ButtonStyle(
-                backgroundColor: item == value
-                    ? WidgetStateProperty.all(
-                        Colors.white.withValues(alpha: 0.1))
-                    : null,
-                foregroundColor: WidgetStateProperty.all(Colors.white),
-                padding: WidgetStateProperty.all(
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              ),
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 120),
-                child: Text(
-                  itemLabel,
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ),
-            );
-          }).toList(),
-          builder: (context, controller, child) {
-            final selectedLabel = labels?[value] ?? value;
-            return InkWell(
-              onTap: () {
-                if (controller.isOpen) {
-                  controller.close();
-                } else {
-                  controller.open();
-                }
-              },
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2D2D2D),
-                  borderRadius: BorderRadius.circular(6),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        selectedLabel,
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const Icon(Icons.expand_more,
-                        color: Colors.white54, size: 20),
-                  ],
-                ),
-              ),
-            );
-          },
         ),
       ],
     );
@@ -9677,170 +9960,120 @@ class _BackupListItem extends StatelessWidget {
 }
 
 /// Tab for generic block styling (Background, Spacing, etc.)
-class _StyleBlockTab extends StatefulWidget {
-  final WebsiteEditModeProvider editProvider;
+/// New optimized block style controls for inline editing
+class _BlockStyleControls extends StatefulWidget {
+  final String blockId;
+  final WebsiteEditModeProvider provider;
+  final Map<String, dynamic> blockData;
 
-  const _StyleBlockTab({required this.editProvider});
+  const _BlockStyleControls({
+    required this.blockId,
+    required this.provider,
+    required this.blockData,
+  });
 
   @override
-  State<_StyleBlockTab> createState() => _StyleBlockTabState();
+  State<_BlockStyleControls> createState() => _BlockStyleControlsState();
 }
 
-class _StyleBlockTabState extends State<_StyleBlockTab> {
+class _BlockStyleControlsState extends State<_BlockStyleControls> {
   bool _paddingLinked = true;
 
-  @override
-  Widget build(BuildContext context) {
-    final selectedId = widget.editProvider.selectedBlockId;
-
-    if (selectedId == null) {
-      return _buildNoSelection();
-    }
-
-    if (selectedId == 'header' || selectedId == 'footer') {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            'El estilo de ${selectedId == 'header' ? 'Cabecera' : 'Pie de página'} se gestiona en la pestaña "Editar".',
-            style: TextStyle(color: Colors.white54, fontSize: 13),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
-
-    final block = widget.editProvider.getBlock(selectedId);
-    if (block == null) return _buildNoSelection();
-
-    final blockData = Map<String, dynamic>.from(block['block_data'] ?? {});
-    final style = Map<String, dynamic>.from(blockData['style'] ?? {});
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ===== BACKGROUND =====
-          _buildSectionHeader('Fondo'),
-          const SizedBox(height: 12),
-          _BackgroundTypeControl(
-            style: style,
-            onChanged: (key, value) => _updateStyle(selectedId, key, value),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ===== PADDING =====
-          _buildSectionHeader('Espaciado Interior'),
-          const SizedBox(height: 12),
-          _FullPaddingControl(
-            paddingTop: (style['paddingTop'] as num?)?.toDouble() ?? 64.0,
-            paddingRight: (style['paddingRight'] as num?)?.toDouble() ?? 24.0,
-            paddingBottom: (style['paddingBottom'] as num?)?.toDouble() ?? 64.0,
-            paddingLeft: (style['paddingLeft'] as num?)?.toDouble() ?? 24.0,
-            linked: _paddingLinked,
-            onLinkedChanged: (v) => setState(() => _paddingLinked = v),
-            onChanged: (top, right, bottom, left) {
-              _updateStyle(selectedId, 'paddingTop', top);
-              _updateStyle(selectedId, 'paddingRight', right);
-              _updateStyle(selectedId, 'paddingBottom', bottom);
-              _updateStyle(selectedId, 'paddingLeft', left);
-            },
-          ),
-
-          const SizedBox(height: 24),
-
-          // ===== BORDER =====
-          _buildSectionHeader('Borde'),
-          const SizedBox(height: 12),
-          _BorderControl(
-            borderWidth: (style['borderWidth'] as num?)?.toDouble() ?? 0.0,
-            borderColor: style['borderColor']?.toString() ?? '#E0E0E0',
-            borderStyle: style['borderStyle']?.toString() ?? 'solid',
-            borderRadius: (style['borderRadius'] as num?)?.toDouble() ?? 0.0,
-            onChanged: (width, color, borderStyle, radius) {
-              _updateStyle(selectedId, 'borderWidth', width);
-              _updateStyle(selectedId, 'borderColor', color);
-              _updateStyle(selectedId, 'borderStyle', borderStyle);
-              _updateStyle(selectedId, 'borderRadius', radius);
-            },
-          ),
-
-          const SizedBox(height: 24),
-
-          // ===== SHADOW =====
-          _buildSectionHeader('Sombra'),
-          const SizedBox(height: 12),
-          _BoxShadowControl(
-            enabled: style['shadowEnabled'] == true,
-            offsetX: (style['shadowOffsetX'] as num?)?.toDouble() ?? 0.0,
-            offsetY: (style['shadowOffsetY'] as num?)?.toDouble() ?? 4.0,
-            blur: (style['shadowBlur'] as num?)?.toDouble() ?? 12.0,
-            spread: (style['shadowSpread'] as num?)?.toDouble() ?? 0.0,
-            color: style['shadowColor']?.toString() ?? 'rgba(0,0,0,0.15)',
-            onChanged: (enabled, offsetX, offsetY, blur, spread, color) {
-              _updateStyle(selectedId, 'shadowEnabled', enabled);
-              _updateStyle(selectedId, 'shadowOffsetX', offsetX);
-              _updateStyle(selectedId, 'shadowOffsetY', offsetY);
-              _updateStyle(selectedId, 'shadowBlur', blur);
-              _updateStyle(selectedId, 'shadowSpread', spread);
-              _updateStyle(selectedId, 'shadowColor', color);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _updateStyle(String blockId, String key, dynamic value) {
-    final block = widget.editProvider.getBlock(blockId);
-    if (block == null) return;
-
-    final currentData = Map<String, dynamic>.from(block['block_data'] ?? {});
+  void _updateStyle(String key, dynamic value) {
+    final currentData =
+        Map<String, dynamic>.from(widget.blockData['block_data'] ?? {});
     final currentStyle = Map<String, dynamic>.from(currentData['style'] ?? {});
 
     currentStyle[key] = value;
-    widget.editProvider.updateBlockData(blockId, 'style', currentStyle);
+    widget.provider.updateBlockData(widget.blockId, 'style', currentStyle);
   }
 
-  Widget _buildNoSelection() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.brush_outlined,
-              size: 48,
-              color: Colors.white.withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Selecciona un bloque',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 14,
-              ),
-            ),
-          ],
+  Map<String, dynamic> get _style {
+    return widget.blockData['block_data']?['style'] ?? {};
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _CollapsibleSection(
+      title: 'DISEÑO Y ESTILO',
+      icon: Icons.brush_outlined,
+      initiallyExpanded: false,
+      children: [
+        // Background
+        _SectionHeader('Fondo del bloque'),
+        const SizedBox(height: 8),
+        _BackgroundTypeControl(
+          style: _style,
+          onChanged: (key, value) => _updateStyle(key, value),
         ),
-      ),
+        const SizedBox(height: 20),
+
+        // Padding
+        _SectionHeader('Relleno (Padding)'),
+        const SizedBox(height: 12),
+        _FullPaddingControl(
+          paddingTop: (_style['paddingTop'] as num?)?.toDouble() ?? 40.0,
+          paddingRight: (_style['paddingRight'] as num?)?.toDouble() ?? 20.0,
+          paddingBottom: (_style['paddingBottom'] as num?)?.toDouble() ?? 40.0,
+          paddingLeft: (_style['paddingLeft'] as num?)?.toDouble() ?? 20.0,
+          linked: _paddingLinked,
+          onLinkedChanged: (v) => setState(() => _paddingLinked = v),
+          onChanged: (top, right, bottom, left) {
+            final newStyle = Map<String, dynamic>.from(_style);
+            newStyle['paddingTop'] = top;
+            newStyle['paddingRight'] = right;
+            newStyle['paddingBottom'] = bottom;
+            newStyle['paddingLeft'] = left;
+            widget.provider.updateBlockData(widget.blockId, 'style', newStyle);
+          },
+        ),
+        const SizedBox(height: 24),
+
+        // Border
+        _SectionHeader('Borde'),
+        const SizedBox(height: 12),
+        _BorderControl(
+          borderWidth: (_style['borderWidth'] as num?)?.toDouble() ?? 0.0,
+          borderColor: _style['borderColor']?.toString() ?? '#E0E0E0',
+          borderStyle: _style['borderStyle']?.toString() ?? 'solid',
+          borderRadius: (_style['borderRadius'] as num?)?.toDouble() ?? 0.0,
+          onChanged: (width, color, borderStyle, radius) {
+            final newStyle = Map<String, dynamic>.from(_style);
+            newStyle['borderWidth'] = width;
+            newStyle['borderColor'] = color;
+            newStyle['borderStyle'] = borderStyle;
+            newStyle['borderRadius'] = radius;
+            widget.provider.updateBlockData(widget.blockId, 'style', newStyle);
+          },
+        ),
+        const SizedBox(height: 24),
+
+        // Shadow
+        _SectionHeader('Sombra'),
+        const SizedBox(height: 12),
+        _BoxShadowControl(
+          enabled: _style['shadowEnabled'] == true,
+          offsetX: (_style['shadowOffsetX'] as num?)?.toDouble() ?? 0.0,
+          offsetY: (_style['shadowOffsetY'] as num?)?.toDouble() ?? 4.0,
+          blur: (_style['shadowBlur'] as num?)?.toDouble() ?? 12.0,
+          spread: (_style['shadowSpread'] as num?)?.toDouble() ?? 0.0,
+          color: _style['shadowColor']?.toString() ?? 'rgba(0,0,0,0.15)',
+          onChanged: (enabled, offsetX, offsetY, blur, spread, color) {
+            final newStyle = Map<String, dynamic>.from(_style);
+            newStyle['shadowEnabled'] = enabled;
+            newStyle['shadowOffsetX'] = offsetX;
+            newStyle['shadowOffsetY'] = offsetY;
+            newStyle['shadowBlur'] = blur;
+            newStyle['shadowSpread'] = spread;
+            newStyle['shadowColor'] = color;
+            widget.provider.updateBlockData(widget.blockId, 'style', newStyle);
+          },
+        ),
+      ],
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title.toUpperCase(),
-      style: const TextStyle(
-        color: Colors.white54,
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 1,
-      ),
-    );
-  }
+  // Helper text controls removed as they are built-in now
 }
 
 /// Background control with solid color or gradient option

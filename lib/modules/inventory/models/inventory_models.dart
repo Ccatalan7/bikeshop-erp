@@ -55,6 +55,7 @@ class Product {
   final String? parentSetId;
   final String? componentLabel;
   final int? componentPosition;
+  final bool? isPartial;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -112,6 +113,7 @@ class Product {
     this.parentSetId,
     this.componentLabel,
     this.componentPosition,
+    this.isPartial,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -189,6 +191,7 @@ class Product {
       parentSetId: json['parent_set_id']?.toString(),
       componentLabel: json['component_label'],
       componentPosition: json['component_position'],
+      isPartial: json['is_partial'],
       createdAt: json['created_at'] == null
           ? DateTime.now()
           : (json['created_at'] is String
@@ -271,6 +274,7 @@ class Product {
       'parent_set_id': parentSetId,
       'component_label': componentLabel,
       'component_position': componentPosition,
+      'is_partial': isPartial,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -341,6 +345,7 @@ class Product {
     String? parentSetId,
     String? componentLabel,
     int? componentPosition,
+    bool? isPartial,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -398,6 +403,7 @@ class Product {
       parentSetId: parentSetId ?? this.parentSetId,
       componentLabel: componentLabel ?? this.componentLabel,
       componentPosition: componentPosition ?? this.componentPosition,
+      isPartial: isPartial ?? this.isPartial,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

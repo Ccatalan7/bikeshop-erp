@@ -186,6 +186,11 @@ const List<MenuSubItem> _salesMenuItems = [
     title: 'Pagos',
     route: '/sales/payments',
   ),
+  MenuSubItem(
+    icon: Icons.bar_chart_outlined,
+    title: 'Informes',
+    route: '/sales/reports',
+  ),
 ];
 
 const String _salesSectionKey = 'sales';
@@ -293,6 +298,9 @@ String _getTitleFromRoute(String route) {
     '/inventory/products': 'Productos',
     '/inventory/categories': 'Categorías',
     '/sales/invoices': 'Ventas',
+    '/sales/reports': 'Informes de Ventas',
+    '/sales/reports/by-product': 'Ventas por Artículo',
+    '/sales/reports/by-customer': 'Ventas por Cliente',
     '/purchases/suppliers': 'Compras',
     '/pos': 'POS',
     '/hr/employees': 'Trabajadores',

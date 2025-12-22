@@ -380,7 +380,7 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 - ✅ Edit `core_schema.sql` (master file)
 - ✅ After editing, tell user: "Deploy the updated `supabase/sql/core_schema.sql` OR regenerate the 3-file split"
 - ✅ Be EXPLICIT: "I modified `core_schema.sql` at line X" or "I updated function Y in `core_schema.sql`"
-- ❌ NEVER create new SQL files (`FIX_*.sql`, `DEPLOY_*.sql`, etc.)
+- ✅ **ALLOWED:** You may create standalone .sql files (e.g. `supabase/migrations/YYYYMMDD_name.sql`) for specific deployments to avoid running the entire schema, BUT you must ALSO update `core_schema.sql` as the source of truth.
 
 **⚠️ CRITICAL: NEVER CREATE UNNECESSARY COLUMNS OR FUNCTIONS!**
 
@@ -739,8 +739,8 @@ values ('Product', 50, 50);
 2. ✅ Note the line numbers you modified (e.g., "lines 4309-4419")
 3. ✅ Tell user: "I modified `core_schema.sql` at lines X-Y (function/view/table name)"
 4. ✅ **EXTRACT the exact SQL code** from those lines
-5. ✅ **PRESENT in a canvas artifact** titled "Deploy to Supabase: [Description]"
-6. ✅ Include clear instructions: "Copy this SQL and run it in Supabase SQL Editor"
+5. ✅ **PRESENT in a canvas artifact** OR **CREATE a standalone SQL file** (e.g. `supabase/migrations/20251221_fix_name.sql`)
+6. ✅ Include clear instructions: "Copy this SQL and run it in Supabase SQL Editor" or "Run the migration file"
 
 **Example canvas format:**
 ```
